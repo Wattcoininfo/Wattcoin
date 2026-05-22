@@ -1,0 +1,5 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /elec-price-api/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [L,QSA]

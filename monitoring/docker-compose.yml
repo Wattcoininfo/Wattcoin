@@ -1,0 +1,100 @@
+services:
+  collector:
+    build:
+      context: ..
+      dockerfile: monitoring/Dockerfile
+    container_name: wattcoin-monitoring-collector
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./nodes.json:/config/nodes.json:ro
+      - ./keys:/config/keys:ro
+      - ./data:/var/lib/wattcoin-monitoring
+      - ./data:/config/data
+    ports:
+      - "9464:9464"
+
+  prometheus:
+    image: prom/prometheus:v2.53.3
+    container_name: wattcoin-prometheus
+    restart: unless-stopped
+    depends_on:
+      - collector
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: wattcoin-alertmanager
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --config.expand-env
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "9093:9093"
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: wattcoin-loki
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/config.yml
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/config.yml:ro
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: wattcoin-promtail
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command:
+      - -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - ./data:/var/lib/wattcoin-monitoring:ro
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: wattcoin-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    env_file:
+      - .env
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  loki-data:
+  grafana-data:

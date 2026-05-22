@@ -1,0 +1,122 @@
+groups:
+  - name: wattcoin-mainnet
+    rules:
+      - alert: WattcoinNodeDown
+        expr: wattcoin_node_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Wattcoin node unreachable
+          description: Node {{ $labels.node_name }} has not returned a successful ops response for 2 minutes.
+
+      - alert: WattcoinChainStall
+        expr: wattcoin_chain_latest_block_age_seconds >= 1200
+        for: 1m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Chain stall detected
+          description: Node {{ $labels.node_name }} has not seen a new block for at least 20 minutes.
+
+      - alert: WattcoinHealthCritical
+        expr: wattcoin_node_health_status_code == 0
+        for: 1m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Node health critical
+          description: Node {{ $labels.node_name }} reports critical health.
+
+      - alert: WattcoinNodeLagging
+        expr: wattcoin_chain_node_lag_blocks > 0
+        for: 10m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Node lag persists
+          description: Node {{ $labels.node_name }} has remained behind peers for 10 minutes.
+
+      - alert: WattcoinForkPressureHigh
+        expr: wattcoin_chain_fork_rate_per_hour > 3
+        for: 15m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Fork pressure elevated
+          description: Node {{ $labels.node_name }} exceeded the fork pressure threshold for 15 minutes.
+
+      - alert: WattcoinAuthFailures
+        expr: wattcoin_node_last_auth_failure_timestamp_seconds > 0 and (time() - wattcoin_node_last_auth_failure_timestamp_seconds) < 300
+        for: 1m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Authenticated scrape failures
+          description: Node {{ $labels.node_name }} returned 401 to the monitoring collector in the last 5 minutes.
+
+      - alert: WattcoinScrapeStaleMetrics
+        expr: wattcoin_node_scrape_age_seconds{source="metrics"} > 120
+        for: 1m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Metrics scrape stale
+          description: Node {{ $labels.node_name }} metrics scrape is older than two polling intervals.
+
+      - alert: WattcoinScrapeStaleHealth
+        expr: wattcoin_node_scrape_age_seconds{source="health"} > 60
+        for: 1m
+        labels:
+          severity: critical
+          route: pager
+        annotations:
+          summary: Health scrape stale
+          description: Node {{ $labels.node_name }} health scrape is older than two polling intervals.
+
+      - alert: WattcoinPeerDiversityLow
+        expr: wattcoin_peers_total >= 3 and wattcoin_peers_unique_segments < 3
+        for: 5m
+        labels:
+          severity: warning
+          route: warnings
+        annotations:
+          summary: Peer diversity below minimum
+          description: Node {{ $labels.node_name }} has fewer than 3 unique peer network segments.
+
+      - alert: WattcoinMempoolPressureHigh
+        expr: wattcoin_mempool_pressure >= 0.85
+        for: 5m
+        labels:
+          severity: warning
+          route: warnings
+        annotations:
+          summary: Mempool pressure high
+          description: Node {{ $labels.node_name }} mempool pressure is at or above 85%.
+
+      - alert: WattcoinRollbackDepthHigh
+        expr: wattcoin_chain_rollback_median_depth >= 3
+        for: 5m
+        labels:
+          severity: warning
+          route: warnings
+        annotations:
+          summary: Rollback depth warning
+          description: Node {{ $labels.node_name }} rollback median depth is at or above 3 blocks.
+
+      - alert: WattcoinArchiveStale
+        expr: wattcoin_node_archive_age_seconds > 600
+        for: 5m
+        labels:
+          severity: warning
+          route: warnings
+        annotations:
+          summary: Node archive stale
+          description: Collector has not archived node files for {{ $labels.node_name }} in the last 10 minutes.

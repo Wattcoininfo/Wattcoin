@@ -1,0 +1,5 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /counter-api/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [L,QSA]

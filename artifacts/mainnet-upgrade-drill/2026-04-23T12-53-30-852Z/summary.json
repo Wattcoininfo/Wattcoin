@@ -1,0 +1,96 @@
+{
+  "startedAt": "2026-04-23T12:53:30.856Z",
+  "finishedAt": "2026-04-23T12:53:39.118Z",
+  "ok": true,
+  "args": {
+    "gatesOnly": false,
+    "nodeATip": "http://62.65.200.145:39310/api/v1/chain/tip",
+    "nodeBTip": "http://localhost:39310/api/v1/chain/tip",
+    "nodeAHealth": "",
+    "nodeBHealth": "",
+    "authTokenProvided": false
+  },
+  "steps": [
+    {
+      "ts": "2026-04-23T12:53:35.254Z",
+      "step": "gate:test:p2p-adversarial",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:36.123Z",
+      "step": "gate:test:ledger",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:37.074Z",
+      "step": "gate:mainnet:durability:snapshot",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:38.044Z",
+      "step": "gate:mainnet:durability:corruption",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:38.882Z",
+      "step": "gate:mainnet:validate-seeds",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:38.886Z",
+      "step": "Stage node A at current release N and node B at candidate release N+1.",
+      "status": "auto-confirmed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.038Z",
+      "step": "tip-compatibility-initial",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.039Z",
+      "step": "Run normal sync and mining for 30 minutes with the mixed-version pair.",
+      "status": "auto-confirmed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.040Z",
+      "step": "Roll node B back from N+1 to N.",
+      "status": "auto-confirmed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.041Z",
+      "step": "Confirm both nodes rejoin and node lag returns to 0 after rollback.",
+      "status": "auto-confirmed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.042Z",
+      "step": "Re-upgrade node B from N to N+1.",
+      "status": "auto-confirmed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.114Z",
+      "step": "tip-compatibility-final",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-23T12:53:39.116Z",
+      "step": "Confirm mixed-version rollout is stable and node lag converges to 0 after re-upgrade.",
+      "status": "auto-confirmed",
+      "details": {}
+    }
+  ],
+  "result": {
+    "mode": "full-drill"
+  }
+}

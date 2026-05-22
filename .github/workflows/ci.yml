@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [20]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ledger integration tests
+        run: npm run test:ledger
+
+  build:
+    name: Build (Node 20)
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Scan for hardcoded credentials
+        run: |
+          node <<'NODE'
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          const files = execSync(
+            "git ls-files '*.js' '*.jsx' '*.ts' '*.cjs' '*.mjs' '*.bat' '*.ps1'",
+            { encoding: 'utf8' }
+          )
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .filter((file) => !/^(artifacts|dist|releases)\//.test(file));
+
+          const rules = [
+            {
+              name: 'hardcoded password assignment',
+              regex: /(^|[^A-Za-z0-9_])[Pp]assword[A-Za-z0-9_]*\s*[:=]\s*["'][^$"'\r\n]{3,}["']/m,
+            },
+            {
+              name: 'hardcoded token/secret/api key assignment',
+              regex: /(^|[^A-Za-z0-9_])(?:token|secret|api[_-]?key)[A-Za-z0-9_]*\s*[:=]\s*["'][^$"'\r\n]{6,}["']/m,
+            },
+            {
+              name: 'literal SFTP_PASSWORD assignment',
+              regex: /SFTP_PASSWORD\s*=\s*["']/m,
+            },
+            {
+              name: 'known leaked test secret',
+              regex: /Ms19bLsPG/m,
+            },
+          ];
+
+          const hits = [];
+          for (const file of files) {
+            const text = fs.readFileSync(file, 'utf8');
+            for (const rule of rules) {
+              if (rule.regex.test(text)) {
+                hits.push(`${file}: ${rule.name}`);
+                break;
+              }
+            }
+          }
+
+          if (hits.length > 0) {
+            console.error('ERROR: Hardcoded credential detected in tracked source files.');
+            for (const hit of hits) console.error(hit);
+            process.exit(1);
+          }
+
+          console.log('Credential scan passed.');
+          NODE
+
+      - name: Build app
+        run: npm run build

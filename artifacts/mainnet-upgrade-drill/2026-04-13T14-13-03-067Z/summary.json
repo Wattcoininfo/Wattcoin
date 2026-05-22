@@ -1,0 +1,48 @@
+{
+  "startedAt": "2026-04-13T14:13:03.070Z",
+  "finishedAt": "2026-04-13T14:13:09.515Z",
+  "ok": true,
+  "args": {
+    "gatesOnly": true,
+    "nodeATip": "",
+    "nodeBTip": "",
+    "nodeAHealth": "",
+    "nodeBHealth": "",
+    "authTokenProvided": false
+  },
+  "steps": [
+    {
+      "ts": "2026-04-13T14:13:06.853Z",
+      "step": "gate:test:p2p-adversarial",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-13T14:13:07.429Z",
+      "step": "gate:test:ledger",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-13T14:13:08.107Z",
+      "step": "gate:mainnet:durability:snapshot",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-13T14:13:08.775Z",
+      "step": "gate:mainnet:durability:corruption",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "ts": "2026-04-13T14:13:09.513Z",
+      "step": "gate:mainnet:validate-bootstrap",
+      "status": "passed",
+      "details": {}
+    }
+  ],
+  "result": {
+    "mode": "gates-only"
+  }
+}

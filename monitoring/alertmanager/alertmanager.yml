@@ -1,0 +1,49 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: '${WATTCOIN_SMTP_HOST}:${WATTCOIN_SMTP_PORT}'
+  smtp_from: '${WATTCOIN_SMTP_FROM}'
+  smtp_auth_username: '${WATTCOIN_SMTP_USER}'
+  smtp_auth_password: '${WATTCOIN_SMTP_PASSWORD}'
+  smtp_require_tls: true
+
+route:
+  receiver: email-warnings
+  group_by:
+    - alertname
+    - node_id
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    - matchers:
+        - route="pager"
+      receiver: email-critical
+    - matchers:
+        - route="warnings"
+      receiver: email-warnings
+
+receivers:
+  - name: email-critical
+    email_configs:
+      - to: 'info@wattcoin.ee'
+        send_resolved: true
+        headers:
+          Subject: '[CRITICAL] Wattcoin Mainnet Alert: {{ .GroupLabels.alertname }}'
+    # Optionally also fire existing webhook if configured
+    webhook_configs:
+      - url: '${WATTCOIN_PAGER_WEBHOOK_URL}'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+  - name: email-warnings
+    email_configs:
+      - to: 'info@wattcoin.ee'
+        send_resolved: true
+        headers:
+          Subject: '[WARNING] Wattcoin Mainnet: {{ .GroupLabels.alertname }}'
+    webhook_configs:
+      - url: '${WATTCOIN_WARNINGS_WEBHOOK_URL}'
+        send_resolved: true
+        http_config:
+          follow_redirects: true

@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wattcoin — My Wallet</title>
+  <link rel="icon" type="image/x-icon" href="assets/icons/icon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: #060e06;
+      background-image:
+        linear-gradient(rgba(26, 58, 26, 0.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(26, 58, 26, 0.12) 1px, transparent 1px);
+      background-size: 60px 60px;
+      color: #e8f5e8;
+      font-family: 'Georgia', serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #4ade80; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Nav ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(6,14,6,0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid #1a2a1a;
+      padding: 0 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+    }
+    .nav-logo {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 900; color: #e8f5e8;
+    }
+    .nav-logo span { color: #4ade80; }
+    .nav-links {
+      display: flex; gap: 28px; list-style: none;
+    }
+    .nav-links a {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; color: #6b9a6b; letter-spacing: 0.1em;
+      text-transform: uppercase; text-decoration: none;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: #4ade80; }
+    .nav-links a.nav-wallet {
+      color: #fbbf24;
+    }
+    .nav-links a.nav-wallet:hover {
+      color: #fde68a;
+    }
+    .nav-links a.nav-nft { color: #4ade80; font-weight: 500; }
+    .nav-links a.nav-nft:hover { color: #86efac; }
+    .nav-links li.nav-break { display: none; }
+
+    /* ── Layout ── */
+    .container { max-width: 960px; margin: 0 auto; padding: 0 40px; }
+
+    /* ── Page header ── */
+    .wallet-page-header {
+      padding: 100px 0 48px;
+      border-bottom: 1px solid #1a2a1a;
+    }
+    .wallet-page-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(36px, 6vw, 64px);
+      font-weight: 900;
+      color: #e8f5e8;
+      margin-bottom: 16px;
+    }
+    .wallet-page-header h1 span { color: #fbbf24; }
+    .wallet-page-header p {
+      font-size: 15px;
+      line-height: 1.8;
+      color: #7aaa7a;
+      max-width: 600px;
+    }
+
+    /* ── Wallet section ── */
+    .wallet-section {
+      padding: 56px 0 80px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 40px; text-align: center;
+      font-family: 'DM Mono', monospace; font-size: 11px; color: #5a8a5a;
+      border-top: 1px solid #1e3a1e;
+    }
+    footer a { color: #7aaa7a; }
+    footer a:hover { color: #4ade80; }
+
+    /* ── Wallet UI ── */
+    .wtcw-card{background:#0a160a;border:1px solid #1e3a1e;border-radius:14px;padding:28px 28px 24px;transform:translateZ(0);backface-visibility:hidden}
+    .wtcw-title{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.12em;color:#fbbf24;text-transform:uppercase;margin-bottom:14px}
+    .wtcw-h2{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#e8f5e8;margin-bottom:6px}
+    .wtcw-sub{font-size:13px;color:#7aaa7a;line-height:1.6;margin-bottom:18px}
+    .wtcw-input{width:100%;background:#060e06;border:1px solid #2d4a2d;border-radius:8px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:13px;color:#a7ffb0;outline:none;transition:border-color .15s}
+    .wtcw-input:focus{border-color:#4ade80}
+    .wtcw-label{display:block;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.1em;color:#4a6a4a;text-transform:uppercase;margin-bottom:6px}
+    .wtcw-field{margin-bottom:16px}
+    .wtcw-btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+    .wtcw-btn{background:#1e3a1e;color:#a7ffb0;border:1px solid #2d4a2d;border-radius:8px;font-family:'DM Mono',monospace;font-size:13px;font-weight:500;letter-spacing:0;padding:9px 20px;cursor:pointer;transition:background .15s,border-color .15s}
+    .wtcw-btn:hover{background:#2d4a2d;border-color:#4ade80}
+    .wtcw-btn:disabled{opacity:.45;cursor:not-allowed}
+    .wtcw-btn-primary{background:#4ade80;color:#001008;border-color:#4ade80}
+    .wtcw-btn-primary:hover{background:#86efac;border-color:#86efac}
+    .wtcw-addr-box{background:#060e06;border:1px solid #2d4a2d;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .wtcw-addr-text{font-family:'DM Mono',monospace;font-size:13px;color:#a7ffb0;word-break:break-all;flex:1}
+    .wtcw-copy-btn{background:#1e3a1e;color:#a7ffb0;border:none;border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;letter-spacing:0;padding:5px 12px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+    .wtcw-error{background:#1a0a0a;border:1px solid #ef4444;border-radius:8px;color:#fca5a5;font-size:13px;padding:10px 14px;margin-bottom:12px}
+    .wtcw-success{background:#091409;border:1px solid #4ade80;border-radius:8px;color:#a7ffb0;font-size:13px;padding:10px 14px;margin-bottom:12px}
+    .wtcw-warning{background:#0a0e00;border:1px solid #fbbf24;border-radius:8px;color:#fde68a;font-size:13px;padding:12px 14px;margin-bottom:12px;line-height:1.5}
+    .wtcw-separator{border:none;border-top:1px solid #1a2a1a;margin:20px 0}
+    .wtcw-info-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px}
+    .wtcw-info-item{flex:1;min-width:180px}
+    .wtcw-info-label{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;color:#3d5c3d;text-transform:uppercase;margin-bottom:4px}
+    .wtcw-info-value{font-size:13px;color:#9ac79f}
+
+    /* ── Mobile ── */
+    @media (max-width: 700px) {
+      html, body { overflow-x: hidden; max-width: 100vw; }
+
+      /* Nav links in exactly 2 rows: 5 on row 1, 6 on row 2 */
+      nav { height: auto; min-height: 56px; padding: 10px 16px; flex-wrap: wrap; gap: 8px 0; }
+      .nav-links { width: 100%; display: flex; flex-wrap: wrap; gap: 6px 10px; justify-content: space-between; }
+      .nav-links a { white-space: nowrap; }
+      .nav-links li.nav-break { display: block; flex-basis: 100%; height: 0; margin: 0; padding: 0; }
+
+      /* Layout */
+      .container { padding: 0 16px; }
+      .wallet-page-header { padding: 140px 0 32px; }
+      .wallet-section { padding: 32px 0 56px; }
+
+      /* Wallet card */
+      .wtcw-card { padding: 20px 16px 18px; border-radius: 12px; }
+      .wtcw-addr-box { flex-wrap: wrap; gap: 8px; padding: 12px 12px; }
+      .wtcw-addr-text { font-size: 11px; word-break: break-all; }
+      .wtcw-btn-row { flex-direction: column; }
+      .wtcw-btn { width: 100%; text-align: center; justify-content: center; }
+      .wtcw-info-row { gap: 12px; }
+      .wtcw-info-item { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav>
+  <a href="wattcoin-whitepaper.html" class="nav-logo" style="text-decoration:none">Watt<span>coin</span></a>
+  <ul class="nav-links">
+    <li><a href="wattcoin-whitepaper.html#mission">Mission</a></li>
+    <li><a href="wattcoin-whitepaper.html#vortex" style="color:#4ade80;font-weight:500">Vortex</a></li>
+    <li><a href="wattcoin-whitepaper.html#tokenomics">Tokenomics</a></li>
+    <li><a href="wattcoin-whitepaper.html#buy">Buy WTC</a></li>
+    <li><a href="wattcoin-whitepaper.html#staking">Staking</a></li>
+    <li><a href="wattcoin-whitepaper.html#nft-collection" class="nav-nft">NFT</a></li>
+    <li class="nav-break" aria-hidden="true"></li>
+    <li><a href="wattcoin-whitepaper.html#wtd">WTD</a></li>
+    <li><a href="wattcoin-whitepaper.html#comparison">Comparison</a></li>
+    <li><a href="wattcoin-whitepaper.html#roadmap">Roadmap</a></li>
+    <li><a href="wattcoin-whitepaper.html#governance">Governance</a></li>
+    <li><a href="wattcoin-whitepaper.html#download">Download</a></li>
+    <li><a href="wallet.html" class="nav-wallet">Wallet</a></li>
+  </ul>
+</nav>
+
+<!-- ── Page header ── -->
+<div class="wallet-page-header">
+  <div class="container">
+    <div style="max-width:680px;margin:0 auto">
+      <h1>My <span>Wallet</span></h1>
+      <p>Create a WTC wallet directly in your browser. Your private key is generated locally and never leaves your device. Download an encrypted backup to keep your funds safe — and buy WTC right here without installing the miner app.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Wallet app ── -->
+<div class="wallet-section">
+  <div class="container">
+    <div id="wtc-wallet-app" style="max-width:680px;margin:0 auto"></div>
+  </div>
+</div>
+
+<footer>
+  WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.267 &nbsp;&mdash;&nbsp; <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp; <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a> &nbsp;&mdash;&nbsp; <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a> &nbsp;&mdash;&nbsp; MAY 2026
+  <br><span id="wallet-visit-count" style="font-size:10px;color:#3a5a3a"></span>
+</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// WTC Web Wallet — client-side only, private key never leaves the browser
+// ════════════════════════════════════════════════════════════════════════════
+(function () {
+'use strict';
+
+// ── RIPEMD-160 (pure JS, RFC 2286) ───────────────────────────────────────────
+function ripemd160(data) {
+  const len=data.length,bitL=len*8,padLen=(len+9+63)&~63;
+  const buf=new Uint8Array(padLen);buf.set(data);buf[len]=0x80;
+  const dv=new DataView(buf.buffer);
+  dv.setUint32(padLen-8,bitL>>>0,true);dv.setUint32(padLen-4,Math.floor(bitL/2**32),true);
+  let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0;
+  const ROL=(x,n)=>((x<<n)|(x>>>(32-n)))>>>0;
+  const A32=(...v)=>v.reduce((a,b)=>(a+b)>>>0,0);
+  const RL=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,7,4,13,1,10,6,15,3,12,0,9,5,2,14,11,8,3,10,14,4,9,15,8,1,2,7,0,6,13,11,5,12,1,9,11,10,0,8,12,4,13,3,7,15,14,5,6,2,4,0,5,9,7,12,2,10,14,1,3,8,11,6,15,13];
+  const RR=[5,14,7,0,9,2,11,4,13,6,15,8,1,10,3,12,6,11,3,7,0,13,5,10,14,15,8,12,4,9,1,2,15,5,1,3,7,14,6,9,11,8,12,2,10,0,4,13,8,6,4,1,3,11,15,0,5,12,2,13,9,7,10,14,12,15,10,4,1,5,8,7,6,2,13,14,0,3,9,11];
+  const SL=[11,14,15,12,5,8,7,9,11,13,14,15,6,7,9,8,7,6,8,13,11,9,7,15,7,12,15,9,11,7,13,12,11,13,6,7,14,9,13,15,14,8,13,6,5,12,7,5,11,12,14,15,14,15,9,8,9,14,5,6,8,6,5,12,9,15,5,11,6,8,13,12,5,12,13,14,11,8,5,6];
+  const SR=[8,9,9,11,13,15,15,5,7,7,8,11,14,14,12,6,9,13,15,7,12,8,9,11,7,7,12,7,6,15,13,11,9,7,15,11,8,6,6,14,12,13,5,14,13,13,7,5,15,5,8,11,14,14,6,14,6,9,12,9,12,5,15,8,8,5,12,9,12,5,14,6,8,13,6,5,15,13,11,11];
+  const KL=[0,0x5A827999,0x6ED9EBA1,0x8F1BBCDC,0xA953FD4E];
+  const KR=[0x50A28BE6,0x5C4DD124,0x6D703EF3,0x7A6D76E9,0];
+  const F=[(x,y,z)=>(x^y^z)>>>0,(x,y,z)=>((x&y)|(~x&z))>>>0,(x,y,z)=>((x|~y)^z)>>>0,(x,y,z)=>((x&z)|(y&~z))>>>0,(x,y,z)=>(x^(y|~z))>>>0];
+  for(let i=0;i<padLen;i+=64){
+    const W=new Uint32Array(16);for(let j=0;j<16;j++)W[j]=dv.getUint32(i+j*4,true);
+    let al=h0,bl=h1,cl=h2,dl=h3,el=h4,ar=h0,br=h1,cr=h2,dr=h3,er=h4;
+    for(let j=0;j<80;j++){
+      const ri=(j/16)|0;
+      let T=A32(ROL(A32(al,F[ri](bl,cl,dl),W[RL[j]],KL[ri]),SL[j]),el);
+      al=el;el=dl;dl=ROL(cl,10);cl=bl;bl=T;
+      T=A32(ROL(A32(ar,F[4-ri](br,cr,dr),W[RR[j]],KR[ri]),SR[j]),er);
+      ar=er;er=dr;dr=ROL(cr,10);cr=br;br=T;
+    }
+    [h0,h1,h2,h3,h4]=[A32(h1,cl,dr),A32(h2,dl,er),A32(h3,el,ar),A32(h4,al,br),A32(h0,bl,cr)];
+  }
+  const out=new Uint8Array(20),ov=new DataView(out.buffer);
+  [h0,h1,h2,h3,h4].forEach((h,i)=>ov.setUint32(i*4,h,true));return out;
+}
+
+// ── secp256k1 (pure BigInt) ──────────────────────────────────────────────────
+const _P=0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
+const _N=0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+const _Gx=0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
+const _Gy=0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
+const mp=v=>((v%_P)+_P)%_P;
+const pm=(b,e,m)=>{let r=1n;b=b%m;while(e>0n){if(e&1n)r=r*b%m;e>>=1n;b=b*b%m;}return r;}
+function ptD([X,Y,Z]){if(Y===0n||Z===0n)return[0n,1n,0n];const A=mp(X*X),B=mp(Y*Y),C=mp(B*B),D=mp(2n*(mp((X+B)*(X+B))-A-C)),E=mp(3n*A),X2=mp(E*E-2n*D);return[X2,mp(E*(D-X2)-8n*C),mp(2n*Y*Z)];}
+function ptA(PA,PB){if(PA[2]===0n)return PB;if(PB[2]===0n)return PA;const[X1,Y1,Z1]=PA,[X2,Y2,Z2]=PB,z1z1=mp(Z1*Z1),z2z2=mp(Z2*Z2),U1=mp(X1*z2z2),U2=mp(X2*z1z1),S1=mp(Y1*Z2*z2z2),S2=mp(Y2*Z1*z1z1),H=mp(U2-U1),R=mp(S2-S1);if(H===0n)return R===0n?ptD(PA):[0n,1n,0n];const H2=mp(H*H),H3=mp(H2*H),X3=mp(R*R-H3-2n*U1*H2);return[X3,mp(R*(U1*H2-X3)-S1*H3),mp(H*Z1*Z2)];}
+function ptM(k,[Px,Py]){let R=[0n,1n,0n],Q=[Px,Py,1n];k=((k%_N)+_N)%_N;while(k>0n){if(k&1n)R=ptA(R,Q);Q=ptD(Q);k>>=1n;}return R;}
+function j2a([X,Y,Z]){if(Z===0n)return null;const iz=pm(Z,_P-2n,_P),iz2=mp(iz*iz);return[mp(X*iz2),mp(Y*iz2*iz)];}
+function bh(buf){return Array.from(buf).map(b=>b.toString(16).padStart(2,'0')).join('');}
+function privToPub(priv){
+  const k=BigInt('0x'+bh(priv));
+  if(k<=0n||k>=_N)throw new Error('Invalid private key');
+  const pt=j2a(ptM(k,[_Gx,_Gy]));if(!pt)throw new Error('Point at infinity');
+  const out=new Uint8Array(33);out[0]=(pt[1]&1n)===0n?0x02:0x03;
+  const xh=pt[0].toString(16).padStart(64,'0');
+  for(let i=0;i<32;i++)out[i+1]=parseInt(xh.slice(i*2,i*2+2),16);return out;
+}
+
+// ── bech32m ──────────────────────────────────────────────────────────────────
+const _HRP='wtc',_BM=0x2bc830a3,_CS='qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const _CR=Object.fromEntries([..._CS].map((c,i)=>[c,i]));
+function bpoly(v){const G=[0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];let c=1;for(const x of v){const t=c>>25;c=((c&0x1ffffff)<<5)^x;for(let i=0;i<5;i++)if((t>>i)&1)c^=G[i];}return c;}
+function hrpX(s){const r=[];for(const c of s)r.push(c.charCodeAt(0)>>5);r.push(0);for(const c of s)r.push(c.charCodeAt(0)&31);return r;}
+function bcv(data,fB,tB,pad){let acc=0,bits=0;const res=[],mv=(1<<tB)-1;for(const v of data){acc=(acc<<fB)|v;bits+=fB;while(bits>=tB){bits-=tB;res.push((acc>>bits)&mv);}}if(pad&&bits>0)res.push((acc<<(tB-bits))&mv);return res;}
+function encodeWtcAddr(h160){
+  const words=bcv([...h160],8,5,true),data=[0,...words];
+  const p=bpoly([...hrpX(_HRP),...data,0,0,0,0,0,0])^_BM;
+  return _HRP+'1'+[...data,...[0,1,2,3,4,5].map(i=>(p>>(5*(5-i)))&31)].map(d=>_CS[d]).join('');
+}
+function isValidWtcAddr(addr){
+  if(typeof addr!=='string')return false;
+  const a=addr.toLowerCase(),sep=a.lastIndexOf('1');
+  if(sep<1||sep+7>a.length||a.slice(0,sep)!==_HRP)return false;
+  const data=[];for(const c of a.slice(sep+1)){if(!(c in _CR))return false;data.push(_CR[c]);}
+  if(bpoly([...hrpX(_HRP),...data])!==_BM)return false;
+  const pl=data.slice(0,-6);if(pl.length<1||pl[0]!==0)return false;
+  const bytes=bcv(pl.slice(1),5,8,false);return !!(bytes&&bytes.length===20);
+}
+
+// ── Key generation (async — Web Crypto for entropy + SHA-256) ────────────────
+async function generateKeypair() {
+  let priv;
+  for(let i=0;i<32;i++){
+    const c=crypto.getRandomValues(new Uint8Array(32));
+    const k=BigInt('0x'+bh(c));
+    if(k>0n&&k<_N){priv=c;break;}
+  }
+  if(!priv)throw new Error('RNG failure');
+  const pub=privToPub(priv);
+  const sha=await crypto.subtle.digest('SHA-256',pub);
+  const h160=ripemd160(new Uint8Array(sha));
+  return{privateKey:bh(priv),publicKey:bh(pub),address:encodeWtcAddr(h160)};
+}
+
+// ── Wallet encryption: PBKDF2-SHA256-600k → AES-256-GCM ─────────────────────
+async function deriveKey(pw,salt){
+  const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),{name:'PBKDF2'},false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:600000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+function hx(s){return Uint8Array.from({length:s.length/2},(_,i)=>parseInt(s.slice(i*2,i*2+2),16));}
+async function encryptWallet(json,pw){
+  const salt=crypto.getRandomValues(new Uint8Array(32)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(pw,salt);
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(json));
+  return{salt:bh(salt),iv:bh(iv),ciphertext:bh(new Uint8Array(ct))};
+}
+async function decryptWallet(enc,pw){
+  const key=await deriveKey(pw,hx(enc.salt));
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:hx(enc.iv)},key,hx(enc.ciphertext));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+// ── Local storage ─────────────────────────────────────────────────────────────
+const LS_ENC='wtc-web-wallet-v1',LS_ADDR='wtc-web-addr-v1',LS_ORDER_PROOFS='wtc-web-order-proofs-v1';
+function saveWallet(enc,addr){try{localStorage.setItem(LS_ENC,JSON.stringify(enc));localStorage.setItem(LS_ADDR,addr);}catch(_){}}
+function loadEnc(){try{const r=localStorage.getItem(LS_ENC);return r?JSON.parse(r):null;}catch(_){return null;}}
+function loadAddr(){try{return localStorage.getItem(LS_ADDR)||null;}catch(_){return null;}}
+function loadOrderProofMap(){try{const r=localStorage.getItem(LS_ORDER_PROOFS);const obj=r?JSON.parse(r):{};return obj&&typeof obj==='object'?obj:{};}catch(_){return {};}}
+function saveOrderProofMap(map){try{localStorage.setItem(LS_ORDER_PROOFS,JSON.stringify(map||{}));}catch(_){} }
+function getOrderProof(orderId){const m=loadOrderProofMap();return m&&orderId?String(m[orderId]||''):'';}
+function setOrderProof(orderId,proof){if(!orderId||!proof)return;const m=loadOrderProofMap();m[orderId]=String(proof);saveOrderProofMap(m);}
+function clearOrderProof(orderId){if(!orderId)return;const m=loadOrderProofMap();if(m&&Object.prototype.hasOwnProperty.call(m,orderId)){delete m[orderId];saveOrderProofMap(m);}}
+function clearWallet(){try{localStorage.removeItem(LS_ENC);localStorage.removeItem(LS_ADDR);localStorage.removeItem(LS_ORDER_PROOFS);}catch(_){}}
+
+const LS_STAKING_PROOFS='wtc-web-staking-proofs-v1';
+function loadStakingProofMap(){try{const r=localStorage.getItem(LS_STAKING_PROOFS);const obj=r?JSON.parse(r):{};return obj&&typeof obj==='object'?obj:{};}catch(_){return {};}}
+function saveStakingProofMap(map){try{localStorage.setItem(LS_STAKING_PROOFS,JSON.stringify(map||{}));}catch(_){}}
+function getStakingProof(entryId){const m=loadStakingProofMap();return m&&entryId?String(m[entryId]||''):'';}
+function setStakingProof(entryId,proof){if(!entryId||!proof)return;const m=loadStakingProofMap();m[entryId]=String(proof);saveStakingProofMap(m);}
+
+// ── Sale API ──────────────────────────────────────────────────────────────────
+const SALE_API='/api';
+async function apiCall(method,path,body){
+  const opts={method,headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(12000)};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(SALE_API+path,opts);const d=await r.json();
+  if(!r.ok)throw new Error(d.error||d.message||'HTTP '+r.status);return d;
+}
+
+function orderPathWithProof(orderId){
+  const oid=String(orderId||'').trim();
+  const proof=getOrderProof(oid);
+  if(!oid)return '/order/';
+  if(!proof)return '/order/'+oid;
+  return '/order/'+oid+'?ownerProof='+encodeURIComponent(proof);
+}
+
+// ── App state ─────────────────────────────────────────────────────────────────
+const SELLER_USDC_ADDR='0x0ca8cc23d85e5c988828076978c4ca65aa4293e8';
+let _state='idle';  // idle | creating | backup | active | restoring
+let _pending=null;  // newly generated keypair before password set
+let _priceData=null,_order=null,_orderTimer=null;
+let _buyErr='',_buyMsg='',_buyBusy=false;
+let _balance=null; // { purchased, pending } or null while loading
+let _buyerEthAddr=''; // buyer's Ethereum address for payment matching
+let _showTxs=false;   // whether the order history panel is visible
+let _paymentSent=false; // true once user taps "Open in Wallet App" — locks the form
+let _activeTab='wallet';  // 'wallet' | 'staking'
+let _stakingStatus=null;
+let _stakingEntries=[];
+let _stakingAmount='';
+let _stakingMsg='';
+let _stakingMsgOk=true;
+let _stakingBusy=false;
+let _stakingTimer=null;
+
+// ── NFT Tier Status Bar ──────────────────────────────────────────────────────
+function renderNftTierBar(purchasedWtc) {
+  const BRONZE=5000,SILVER=15000,GOLD=25000;
+  const hasBronze=purchasedWtc>=BRONZE,hasSilver=purchasedWtc>=SILVER,hasGold=purchasedWtc>=GOLD;
+  const badge=(on,color,bg)=>`font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;color:${on?color:'#3a4a3a'};background:${on?bg:'#111a11'};border:1px solid ${on?color:'#1e3a1e'};box-shadow:${on?'0 0 7px '+color+'55':'none'};white-space:nowrap`;
+  let toGo;
+  if(!hasBronze)toGo=`<span style="font-family:'DM Mono',monospace;font-weight:700;color:#d97706">${Math.ceil(BRONZE-purchasedWtc).toLocaleString()}</span><span style="color:#5a7a5a;margin-left:4px">WTC to Bronze</span>`;
+  else if(!hasSilver)toGo=`<span style="font-family:'DM Mono',monospace;font-weight:700;color:#9ca3af">${Math.ceil(SILVER-purchasedWtc).toLocaleString()}</span><span style="color:#5a7a5a;margin-left:4px">WTC to Silver</span>`;
+  else if(!hasGold)toGo=`<span style="font-family:'DM Mono',monospace;font-weight:700;color:#fbbf24">${Math.ceil(GOLD-purchasedWtc).toLocaleString()}</span><span style="color:#5a7a5a;margin-left:4px">WTC to Gold</span>`;
+  else toGo='<span style="color:#fbbf24;font-weight:700">✦ Gold tier reached</span>';
+  const glow=hasGold?'#fbbf24':hasSilver?'#9ca3af':'#d97706';
+  return `<div style="background:#0a140a;border:1px solid #1e3a1e;border-radius:12px;padding:11px 16px;margin-bottom:14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-family:'DM Mono',monospace;font-size:9px;color:#4ade80;letter-spacing:0.1em;white-space:nowrap">PURCHASED WTC</span>
+      <span style="font-size:15px;font-weight:700;color:#e8f5e8;font-family:'DM Mono',monospace;white-space:nowrap">${Math.floor(purchasedWtc).toLocaleString()}</span>
+      <div style="display:flex;gap:5px">
+        <span style="${badge(hasBronze,'#d97706','#2a1500')}">Bronze</span>
+        <span style="${badge(hasSilver,'#9ca3af','#1a1a1e')}">Silver</span>
+        <span style="${badge(hasGold,'#fbbf24','#2d2200')}">Gold</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;font-size:9px;font-family:'DM Mono',monospace;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+      <span style="color:${hasBronze?'#d97706':'#5a3a10'}">Bronze&nbsp;5,000</span>
+      <span style="color:${hasSilver?'#9ca3af':'#3a3a45'}">Silver&nbsp;15,000</span>
+      <span style="color:${hasGold?'#fbbf24':'#5a4a10'}">Gold&nbsp;25,000</span>
+    </div>
+  </div>
+  <div style="height:7px;background:#172a17;border-radius:99px;overflow:hidden;position:relative">
+    <div style="position:absolute;left:20%;top:0;bottom:0;width:1px;background:#d97706;opacity:0.45;z-index:1"></div>
+    <div style="position:absolute;left:60%;top:0;bottom:0;width:1px;background:#9ca3af;opacity:0.45;z-index:1"></div>
+    <div id="wtc-tier-bar-fill" data-pct="${Math.min(Math.max(0,purchasedWtc),GOLD)/GOLD*100}" style="position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#d97706 0%,#c47a12 20%,#9ca3af 60%,#fbbf24 100%);border-radius:99px;transition:width 1.3s ease-out;box-shadow:0 0 7px ${glow}88"></div>
+  </div>
+  <div style="margin-top:5px;font-size:11px;min-height:16px">${toGo}</div>
+</div>`;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){
+  const app=document.getElementById('wtc-wallet-app');if(!app)return;
+  if(!loadEnc()&&_state!=='creating'&&_state!=='restoring')_state='idle';
+  const views={idle:vIdle,creating:vCreating,backup:vBackup,active:vActive,restoring:vRestoring};
+  app.innerHTML=(views[_state]||vIdle)();
+  wire();
+  // Animate tier bar fill after paint
+  setTimeout(()=>{
+    const fill=document.getElementById('wtc-tier-bar-fill');
+    if(fill)fill.style.width=(parseFloat(fill.dataset.pct)||0)+'%';
+  },80);
+  // Wire ETH address input — persists value across re-renders
+  const elEth=document.getElementById('wbuy-eth');
+  if(elEth){
+    if(_buyerEthAddr)elEth.value=_buyerEthAddr;
+    elEth.addEventListener('input',e=>{_buyerEthAddr=e.target.value.trim();});
+  }
+}
+
+function vIdle(){return`
+<div class="wtcw-card">
+  <div class="wtcw-title">WTC Web Wallet</div>
+  <div class="wtcw-h2">No wallet on this device</div>
+  <div class="wtcw-sub">Generate a WTC address in your browser. Your private key is created locally and never sent to any server.</div>
+  <div class="wtcw-btn-row">
+    <button class="wtcw-btn wtcw-btn-primary" id="wbtn-create">Generate New Wallet</button>
+    <button class="wtcw-btn" id="wbtn-restore">Restore from Backup</button>
+  </div>
+  <div class="wtcw-warning" style="margin-top:20px"><strong>Security note:</strong> Your keys live in browser storage only. Always download a backup — if you clear browser data without one, access to your WTC is lost forever.</div>
+</div>`;}
+
+function vCreating(){const a=_pending?_pending.address:'Generating…';return`
+<div class="wtcw-card">
+  <div class="wtcw-title">New Wallet</div>
+  <div class="wtcw-h2">Your WTC Address</div>
+  <div class="wtcw-addr-box"><span class="wtcw-addr-text" id="wnew-addr">${a}</span></div>
+  <div class="wtcw-sub">Set a password to encrypt your private key in this browser.</div>
+  <div class="wtcw-field"><label class="wtcw-label" for="wpw1">Password</label><input class="wtcw-input" id="wpw1" type="password" placeholder="Minimum 8 characters" autocomplete="new-password"/></div>
+  <div class="wtcw-field"><label class="wtcw-label" for="wpw2">Confirm Password</label><input class="wtcw-input" id="wpw2" type="password" placeholder="Repeat password" autocomplete="new-password"/></div>
+  <div id="wcreate-err"></div>
+  <div class="wtcw-btn-row">
+    <button class="wtcw-btn wtcw-btn-primary" id="wbtn-confirm">Create Wallet</button>
+    <button class="wtcw-btn" id="wbtn-cancel-create">Cancel</button>
+  </div>
+</div>`;}
+
+function vBackup(){const a=loadAddr()||'';return`
+<div class="wtcw-card">
+  <div class="wtcw-title">&#9888; Save Your Backup First</div>
+  <div class="wtcw-h2">Wallet created</div>
+  <div class="wtcw-addr-box">
+    <span class="wtcw-addr-text">${a}</span>
+    <button class="wtcw-copy-btn" onclick="navigator.clipboard.writeText('${a}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+  </div>
+  <div class="wtcw-warning"><strong>&#9888; Download your backup before continuing.</strong><br>This is the only way to recover your wallet if browser data is lost. Store it somewhere safe and offline.</div>
+  <div class="wtcw-btn-row" style="margin-bottom:16px">
+    <button class="wtcw-btn wtcw-btn-primary" id="wbtn-dl-backup">&#8595; Download Backup</button>
+  </div>
+  <div class="wtcw-field" style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+    <input type="checkbox" id="wchk-saved" style="accent-color:#4ade80;width:16px;height:16px"/>
+    <label for="wchk-saved" style="font-family:'DM Mono',monospace;font-size:12px;color:#7aaa7a;cursor:pointer">I have saved my backup file securely</label>
+  </div>
+  <button class="wtcw-btn" id="wbtn-proceed" disabled style="opacity:.35">Continue to My Wallet</button>
+</div>`;}
+
+function vActive(){
+  const a=loadAddr()||'';
+  const addrHtml=a
+    ?`<div class="wtcw-addr-box"><span class="wtcw-addr-text">${a}</span><button class="wtcw-copy-btn" onclick="navigator.clipboard.writeText('${a}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button></div>`
+    :`<div class="wtcw-error">Address not found. Please restore from backup.</div>`;
+  const balQueued    = _balance ? (_balance.queued   || 0) : 0;
+  const balDelivered = _balance ? (_balance.delivered || 0) : 0;
+  const balPending   = _balance ? _balance.pending : 0;
+  const balOrders = _balance && Array.isArray(_balance.orders) ? _balance.orders : [];
+  const COUNTED_STATUSES=['fulfilled','queued','delivery_pending','payment_submitted'];
+  const tierPurchasedWtc=balOrders.length>0
+    ?balOrders.filter(o=>COUNTED_STATUSES.includes(o.status)).reduce((s,o)=>s+(o.wtcAmount||0),0)
+    :0;
+  const tierBarHtml=tierPurchasedWtc>0||_balance?renderNftTierBar(tierPurchasedWtc):'';
+  const txHistoryHtml = balOrders.length>0 ? `<div style="margin-bottom:12px">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;color:#4a6a4a;letter-spacing:.06em;margin-bottom:6px">ORDER HISTORY</div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      ${balOrders.map(o=>{
+        const statusColor=o.status==='fulfilled'?'#4ade80':o.status==='queued'||o.status==='payment_submitted'||o.status==='delivery_pending'?'#fbbf24':o.status==='expired'||o.status==='failed'?'#fca5a5':'#9ac79f';
+        const addr=o.wtcAddress||'';
+        const addrShort=addr?addr.slice(0,14)+'\u2026'+addr.slice(-6):'';
+        const txRaw=o.fulfilledTxId||o.matchedTxHash||null;
+        const txid=txRaw?txRaw.slice(0,12)+'\u2026':'\u2014';
+        return `<div style="background:#071507;border:1px solid #1a2a1a;border-radius:6px;padding:8px 10px;font-family:'DM Mono',monospace;font-size:10px;color:#6b9b6b;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="color:${statusColor};font-weight:700;min-width:80px">${o.status}</span>
+          <span style="color:#fcd34d">${(o.wtcAmount||0).toLocaleString()} WTC</span>
+          <span>$${(o.usdcRequired||0).toFixed(2)} USDC</span>
+          <span style="color:#4a6a4a">deliver\u2192 ${addrShort||'(unknown)'}</span>
+          <span style="color:#4a6a4a">tx: ${txid}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>` : '';
+  const balHtml=`
+  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px">
+    ${balDelivered>0?`<div style="flex:1;min-width:120px;background:#071507;border:1px solid #1a4a1a;border-radius:10px;padding:14px 18px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#4ade80;letter-spacing:.08em;margin-bottom:4px">DELIVERED</div>
+      <div style="font-family:'Playfair Display',serif;font-size:24px;color:#4ade80;font-weight:700">${balDelivered.toLocaleString()}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#4ade80;margin-top:2px">WTC sent to your wallet &#10003;</div>
+    </div>`:''}
+    ${balQueued>0?`<div style="flex:1;min-width:120px;background:#0a160a;border:1px solid #2d4a1e;border-radius:10px;padding:14px 18px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#fbbf24;letter-spacing:.08em;margin-bottom:4px">QUEUED FOR DELIVERY</div>
+      <div style="font-family:'Playfair Display',serif;font-size:24px;color:#fcd34d;font-weight:700">${balQueued.toLocaleString()}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#3d5c3d;margin-top:2px">WTC paid &mdash; awaiting block flush</div>
+    </div>`:''}
+    ${balPending>0?`<div style="flex:1;min-width:120px;background:#0a160a;border:1px solid #2a3a1e;border-radius:10px;padding:14px 18px">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#fbbf24;letter-spacing:.08em;margin-bottom:4px">AWAITING PAYMENT</div>
+      <div style="font-family:'Playfair Display',serif;font-size:24px;color:#fcd34d;font-weight:700">${balPending.toLocaleString()}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:#3d5c3d;margin-top:2px">WTC reserved — send USDC to confirm</div>
+    </div>`:''}
+  </div>`;
+
+  const tabBar=`<div style="display:flex;border-bottom:1px solid #1e3a1e;margin-bottom:20px">
+    <button id="wtab-wallet" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid ${_activeTab==='wallet'?'#4ade80':'transparent'};color:${_activeTab==='wallet'?'#4ade80':'#6b9a6b'};font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;cursor:pointer;font-weight:400">WALLET</button>
+    <button id="wtab-staking" style="padding:8px 18px;background:transparent;border:none;border-bottom:2px solid ${_activeTab==='staking'?'#4ade80':'transparent'};color:${_activeTab==='staking'?'#4ade80':'#6b9a6b'};font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.08em;cursor:pointer;font-weight:400">STAKING</button>
+  </div>`;
+
+  const walletTabHtml=`${tierBarHtml}${balHtml}<hr class="wtcw-separator"/>${vBuySection(a)}<hr class="wtcw-separator"/>
+  <div class="wtcw-info-row">
+    <div class="wtcw-info-item"><div class="wtcw-info-label">Backup</div><div class="wtcw-info-value"><button class="wtcw-btn" id="wbtn-export" style="padding:6px 14px;font-size:11px">Export Backup</button></div></div>
+    <div class="wtcw-info-item"><div class="wtcw-info-label">Wallet</div><div class="wtcw-info-value"><button class="wtcw-btn" id="wbtn-delete" style="padding:6px 14px;font-size:11px;color:#fca5a5;border-color:#3a1a1a">Delete Wallet</button></div></div>
+  </div>`;
+
+  return`
+<div class="wtcw-card">
+  <div class="wtcw-title">My WTC Wallet</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div class="wtcw-h2" style="margin-bottom:0">Wallet Address</div>${balOrders.length>0?`<button class="wtcw-btn" id="wbtn-txs" style="padding:4px 12px;font-size:11px">${_showTxs?'&#x25B2; Hide':'Transactions'}</button>`:''}</div>
+  ${addrHtml}
+  <div style="font-size:12px;color:#3d5c3d;font-family:'DM Mono',monospace;margin-bottom:${_showTxs?'10px':'14px'}">Safe to share &mdash; this is your public receive address.</div>
+  ${_showTxs?txHistoryHtml:''}
+  ${tabBar}
+  ${_activeTab==='staking'?vStakingSection():walletTabHtml}
+</div>`;}
+
+// ── Staking data fetch + handlers ─────────────────────────────────────────────
+async function fetchStakingData(){
+  const a=loadAddr();
+  try{const s=await apiCall('GET','/staking-status');if(s&&s.ok){_stakingStatus=s;render();}}catch(_){}
+  if(!a)return;
+  try{const r=await apiCall('GET','/staking/my-entries/'+encodeURIComponent(a));if(r&&r.ok){_stakingEntries=r.entries||[];render();}}catch(_){}
+}
+function stopStakingPoll(){if(_stakingTimer){clearInterval(_stakingTimer);_stakingTimer=null;}}
+async function handleStakingStake(){
+  const a=loadAddr();
+  const amt=parseInt(_stakingAmount,10);
+  const minStake=_stakingStatus?_stakingStatus.minStake:100;
+  if(!a){_stakingMsg='No wallet address.';_stakingMsgOk=false;render();return;}
+  if(!Number.isFinite(amt)||amt<minStake){_stakingMsg='Minimum stake is '+minStake+' WTC.';_stakingMsgOk=false;render();return;}
+  const balTotal=(_balance?(_balance.delivered||0):0)+(_balance?(_balance.queued||0):0);
+  if(balTotal>0&&amt>balTotal){_stakingMsg='Insufficient balance. You have '+balTotal.toLocaleString()+' WTC in your wallet.';_stakingMsgOk=false;render();return;}
+  _stakingBusy=true;_stakingMsg='';render();
+  try{
+    const r=await apiCall('POST','/staking/stake',{wtcAddress:a,wtcAmount:Math.floor(amt)});
+    if(r.ok){
+      if(r.ownerProof)setStakingProof(r.entryId,r.ownerProof);
+      _stakingMsg=r.alreadyExists?'You already have a pending staking entry.':'Stake submitted! Reward will be paid when the queue reaches the flush threshold.';
+      _stakingMsgOk=true;_stakingAmount='';
+      await fetchStakingData();
+    }else{_stakingMsg=r.error||'Failed to submit stake.';_stakingMsgOk=false;}
+  }catch(e){_stakingMsg='Error: '+_escHtml(e.message||String(e));_stakingMsgOk=false;}
+  _stakingBusy=false;render();
+}
+async function handleStakingCancel(entryId){
+  _stakingBusy=true;_stakingMsg='';render();
+  try{
+    const proof=getStakingProof(entryId);
+    const r=await apiCall('POST','/staking/cancel',{entryId:entryId,ownerProof:proof});
+    _stakingMsg=r.ok?'Staking entry cancelled.':(r.error||'Failed to cancel.');
+    _stakingMsgOk=r.ok;
+    await fetchStakingData();
+  }catch(e){_stakingMsg='Error: '+_escHtml(e.message||String(e));_stakingMsgOk=false;}
+  _stakingBusy=false;render();
+}
+
+// ── Staking section UI ────────────────────────────────────────────────────────
+function vStakingSection(){
+  const poolBal=_stakingStatus?_stakingStatus.poolBalance:null;
+  const totalStaked=_stakingStatus?(_stakingStatus.totalStaked||0):0;
+  const apy=_stakingStatus?(_stakingStatus.currentApy||0):0;
+  const minStake=_stakingStatus?_stakingStatus.minStake:100;
+  const hasPending=_stakingEntries.some(e=>e.status==='pending');
+
+  const balDelivered=_balance?(_balance.delivered||0):0;
+  const balQueued=_balance?(_balance.queued||0):0;
+  const balTotal=balDelivered+balQueued;
+  const balanceHtml=balTotal>0
+    ?`<div style="background:#071507;border:1px solid #1a3a1a;border-radius:10px;padding:11px 18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.06em;color:#4a6a4a;text-transform:uppercase">Your Wallet Balance</div>
+      <div style="font-family:'DM Mono',monospace;color:#4ade80;font-size:16px;font-weight:400;margin-left:auto">${balTotal.toLocaleString()} WTC</div>
+      ${balQueued>0&&balDelivered>0?`<div style="font-family:'DM Mono',monospace;font-size:10px;color:#4a6a4a;width:100%;text-align:right">${balDelivered.toLocaleString()} delivered + ${balQueued.toLocaleString()} queued for delivery</div>`:''}
+      ${balQueued>0&&balDelivered===0?`<div style="font-family:'DM Mono',monospace;font-size:10px;color:#fbbf24;width:100%;text-align:right">${balQueued.toLocaleString()} WTC queued for delivery</div>`:''}
+    </div>`:'';
+
+  const poolHtml=`<div style="background:#0a160a;border:1px solid #1e3a1e;border-radius:10px;padding:14px 18px;margin-bottom:18px;display:flex;gap:32px;flex-wrap:wrap">
+  <div><div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;color:#4a6a4a;text-transform:uppercase;margin-bottom:4px">Coins Left to Earn</div>
+  <div style="color:#4ade80;font-size:20px;font-weight:400;font-family:'DM Mono',monospace">${poolBal!==null?poolBal.toLocaleString()+' WTC':'—'}</div></div>
+  <div><div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;color:#4a6a4a;text-transform:uppercase;margin-bottom:4px">Total Currently Staked</div>
+  <div style="color:#e8f5e8;font-size:20px;font-weight:400;font-family:'DM Mono',monospace">${totalStaked.toLocaleString()} WTC</div></div>
+  <div><div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;color:#4a6a4a;text-transform:uppercase;margin-bottom:4px">Current APY</div>
+  <div style="color:${apy>0?'#4ade80':'#6b9a6b'};font-size:20px;font-weight:400;font-family:'DM Mono',monospace">${apy.toFixed(2)}%</div></div>
+  </div>`;
+
+  const descHtml=`<div style="font-size:12px;color:#3d5c3d;line-height:1.6;margin-bottom:16px">Stake WTC to earn rewards. Every <strong style="color:#7aaa7a">100&nbsp;WTC</strong> in the queue adds <strong style="color:#7aaa7a">0.01%&nbsp;APY</strong>. Rewards are paid from the 166,667&nbsp;WTC staking pool until fully depleted.</div>`;
+
+  const stakeFormHtml=!hasPending
+    ?`<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <input id="wstk-amt" type="number" min="${minStake}" step="1" placeholder="Amount (min ${minStake} WTC)" value="${_escHtml(String(_stakingAmount))}" ${_stakingBusy?'disabled':''} class="wtcw-input" style="width:220px;font-family:'DM Mono',monospace;font-size:13px"/>
+      <button id="wstk-stake" ${_stakingBusy?'disabled':''} class="wtcw-btn${_stakingBusy?'':' wtcw-btn-primary'}">${_stakingBusy?'Submitting\u2026':'Stake WTC'}</button>
+    </div>`
+    :`<div class="wtcw-warning" style="margin-bottom:14px">You have a pending staking entry. Cancel it below to stake a different amount.</div>`;
+
+  const msgHtml=_stakingMsg?`<div class="${_stakingMsgOk?'wtcw-success':'wtcw-error'}" style="margin-bottom:12px">${_escHtml(_stakingMsg)}</div>`:'';
+
+  const entriesHtml=_stakingEntries.length>0?`<div>
+    <div style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.08em;color:#4a6a4a;text-transform:uppercase;margin-bottom:8px">My Staking Entries</div>
+    ${_stakingEntries.map(e=>`<div style="background:#060e06;border:1px solid #1e3a1e;border-radius:8px;padding:12px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:120px">
+        <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:400;color:#a7ffb0">${e.wtcAmount.toLocaleString()} WTC</div>
+        <div style="font-size:11px;color:#3d5c3d">${new Date(e.createdAtMs).toLocaleString()}</div>
+      </div>
+      <div>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:400;letter-spacing:.06em;padding:3px 9px;border-radius:5px;background:${e.status==='pending'?'#1e3a1e':e.status==='rewarded'?'#091409':'#1a0a0a'};color:${e.status==='pending'?'#4ade80':e.status==='rewarded'?'#86efac':'#fca5a5'}">${e.status.toUpperCase()}</span>
+      </div>
+      ${e.status==='rewarded'&&e.rewardAmount!==null?`<div style="color:#86efac;font-size:13px">+${e.rewardAmount.toLocaleString()} WTC @ ${e.apyAtFlush}% APY</div>`:''}
+      ${e.status==='pending'?`<button onclick="handleStakingCancel('${_escHtml(e.id)}')" ${_stakingBusy?'disabled':''} class="wtcw-btn" style="padding:5px 12px;font-size:11px;color:#fca5a5;border-color:#3a1a1a">Cancel</button>`:''}
+    </div>`).join('')}
+  </div>`:'';
+
+  return balanceHtml+poolHtml+descHtml+stakeFormHtml+msgHtml+entriesHtml;
+}
+
+function vBuySection(a){
+  if(_order&&(_order.status==='pending_payment'||_order.status==='payment_submitted'||_order.status==='queued'||_order.status==='delivery_pending')){
+    const usdc=(_order.usdcRequired||0).toFixed(2);
+    const usdcRaw=Math.round((_order.usdcRequired||0)*1000000);
+    const seller=_order.sellerUsdcAddress||'';
+    const isQueued=_order.status==='queued'||_order.status==='delivery_pending';
+    const isSubmitted=_order.status==='payment_submitted';
+    const isWaiting=_paymentSent&&_order.status==='pending_payment';  // sent/opened wallet app but not yet detected
+    const eip681=`ethereum:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48@1/transfer?address=${seller}&uint256=${usdcRaw}`;
+    return`<div class="wtcw-title">Buy WTC</div>
+${isQueued?`<div class="wtcw-success">&#10003; Payment received &mdash; WTC is queued for delivery to your wallet.</div>`:
+isSubmitted?`<div style="background:#0a1a0a;border:1px solid #2d4a2d;border-radius:10px;padding:18px 16px">
+  <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:8px">&#9203; Payment in Progress</div>
+  <div style="font-size:13px;color:#9ac79f;margin-bottom:6px">Your payment transaction was submitted, but it is <strong style="color:#fcd34d">not counted as received yet</strong>. We will mark it paid only after on-chain confirmation.</div>
+  <div style="font-size:11px;color:#4a6a4a;margin-top:10px;font-family:'DM Mono',monospace">Order: ${_order.id||''}</div>
+</div>`:
+isWaiting?`<div style="background:#0a1a0a;border:1px solid #2d4a2d;border-radius:10px;padding:18px 16px">
+  <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:8px">&#9203; Payment in Progress</div>
+  <div style="font-size:13px;color:#9ac79f;margin-bottom:6px">Your USDC transaction is being detected on-chain. This can take <strong style="color:#fcd34d">up to 10 minutes</strong>.</div>
+  <div style="font-size:11px;color:#4a6a4a;margin-top:10px;font-family:'DM Mono',monospace">Order: ${_order.id||''}</div>
+  <div style="margin-top:12px"><a href="#" style="font-size:11px;color:#4a7a4a;text-decoration:underline" onclick="event.preventDefault();_paymentSent=false;render()">Haven&#39;t sent payment yet? Show payment instructions</a></div>
+</div>`:
+`<div>
+  <div class="wtcw-sub" style="margin-bottom:14px">Send exactly <strong style="color:#fcd34d">$${usdc} USDC</strong> (ERC-20 on Ethereum mainnet) to the address below. Your WTC will be delivered once payment is confirmed.</div>
+  <div style="margin-bottom:10px">
+    <div class="wtcw-label" style="margin-bottom:4px">USDC Recipient Address</div>
+    <div class="wtcw-addr-box" style="align-items:center">
+      <span class="wtcw-addr-text" style="font-size:11px;word-break:break-all">${seller}</span>
+      <button class="wtcw-copy-btn" onclick="navigator.clipboard.writeText('${seller}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>
+  </div>
+  <div style="margin-bottom:16px">
+    <div class="wtcw-label" style="margin-bottom:4px">Exact Amount (USDC)</div>
+    <div class="wtcw-addr-box" style="align-items:center">
+      <span class="wtcw-addr-text">${usdc} USDC</span>
+      <button class="wtcw-copy-btn" onclick="navigator.clipboard.writeText('${usdc}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>
+  </div>
+  ${typeof window!=='undefined'&&typeof window.ethereum!=='undefined'
+    ?`<button class="wtcw-btn wtcw-btn-primary" id="wbtn-pay-metamask" style="width:100%;justify-content:center;gap:10px;font-size:14px">&#128279; Pay with MetaMask</button>`
+    :`<a class="wtcw-btn wtcw-btn-primary" href="${eip681}" target="_blank" rel="noopener" onclick="_paymentSent=true;render()" style="width:100%;justify-content:center;gap:10px;font-size:14px;text-decoration:none;display:flex">&#128279; Open in Wallet App</a>`}
+  <div style="font-size:11px;color:#6b9b6b;margin-top:8px;margin-bottom:12px">MetaMask &middot; Trust Wallet &middot; Coinbase &middot; any EIP-681 wallet &mdash; or send manually using the address above</div>
+  <div id="worder-status" style="font-size:12px;color:#fbbf24;font-family:'DM Mono',monospace">Status: pending_payment &mdash; can take up to 10 min</div>
+</div>`}
+<div class="wtcw-btn-row" style="margin-top:14px">
+  ${(isQueued||isWaiting||isSubmitted)?'':`<button class="wtcw-btn" id="wbtn-cancel-order">Cancel Order</button>`}
+  <button class="wtcw-btn" id="wbtn-new-order">${isWaiting?'Cancel if payment not done':'New Order'}</button>
+</div>`;}
+
+  const errHtml=_buyErr?`<div class="wtcw-error">${_buyErr}</div>`:'';
+  const msgHtml=_buyMsg?`<div class="wtcw-success">${_buyMsg}</div>`:'';
+  const priceHtml=_priceData
+    ?`<div style="font-family:'DM Mono',monospace;font-size:12px;color:#a7ffb0;margin-bottom:12px">${_priceData.wtcAmount.toLocaleString()} WTC = $${_priceData.usdcRequired.toFixed(2)} USDC</div>`
+    :`<div style="min-height:20px;margin-bottom:12px"></div>`;
+  return`<div class="wtcw-title">Buy WTC</div>
+<div class="wtcw-sub" style="margin-bottom:14px">Purchase WTC directly &mdash; payment in USDC on Ethereum mainnet.</div>
+${errHtml}${msgHtml}
+<div style="margin-bottom:14px">
+  <label class="wtcw-label" for="wbuy-eth" style="margin-bottom:4px">Your USDC Wallet Address <span style="color:#fbbf24">(required)</span></label>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input class="wtcw-input" id="wbuy-eth" type="text" placeholder="0x..." value="${_escHtml(_buyerEthAddr)}" autocomplete="off" spellcheck="false" style="font-family:'DM Mono',monospace;font-size:11px;flex:1"/>
+    ${(typeof window!=='undefined'&&typeof window.ethereum!=='undefined')?`<button class="wtcw-btn" id="wbtn-connect-wallet" style="white-space:nowrap;padding:8px 12px;font-size:11px;flex-shrink:0">&#128279; Connect Wallet</button>`:''}
+  </div>
+  <div style="font-size:11px;color:#3d5c3d;margin-top:4px">The Ethereum address you will be sending USDC from. Used to confirm your payment automatically.</div>
+</div>
+<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+  <div class="wtcw-field" style="flex:1;min-width:120px;margin-bottom:0"><label class="wtcw-label" for="wbuy-amt">WTC Amount</label><input class="wtcw-input" id="wbuy-amt" type="number" min="1" step="1" placeholder="e.g. 100"/></div>
+  <button class="wtcw-btn" id="wbtn-getprice" ${_buyBusy?'disabled':''}>${_buyBusy?'Loading&hellip;':'Get Price'}</button>
+</div>
+${priceHtml}
+<button class="wtcw-btn wtcw-btn-primary" id="wbtn-place" ${(_priceData&&_buyerEthAddr.startsWith('0x')&&_buyerEthAddr.length>=40)?'':'disabled'} style="opacity:${(_priceData&&_buyerEthAddr.startsWith('0x')&&_buyerEthAddr.length>=40)?'1':'0.4'}">Place Order &amp; Pay with USDC</button>
+<div style="margin-top:10px;font-size:11px;color:#3d5c3d;font-family:'DM Mono',monospace">Deliver to: ${a?a.slice(0,20)+'&hellip;':'&mdash;'}</div>`;}
+
+function vRestoring(){return`
+<div class="wtcw-card">
+  <div class="wtcw-title">Restore Wallet</div>
+  <div class="wtcw-h2">Restore from Backup</div>
+  <div class="wtcw-sub">Select your <code>.json</code> backup file and enter the password used when it was created.</div>
+  <div class="wtcw-field"><label class="wtcw-label" for="wrestore-file">Backup File (.json)</label><input class="wtcw-input" id="wrestore-file" type="file" accept=".json" style="cursor:pointer"/></div>
+  <div class="wtcw-field"><label class="wtcw-label" for="wrestore-pw">Password</label><input class="wtcw-input" id="wrestore-pw" type="password" placeholder="Your backup password" autocomplete="current-password"/></div>
+  <div id="wrestore-err"></div>
+  <div class="wtcw-btn-row">
+    <button class="wtcw-btn wtcw-btn-primary" id="wbtn-do-restore">Restore Wallet</button>
+    <button class="wtcw-btn" id="wbtn-cancel-restore">Cancel</button>
+  </div>
+</div>`;}
+
+// ── Event wiring ──────────────────────────────────────────────────────────────
+function wire(){
+  const $=id=>document.getElementById(id);
+  const on=(id,fn)=>{const el=$(id);if(el)el.addEventListener('click',fn);};
+
+  // idle
+  on('wbtn-create',async()=>{
+    _state='creating';_pending=null;render();
+    try{_pending=await generateKeypair();const el=$('wnew-addr');if(el)el.textContent=_pending.address;}
+    catch(e){const el=$('wnew-addr');if(el)el.textContent='Error: '+e.message;}
+  });
+  on('wbtn-restore',()=>{_state='restoring';render();});
+
+  // creating
+  on('wbtn-cancel-create',()=>{_state='idle';_pending=null;render();});
+  on('wbtn-confirm',async()=>{
+    if(!_pending){setErr('wcreate-err','Keypair not ready — please wait.');return;}
+    const pw1=$('wpw1').value,pw2=$('wpw2').value;
+    if(!pw1||pw1.length<8){setErr('wcreate-err','Password must be at least 8 characters.');return;}
+    if(pw1!==pw2){setErr('wcreate-err','Passwords do not match.');return;}
+    const btn=$('wbtn-confirm');btn.textContent='Encrypting…';btn.disabled=true;
+    try{
+      const enc=await encryptWallet(JSON.stringify({version:1,keys:[_pending],primaryKey:_pending}),pw1);
+      saveWallet(enc,_pending.address);_pending=null;_state='backup';render();
+    }catch(e){btn.textContent='Create Wallet';btn.disabled=false;setErr('wcreate-err','Encryption failed: '+e.message);}
+  });
+
+  // backup
+  on('wbtn-dl-backup',()=>dlBackup());
+  const chk=$('wchk-saved');
+  if(chk)chk.addEventListener('change',function(){const b=$('wbtn-proceed');if(b){b.disabled=!this.checked;b.style.opacity=this.checked?'1':'.35';}});
+  on('wbtn-proceed',()=>{_state='active';render();fetchBalance();});
+
+  // active — wallet controls
+  on('wbtn-export',async()=>{
+    const pw=window.prompt('Enter your wallet password to export backup:');
+    if(!pw)return;
+    try{await decryptWallet(loadEnc(),pw);dlBackup();}
+    catch(_){window.alert('Incorrect password.');}
+  });
+  on('wbtn-delete',()=>{
+    if(!window.confirm('Delete wallet from this browser?\nMake sure you have a backup file!'))return;
+    clearWallet();_state='idle';_order=null;_priceData=null;_buyErr='';_buyMsg='';
+    stopStakingPoll();_activeTab='wallet';_stakingStatus=null;_stakingEntries=[];_stakingMsg='';_stakingAmount='';
+    render();
+  });
+  on('wbtn-txs',()=>{_showTxs=!_showTxs;render();});
+
+  // active — tab switching
+  on('wtab-wallet',()=>{
+    if(_activeTab!=='wallet'){_activeTab='wallet';stopStakingPoll();render();}
+  });
+  on('wtab-staking',()=>{
+    if(_activeTab!=='staking'){
+      _activeTab='staking';render();
+      fetchStakingData();
+      stopStakingPoll();
+      _stakingTimer=setInterval(fetchStakingData,15000);
+    }
+  });
+
+  // active — staking
+  on('wstk-stake',()=>handleStakingStake());
+  const stkAmt=$('wstk-amt');
+  if(stkAmt){
+    if(_stakingAmount)stkAmt.value=_stakingAmount;
+    stkAmt.addEventListener('input',e=>{_stakingAmount=e.target.value;});
+  }
+
+  // active — buy form
+  on('wbtn-connect-wallet',async()=>{
+    if(typeof window.ethereum==='undefined'){_buyErr='No web3 wallet detected. Install MetaMask or a compatible browser extension.';render();return;}
+    try{
+      const accounts=await window.ethereum.request({method:'eth_requestAccounts'});
+      if(accounts&&accounts[0]){_buyerEthAddr=accounts[0].toLowerCase();_buyErr='';render();}
+    }catch(e){
+      _buyErr='Wallet connection cancelled.';render();
+    }
+  });
+
+  on('wbtn-pay-metamask',async()=>{
+    if(typeof window.ethereum==='undefined'){_buyErr='MetaMask not detected.';render();return;}
+    if(!_order){_buyErr='No active order.';render();return;}
+    const USDC='0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+    const seller=(_order.sellerUsdcAddress||'').toLowerCase();
+    const amountHex='0x'+Math.round((_order.usdcRequired||0)*1000000).toString(16);
+    // ERC-20 transfer(address,uint256) selector = 0xa9059cbb
+    const data='0xa9059cbb'
+      +'000000000000000000000000'+seller.replace('0x','')
+      +amountHex.replace('0x','').padStart(64,'0');
+    try{
+      _buyErr='';
+      _paymentSent=true;
+      render();
+      await nextPaint();
+      const accounts=await window.ethereum.request({method:'eth_requestAccounts'});
+      if(!accounts||!accounts[0]){_buyErr='Wallet connection cancelled.';render();return;}
+      // Verify MetaMask is on Ethereum mainnet before sending
+      const chainId=await window.ethereum.request({method:'eth_chainId'});
+      if(chainId!=='0x1'){
+        _buyErr='Please switch MetaMask to <strong>Ethereum Mainnet</strong> (currently on chain '+parseInt(chainId,16)+').';
+        render();return;
+      }
+      const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[{
+        from:accounts[0],to:USDC,data,value:'0x0'
+      }]});
+      // Notify server of the submitted tx hash so matching is reliable
+      if(hash){
+        const _oid=_order.id||_order.orderId;
+        try{await apiCall('POST','/confirm-payment',{orderId:_oid,txHash:hash,ownerProof:getOrderProof(_oid)});}catch(_){}
+      }
+      render();
+    }catch(e){
+      _paymentSent=false;
+      _buyErr=e&&e.code===4001?'Transaction cancelled.':'MetaMask error: '+(e&&e.message||'unknown');
+      render();
+    }
+  });
+
+  on('wbtn-getprice',async()=>{
+    const el=$('wbuy-amt');const amt=parseInt(el&&el.value||'0',10);
+    if(!amt||amt<1){_buyErr='Enter a valid WTC amount (minimum 1).';_priceData=null;render();return;}
+    _buyBusy=true;_buyErr='';_buyMsg='';_priceData=null;render();
+    const savedAmt=amt;
+    try{
+      let elecPrice=0.174;
+      try{const ep=await fetch('/elec-price-api/',{signal:AbortSignal.timeout(5000)});const ej=await ep.json();if(ej.ok&&Number.isFinite(ej.price)&&ej.price>0)elecPrice=ej.price;}catch(_){}
+      const r=await apiCall('POST','/compute-price',{wtcAmount:savedAmt,electricityPricePerKwh:elecPrice});
+      _priceData={wtcAmount:savedAmt,usdcRequired:r.usdcRequired};
+    }catch(e){
+      _buyErr='Could not reach sale server. You can still buy using the manual steps in the <a href="index.html#buy" style="color:#4ade80">Buy WTC</a> section — copy your address above and use it in Step 2.';
+    }
+    _buyBusy=false;render();
+    const el2=$('wbuy-amt');if(el2)el2.value=String(savedAmt);
+    // Re-attach eth address listener after re-render
+    const elEth=$('wbuy-eth');if(elEth)elEth.addEventListener('input',e=>{_buyerEthAddr=e.target.value.trim();render();});
+  });
+
+  on('wbtn-place',async()=>{
+    if(!_priceData)return;
+    const a=loadAddr();if(!a){_buyErr='No wallet address.';render();return;}
+    const eth=($('wbuy-eth')||{value:_buyerEthAddr}).value.trim();
+    if(!eth||!eth.startsWith('0x')||eth.length<40){_buyErr='Enter your USDC wallet address (the Ethereum address you will send from).';render();return;}
+    _buyerEthAddr=eth;
+    _buyBusy=true;_buyErr='';render();
+    try{
+      const r=await apiCall('POST','/place-order',{wtcAddress:a,wtcAmount:_priceData.wtcAmount,usdcRequired:_priceData.usdcRequired,buyerEthAddress:eth});
+      if(r&&r.ownerProof)setOrderProof(String(r.orderId||r.id||''),String(r.ownerProof));
+      _order={...r,status:'pending_payment'};
+      // If an existing order was returned, immediately fetch its real status before rendering
+      // to avoid showing stale payment instructions (e.g. old amount for an already-queued order)
+      if(r.alreadyExists){
+        try{
+          const s=await apiCall('GET',orderPathWithProof(r.orderId||r.id));
+          if(s&&s.ownerProof)setOrderProof(String(r.orderId||r.id||''),String(s.ownerProof));
+          if(s&&s.order)_order={..._order,...s.order};
+        }catch(_){}
+      }
+      startPoll(r.orderId||r.id);
+    }catch(e){_buyErr='Failed to place order: '+_escHtml(e.message);}
+    _buyBusy=false;render();
+    // Re-attach eth address listener after re-render
+    const elEth2=$('wbuy-eth');if(elEth2){elEth2.value=_buyerEthAddr;elEth2.addEventListener('input',e=>{_buyerEthAddr=e.target.value.trim();render();});}
+  });
+
+  on('wbtn-cancel-order',async()=>{
+    stopPoll();
+    try{if(_order){const id=_order.id||_order.orderId;await apiCall('POST','/cancel-order',{orderId:id,ownerProof:getOrderProof(id)});clearOrderProof(id);}}catch(_){ }
+    _order=null;_buyMsg='Order cancelled.';_priceData=null;_paymentSent=false;render();
+  });
+  on('wbtn-new-order',async()=>{
+    stopPoll();
+    // If the user is on the waiting screen (payment sent UI) and cancels, treat it
+    // as a real cancel — call the API so the order is freed on the server.
+    if(_paymentSent&&_order&&(_order.status==='pending_payment'||!_order.status)){
+      try{const id=_order.id||_order.orderId;await apiCall('POST','/cancel-order',{orderId:id,ownerProof:getOrderProof(id)});clearOrderProof(id);}catch(_){ }
+    }
+    _order=null;_priceData=null;_buyErr='';_buyMsg='';_paymentSent=false;render();
+  });
+
+  // restoring
+  on('wbtn-cancel-restore',()=>{_state='idle';render();});
+  on('wbtn-do-restore',async()=>{
+    const fi=$('wrestore-file'),pw=($('wrestore-pw')||{}).value;
+    if(!fi||!fi.files.length){setErr('wrestore-err','Select a backup file.');return;}
+    if(!pw){setErr('wrestore-err','Enter your password.');return;}
+    const btn=$('wbtn-do-restore');btn.textContent='Restoring…';btn.disabled=true;
+    const reader=new FileReader();
+    reader.onload=async ev=>{
+      try{
+        const bk=JSON.parse(ev.target.result);
+        if(!bk||!bk.salt||!bk.iv||!bk.ciphertext)throw new Error('Invalid backup file.');
+        const wl=await decryptWallet(bk,pw);
+        if(!wl||!wl.primaryKey||!wl.primaryKey.address)throw new Error('Backup decrypted but wallet data is invalid.');
+        saveWallet({salt:bk.salt,iv:bk.iv,ciphertext:bk.ciphertext},wl.primaryKey.address);
+        _state='active';render();fetchBalance();
+      }catch(e){
+        const msg=e.message.includes('operation-specific')?'Wrong password or corrupted backup.':_escHtml(e.message);
+        setErr('wrestore-err',msg);btn.textContent='Restore Wallet';btn.disabled=false;
+      }
+    };
+    reader.readAsText(fi.files[0]);
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setErr(id,msg){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="wtcw-error">${msg}</div>`;}
+function _escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function dlBackup(){
+  const enc=loadEnc(),a=loadAddr();if(!enc)return;
+  const bk={format:'wtc-web-wallet-backup',version:1,createdAt:Date.now(),address:a,kdf:'PBKDF2-SHA256-600000',...enc};
+  const blob=new Blob([JSON.stringify(bk,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const el=document.createElement('a');el.href=url;
+  el.download='wattcoin-wallet-'+(a?a.slice(-8):'backup')+'.json';
+  el.click();URL.revokeObjectURL(url);
+}
+function startPoll(oid){
+  stopPoll();
+  _orderTimer=setInterval(async()=>{
+    try{
+      const r=await apiCall('GET',orderPathWithProof(oid));
+      if(r&&r.ownerProof)setOrderProof(String(oid||''),String(r.ownerProof));
+      if(r&&r.order){
+        _order={..._order,...r.order};
+        const el=document.getElementById('worder-status');
+        if(el)el.textContent='Status: '+(_order.status||'unknown');
+        if(['queued','delivery_pending','fulfilled','expired','failed','cancelled'].includes(_order.status)){_paymentSent=false;render();}
+        if(['fulfilled','expired','failed','cancelled'].includes(_order.status))stopPoll();
+      }
+    }catch(_){}
+  },8000);
+}
+function stopPoll(){if(_orderTimer){clearInterval(_orderTimer);_orderTimer=null;}}
+function nextPaint(){return new Promise(resolve=>requestAnimationFrame(()=>setTimeout(resolve,0)));}
+
+async function fetchBalance(){
+  const a=loadAddr();if(!a)return;
+  try{
+    const r=await apiCall('GET','/balance/'+a);
+    if(r&&r.ok){
+      _balance={queued:r.queued||0,delivered:r.delivered||0,purchased:r.purchased||0,pending:r.pending||0,orders:r.orders||[]};
+      // Restore active order on page load/refresh only for orders that still need
+      // payment instructions shown (pending_payment / payment_submitted).
+      // queued/delivery_pending orders are already shown in the balance badges above —
+      // restoring them here causes the redundant "Payment received" card to appear.
+      if(!_order&&Array.isArray(r.orders)&&r.orders.length>0){
+        const active=r.orders
+          .filter(o=>o.status==='pending_payment'||o.status==='payment_submitted')
+          .sort((x,y)=>(y.createdAtMs||0)-(x.createdAtMs||0))[0];
+        if(active){
+          _order={...active,sellerUsdcAddress:SELLER_USDC_ADDR};
+          _paymentSent=true; // restored from server — default to waiting state on page load/refresh
+          startPoll(active.id);
+        }
+      }
+      render();
+    }
+  }catch(_){}
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+_state=loadEnc()?'active':'idle';
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',()=>{render();if(_state==='active')fetchBalance();});}
+else{render();if(_state==='active')fetchBalance();}
+})();
+</script>
+<script>
+// ── Visit counter ─────────────────────────────────────────────────────
+(function () {
+  'use strict';
+  function fmt(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+    return n;
+  }
+  var counted = sessionStorage.getItem('wtc_pg_wallet');
+  var method  = counted ? 'GET' : 'POST';
+  if (!counted) sessionStorage.setItem('wtc_pg_wallet', '1');
+  fetch('/counter-api/?page=wallet', { method: method })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var el = document.getElementById('wallet-visit-count');
+      if (el && d.ok) el.textContent = fmt(d.count);
+    }).catch(function () {});
+})();
+</script>
+</body>
+</html>

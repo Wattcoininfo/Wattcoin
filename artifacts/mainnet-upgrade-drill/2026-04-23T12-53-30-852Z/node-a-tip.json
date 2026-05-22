@@ -1,0 +1,47 @@
+{
+  "url": "http://62.65.200.145:39310/api/v1/chain/tip",
+  "body": {
+    "ok": true,
+    "height": 6,
+    "tip": {
+      "height": 6,
+      "prevHash": "25e674f320c6b0c96cee4150e586faf1f83d66175467f983a257f2ce16d313cb",
+      "timestamp": 1775747417672,
+      "proposer": "wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn",
+      "energyWh": 0,
+      "proofCommitment": "",
+      "txsHash": "f3a9c78536a0a37199160802ce00f7d416a6acd7a0261ea830689a8c1e67353e",
+      "transactions": [
+        {
+          "id": "c741c887875c79a12ded7198bf938e774f3236d74561b68b6029060753c22f49",
+          "from": "wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn",
+          "to": "wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw",
+          "amount": 300000,
+          "fee": 0,
+          "nonce": 5,
+          "timestamp": 1775747417145,
+          "sig": {
+            "r": "8b80c7f3d715888433e4344ed523d948bfc7802a2e34855c4094a4e78aac4bb0",
+            "s": "7d514dba9598ad47b7e548aabc9eebd1baf2476673e120780748099066b0c5ad",
+            "v": 0
+          },
+          "addedAt": 1775747417152
+        }
+      ],
+      "rewardTotal": 500,
+      "rewardAddresses": {
+        "wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn": 500
+      },
+      "stateRoot": "7a8ea88ed25ecb5b94bb5268f19f546670a932d18ba05fc8b46f2e5fb643e2cd",
+      "votes": {
+        "wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn": "22b1cc9142c396197417b37bce17687b6f4cebdc8473990eae971d0ce1168a3e6c235c17ac1cdc958567c35fa43f83c764b98cbca063862d3061ee347807f01a01"
+      },
+      "hash": "d26732f469b358f876be78e84f5f09b51f1119c38d98359595405880b014a9cb"
+    },
+    "peerIdentity": "17593e822b35c20d11add4cbd6de8d93943e0fce6ffbedefa26bbbf4a84a82a6",
+    "networkId": "wtc-mainnet",
+    "protocolVersion": 1,
+    "minSupportedVersion": 1,
+    "genesisHash": "07165b5d3fb9bc5f9160d3f37611976b2281076e9659fccf4f03342bb7711d43"
+  }
+}

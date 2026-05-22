@@ -1,0 +1,54 @@
+{
+  "listenHost": "0.0.0.0",
+  "listenPort": 9464,
+  "requestTimeoutMs": 15000,
+  "pollIntervals": {
+    "healthMs": 30000,
+    "metricsMs": 60000,
+    "archiveMs": 300000
+  },
+  "retention": {
+    "scrapeDays": 30,
+    "abuseHotDays": 30,
+    "abuseColdDays": 90
+  },
+  "dataDir": "./data",
+  "nodes": [
+    {
+      "id": "node-a",
+      "name": "Mainnet Node A",
+      "opsBaseUrl": "http://127.0.0.1:39310",
+      "ledgerTokenEnv": "NODE_A_LEDGER_TOKEN",
+      "ssh": {
+        "host": "node-a.example.com",
+        "port": 22,
+        "username": "wattcoin",
+        "privateKeyPath": "./keys/node-a-ed25519",
+        "tunnel": {
+          "enabled": true,
+          "targetHost": "127.0.0.1",
+          "targetPort": 39310
+        },
+        "remoteUserDataDir": "C:/Users/wattcoin/AppData/Roaming/WattcoinMinerUserData"
+      }
+    },
+    {
+      "id": "node-b",
+      "name": "Mainnet Node B",
+      "opsBaseUrl": "http://127.0.0.1:39310",
+      "ledgerTokenEnv": "NODE_B_LEDGER_TOKEN",
+      "ssh": {
+        "host": "node-b.example.com",
+        "port": 22,
+        "username": "wattcoin",
+        "privateKeyPath": "./keys/node-b-ed25519",
+        "tunnel": {
+          "enabled": true,
+          "targetHost": "127.0.0.1",
+          "targetPort": 39310
+        },
+        "remoteUserDataDir": "C:/Users/wattcoin/AppData/Roaming/WattcoinMinerUserData"
+      }
+    }
+  ]
+}

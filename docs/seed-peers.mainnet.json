@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-17T00:00:00.000Z",
+  "requiredMinSeedPeers": 1,
+  "requiredMinProviders": 1,
+  "requiredMinNetworkSegments": 1,
+  "seedPeers": [
+    {
+      "url": "http://85.253.84.88:39310",
+      "provider": "seed-host-85-253-84-88",
+      "region": "eu",
+      "label": "Seed host 85.253.84.88",
+      "notes": "Primary mainnet bootstrap seed is the public host at 85.253.84.88:39310. IP updated 2026-05-17."
+    }
+  ]
+}
