@@ -238,7 +238,7 @@ function verifySignature(hash32, sig, address) {
     if (!Buffer.isBuffer(hash32) || hash32.length !== 32) return false;
     const expectedH160 = decodeAddressToHash160(address);
     if (!expectedH160) return false;
-    for (let recid = 0; recid <= 1; recid++) {
+    for (let recid = 0; recid <= 3; recid++) {
       try {
         const recovered = ec.recoverPubKey(hash32, sig, recid);
         const pubKey = Buffer.from(recovered.encode('hex', true), 'hex');

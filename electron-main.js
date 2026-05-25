@@ -7442,12 +7442,7 @@ ipcMain.handle('wattcoin-get-addresses', async () => {
     const addresses = wtcNode.getAddresses();
     return { ok: true, addresses };
   }
-  try {
-    const addresses = await readUserAddresses();
-    return { ok: true, addresses };
-  } catch (e) {
-    return normalizeWalletError(e);
-  }
+  return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
 });
 
 // Create a new mining address
@@ -7490,21 +7485,7 @@ ipcMain.handle('wattcoin-delete-address', async (_, targetAddress) => {
       return { ok: false, code: 'DELETE_FAILED', message: e && e.message ? e.message : 'Delete failed' };
     }
   }
-  try {
-    const allAddresses = await deleteUserAddress(address);
-    if (walletAddressCache.address === address) {
-      walletAddressCache = { address: '', at: 0 };
-    }
-    return {
-      ok: true,
-      deletedAddress: address,
-      allAddresses,
-      recoverable: true,
-      note: 'Address was removed from the app mining list. Recovery is possible by restoring from wallet backup.',
-    };
-  } catch (e) {
-    return normalizeWalletError(e);
-  }
+  return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
 });
 
 // Get wallet seed phrase or backup guidance.

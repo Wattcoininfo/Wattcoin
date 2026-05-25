@@ -2067,7 +2067,7 @@ function StakingView({ selectedWalletAddress, walletBalance, queuedWtc = 0 }) {
   );
 }
 
-function SaleView({ selectedWalletAddress }) {
+function SaleView({ selectedWalletAddress, setQueuedSaleOrders, orderId, setOrderId, orderStatus, setOrderStatus, orderPollRef, startOrderPoll }) {
   const [soldWtc, setSoldWtc]                     = React.useState(null);
   const [electricityPrice, setElectricityPrice] = React.useState(null);
   const [electricitySource, setElectricitySource] = React.useState(null);
@@ -2079,11 +2079,8 @@ function SaleView({ selectedWalletAddress }) {
   const [buyAmount, setBuyAmount]         = React.useState('');
   const [usdcRequired, setUsdcRequired]   = React.useState(null);
   const [priceLoading, setPriceLoading]   = React.useState(false);
-  const [orderId, setOrderId]             = React.useState(null);
-  const [orderStatus, setOrderStatus]     = React.useState(null); // order object
   const [orderMsg, setOrderMsg]           = React.useState('');
   const [orderError, setOrderError]       = React.useState('');
-  const [orderPollRef]                    = React.useState({ iv: null });
   const [copied, setCopied]               = React.useState(false);
   const [buyToAddress, setBuyToAddress]   = React.useState(selectedWalletAddress || '');
   const [localAddresses, setLocalAddresses] = React.useState([]);
@@ -2177,7 +2174,12 @@ function SaleView({ selectedWalletAddress }) {
         const existing = sorted[0];
         setOrderId(existing.id);
         setOrderStatus(existing);
-        startOrderPoll(existing.id);
+        startOrderPoll(existing.id, {
+          onConfirmed: () => { loadSaleData(); setOrderMsg(''); setOrderError(''); setBuyAmount(''); setUsdcRequired(null); setOptimisticPaid(false); setShowWalletModal(false); },
+          onFulfilled: () => { loadSaleData(); setOrderMsg('Payment received and WTC sent! Check your wallet balance.'); },
+          onFailed:    () => { setOrderError('Fulfillment failed — please contact support with your order ID.'); },
+          onExpired:   () => { setOrderError('Order expired (no payment received within 24 h). Please try again.'); },
+        });
       }).catch(() => {});
   }, [buyToAddress, orderStatus]);
 
@@ -2198,46 +2200,7 @@ function SaleView({ selectedWalletAddress }) {
   }, [buyAmount, electricityPrice]);
 
   // ── Poll order status after placing ──────────────────────────────────────
-  function startOrderPoll(id) {
-    if (orderPollRef.iv) clearInterval(orderPollRef.iv);
-    orderPollRef.iv = setInterval(async () => {
-      try {
-        const r = await window.wattcoinHardware.invoke('wattcoin-sale-get-order', id);
-        if (r && r.ok && r.order) {
-          setOrderStatus(r.order);
-          if (r.order.status === 'queued' || r.order.status === 'delivery_pending') {
-            loadSaleData();
-            // Payment confirmed on-chain — reset buy form and clear banner
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            setOrderId(null);
-            setOrderStatus(null);
-            setOrderMsg('');
-            setOrderError('');
-            setBuyAmount('');
-            setUsdcRequired(null);
-            setOptimisticPaid(false);
-            setShowWalletModal(false);
-            setQueuedSaleOrders(prev => prev.filter(o => o.id !== id));
-          } else if (r.order.status === 'fulfilled') {
-            loadSaleData();
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            setOrderMsg('Payment received and WTC sent! Check your wallet balance.');
-          } else if (r.order.status === 'failed') {
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            setOrderError('Fulfillment failed — please contact support with your order ID.');
-          } else if (r.order.status === 'expired') {
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            setOrderError('Order expired (no payment received within 24 h). Please try again.');
-          }
-        }
-      } catch (_) {}
-    }, 10_000);
-  }
-
+  // (moved to WalletTab)
   // ── Place order ───────────────────────────────────────────────────────────
   async function handlePlaceOrder() {
     if (!buyToAddress) {
@@ -2287,7 +2250,12 @@ function SaleView({ selectedWalletAddress }) {
           setOrderStatus({ status: 'pending_payment', wtcAmount: amount, usdcRequired: r.usdcRequired, id: r.orderId });
           setShowWalletModal(true);
         }
-        startOrderPoll(r.orderId);
+        startOrderPoll(r.orderId, {
+          onConfirmed: () => { loadSaleData(); setOrderMsg(''); setOrderError(''); setBuyAmount(''); setUsdcRequired(null); setOptimisticPaid(false); setShowWalletModal(false); },
+          onFulfilled: () => { loadSaleData(); setOrderMsg('Payment received and WTC sent! Check your wallet balance.'); },
+          onFailed:    () => { setOrderError('Fulfillment failed — please contact support with your order ID.'); },
+          onExpired:   () => { setOrderError('Order expired (no payment received within 24 h). Please try again.'); },
+        });
       } else {
         setOrderError(r && r.error ? r.error : 'Failed to place order.');
       }
@@ -2782,6 +2750,9 @@ function WalletTab({ coins, maturedCoins, unmaturedCoins, energy, selectedWallet
   const [explorerSelectedBlockData, setExplorerSelectedBlockData] = React.useState(null);
   const [explorerBlockBusy, setExplorerBlockBusy] = React.useState(false);
   const [queuedSaleOrders, setQueuedSaleOrders]   = React.useState([]);
+  const [orderId, setOrderId] = React.useState(null);
+  const [orderStatus, setOrderStatus] = React.useState(null);
+  const [orderPollRef] = React.useState({ iv: null });
   const EXPLORER_PAGE_SIZE = 20;
 
   // Vortex NFT state
@@ -2807,6 +2778,39 @@ function WalletTab({ coins, maturedCoins, unmaturedCoins, energy, selectedWallet
       return '-';
     }
   }, []);
+
+  // ── Poll order status after placing ──────────────────────────────────────
+  function startOrderPoll(id, callbacks = {}) {
+    if (orderPollRef.iv) clearInterval(orderPollRef.iv);
+    orderPollRef.iv = setInterval(async () => {
+      try {
+        const r = await window.wattcoinHardware.invoke('wattcoin-sale-get-order', id);
+        if (r && r.ok && r.order) {
+          setOrderStatus(r.order);
+          if (r.order.status === 'queued' || r.order.status === 'delivery_pending') {
+            clearInterval(orderPollRef.iv);
+            orderPollRef.iv = null;
+            setOrderId(null);
+            setOrderStatus(null);
+            setQueuedSaleOrders(prev => prev.filter(o => o.id !== id));
+            if (callbacks.onConfirmed) callbacks.onConfirmed();
+          } else if (r.order.status === 'fulfilled') {
+            clearInterval(orderPollRef.iv);
+            orderPollRef.iv = null;
+            if (callbacks.onFulfilled) callbacks.onFulfilled();
+          } else if (r.order.status === 'failed') {
+            clearInterval(orderPollRef.iv);
+            orderPollRef.iv = null;
+            if (callbacks.onFailed) callbacks.onFailed();
+          } else if (r.order.status === 'expired') {
+            clearInterval(orderPollRef.iv);
+            orderPollRef.iv = null;
+            if (callbacks.onExpired) callbacks.onExpired();
+          }
+        }
+      } catch (_) {}
+    }, 10_000);
+  }
 
   React.useEffect(() => {
     try {
@@ -3512,7 +3516,16 @@ function WalletTab({ coins, maturedCoins, unmaturedCoins, energy, selectedWallet
       )}
 
       {walletView === 'sale' && (
-        <SaleView selectedWalletAddress={selectedWalletAddress} />
+        <SaleView
+          selectedWalletAddress={selectedWalletAddress}
+          setQueuedSaleOrders={setQueuedSaleOrders}
+          orderId={orderId}
+          setOrderId={setOrderId}
+          orderStatus={orderStatus}
+          setOrderStatus={setOrderStatus}
+          orderPollRef={orderPollRef}
+          startOrderPoll={startOrderPoll}
+        />
       )}
 
       {walletView === 'staking' && (

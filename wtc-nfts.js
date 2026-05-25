@@ -121,6 +121,7 @@ class NftStore {
       const raw = JSON.parse(fs.readFileSync(this._file, 'utf8'));
       const { _sig: savedSig, ...data } = raw;
       if (savedSig !== this._hmac(data)) {
+        console.warn('[NftStore] HMAC mismatch — wtc-nfts.json has been tampered');
         throw new Error('[NftStore] HMAC mismatch — wtc-nfts.json has been tampered');
       }
       this._tokens = data.tokens || {};

@@ -48,6 +48,10 @@ module.exports = {
     // React: allow JSX in .jsx files
     'react/jsx-uses-react': 'off',
     'react/react-in-jsx-scope': 'off',
+    'react/prop-types': 'warn',
+    'react/no-unescaped-entities': 'warn',
+    'react/jsx-no-comment-textnodes': 'warn',
+    'no-inner-declarations': 'warn',
 
     // React hooks
     'react-hooks/exhaustive-deps': 'warn',

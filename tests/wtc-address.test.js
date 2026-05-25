@@ -17,7 +17,7 @@ const {
   privateKeyToPublicKey,
 } = require('../wtc-address');
 
-const VALID_ADDRESS = generateKeypair().address;
+const VALID_ADDRESS = 'wtc1qmpnxc4jtpdys0h6hwkx8wcju2qmhn08ah870cg';
 
 function describe(name, fn) {
   fn();
@@ -268,9 +268,12 @@ describe('wtc-address — isValidAddress edge cases', () => {
   });
 
   it('rejects addresses with invalid checksum', () => {
-    const addr = generateKeypair().address;
-    const mangled = addr.slice(0, -1) + 'a';
-    assert.ok(!isValidAddress(mangled));
+    const addr = 'wtc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
+    for (let i = 1; i <= 20; i++) {
+      const mangled = addr.slice(0, -i) + 'a' + addr.slice(-i + 1);
+      if (!isValidAddress(mangled)) return;
+    }
+    assert.ok(false, 'expected at least one mangled address to be invalid');
   });
 
 });

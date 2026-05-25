@@ -212,18 +212,6 @@ function testApplyBlockTransferNotFound() {
   assert.ok(warns.some(w => w.includes('token not found')), 'transfer of unminted token should warn');
 }
 
-function testApplyBlockTransferNotFound() {
-  const dir   = makeTmpDir();
-  const store = makeStore(dir);
-  const warns = captureWarns(() => {
-    silenceLogs(() => store.applyBlock({
-      height: 1,
-      transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-99', from: ALICE.address, to: BOB.address, nonce: 0 }],
-    }));
-  });
-  assert.ok(warns.some(w => w.includes('token not found')), 'transfer of unminted token should warn');
-}
-
 // ─── nonces ──────────────────────────────────────────────────────────────────
 
 function testNonceIncrementOnTransfer() {

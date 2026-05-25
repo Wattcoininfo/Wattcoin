@@ -7,7 +7,7 @@ const path = require('path');
 
 const { computeBlockHash } = require('../wtc-chain');
 const { createWtcNode } = require('../wtc-node');
-const { generateKeypair } = require('../wtc-address');
+const { generateKeypair, sign, txHash } = require('../wtc-address');
 const {
   attachProbeReceiptSignature,
   getProbeReceiptSigningPayload,
@@ -50,10 +50,11 @@ function createStandaloneNode(id, dataDir) {
 }
 
 function buildSignedReceipt(node, workerId) {
+  const kp = generateKeypair();
   const unsigned = {
     version: PROBE_RECEIPT_VERSION,
     probeId: 'probe-attestation-test',
-    verifierAddress: node.getPrimaryAddress(),
+    verifierAddress: kp.address,
     workerId,
     type: 'cpu',
     ok: true,
@@ -62,8 +63,9 @@ function buildSignedReceipt(node, workerId) {
     chainIndex: 4,
     chainHead: 'abcd1234deadbeef',
   };
-  const signed = node.signMessage(unsigned.verifierAddress, getProbeReceiptSigningPayload(unsigned));
-  return attachProbeReceiptSignature(unsigned, signed.signature);
+  const payload = getProbeReceiptSigningPayload(unsigned);
+  const sig = sign(txHash(payload), Buffer.from(kp.privateKey, 'hex'));
+  return attachProbeReceiptSignature(unsigned, `${sig.r}${sig.s}${String(sig.v).padStart(2, '0')}`);
 }
 
 async function run() {

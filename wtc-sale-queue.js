@@ -1,4 +1,5 @@
 ﻿// SPDX-License-Identifier: MIT
+const os = require('os');
 /**
  * wtc-sale-queue.js
  *

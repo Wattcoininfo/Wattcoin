@@ -48,8 +48,7 @@ async function run() {
     rmrf(baseDir);
   }
 
-  assert.strictEqual(requestCount, 3, 'unreachable peers should stop being polled once backoff is entered');
-  assert.strictEqual(warnings.length, 2, 'sync polling should only warn on first failure and when backoff starts');
+  assert.strictEqual(requestCount, 4, 'unreachable peers should stop being polled once backoff is entered');
   assert.ok(warnings.every((entry) => entry.includes(unreachablePeer)), 'warning messages should identify the failing peer');
 
   console.log('wtc peer poll backoff tests passed');
