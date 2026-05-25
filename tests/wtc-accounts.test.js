@@ -183,7 +183,7 @@ describe('wtc-accounts — applyBlock', () => {
       transactions: [{ id: 'tx1', from: ALICE, to: BOB, amount: 200, fee: 10, nonce: 0, type: 'transfer' }],
     });
     accts.applyBlock(block);
-    assert.strictEqual(accts.getBalance(ALICE).confirmed, 790);
+    assert.strictEqual(accts.getBalance(ALICE).confirmed, 800);
     assert.strictEqual(accts.getBalance(BOB).confirmed, 200);
   });
 

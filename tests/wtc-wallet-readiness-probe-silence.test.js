@@ -28,11 +28,28 @@ function rmrf(t) {
   } catch (_) {}
 }
 
+function writeGenesis(dir, teamAddress) {
+  fs.writeFileSync(
+    path.join(dir, 'wtc-genesis.json'),
+    JSON.stringify(
+      {
+        timestamp: 1710000000000,
+        teamWallets: [{ address: teamAddress, amount: 1_000_000 }],
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+}
+
 async function run() {
   const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-readiness-probe-silence-'));
   try {
     const dir = path.join(baseDir, 'node');
     ensureDir(dir);
+
+    writeGenesis(dir, generateKeypair().address);
 
     const peerUrls = ['http://10.0.0.1:39310', 'http://10.0.0.2:39310', 'http://10.0.0.3:39310'];
 

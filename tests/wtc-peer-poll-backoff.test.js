@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 
 const { createWtcNode } = require('../wtc-node');
+const { generateKeypair } = require('../wtc-address');
 
 function rmrf(target) {
   try {
@@ -15,12 +16,29 @@ function rmrf(target) {
   }
 }
 
+function writeGenesis(dir, teamAddress) {
+  fs.writeFileSync(
+    path.join(dir, 'wtc-genesis.json'),
+    JSON.stringify(
+      {
+        timestamp: 1710000000000,
+        teamWallets: [{ address: teamAddress, amount: 1_000_000 }],
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+}
+
 async function run() {
   const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-peer-poll-backoff-'));
   const unreachablePeer = 'http://192.168.0.21:39310';
   let requestCount = 0;
   const warnings = [];
   const originalWarn = console.warn;
+
+  writeGenesis(baseDir, generateKeypair().address);
 
   const node = createWtcNode({
     dataDir: baseDir,
@@ -59,5 +77,5 @@ async function run() {
 
 run().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
-  process.exit(1);
+  process.exitCode = 1;
 });

@@ -1471,7 +1471,7 @@
       <div class="hero-grid"></div>
       <div class="container hero-content">
         <div class="hero-pill-row">
-          <div class="hero-pill">VERSION 1.0.274 — MAY 2026</div>
+          <div class="hero-pill">VERSION 1.0.276 — MAY 2026</div>
           <div
             class="elec-dial"
             id="hero-elec-dial"
@@ -1538,7 +1538,9 @@
               The proceeds fund land acquisition, permitting, construction, and commissioning of a
               <strong>60 kW Vortex Gravity Hydro Turbine</strong> in Estonia. Once built, that turbine generates
               metered, verifiable electricity whose revenue flows directly back to NFT holders &mdash; on-chain,
-              transparently, proportionally.
+              transparently, proportionally. The genesis block allocated 1,000,000 WTC to the Foundation Reserve, which
+              was then distributed via on-chain transactions to the Public Sale, Staking Rewards, and Team wallets — all
+              verifiable on the public chain.
             </p>
           </div>
           <div>
@@ -1564,6 +1566,12 @@
                 A CPU miner and a GPU miner both spend exactly <strong>20 kWh</strong> to earn one WTC in Tier 1.
                 Hardware determines how fast you mine, not how cheaply. No ASIC dominance, no arms race, no exclusion by
                 hardware wealth.
+              </p>
+              <p style="margin-top: 12px">
+                Hardware that Bitcoin&rsquo;s SHA-256 arms race and Ethereum&rsquo;s proof-of-stake transition rendered
+                obsolete&mdash;ASICs bound for landfill, GPUs pulled from decommissioned rigs&mdash;mines Wattcoin on
+                equal energy terms. The network doesn&rsquo;t care how fast you are; it only counts the kilowatt-hours
+                you prove. What the industry discarded as e-waste becomes a productive asset again.
               </p>
             </div>
           </div>
@@ -1834,21 +1842,21 @@
               deterministic algorithm. No specialised hardware is required on the verifier side.
             </p>
             <p>
-              The design uses a two-tier structure: <strong class="gold">Tier 0</strong> &mdash; 1,000,000 WTC pre-mined
-              at genesis and distributed across four on-chain wallets: Foundation Reserve (200,000), Public Sale
-              (333,333), Staking Rewards (166,667), and Team (300,000). From
+              The design uses a two-tier structure: <strong class="gold">Tier 0</strong> &mdash; 1,000,000 WTC allocated
+              at genesis to the Foundation Reserve and distributed via on-chain transactions to four wallets: Foundation
+              Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), and Team (300,000). From
               <strong class="green">Tier 1 onward</strong> the real economy begins at 20 kWh per coin, with the energy
               requirement doubling each tier across 20 mining tiers until the 21,000,000 WTC hard cap is reached.
-              Transaction fees are captured by miners proportionally to their verified energy contribution.
+              Transaction fees are awarded to the block proposer alongside the block reward.
             </p>
           </div>
           <div>
             <div class="info-card">
-              <div class="ic-title">TIER 0 &mdash; PRE-MINED GENESIS</div>
+              <div class="ic-title">TIER 0 &mdash; GENESIS ALLOCATION</div>
               <p>
-                1,000,000 WTC pre-mined at genesis across four on-chain wallets: Foundation Reserve (200,000), Public
-                Sale (333,333), Staking Rewards (166,667), Team (300,000). Every allocation is verifiable on the public
-                chain.
+                1,000,000 WTC allocated at genesis to the Foundation Reserve and distributed via on-chain transactions
+                to four wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), Team
+                (300,000). Every allocation is verifiable on the public chain.
               </p>
             </div>
             <div class="info-card">
@@ -1873,9 +1881,8 @@
             <div class="info-card">
               <div class="ic-title">TRANSACTION FEES</div>
               <p>
-                Network transaction fees are captured by miners and distributed proportionally alongside block rewards
-                &mdash; in exact proportion to each miner's verified energy contribution. Fees grow as a revenue
-                component over later tiers.
+                Network transaction fees are awarded to the block proposer alongside the block reward, providing an
+                additional revenue component that grows over later tiers.
               </p>
             </div>
             <div class="info-card">
@@ -1913,18 +1920,18 @@
         <h3>Hardware-Aware Energy Invariant</h3>
         <div class="code-block">
           <div class="comment">// Energy per coin at tier n (n = 1)</div>
-          <div>E(n) = 20,000 Wh — 2<sup>(n-1)</sup></div>
+          <div>E(n) = 20,000 Wh &times; 2<sup>(n&minus;1)</sup></div>
           <div class="comment" style="margin-top: 8px">// Operations per coin</div>
-          <div>ops(n) = E(n) &mdash; 3,600 / &eta;</div>
+          <div>ops(n) = E(n) &times; 3,600 / &eta;</div>
           <div class="comment" style="margin-top: 8px">
             // Actual energy consumed &mdash; always equal regardless of hardware
           </div>
-          <div>actual = ops &mdash; &eta; = E(n) Wh &check;</div>
+          <div>actual = ops &times; &eta; = E(n) Wh &check;</div>
           <div class="comment" style="margin-top: 8px">
             // Energy per block at tier n (constant across all tiers T1+)
           </div>
           <div>
-            E_block = (1,000 / 2<sup>n</sup>) &mdash; (20,000 &mdash; 2<sup>(n-1)</sup>) = 10,000,000 Wh = 10 MWh
+            E_block = (1,000 / 2<sup>n</sup>) &times; (20,000 &times; 2<sup>(n&minus;1)</sup>) = 10,000,000 Wh = 10 MWh
             &check;
           </div>
           <div class="comment" style="margin-top: 8px">// Block time (emergent)</div>
@@ -1957,7 +1964,7 @@
           <h2>Hardware Registry</h2>
         </div>
         <p>
-          The on-chain registry records each hardware type's efficiency &eta; (Joules per operation). Power of usage is
+          Benchmark proofs determine each hardware type's efficiency &eta; (Joules per operation). Power of usage is
           calculated via algorithm that specifically calculates your hardware's power consumption and is scaled by the
           miner's configured duty-cycle load. Benchmark proofs calibrate the estimate against measured throughput — if
           the hardware underperforms, its credited power is reduced proportionally. Energy in Wh is computed as power —
@@ -2008,11 +2015,11 @@
         </p>
         <div class="code-block">
           <div class="comment">// Miner share of block reward</div>
-          <div>miner_reward = block_reward — (miner_energy_Wh / total_block_energy_Wh)</div>
+          <div>miner_reward = block_reward &times; (miner_energy_Wh / total_block_energy_Wh)</div>
           <div class="comment" style="margin-top: 8px">
             // Since all hardware is energy-normalized, this simplifies to
           </div>
-          <div>miner_reward = block_reward &mdash; (miner_ops &mdash; &eta; / &Sigma;(all_ops &mdash; &eta;))</div>
+          <div>miner_reward = block_reward &times; (miner_ops &times; &eta; / &Sigma;(all_ops &times; &eta;))</div>
           <div class="comment" style="margin-top: 8px">// Total block energy is always conserved</div>
           <div>&Sigma;(miner_rewards) = block_reward &check;</div>
         </div>
@@ -2095,10 +2102,9 @@
         <div class="insight-box" style="margin-top: 16px; margin-bottom: 0">
           <div class="insight-label">TRANSACTION FEES</div>
           <p class="small-p">
-            All network transaction fees are captured by miners and distributed proportionally alongside block rewards
-            &mdash; in exact proportion to each contributor's verified energy. As block rewards halve through successive
-            tiers, transaction fees form an increasingly important component of miner revenue, sustaining mining
-            incentives across the full emission schedule.
+            All network transaction fees are awarded to the block proposer alongside the block reward. As block rewards
+            halve through successive tiers, transaction fees form an increasingly important component of proposer
+            revenue, sustaining mining incentives across the full emission schedule.
           </p>
         </div>
       </div>
@@ -3078,7 +3084,7 @@
             color: #1e3a1e;
           "
         >
-          WATTCOIN FOUNDATION &mdash; VERSION 1.0.274 &mdash; MAY 2026
+          WATTCOIN FOUNDATION &mdash; VERSION 1.0.276 &mdash; MAY 2026
         </div>
       </div>
     </section>
@@ -3381,9 +3387,9 @@
         </p>
         <div class="download-card">
           <div class="download-platform">WINDOWS</div>
-          <div class="download-name">Wattcoin Miner v1.0.274</div>
+          <div class="download-name">Wattcoin Miner v1.0.276</div>
           <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
-          <a href="/releases/Wattcoin Miner Setup 1.0.274.exe" download class="download-btn" id="download-btn"
+          <a href="/releases/Wattcoin Miner Setup 1.0.276.exe" download class="download-btn" id="download-btn"
             >&#8595;&nbsp; Download for Windows</a
           >
           <div id="download-count" style="font-size: 11px; color: #5a8a5a; margin-top: 10px; text-align: center"></div>
@@ -3440,7 +3446,7 @@
     </section>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.274 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.276 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer"
         ><svg
@@ -3878,7 +3884,7 @@
             '~1M early-mined (Satoshi)',
             '~72M ETH ICO pre-sale',
             'No formal premine',
-            '1,000,000 WTC — 4 on-chain wallets',
+            '1,000,000 WTC — 4 wallets (on-chain)',
           ],
           ['Economy floor', 'None', 'None', 'None', '20 kWh / coin (Tier 1+)'],
           [
@@ -3902,7 +3908,7 @@
             'Miners (lottery winner)',
             'Validators + burn (EIP-1559)',
             'Miners (lottery winner)',
-            'Miners — proportional by energy',
+            'Block proposer — proportional to energy',
           ],
           ['Supply', '21M (hard cap)', 'Deflationary (burns)', '~18.4M + tail emission', '21M (hard cap)'],
           [

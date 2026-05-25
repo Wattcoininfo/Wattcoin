@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 
 const { createWtcNode } = require('../wtc-node');
+const { generateKeypair } = require('../wtc-address');
 
 function rmrf(target) {
   try {
@@ -13,6 +14,21 @@ function rmrf(target) {
   } catch (_) {
     // Best effort cleanup.
   }
+}
+
+function writeGenesis(dir, teamAddress) {
+  fs.writeFileSync(
+    path.join(dir, 'wtc-genesis.json'),
+    JSON.stringify(
+      {
+        timestamp: 1710000000000,
+        teamWallets: [{ address: teamAddress, amount: 1_000_000 }],
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
 }
 
 function createStandaloneNode(dataDir, peerIdentity) {
@@ -97,6 +113,15 @@ async function run() {
   fs.mkdirSync(nodeEDir, { recursive: true });
   fs.mkdirSync(nodeFDir, { recursive: true });
   fs.mkdirSync(nodeGDir, { recursive: true });
+
+  const teamAddress = generateKeypair().address;
+  writeGenesis(nodeADir, teamAddress);
+  writeGenesis(nodeBDir, teamAddress);
+  writeGenesis(nodeCDir, teamAddress);
+  writeGenesis(nodeDDir, teamAddress);
+  writeGenesis(nodeEDir, teamAddress);
+  writeGenesis(nodeFDir, teamAddress);
+  writeGenesis(nodeGDir, teamAddress);
 
   try {
     const nodeA = createStandaloneNode(nodeADir, 'a'.repeat(64));
@@ -261,5 +286,5 @@ async function run() {
 
 run().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
-  process.exit(1);
+  process.exitCode = 1;
 });

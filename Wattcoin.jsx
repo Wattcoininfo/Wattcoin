@@ -833,9 +833,17 @@ export default function Wattcoin() {
                   Verifiable on-chain.
                 </InfoCard>
                 <InfoCard title="HARDWARE FAIRNESS — ANYONE CAN MINE">
-                  A CPU miner and a GPU miner both spend exactly <strong style={{ color: '#e8f5e8' }}>20 kWh</strong> to
-                  earn one WTC in Tier 1. Hardware determines how fast you mine, not how cheaply. No ASIC dominance, no
-                  arms race, no exclusion by hardware wealth.
+                  <p style={{ margin: 0 }}>
+                    A CPU miner and a GPU miner both spend exactly <strong style={{ color: '#e8f5e8' }}>20 kWh</strong>{' '}
+                    to earn one WTC in Tier 1. Hardware determines how fast you mine, not how cheaply. No ASIC
+                    dominance, no arms race, no exclusion by hardware wealth.
+                  </p>
+                  <p style={{ margin: '10px 0 0' }}>
+                    Hardware that Bitcoin&rsquo;s SHA-256 arms race and Ethereum&rsquo;s proof-of-stake transition
+                    rendered obsolete&mdash;ASICs bound for landfill, GPUs pulled from decommissioned rigs&mdash;mines
+                    Wattcoin on equal energy terms. The network doesn&rsquo;t care how fast you are; it only counts the
+                    kilowatt-hours you prove. What the industry discarded as e-waste becomes a productive asset again.
+                  </p>
                 </InfoCard>
               </div>
             </FadeIn>
@@ -1218,21 +1226,21 @@ export default function Wattcoin() {
                 </p>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a' }}>
                   The design uses a two-tier structure: <strong style={{ color: '#fbbf24' }}>Tier 0</strong> — 1,000,000
-                  WTC pre-mined at genesis and distributed across four on-chain wallets: Foundation Reserve (200,000),
-                  Public Sale (333,333), Staking Rewards (166,667), and Team (300,000). From{' '}
-                  <strong style={{ color: '#4ade80' }}>Tier 1 onward</strong> the real economy begins at 20 kWh per
-                  coin, with the energy requirement doubling each tier across 20 mining tiers until the 21,000,000 WTC
-                  hard cap is reached. Transaction fees are captured by miners proportionally to their verified energy
-                  contribution.
+                  WTC allocated at genesis to the Foundation Reserve and distributed via on-chain transactions to four
+                  wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), and Team
+                  (300,000). From <strong style={{ color: '#4ade80' }}>Tier 1 onward</strong> the real economy begins at
+                  20 kWh per coin, with the energy requirement doubling each tier across 20 mining tiers until the
+                  21,000,000 WTC hard cap is reached. Transaction fees are awarded to the block proposer alongside the
+                  block reward.
                 </p>
               </div>
             </FadeIn>
             <FadeIn delay={0.2}>
               <div style={{ display: 'grid', gap: 12 }}>
-                <InfoCard title="TIER 0 — PRE-MINED GENESIS">
-                  1,000,000 WTC pre-mined at genesis across four on-chain wallets: Foundation Reserve (200,000), Public
-                  Sale (333,333), Staking Rewards (166,667), Team (300,000). Every allocation is verifiable on the
-                  public chain.
+                <InfoCard title="TIER 0 — GENESIS ALLOCATION">
+                  1,000,000 WTC allocated at genesis to the Foundation Reserve and distributed via on-chain transactions
+                  to four wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), Team
+                  (300,000). Every allocation is verifiable on the public chain.
                 </InfoCard>
                 <InfoCard title="TIER 1+ — ECONOMY LAW">
                   20 kWh per coin — the real economic floor. Energy requirement doubles every tier. At $
@@ -1247,9 +1255,8 @@ export default function Wattcoin() {
                   exactly what their energy earns, every block. Mining pools are obsolete by design.
                 </InfoCard>
                 <InfoCard title="TRANSACTION FEES">
-                  Network transaction fees are captured by miners and distributed proportionally alongside block rewards
-                  — in exact proportion to each miner's verified energy contribution. Fees grow as a revenue component
-                  over later tiers.
+                  Network transaction fees are awarded to the block proposer alongside the block reward, providing an
+                  additional revenue component that grows over later tiers.
                 </InfoCard>
                 <InfoCard title="ENERGY FAIRNESS">
                   Operation count scales inversely with hardware efficiency (&eta;) — so every hardware type spends
@@ -1387,7 +1394,7 @@ export default function Wattcoin() {
           <SectionTitle number={6} title="Hardware Registry" />
           <FadeIn delay={0.1}>
             <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 32 }}>
-              The on-chain registry records each hardware type's efficiency η (Joules per operation). Power of usage is
+              Benchmark proofs determine each hardware type's efficiency η (Joules per operation). Power of usage is
               calculated via algorithm that specifically calculates your hardware's power consumption and is scaled by
               the miner's configured duty-cycle load. Benchmark proofs calibrate the estimate against measured
               throughput — if the hardware underperforms, its credited power is reduced proportionally. Energy in Wh is

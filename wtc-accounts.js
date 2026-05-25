@@ -101,7 +101,8 @@ class Accounts {
   }
 
   /**
-   * Atomic transfer of amount+fee from sender. Fee stays with the block (caller credits miner).
+   * Atomic transfer of amount+fee from sender. Fee is collected by applyBlock and
+   * credited to the block proposer alongside the block reward.
    * Throws if sender has insufficient confirmed balance.
    * @returns {number} fee collected
    */
@@ -138,11 +139,15 @@ class Accounts {
   /**
    * Apply all effects of a committed block:
    *  1. Execute transactions (transfer from→to, debit fee)
-   *  2. Credit mining rewards (unmatured unless genesis height=0)
-   *  3. Run maturity sweep for this block's height
+   *  2. Credit accumulated transaction fees to the block proposer (mature)
+   *  3. Credit mining rewards (unmatured unless genesis height=0)
+   *  4. Run maturity sweep for this block's height
    */
   applyBlock(block) {
-    // 1. Transactions
+    const proposer = block.proposer || '';
+    let totalFees = 0;
+
+    // 1. Transactions — fees are debited from senders but not yet credited
     for (const tx of block.transactions || []) {
       try {
         // Skip NFT transactions — handled by NftStore, not by Accounts
@@ -156,9 +161,16 @@ class Accounts {
           continue;
         }
         this.transfer(tx.from, tx.to, tx.amount, tx.fee || 0);
+        totalFees += tx.fee || 0;
       } catch (e) {
         console.warn(`[Accounts] tx ${tx.id} skipped: ${e.message}`);
       }
+    }
+
+    // Credit accumulated transaction fees to the block proposer as mature
+    // (immediately spendable — they were debited from confirmed balances).
+    if (totalFees > 0 && proposer) {
+      this.credit(proposer, totalFees, { mature: true });
     }
 
     // 2. Mining rewards
