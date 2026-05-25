@@ -141,7 +141,6 @@ try {
           'wattcoin-nft-get',
           'wattcoin-nft-collection',
           'wattcoin-nft-transfer',
-          'wattcoin-nft-mint-all',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

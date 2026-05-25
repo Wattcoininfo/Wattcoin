@@ -119,6 +119,14 @@ class Mempool {
     if (!tx.sig || typeof tx.sig !== 'object') {
       return { ok: false, code: 'MISSING_SIG', message: 'signature object required' };
     }
+    if (typeof tx.from === 'string' && typeof tx.nonce === 'number') {
+      for (const existing of this._txs.values()) {
+        if (existing.from === tx.from && existing.nonce === tx.nonce) {
+          return { ok: false, code: 'NONCE_IN_USE', message: `nonce ${tx.nonce} already pending for this sender` };
+        }
+      }
+    }
+
     if (this._txs.size >= MEMPOOL_MAX_SIZE) {
       if (!this._evictLowestFee(tx.fee)) {
         return { ok: false, code: 'POOL_FULL', message: 'mempool is full, fee too low' };
