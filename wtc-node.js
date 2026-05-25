@@ -371,11 +371,11 @@ class WtcNode {
       /* ignore parse errors, fall through to default */
     }
 
-    // Development / testnet fallback: premine to local primary address
     if (teamWallets.length === 0) {
-      const addr = this._wallet.primaryKey.address;
-      teamWallets = [{ address: addr, amount: GENESIS_PREMINE }];
-      console.log(`[WtcNode] No wtc-genesis.json - premining ${GENESIS_PREMINE} WTC to ${addr}`);
+      throw new Error(
+        `Genesis config not found at ${cfgPath}. The file wtc-genesis.json must exist with valid teamWallets. ` +
+          `Reinstall the application or restore the file from your installation resources directory.`,
+      );
     }
 
     const genesis = this._chain.genesis({ teamWallets, timestamp });
