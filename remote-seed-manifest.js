@@ -23,11 +23,9 @@ function createRemoteSeedManifestManager({
       ? runtime.ledgerSeedManifestUrls
       : [];
     const urls = configuredUrls.length > 0 ? configuredUrls : defaultRemoteSeedManifestUrls;
-    return Array.from(new Set(
-      urls
-        .map((entry) => String(entry || '').trim())
-        .filter((entry) => /^https?:\/\//i.test(entry))
-    ));
+    return Array.from(
+      new Set(urls.map((entry) => String(entry || '').trim()).filter((entry) => /^https?:\/\//i.test(entry))),
+    );
   }
 
   function loadCachedRemoteSeedPeers() {
@@ -47,19 +45,23 @@ function createRemoteSeedManifestManager({
 
   function saveCachedRemoteSeedPeers(peers) {
     try {
-      const serializedPeers = Array.from(new Set(
-        (peers || [])
-          .map((peer) => normalizePeerUrl(peer))
-          .filter((peer) => peer && !isDeprecatedPeerUrl(peer))
-      ));
+      const serializedPeers = Array.from(
+        new Set(
+          (peers || []).map((peer) => normalizePeerUrl(peer)).filter((peer) => peer && !isDeprecatedPeerUrl(peer)),
+        ),
+      );
       fs.mkdirSync(require('path').dirname(getCachePath()), { recursive: true });
       fs.writeFileSync(
         getCachePath(),
-        JSON.stringify({
-          peers: serializedPeers,
-          savedAtMs: Date.now(),
-        }, null, 2),
-        'utf8'
+        JSON.stringify(
+          {
+            peers: serializedPeers,
+            savedAtMs: Date.now(),
+          },
+          null,
+          2,
+        ),
+        'utf8',
       );
     } catch (_) {
       // Best-effort cache persistence only.
@@ -71,14 +73,18 @@ function createRemoteSeedManifestManager({
     if (Number(response && response.statusCode) !== 200) {
       throw new Error(`HTTP ${Number(response && response.statusCode) || 0}`);
     }
-    const body = String(response && response.body || '').trim();
+    const body = String((response && response.body) || '').trim();
     if (!body.startsWith('{') && !body.startsWith('[')) {
-      throw new Error(`Remote seed manifest did not return JSON (content-type: ${String(response && response.contentType || 'unknown')}).`);
+      throw new Error(
+        `Remote seed manifest did not return JSON (content-type: ${String((response && response.contentType) || 'unknown')}).`,
+      );
     }
     const parsed = JSON.parse(body);
     const peerEntries = Array.isArray(parsed && parsed.seedPeers)
       ? parsed.seedPeers
-      : (Array.isArray(parsed && parsed.peers) ? parsed.peers : []);
+      : Array.isArray(parsed && parsed.peers)
+        ? parsed.peers
+        : [];
     return peerEntries
       .map((peer) => normalizePeerUrl((peer && peer.url) || peer || ''))
       .filter((peer) => peer && !isDeprecatedPeerUrl(peer));
@@ -128,13 +134,19 @@ function createRemoteSeedManifestManager({
     return remoteSeedPeerRefreshPromise;
   }
 
-  function buildEffectiveSeedPeers({ network = 'wtc-mainnet', bootstrapPeers = [], bundledSeedPeers = [], cachedRemoteSeedPeers = [] } = {}) {
-    const peers = network === 'wtc-mainnet'
-      ? [...bootstrapPeers, ...bundledSeedPeers, ...cachedRemoteSeedPeers]
-      : [...bootstrapPeers];
-    return Array.from(new Set(
-      peers.map((peer) => normalizePeerUrl(peer)).filter((peer) => peer && !isDeprecatedPeerUrl(peer))
-    ));
+  function buildEffectiveSeedPeers({
+    network = 'wtc-mainnet',
+    bootstrapPeers = [],
+    bundledSeedPeers = [],
+    cachedRemoteSeedPeers = [],
+  } = {}) {
+    const peers =
+      network === 'wtc-mainnet'
+        ? [...bootstrapPeers, ...bundledSeedPeers, ...cachedRemoteSeedPeers]
+        : [...bootstrapPeers];
+    return Array.from(
+      new Set(peers.map((peer) => normalizePeerUrl(peer)).filter((peer) => peer && !isDeprecatedPeerUrl(peer))),
+    );
   }
 
   return {

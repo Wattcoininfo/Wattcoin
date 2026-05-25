@@ -3,12 +3,15 @@
 
 const crypto = require('crypto');
 
-function deriveActiveOpsAlerts(snapshot, {
-  chainStallAlertMs = 20 * 60_000,
-  minPeerDiversityPeers = 3,
-  minUniquePeerSegments = 3,
-  mempoolPressureThreshold = 0.85,
-} = {}) {
+function deriveActiveOpsAlerts(
+  snapshot,
+  {
+    chainStallAlertMs = 20 * 60_000,
+    minPeerDiversityPeers = 3,
+    minUniquePeerSegments = 3,
+    mempoolPressureThreshold = 0.85,
+  } = {},
+) {
   const alerts = [];
   const chain = snapshot && snapshot.chain ? snapshot.chain : {};
   const peers = snapshot && snapshot.peers ? snapshot.peers : {};
@@ -61,7 +64,7 @@ function buildOpsHealthResponse(snapshot, options = {}) {
   const activeAlerts = deriveActiveOpsAlerts(snapshot, options);
   const criticalCount = activeAlerts.filter((alert) => alert && alert.severity === 'critical').length;
   const warnCount = activeAlerts.filter((alert) => alert && alert.severity === 'warn').length;
-  const status = criticalCount > 0 ? 'critical' : (warnCount > 0 ? 'degraded' : 'healthy');
+  const status = criticalCount > 0 ? 'critical' : warnCount > 0 ? 'degraded' : 'healthy';
 
   return {
     ok: true,

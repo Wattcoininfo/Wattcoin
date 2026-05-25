@@ -31,17 +31,17 @@
  *   votes           — { voterAddress: sigHex } BFT vote set
  */
 
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 const { MATURITY_DEPTH } = require('./wtc-accounts');
 const { normalizeBlockProbeAttestation, validateBlockProbeAttestation } = require('./probe-attestation');
 
-const SUPPLY_PER_TIER    = 1_000_000;
-const MAX_TIERS          = 21;
-const BASE_REWARD        = 1000;
-const GENESIS_PREMINE    = 1_000_000;  // tier 0 — premined at height 0
+const SUPPLY_PER_TIER = 1_000_000;
+const MAX_TIERS = 21;
+const BASE_REWARD = 1000;
+const GENESIS_PREMINE = 1_000_000; // tier 0 — premined at height 0
 
 /**
  * Block reward for a given height.
@@ -56,14 +56,14 @@ const GENESIS_PREMINE    = 1_000_000;  // tier 0 — premined at height 0
  */
 function rewardForHeight(height) {
   if (height <= 0) return 0;
-  let remaining = height - 1;  // 0-indexed counter within tier 1+
+  let remaining = height - 1; // 0-indexed counter within tier 1+
   for (let tier = 1; tier < MAX_TIERS; tier++) {
-    const reward         = BASE_REWARD / Math.pow(2, tier);
+    const reward = BASE_REWARD / Math.pow(2, tier);
     const blocksThisTier = Math.round(SUPPLY_PER_TIER / reward);
     if (remaining < blocksThisTier) return reward;
     remaining -= blocksThisTier;
   }
-  return 0;  // supply exhausted
+  return 0; // supply exhausted
 }
 
 /**
@@ -88,15 +88,15 @@ function energyForHeight(height) {
 function computeBlockHash(block) {
   const attestation = normalizeBlockProbeAttestation(block);
   const canon = {
-    height:          block.height,
-    prevHash:        block.prevHash,
-    timestamp:       block.timestamp,
-    proposer:        block.proposer,
-    energyWh:        block.energyWh,
+    height: block.height,
+    prevHash: block.prevHash,
+    timestamp: block.timestamp,
+    proposer: block.proposer,
+    energyWh: block.energyWh,
     proofCommitment: block.proofCommitment || '',
-    txsHash:         block.txsHash || '',
-    rewardTotal:     block.rewardTotal,
-    stateRoot:       block.stateRoot || '',
+    txsHash: block.txsHash || '',
+    rewardTotal: block.rewardTotal,
+    stateRoot: block.stateRoot || '',
   };
   if (attestation.attestationVersion >= 1) {
     canon.attestationVersion = attestation.attestationVersion;
@@ -115,7 +115,7 @@ function computeBlockHash(block) {
  * so transaction contents are committed.
  */
 function computeTxsHash(txs = []) {
-  const ids = (txs || []).map(t => t.id).sort();
+  const ids = (txs || []).map((t) => t.id).sort();
   return crypto.createHash('sha256').update(JSON.stringify(ids)).digest('hex');
 }
 
@@ -126,10 +126,10 @@ class Chain {
    * @param {{ dataDir: string, signingSecret: string }} opts
    */
   constructor({ dataDir, signingSecret }) {
-    this._file    = path.join(dataDir, 'wtc-chain.ndjson');
-    this._secret  = signingSecret;
-    this._blocks  = [];           // in-memory ordered list
-    this._byHash  = {};           // hash → block (fast lookup)
+    this._file = path.join(dataDir, 'wtc-chain.ndjson');
+    this._secret = signingSecret;
+    this._blocks = []; // in-memory ordered list
+    this._byHash = {}; // hash → block (fast lookup)
     this._load();
   }
 
@@ -137,15 +137,13 @@ class Chain {
 
   /** HMAC-SHA256 of the full block object (used as per-line tamper seal). */
   _hmac(block) {
-    return crypto.createHmac('sha256', this._secret)
-      .update(JSON.stringify(block)).digest('hex');
+    return crypto.createHmac('sha256', this._secret).update(JSON.stringify(block)).digest('hex');
   }
 
   _load() {
     try {
       if (!fs.existsSync(this._file)) return;
-      const lines = fs.readFileSync(this._file, 'utf8')
-        .trim().split('\n').filter(Boolean);
+      const lines = fs.readFileSync(this._file, 'utf8').trim().split('\n').filter(Boolean);
 
       let needsMigration = false;
       for (const line of lines) {
@@ -185,13 +183,15 @@ class Chain {
         this._rewriteFile();
         console.log('[Chain] Migrated chain file to HMAC-signed format.');
       }
-    } catch (_) { /* no chain file yet */ }
+    } catch (_) {
+      /* no chain file yet */
+    }
   }
 
   /** Rewrite the entire chain file (used for migration and tamper recovery). */
   _rewriteFile() {
     try {
-      const lines = this._blocks.map(b => JSON.stringify({ ...b, _sig: this._hmac(b) }));
+      const lines = this._blocks.map((b) => JSON.stringify({ ...b, _sig: this._hmac(b) }));
       fs.writeFileSync(this._file, lines.join('\n') + '\n', 'utf8');
     } catch (e) {
       console.warn('[Chain] Failed to rewrite chain file:', e && e.message);
@@ -207,22 +207,34 @@ class Chain {
   reset() {
     this._blocks = [];
     this._byHash = {};
-    try { fs.writeFileSync(this._file, '', 'utf8'); } catch (_) { /* ignore */ }
+    try {
+      fs.writeFileSync(this._file, '', 'utf8');
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   // ─── Chain queries ────────────────────────────────────────────────────────
 
   /** @returns {number} Current tip height (-1 if chain is empty) */
-  getHeight()            { return this._blocks.length - 1; }
+  getHeight() {
+    return this._blocks.length - 1;
+  }
 
   /** @returns {object|null} Most recent block */
-  getTip()               { return this._blocks[this._blocks.length - 1] || null; }
+  getTip() {
+    return this._blocks[this._blocks.length - 1] || null;
+  }
 
   /** @returns {object|null} Block at a given height */
-  getBlock(height)       { return this._blocks[height] || null; }
+  getBlock(height) {
+    return this._blocks[height] || null;
+  }
 
   /** @returns {object|null} Block with a given hash */
-  getBlockByHash(hash)   { return this._byHash[hash] || null; }
+  getBlockByHash(hash) {
+    return this._byHash[hash] || null;
+  }
 
   /** @returns {object[]} Deep copy of chain blocks in height order. */
   getAllBlocks() {
@@ -268,13 +280,19 @@ class Chain {
   }
 
   /** Block reward WTC for the given height */
-  rewardForHeight(h)     { return rewardForHeight(h); }
+  rewardForHeight(h) {
+    return rewardForHeight(h);
+  }
 
   /** Block reward WTC for the next block to be produced */
-  nextBlockReward()      { return rewardForHeight(this._blocks.length); }
+  nextBlockReward() {
+    return rewardForHeight(this._blocks.length);
+  }
 
   /** SHA-256 of canonical block fields */
-  computeBlockHash(b)    { return computeBlockHash(b); }
+  computeBlockHash(b) {
+    return computeBlockHash(b);
+  }
 
   // ─── Block production ─────────────────────────────────────────────────────
 
@@ -294,25 +312,23 @@ class Chain {
       total += amount;
     }
     if (Math.abs(total - GENESIS_PREMINE) > 0.001) {
-      throw new Error(
-        `Genesis premine must equal ${GENESIS_PREMINE} WTC (got ${total})`
-      );
+      throw new Error(`Genesis premine must equal ${GENESIS_PREMINE} WTC (got ${total})`);
     }
 
     const block = {
-      height:          0,
-      prevHash:        '0'.repeat(64),
+      height: 0,
+      prevHash: '0'.repeat(64),
       timestamp,
-      proposer:        'genesis',
-      energyWh:        0,
+      proposer: 'genesis',
+      energyWh: 0,
       proofCommitment: '',
-      txsHash:         computeTxsHash([]),
-      transactions:    [],
-      rewardTotal:     GENESIS_PREMINE,
+      txsHash: computeTxsHash([]),
+      transactions: [],
+      rewardTotal: GENESIS_PREMINE,
       rewardAddresses,
-      stateRoot:       '',
-      votes:           {},
-      hash:            '',
+      stateRoot: '',
+      votes: {},
+      hash: '',
     };
     block.hash = computeBlockHash(block);
     this._blocks.push(block);
@@ -325,21 +341,31 @@ class Chain {
    * Build an unsigned block proposal at the next height.
    * The returned block needs to go through BFT voting before being appended.
    *
-  * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, transactions?, rewardAddresses, stateRoot? }} opts
+   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, transactions?, rewardAddresses, stateRoot? }} opts
    */
-  buildBlock({ proposer, energyWh, proofCommitment, peerProbeVerified = false, probeReceipt = null, transactions = [], rewardAddresses, stateRoot = '', nftsRoot = '' }) {
-    const height   = this._blocks.length;
-    const tip      = this.getTip();
+  buildBlock({
+    proposer,
+    energyWh,
+    proofCommitment,
+    peerProbeVerified = false,
+    probeReceipt = null,
+    transactions = [],
+    rewardAddresses,
+    stateRoot = '',
+    nftsRoot = '',
+  }) {
+    const height = this._blocks.length;
+    const tip = this.getTip();
     const prevHash = tip ? tip.hash : '0'.repeat(64);
-    const reward   = rewardForHeight(height);
-    const txsHash  = computeTxsHash(transactions);
+    const reward = rewardForHeight(height);
+    const txsHash = computeTxsHash(transactions);
 
     const block = {
       height,
       prevHash,
-      timestamp:       Date.now(),
+      timestamp: Date.now(),
       proposer,
-      energyWh:        energyWh || 0,
+      energyWh: energyWh || 0,
       proofCommitment: proofCommitment || '',
       attestationVersion: 1,
       peerProbeVerified: !!peerProbeVerified,
@@ -350,12 +376,12 @@ class Chain {
       }).probeReceipt,
       txsHash,
       transactions,
-      rewardTotal:     reward,
+      rewardTotal: reward,
       rewardAddresses: rewardAddresses || (reward > 0 ? { [proposer]: reward } : {}),
       stateRoot,
       nftsRoot,
-      votes:           {},
-      hash:            '',
+      votes: {},
+      hash: '',
     };
     block.hash = computeBlockHash(block);
     return block;
@@ -462,19 +488,19 @@ class Chain {
    * @param {number}  count   max results
    */
   listTransactions(address, count = 50) {
-    const out  = [];
-    const tip  = this._blocks.length;
+    const out = [];
+    const tip = this._blocks.length;
 
     for (let h = tip - 1; h >= 0 && out.length < count; h--) {
       const b = this._blocks[h];
 
-      for (const tx of (b.transactions || [])) {
+      for (const tx of b.transactions || []) {
         if (tx.from === address || tx.to === address) {
           out.push({
             ...tx,
-            category:      tx.from === address ? 'send' : 'receive',
-            blockHeight:   h,
-            blockHash:     b.hash,
+            category: tx.from === address ? 'send' : 'receive',
+            blockHeight: h,
+            blockHash: b.hash,
             confirmations: tip - h,
           });
         }
@@ -482,14 +508,14 @@ class Chain {
 
       if (b.rewardAddresses && b.rewardAddresses[address] > 0) {
         out.push({
-          id:            `reward-${b.hash}`,
-          category:      'mine',
-          to:            address,
-          amount:        b.rewardAddresses[address],
-          blockHeight:   h,
-          blockHash:     b.hash,
+          id: `reward-${b.hash}`,
+          category: 'mine',
+          to: address,
+          amount: b.rewardAddresses[address],
+          blockHeight: h,
+          blockHash: b.hash,
           confirmations: tip - h,
-          timestamp:     b.timestamp,
+          timestamp: b.timestamp,
         });
       }
     }
@@ -501,11 +527,11 @@ class Chain {
    * Used by the Mining UI to show "mined N coins, M matured".
    */
   getMinedStats(address) {
-    const tip         = this._blocks.length;
-    let totalBlocks   = 0;
+    const tip = this._blocks.length;
+    let totalBlocks = 0;
     let maturedBlocks = 0;
-    let totalWTC      = 0;
-    let maturedWTC    = 0;
+    let totalWTC = 0;
+    let maturedWTC = 0;
 
     for (const b of this._blocks) {
       const amt = b.rewardAddresses && b.rewardAddresses[address];

@@ -31,7 +31,7 @@ try {
           os: osInfo,
           system,
           baseboard,
-          chassis
+          chassis,
         };
       },
       getWalletState: () => ipcRenderer.invoke('wattcoin-get-wallet-state'),
@@ -48,18 +48,18 @@ try {
         console.log('[Wattcoin preload] mineBlock called with address:', address);
         return ipcRenderer.invoke('wattcoin-mine-block', address, proofData || null);
       },
-      getPendingProbe:         ()       => ipcRenderer.invoke('wattcoin-get-pending-probe'),
-      submitProbeResult:       (result) => ipcRenderer.invoke('wattcoin-submit-probe-result', result || {}),
-      getProbeHistory:         ()       => ipcRenderer.invoke('wattcoin-get-probe-history'),
-      requestPeerProbe:        (opts)   => ipcRenderer.invoke('wattcoin-request-peer-probe', opts || {}),
-      submitPeerProbeResult:   (payload) => ipcRenderer.invoke('wattcoin-submit-peer-probe-result', payload || {}),
+      getPendingProbe: () => ipcRenderer.invoke('wattcoin-get-pending-probe'),
+      submitProbeResult: (result) => ipcRenderer.invoke('wattcoin-submit-probe-result', result || {}),
+      getProbeHistory: () => ipcRenderer.invoke('wattcoin-get-probe-history'),
+      requestPeerProbe: (opts) => ipcRenderer.invoke('wattcoin-request-peer-probe', opts || {}),
+      submitPeerProbeResult: (payload) => ipcRenderer.invoke('wattcoin-submit-peer-probe-result', payload || {}),
       // Wallet-bound fingerprint persistence (item 6): stored in userData, not localStorage.
-      readFingerprintFile:  ()      => ipcRenderer.invoke('wattcoin-read-fingerprint'),
-      writeFingerprintFile: (data)  => ipcRenderer.invoke('wattcoin-write-fingerprint', data || {}),
+      readFingerprintFile: () => ipcRenderer.invoke('wattcoin-read-fingerprint'),
+      writeFingerprintFile: (data) => ipcRenderer.invoke('wattcoin-write-fingerprint', data || {}),
       // Hardware-bound device identity: generated once on first run, stored in userData.
       // deviceId (SHA-256 of local secret) is the stable public identifier for this device.
-      getDeviceIdentity:    ()      => ipcRenderer.invoke('wattcoin-get-device-identity'),
-      getPeerCount:         ()      => ipcRenderer.invoke('wattcoin-get-peer-count'),
+      getDeviceIdentity: () => ipcRenderer.invoke('wattcoin-get-device-identity'),
+      getPeerCount: () => ipcRenderer.invoke('wattcoin-get-peer-count'),
       // Generic invoke method for other IPC handlers.
       // Uses an explicit allowlist — any channel not on the list is silently rejected so
       // newly-added sensitive handlers are protected by default (secure-by-default).

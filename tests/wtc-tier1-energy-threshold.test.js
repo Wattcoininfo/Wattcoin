@@ -58,7 +58,11 @@ async function run() {
     writeCanonicalGenesis(belowDir, teamAddress);
     writeCanonicalGenesis(aboveDir, teamAddress);
 
-    assert.strictEqual(energyForHeight(1), TIER1_ENERGY_WH, 'height-1 energy threshold should be exactly 10,000,000 Wh');
+    assert.strictEqual(
+      energyForHeight(1),
+      TIER1_ENERGY_WH,
+      'height-1 energy threshold should be exactly 10,000,000 Wh',
+    );
 
     const exactNode = createStandaloneNode('exact', exactDir);
     const exactAddr = exactNode.getPrimaryAddress();
@@ -72,12 +76,13 @@ async function run() {
     const belowNode = createStandaloneNode('below', belowDir);
     const belowAddr = belowNode.getPrimaryAddress();
     await assert.rejects(
-      () => belowNode.mineBlock(belowAddr, {
-        energyWh: TIER1_ENERGY_WH - 1,
-        proofCommitment: 'tier1-below-threshold',
-      }),
+      () =>
+        belowNode.mineBlock(belowAddr, {
+          energyWh: TIER1_ENERGY_WH - 1,
+          proofCommitment: 'tier1-below-threshold',
+        }),
       /insufficient energyWh: required 10000000, got 9999999/,
-      'sub-threshold Tier1 block should be rejected'
+      'sub-threshold Tier1 block should be rejected',
     );
     assert.strictEqual(belowNode.getHeight(), 0, 'rejected sub-threshold block should leave chain at genesis only');
 

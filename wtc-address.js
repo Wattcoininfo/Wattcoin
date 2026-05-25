@@ -45,10 +45,10 @@ function hash160(buf) {
 // HRP = "wtc"  →  all addresses start with "wtc1"
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _HRP          = 'wtc';
+const _HRP = 'wtc';
 const _BECH32M_CONST = 0x2bc830a3;
-const _CHARSET      = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-const _CHARSET_REV  = Object.fromEntries([..._CHARSET].map((c, i) => [c, i]));
+const _CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const _CHARSET_REV = Object.fromEntries([..._CHARSET].map((c, i) => [c, i]));
 
 function _bech32Polymod(values) {
   const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
@@ -71,7 +71,7 @@ function _hrpExpand(hrp) {
 
 function _bech32mChecksum(hrp, data) {
   const poly = _bech32Polymod([..._hrpExpand(hrp), ...data, 0, 0, 0, 0, 0, 0]) ^ _BECH32M_CONST;
-  return [0, 1, 2, 3, 4, 5].map(i => (poly >> (5 * (5 - i))) & 31);
+  return [0, 1, 2, 3, 4, 5].map((i) => (poly >> (5 * (5 - i))) & 31);
 }
 
 function _bech32mVerify(hrp, data) {
@@ -80,17 +80,22 @@ function _bech32mVerify(hrp, data) {
 
 // Convert a byte array between bit-widths (e.g. 8→5 for bech32 encoding).
 function _convertBits(data, fromBits, toBits, pad) {
-  let acc = 0, bits = 0;
-  const result = [], maxv = (1 << toBits) - 1;
+  let acc = 0,
+    bits = 0;
+  const result = [],
+    maxv = (1 << toBits) - 1;
   for (const v of data) {
     if (v < 0 || v >> fromBits) return null;
     acc = (acc << fromBits) | v;
     bits += fromBits;
-    while (bits >= toBits) { bits -= toBits; result.push((acc >> bits) & maxv); }
+    while (bits >= toBits) {
+      bits -= toBits;
+      result.push((acc >> bits) & maxv);
+    }
   }
   if (pad) {
     if (bits > 0) result.push((acc << (toBits - bits)) & maxv);
-  } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+  } else if (bits >= fromBits || (acc << (toBits - bits)) & maxv) {
     return null;
   }
   return result;
@@ -115,7 +120,7 @@ function encodeAddress(hash160Buf) {
   if (!words) throw new Error('encodeAddress: convertBits failed');
   const data = [0, ...words];
   const checksum = _bech32mChecksum(_HRP, data);
-  return _HRP + '1' + [...data, ...checksum].map(d => _CHARSET[d]).join('');
+  return _HRP + '1' + [...data, ...checksum].map((d) => _CHARSET[d]).join('');
 }
 
 /**
@@ -243,7 +248,9 @@ function verifySignature(hash32, sig, address) {
         const recovered = ec.recoverPubKey(hash32, sig, recid);
         const pubKey = Buffer.from(recovered.encode('hex', true), 'hex');
         if (hash160(pubKey).equals(expectedH160)) return true;
-      } catch (_) { continue; }
+      } catch (_) {
+        continue;
+      }
     }
     return false;
   } catch (_) {
@@ -260,16 +267,20 @@ function verifySignature(hash32, sig, address) {
  */
 function txHash(data) {
   const buf = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf8');
-  return crypto.createHash('sha256')
-    .update(crypto.createHash('sha256').update(buf).digest())
-    .digest();
+  return crypto.createHash('sha256').update(crypto.createHash('sha256').update(buf).digest()).digest();
 }
 
 // ── Bitcoin Signed Message verification ──────────────────────────────────────
 function _encodeVarint(n) {
   if (n < 0xfd) return Buffer.from([n]);
   const b = Buffer.alloc(n <= 0xffff ? 3 : 5);
-  if (n <= 0xffff) { b[0] = 0xfd; b.writeUInt16LE(n, 1); } else { b[0] = 0xfe; b.writeUInt32LE(n, 1); }
+  if (n <= 0xffff) {
+    b[0] = 0xfd;
+    b.writeUInt16LE(n, 1);
+  } else {
+    b[0] = 0xfe;
+    b.writeUInt32LE(n, 1);
+  }
   return b;
 }
 
@@ -284,8 +295,14 @@ const _BASE58_ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxy
 function _base58Encode(bytes) {
   let n = BigInt('0x' + (bytes.length ? bytes.toString('hex') : '00'));
   let s = '';
-  while (n > 0n) { s = _BASE58_ALPHA[Number(n % 58n)] + s; n /= 58n; }
-  for (const b of bytes) { if (b !== 0) break; s = '1' + s; }
+  while (n > 0n) {
+    s = _BASE58_ALPHA[Number(n % 58n)] + s;
+    n /= 58n;
+  }
+  for (const b of bytes) {
+    if (b !== 0) break;
+    s = '1' + s;
+  }
   return s;
 }
 
@@ -308,9 +325,13 @@ function verifyWalletMessagePureJS(address, signature, message, network) {
     if (!point) return false;
     const pubkey = Buffer.from(point.encodeCompressed());
     const h160 = crypto.createHash('ripemd160').update(crypto.createHash('sha256').update(pubkey).digest()).digest();
-    const vByte = ((network || 'wtc-mainnet') === 'mainnet') ? 0x00 : 0x6f;
+    const vByte = (network || 'wtc-mainnet') === 'mainnet' ? 0x00 : 0x6f;
     const versioned = Buffer.concat([Buffer.from([vByte]), h160]);
-    const checksum = crypto.createHash('sha256').update(crypto.createHash('sha256').update(versioned).digest()).digest().slice(0, 4);
+    const checksum = crypto
+      .createHash('sha256')
+      .update(crypto.createHash('sha256').update(versioned).digest())
+      .digest()
+      .slice(0, 4);
     return _base58Encode(Buffer.concat([versioned, checksum])) === address;
   } catch (_) {
     return false;

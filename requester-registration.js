@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: MIT
 'use strict';
 
-async function maybeRegisterReachableRequester(req, settings, source = 'peer-contact', {
-  isReverseTunnelForwardedRequest,
-  rememberObservedRequester,
-  extractReachablePeerCandidates,
-  isPublicPeerHost,
-  verifyReachablePeerCandidate,
-} = {}) {
+async function maybeRegisterReachableRequester(
+  req,
+  settings,
+  source = 'peer-contact',
+  {
+    isReverseTunnelForwardedRequest,
+    rememberObservedRequester,
+    extractReachablePeerCandidates,
+    isPublicPeerHost,
+    verifyReachablePeerCandidate,
+  } = {},
+) {
   if (isReverseTunnelForwardedRequest(req)) {
     rememberObservedRequester(req, settings, `${source}-tunnel`);
     return { ok: true, source, skippedReachability: true, reason: 'reverse-tunnel-forwarded' };

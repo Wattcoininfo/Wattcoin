@@ -35,16 +35,11 @@
 
 const { computeBlockHash, energyForHeight } = require('./wtc-chain');
 const { validateBlockProbeAttestation } = require('./probe-attestation');
-const {
-  sign:            wtcSign,
-  verifySignature: wtcVerify,
-  isValidAddress,
-  txHash,
-} = require('./wtc-address');
+const { sign: wtcSign, verifySignature: wtcVerify, isValidAddress, txHash } = require('./wtc-address');
 
-const VOTE_TIMEOUT_MS   = 2500;   // how long to wait for peer votes
-const QUORUM_FRACTION   = 2 / 3;  // BFT majority fraction
-const DEDUP_CACHE_LIMIT = 1000;   // max committed hashes to remember
+const VOTE_TIMEOUT_MS = 2500; // how long to wait for peer votes
+const QUORUM_FRACTION = 2 / 3; // BFT majority fraction
+const DEDUP_CACHE_LIMIT = 1000; // max committed hashes to remember
 
 class Consensus {
   /**
@@ -59,20 +54,30 @@ class Consensus {
    *   getEnergyContributions?: () => { [address: string]: number },
    * }} opts
    */
-  constructor({ chain, accounts, mempool, getActivePeers, requestPeerJson, privateKey, allowPartialQuorumCommit = true, nfts = null, getEnergyContributions }) {
-    this._chain    = chain;
+  constructor({
+    chain,
+    accounts,
+    mempool,
+    getActivePeers,
+    requestPeerJson,
+    privateKey,
+    allowPartialQuorumCommit = true,
+    nfts = null,
+    getEnergyContributions,
+  }) {
+    this._chain = chain;
     this._accounts = accounts;
-    this._mempool  = mempool;
-    this._nfts     = nfts;   // optional NftStore — if provided, applyBlock is called on commit
-    this._peers    = getActivePeers;
-    this._rpc      = requestPeerJson;
-    this._privKey  = privateKey;    // Buffer — secp256k1 private key
+    this._mempool = mempool;
+    this._nfts = nfts; // optional NftStore — if provided, applyBlock is called on commit
+    this._peers = getActivePeers;
+    this._rpc = requestPeerJson;
+    this._privKey = privateKey; // Buffer — secp256k1 private key
     this._allowPartialQuorumCommit = !!allowPartialQuorumCommit;
     this._getEnergyContributions = typeof getEnergyContributions === 'function' ? getEnergyContributions : () => ({});
 
-    this._localAddr = '';           // set by setLocalAddress()
-    this._pending   = new Map();    // blockHash → { block, votes: Map(addr → sigHex), voteWeight: Number }
-    this._committed = new Set();    // committed block hashes (dedup guard)
+    this._localAddr = ''; // set by setLocalAddress()
+    this._pending = new Map(); // blockHash → { block, votes: Map(addr → sigHex), voteWeight: Number }
+    this._committed = new Set(); // committed block hashes (dedup guard)
   }
 
   /** Tell consensus which wallet address this node is mining from. */
@@ -88,10 +93,27 @@ class Consensus {
    *
    * @returns {Promise<object>} the committed block
    */
-  async proposeBlock({ proposer, energyWh, proofCommitment, peerProbeVerified = false, probeReceipt = null, transactions, rewardAddresses, nftsRoot = '' }) {
+  async proposeBlock({
+    proposer,
+    energyWh,
+    proofCommitment,
+    peerProbeVerified = false,
+    probeReceipt = null,
+    transactions,
+    rewardAddresses,
+    nftsRoot = '',
+  }) {
     const stateRoot = this._accounts.stateHash();
-    const block     = this._chain.buildBlock({
-      proposer, energyWh, proofCommitment, peerProbeVerified, probeReceipt, transactions, rewardAddresses, stateRoot, nftsRoot,
+    const block = this._chain.buildBlock({
+      proposer,
+      energyWh,
+      proofCommitment,
+      peerProbeVerified,
+      probeReceipt,
+      transactions,
+      rewardAddresses,
+      stateRoot,
+      nftsRoot,
     });
 
     const validationError = this._validateBlock(block);
@@ -107,7 +129,7 @@ class Consensus {
 
     // Self-vote
     const selfSig = this._signBlock(block);
-    const votes   = new Map([[proposer, selfSig]]);
+    const votes = new Map([[proposer, selfSig]]);
     const voteWeight = this._voteWeight(proposer);
     this._pending.set(block.hash, { block, votes, voteWeight });
 
@@ -137,7 +159,7 @@ class Consensus {
         };
       }
       console.warn(
-        `[Consensus] Committing block ${block.height} with weight ${totalWeight}/${quorumWeight} (partial quorum, ${votes.size} votes)`
+        `[Consensus] Committing block ${block.height} with weight ${totalWeight}/${quorumWeight} (partial quorum, ${votes.size} votes)`,
       );
     }
 
@@ -214,16 +236,16 @@ class Consensus {
    */
   getStatus() {
     const height = this._chain.getHeight();
-    const tip    = this._chain.getTip();
-    const peers  = this._peers();
+    const tip = this._chain.getTip();
+    const peers = this._peers();
     return {
       height,
-      tipHash:          tip ? tip.hash : null,
-      tipTimestamp:     tip ? tip.timestamp : null,
-      nextReward:       this._chain.nextBlockReward(),
-      activePeers:      peers.length,
+      tipHash: tip ? tip.hash : null,
+      tipTimestamp: tip ? tip.timestamp : null,
+      nextReward: this._chain.nextBlockReward(),
+      activePeers: peers.length,
       pendingProposals: this._pending.size,
-      status:           'running',
+      status: 'running',
     };
   }
 
@@ -289,7 +311,7 @@ class Consensus {
   _signBlock(block) {
     if (!this._privKey || this._privKey.length === 0) return '';
     try {
-      const h   = txHash(block.hash);
+      const h = txHash(block.hash);
       const sig = wtcSign(h, this._privKey);
       return `${sig.r}${sig.s}${String(sig.v).padStart(2, '0')}`;
     } catch (_) {
@@ -302,7 +324,7 @@ class Consensus {
    * A missing, short, or unverifiable signature is always rejected.
    */
   _verifyVote(blockHash, sigHex, voterAddress) {
-    if (!sigHex || sigHex.length < 130) return false;  // missing or malformed sig
+    if (!sigHex || sigHex.length < 130) return false; // missing or malformed sig
     try {
       const r = sigHex.slice(0, 64);
       const s = sigHex.slice(64, 128);
@@ -310,7 +332,7 @@ class Consensus {
       const h = txHash(blockHash);
       return wtcVerify(h, { r, s, v }, voterAddress);
     } catch (_) {
-      return false;  // any verification error is a rejection
+      return false; // any verification error is a rejection
     }
   }
 
@@ -319,13 +341,13 @@ class Consensus {
    * Returns null on success, or an error string on failure.
    */
   _validateBlock(block) {
-    if (!block || typeof block !== 'object')    return 'block must be an object';
-    if (typeof block.height !== 'number')       return 'missing height';
-    if (typeof block.prevHash !== 'string')     return 'missing prevHash';
-    if (typeof block.proposer !== 'string')     return 'missing proposer';
+    if (!block || typeof block !== 'object') return 'block must be an object';
+    if (typeof block.height !== 'number') return 'missing height';
+    if (typeof block.prevHash !== 'string') return 'missing prevHash';
+    if (typeof block.proposer !== 'string') return 'missing proposer';
     if (block.hash !== computeBlockHash(block)) return 'block hash mismatch';
 
-    if (block.height === 0) return null;  // genesis is valid by hash alone
+    if (block.height === 0) return null; // genesis is valid by hash alone
 
     const expectedHeight = this._chain.getHeight() + 1;
     if (block.height !== expectedHeight) {
@@ -381,14 +403,18 @@ class Consensus {
         if (!tx.from || !tx.to || !tx.sig) return `tx ${i} missing from/to/sig`;
         if (typeof tx.sig.r !== 'string' || typeof tx.sig.s !== 'string') return `tx ${i} invalid sig format`;
         const sigInput = JSON.stringify({
-          id: tx.id, from: tx.from, to: tx.to,
-          amount: tx.amount, fee: tx.fee, nonce: tx.nonce,
+          id: tx.id,
+          from: tx.from,
+          to: tx.to,
+          amount: tx.amount,
+          fee: tx.fee,
+          nonce: tx.nonce,
         });
         if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) return `tx ${i} signature mismatch`;
       }
     }
 
-    return null;  // valid
+    return null; // valid
   }
 
   /**
@@ -409,7 +435,7 @@ class Consensus {
     }
 
     // Attach vote set to the final block object
-    const votesObj   = {};
+    const votesObj = {};
     for (const [voter, sig] of votes) votesObj[voter] = sig;
     const finalBlock = { ...block, votes: votesObj };
 
@@ -428,7 +454,7 @@ class Consensus {
     if (this._nfts) this._nfts.applyBlock(finalBlock);
 
     // Clear committed transactions from mempool
-    const txIds = (finalBlock.transactions || []).map(t => t.id);
+    const txIds = (finalBlock.transactions || []).map((t) => t.id);
     this._mempool.removeAll(txIds);
 
     // Clean up pending map
@@ -436,9 +462,9 @@ class Consensus {
 
     console.log(
       `[Consensus] Block ${finalBlock.height} committed` +
-      ` hash=${finalBlock.hash.slice(0, 16)}...` +
-      ` votes=${votes.size}` +
-      ` reward=${finalBlock.rewardTotal}`
+        ` hash=${finalBlock.hash.slice(0, 16)}...` +
+        ` votes=${votes.size}` +
+        ` reward=${finalBlock.rewardTotal}`,
     );
 
     return finalBlock;

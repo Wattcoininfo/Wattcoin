@@ -2,9 +2,9 @@
 'use strict';
 
 const assert = require('assert');
-const path   = require('path');
-const fs     = require('fs');
-const os     = require('os');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const sq = require('../wtc-sale-queue');
 
@@ -29,7 +29,6 @@ function it(name, fn) {
 // ─── Sale tier math ────────────────────────────────────────────────────────
 
 describe('wtc-sale-queue — tier constants', () => {
-
   it('SALE_TOTAL is 333,333 WTC', () => {
     assert.strictEqual(sq.SALE_TOTAL, 333333);
   });
@@ -41,9 +40,9 @@ describe('wtc-sale-queue — tier constants', () => {
   it('three tiers each have 1/3 fraction', () => {
     const tiers = sq.SALE_TIERS;
     assert.strictEqual(tiers.length, 3);
-    assert.strictEqual(tiers[0].fraction, 1/3);
-    assert.strictEqual(tiers[1].fraction, 2/3);
-    assert.strictEqual(tiers[2].fraction, 3/3);
+    assert.strictEqual(tiers[0].fraction, 1 / 3);
+    assert.strictEqual(tiers[1].fraction, 2 / 3);
+    assert.strictEqual(tiers[2].fraction, 3 / 3);
   });
 
   it('tier boundaries are contiguous and cover total', () => {
@@ -55,36 +54,33 @@ describe('wtc-sale-queue — tier constants', () => {
     assert.strictEqual(tiers[2].start, 222222);
     assert.strictEqual(tiers[2].end, 333333);
   });
-
 });
 
 describe('wtc-sale-queue — computeUsdcRequired', () => {
-
   it('returns 0 for zero amount', () => {
-    const cost = sq.computeUsdcRequired(0, 0.10);
+    const cost = sq.computeUsdcRequired(0, 0.1);
     assert.strictEqual(cost, 0);
   });
 
   it('returns positive cost for positive amount', () => {
-    const elPrice = 0.10;
+    const elPrice = 0.1;
     const ENERGY_KWH_PER_WTC = 20;
-    const expectedTier1Price = elPrice * ENERGY_KWH_PER_WTC * (1/3);
+    const expectedTier1Price = elPrice * ENERGY_KWH_PER_WTC * (1 / 3);
     const cost = sq.computeUsdcRequired(1, elPrice);
     assert.strictEqual(cost, expectedTier1Price);
   });
 
   it('cost is linear in electricity price', () => {
     const costLow = sq.computeUsdcRequired(100, 0.05);
-    const costHigh = sq.computeUsdcRequired(100, 0.10);
+    const costHigh = sq.computeUsdcRequired(100, 0.1);
     assert.strictEqual(costHigh, costLow * 2);
   });
 
   it('cost increases across tier boundaries', () => {
-    const elPrice = 0.10;
+    const elPrice = 0.1;
     const firstWtcCost = sq.computeUsdcRequired(1, elPrice);
     assert.ok(firstWtcCost > 0);
   });
-
 });
 
 describe('wtc-sale-queue — init and order lifecycle', () => {
@@ -117,11 +113,11 @@ describe('wtc-sale-queue — init and order lifecycle', () => {
     const result = await sq.placeSaleOrder({
       wtcAddress: ADDR1,
       wtcAmount: 100,
-      usdcRequired: 50.00,
+      usdcRequired: 50.0,
     });
     assert.ok(result.ok, `placeSaleOrder failed: ${result.error || 'unknown'}`);
     assert.ok(result.orderId);
-    assert.strictEqual(result.usdcRequired, 50.00);
+    assert.strictEqual(result.usdcRequired, 50.0);
     const orders = sq.getOrders();
     assert.strictEqual(orders.length, 1);
     assert.strictEqual(orders[0].id, result.orderId);
@@ -135,7 +131,7 @@ describe('wtc-sale-queue — init and order lifecycle', () => {
     await sq.placeSaleOrder({
       wtcAddress: 'wtc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0',
       wtcAmount: 250,
-      usdcRequired: 125.50,
+      usdcRequired: 125.5,
     });
     sq.shutdown();
     const ordersPath = path.join(dir, 'sale-orders.json');
@@ -149,7 +145,6 @@ describe('wtc-sale-queue — init and order lifecycle', () => {
     assert.strictEqual(orders[0].wtcAmount, 250);
     sq.shutdown();
   });
-
 });
 
 describe('wtc-sale-queue — order queries', () => {
@@ -183,7 +178,6 @@ describe('wtc-sale-queue — order queries', () => {
     assert.strictEqual(sq.getPurchaseTotalForAddress(addr), 0);
     sq.shutdown();
   });
-
 });
 
 describe('wtc-sale-queue — cancelOrder', () => {
@@ -212,7 +206,6 @@ describe('wtc-sale-queue — cancelOrder', () => {
     assert.strictEqual(cancelResult.ok, false);
     sq.shutdown();
   });
-
 });
 
 describe('wtc-sale-queue — setOrderTxHash', () => {
@@ -242,11 +235,9 @@ describe('wtc-sale-queue — setOrderTxHash', () => {
     assert.strictEqual(res.ok, false);
     sq.shutdown();
   });
-
 });
 
 describe('wtc-sale-queue — setElectricityPrice', () => {
-
   it('accepts valid prices', () => {
     const dir = tmpDir();
     sq.init(dir, null);
@@ -262,11 +253,9 @@ describe('wtc-sale-queue — setElectricityPrice', () => {
     sq.setElectricityPrice(null);
     sq.shutdown();
   });
-
 });
 
 describe('wtc-sale-queue — getSoldWTC', () => {
-
   it('returns 0 with no orders or node', () => {
     const dir = tmpDir();
     sq.init(dir, null);
@@ -283,7 +272,6 @@ describe('wtc-sale-queue — getSoldWTC', () => {
     assert.ok(sold <= sq.SALE_TOTAL);
     sq.shutdown();
   });
-
 });
 
 if (require.main === module) {

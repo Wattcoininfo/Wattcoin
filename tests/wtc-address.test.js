@@ -29,7 +29,10 @@ function it(name, fn) {
     if (result && typeof result.then === 'function') {
       return result.then(
         () => console.log(`  ✓ ${name}`),
-        (e) => { console.error(`  ✗ ${name}: ${e.message}`); throw e; }
+        (e) => {
+          console.error(`  ✗ ${name}: ${e.message}`);
+          throw e;
+        },
       );
     }
     console.log(`  ✓ ${name}`);
@@ -40,7 +43,6 @@ function it(name, fn) {
 }
 
 describe('wtc-address — key generation', () => {
-
   it('generateKeypair returns a valid keypair', () => {
     const kp = generateKeypair();
     assert.ok(kp.privateKey, 'privateKey must be present');
@@ -89,11 +91,9 @@ describe('wtc-address — key generation', () => {
     assert.strictEqual(pub.length, 33);
     assert.ok(pub[0] === 0x02 || pub[0] === 0x03, 'compressed key should start with 0x02 or 0x03');
   });
-
 });
 
 describe('wtc-address — address encoding/decoding', () => {
-
   it('encodeAddress produces valid addresses', () => {
     const h160 = crypto.randomBytes(20);
     const addr = encodeAddress(h160);
@@ -131,11 +131,9 @@ describe('wtc-address — address encoding/decoding', () => {
     assert.ok(!isValidAddress('invalid'));
     assert.ok(!isValidAddress('btc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0'));
   });
-
 });
 
 describe('wtc-address — hash160', () => {
-
   it('hash160 returns 20-byte buffer', () => {
     const result = hash160(Buffer.from('hello', 'utf8'));
     assert.ok(Buffer.isBuffer(result));
@@ -152,11 +150,9 @@ describe('wtc-address — hash160', () => {
     const b = hash160(Buffer.from('input B', 'utf8'));
     assert.ok(!a.equals(b));
   });
-
 });
 
 describe('wtc-address — txHash (double-SHA256)', () => {
-
   it('txHash returns 32-byte buffer', () => {
     const h = txHash(Buffer.from('data', 'utf8'));
     assert.ok(Buffer.isBuffer(h));
@@ -172,11 +168,9 @@ describe('wtc-address — txHash (double-SHA256)', () => {
   it('txHash is deterministic', () => {
     assert.ok(txHash('same').equals(txHash('same')));
   });
-
 });
 
 describe('wtc-address — ECDSA signing and verification', () => {
-
   it('sign produces valid signature structure', () => {
     const kp = generateKeypair();
     const msg = txHash('test message');
@@ -244,11 +238,9 @@ describe('wtc-address — ECDSA signing and verification', () => {
       assert.ok(s <= halfOrder, `s value ${s} should be <= half order (low-s form)`);
     }
   });
-
 });
 
 describe('wtc-address — isValidAddress edge cases', () => {
-
   it('rejects addresses with wrong HRP', () => {
     assert.ok(!isValidAddress('btc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0'));
   });
@@ -275,17 +267,19 @@ describe('wtc-address — isValidAddress edge cases', () => {
     }
     assert.ok(false, 'expected at least one mangled address to be invalid');
   });
-
 });
 
 function run() {
-  const tests = [
-    describe,
-  ];
+  const tests = [describe];
   let passed = 0;
   let failed = 0;
   for (const [, fn] of Object.entries(tests)) {
-    try { fn(); passed++; } catch (e) { failed++; }
+    try {
+      fn();
+      passed++;
+    } catch (e) {
+      failed++;
+    }
   }
   if (failed > 0) process.exit(1);
 }

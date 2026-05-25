@@ -179,12 +179,17 @@ async function run() {
 
     const belowTotalWh = Object.values(belowThreshold).reduce((sum, value) => sum + value, 0);
     await assert.rejects(
-      () => A.mineBlock(addrA, {
-        energyWh: belowTotalWh,
-        proofCommitment: 'shared-round-below-threshold',
-      }, buildRewardMap(belowThreshold, 500)),
+      () =>
+        A.mineBlock(
+          addrA,
+          {
+            energyWh: belowTotalWh,
+            proofCommitment: 'shared-round-below-threshold',
+          },
+          buildRewardMap(belowThreshold, 500),
+        ),
       /insufficient energyWh: required 10000000, got 9999999/,
-      'pooled round below threshold should not mine a block'
+      'pooled round below threshold should not mine a block',
     );
     assert.strictEqual(A.getHeight(), 0, 'below-threshold attempt must leave chain at genesis');
 
@@ -203,10 +208,14 @@ async function run() {
     const exactTotalWh = Object.values(exactThreshold).reduce((sum, value) => sum + value, 0);
     assert.strictEqual(exactTotalWh, tier1ThresholdWh, 'shared round total should hit exact Tier1 threshold');
 
-    const mined = await A.mineBlock(addrA, {
-      energyWh: exactTotalWh,
-      proofCommitment: 'shared-round-threshold-hit',
-    }, buildRewardMap(exactThreshold, 500));
+    const mined = await A.mineBlock(
+      addrA,
+      {
+        energyWh: exactTotalWh,
+        proofCommitment: 'shared-round-threshold-hit',
+      },
+      buildRewardMap(exactThreshold, 500),
+    );
 
     assert.strictEqual(mined.height, 1, 'threshold hit should commit the first mined block');
     await converge([A, B, C], 4);
@@ -238,7 +247,11 @@ async function run() {
       assert.strictEqual(ledger.getRoundContribution(addrA), 0, 'new round should reset A contribution to 0');
       assert.strictEqual(ledger.getRoundContribution(addrB), 0, 'new round should reset B contribution to 0');
       assert.strictEqual(ledger.getRoundContribution(addrC), 0, 'new round should reset C contribution to 0');
-      assert.strictEqual(ledger.getCurrentRoundSnapshot().id, 2, 'settlement should advance each ledger to the next round');
+      assert.strictEqual(
+        ledger.getCurrentRoundSnapshot().id,
+        2,
+        'settlement should advance each ledger to the next round',
+      );
     }
 
     console.log('shared round network runtime test passed');

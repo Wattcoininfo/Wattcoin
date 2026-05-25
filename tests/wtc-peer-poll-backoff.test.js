@@ -49,7 +49,10 @@ async function run() {
   }
 
   assert.strictEqual(requestCount, 4, 'unreachable peers should stop being polled once backoff is entered');
-  assert.ok(warnings.every((entry) => entry.includes(unreachablePeer)), 'warning messages should identify the failing peer');
+  assert.ok(
+    warnings.every((entry) => entry.includes(unreachablePeer)),
+    'warning messages should identify the failing peer',
+  );
 
   console.log('wtc peer poll backoff tests passed');
 }

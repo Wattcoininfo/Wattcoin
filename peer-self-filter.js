@@ -7,7 +7,7 @@ function isSelfPeerUrlCandidate(candidate, { selfAdvertisedUrls = [], listenPort
   const selfUrls = new Set(
     (Array.isArray(selfAdvertisedUrls) ? selfAdvertisedUrls : [])
       .map((value) => String(value || '').trim())
-      .filter(Boolean)
+      .filter(Boolean),
   );
   if (selfUrls.has(candidate)) return true;
 
@@ -33,12 +33,14 @@ function isSelfPeerUrlCandidate(candidate, { selfAdvertisedUrls = [], listenPort
 
 function filterExternalPeerUrls(candidates, selfOptions = {}) {
   const urls = Array.isArray(candidates) ? candidates : [];
-  return Array.from(new Set(
-    urls
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-      .filter((value) => !isSelfPeerUrlCandidate(value, selfOptions))
-  ));
+  return Array.from(
+    new Set(
+      urls
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .filter((value) => !isSelfPeerUrlCandidate(value, selfOptions)),
+    ),
+  );
 }
 
 module.exports = {

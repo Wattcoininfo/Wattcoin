@@ -33,27 +33,21 @@
  *   GET  /api/v1/chain/tip      → wtcNode.handleGetTip()
  */
 
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
-const { Accounts }   = require('./wtc-accounts');
-const { Chain }      = require('./wtc-chain');
-const { Mempool }    = require('./wtc-mempool');
-const { Consensus }  = require('./wtc-consensus');
+const { Accounts } = require('./wtc-accounts');
+const { Chain } = require('./wtc-chain');
+const { Mempool } = require('./wtc-mempool');
+const { Consensus } = require('./wtc-consensus');
 const { NftStore, NFT_COLLECTION, MINTER_ADDRESS } = require('./wtc-nfts');
-const {
-  generateKeypair,
-  isValidAddress,
-  txHash,
-  sign,
-  verifySignature,
-} = require('./wtc-address');
+const { generateKeypair, isValidAddress, txHash, sign, verifySignature } = require('./wtc-address');
 
-const WALLET_FILE       = 'wtc-wallet.json';
-const PENDING_TXS_FILE  = 'wtc-pending-txs.json';
-const GENESIS_CFG_FILE  = 'wtc-genesis.json';
-const GENESIS_PREMINE   = 1_000_000;
+const WALLET_FILE = 'wtc-wallet.json';
+const PENDING_TXS_FILE = 'wtc-pending-txs.json';
+const GENESIS_CFG_FILE = 'wtc-genesis.json';
+const GENESIS_PREMINE = 1_000_000;
 const CHAIN_PROTOCOL_VERSION = 1;
 const PEER_CHAIN_TIP_TIMEOUT_MS = 12_000;
 const PEER_CHAIN_FETCH_TIMEOUT_MS = 20_000;
@@ -67,20 +61,20 @@ class WtcNode {
   static PEER_FAILURE_BACKOFF_MS = 30_000; // 30 s backoff — peers typically recover within seconds
   static PEER_FAILURE_THRESHOLD = 5; // backoff only after 5 consecutive failures
   _peerFailureCounts = new Map(); // peerUrl -> { count, lastFail }
-  _lastBackoffLog = new Map();    // peerUrl -> last log timestamp
+  _lastBackoffLog = new Map(); // peerUrl -> last log timestamp
 
   _isPeerInFailureBackoff(peerUrl, now = Date.now()) {
     const fail = this._peerFailureCounts.get(peerUrl);
     if (!fail) return false;
-    return fail.count >= WtcNode.PEER_FAILURE_THRESHOLD
-      && now - fail.lastFail < WtcNode.PEER_FAILURE_BACKOFF_MS;
+    return fail.count >= WtcNode.PEER_FAILURE_THRESHOLD && now - fail.lastFail < WtcNode.PEER_FAILURE_BACKOFF_MS;
   }
 
   _recordPeerFailure(peerUrl, now = Date.now()) {
     const previous = this._peerFailureCounts.get(peerUrl);
-    const next = !previous || now - previous.lastFail >= WtcNode.PEER_FAILURE_BACKOFF_MS
-      ? { count: 1, lastFail: now }
-      : { count: previous.count + 1, lastFail: now };
+    const next =
+      !previous || now - previous.lastFail >= WtcNode.PEER_FAILURE_BACKOFF_MS
+        ? { count: 1, lastFail: now }
+        : { count: previous.count + 1, lastFail: now };
     this._peerFailureCounts.set(peerUrl, next);
     return next;
   }
@@ -93,22 +87,22 @@ class WtcNode {
    * @param {{ dataDir: string, signingSecret: string }} opts
    */
   constructor({ dataDir, signingSecret, peerIdentity = '', walletKey }) {
-    this._dataDir  = dataDir;
-    this._secret   = signingSecret || crypto.randomBytes(32).toString('hex');
+    this._dataDir = dataDir;
+    this._secret = signingSecret || crypto.randomBytes(32).toString('hex');
     this._walletKey = Buffer.isBuffer(walletKey) && walletKey.length === 32 ? walletKey : null;
     this._peerIdentity = typeof peerIdentity === 'string' ? peerIdentity.trim() : '';
     this._isSelfPeerUrl = null;
 
-    this._accounts   = new Accounts({ dataDir, signingSecret: this._secret });
-    this._chain      = new Chain   ({ dataDir, signingSecret: this._secret });
-    this._mempool    = new Mempool ();
-    this._nfts       = new NftStore({ dataDir, signingSecret: this._secret });
-    this._consensus  = null;   // set during init()
+    this._accounts = new Accounts({ dataDir, signingSecret: this._secret });
+    this._chain = new Chain({ dataDir, signingSecret: this._secret });
+    this._mempool = new Mempool();
+    this._nfts = new NftStore({ dataDir, signingSecret: this._secret });
+    this._consensus = null; // set during init()
 
-    this._wallet     = this._loadOrCreateWallet();
+    this._wallet = this._loadOrCreateWallet();
     this._syncInProgress = false;
 
-    this._pendingTxs = [];          // persisted pending txs that survive restart
+    this._pendingTxs = []; // persisted pending txs that survive restart
     this._loadPendingTxs();
 
     // Periodic diagnostics: log peers stuck in failure backoff every 5 minutes
@@ -124,11 +118,15 @@ class WtcNode {
       const lastLog = this._lastBackoffLog.get(peerUrl) || 0;
       if (now - lastLog < WtcNode.PEER_BACKOFF_DIAGNOSTIC_MS) continue;
       this._lastBackoffLog.set(peerUrl, now);
-      console.warn(`[WtcNode] Peer ${peerUrl} still in failure backoff (${fail.count} consecutive failures, last fail ${new Date(fail.lastFail).toISOString()})`);
+      console.warn(
+        `[WtcNode] Peer ${peerUrl} still in failure backoff (${fail.count} consecutive failures, last fail ${new Date(fail.lastFail).toISOString()})`,
+      );
     }
   }
 
-  _pendingTxsPath() { return path.join(this._dataDir, PENDING_TXS_FILE); }
+  _pendingTxsPath() {
+    return path.join(this._dataDir, PENDING_TXS_FILE);
+  }
 
   _loadPendingTxs() {
     try {
@@ -152,7 +150,7 @@ class WtcNode {
   }
 
   _addPendingTx(tx) {
-    const exists = this._pendingTxs.some(t => t.id === tx.id);
+    const exists = this._pendingTxs.some((t) => t.id === tx.id);
     if (exists) return;
     this._pendingTxs.push(tx);
     this._savePendingTxs();
@@ -160,7 +158,7 @@ class WtcNode {
 
   _removePendingTx(txid) {
     const before = this._pendingTxs.length;
-    this._pendingTxs = this._pendingTxs.filter(t => t.id !== txid);
+    this._pendingTxs = this._pendingTxs.filter((t) => t.id !== txid);
     if (this._pendingTxs.length !== before) this._savePendingTxs();
   }
 
@@ -186,17 +184,28 @@ class WtcNode {
    * @param {{ getActivePeers: () => string[], getPeerTargets?: () => string[], getTrustedPeerTargets?: () => string[], requestPeerJson: Function, onPeerTip?: Function, allowPartialQuorumCommit?: boolean, getConnectedPeerCount?: Function, getEnergyContributions?: () => object }} opts
    * @returns {WtcNode} this (for chaining)
    */
-  init({ getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit = true, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount, getEnergyContributions }) {
+  init({
+    getActivePeers,
+    getPeerTargets,
+    getTrustedPeerTargets,
+    requestPeerJson,
+    onPeerTip,
+    allowPartialQuorumCommit = true,
+    isLiveLocalTunnelPeer,
+    isSelfPeerUrl,
+    getConnectedPeerCount,
+    getEnergyContributions,
+  }) {
     const privBuf = Buffer.from(this._wallet.primaryKey.privateKey, 'hex');
 
     this._consensus = new Consensus({
-      chain:          this._chain,
-      accounts:       this._accounts,
-      mempool:        this._mempool,
-      nfts:           this._nfts,
+      chain: this._chain,
+      accounts: this._accounts,
+      mempool: this._mempool,
+      nfts: this._nfts,
       getActivePeers,
       requestPeerJson,
-      privateKey:     privBuf,
+      privateKey: privBuf,
       allowPartialQuorumCommit,
       getEnergyContributions,
     });
@@ -221,16 +230,15 @@ class WtcNode {
 
     this._retryPendingTxs();
 
-    console.log(
-      `[WtcNode] Ready - height=${this._chain.getHeight()}` +
-      ` address=${this._wallet.primaryKey.address}`
-    );
+    console.log(`[WtcNode] Ready - height=${this._chain.getHeight()}` + ` address=${this._wallet.primaryKey.address}`);
     return this;
   }
 
   // ─── Wallet management ────────────────────────────────────────────────────
 
-  _walletPath() { return path.join(this._dataDir, WALLET_FILE); }
+  _walletPath() {
+    return path.join(this._dataDir, WALLET_FILE);
+  }
 
   _loadOrCreateWallet() {
     const fp = this._walletPath();
@@ -238,11 +246,7 @@ class WtcNode {
       if (fs.existsSync(fp)) {
         const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
         if (raw && raw.encrypted && this._walletKey) {
-          const decipher = crypto.createDecipheriv(
-            'aes-256-gcm',
-            this._walletKey,
-            Buffer.from(raw.iv, 'hex')
-          );
+          const decipher = crypto.createDecipheriv('aes-256-gcm', this._walletKey, Buffer.from(raw.iv, 'hex'));
           decipher.setAuthTag(Buffer.from(raw.tag, 'hex'));
           const decrypted = decipher.update(raw.ciphertext, 'hex', 'utf8') + decipher.final('utf8');
           const parsed = JSON.parse(decrypted);
@@ -255,9 +259,11 @@ class WtcNode {
           return raw;
         }
       }
-    } catch (_) { /* corrupt file — recreate */ }
+    } catch (_) {
+      /* corrupt file — recreate */
+    }
 
-    const kp     = generateKeypair();
+    const kp = generateKeypair();
     const wallet = { version: 1, keys: [kp], primaryKey: kp };
     this._saveWallet(wallet);
     console.log('[WtcNode] New wallet created:', kp.address);
@@ -274,8 +280,10 @@ class WtcNode {
         const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
         const tag = cipher.getAuthTag();
         data = JSON.stringify({
-          encrypted: true, version: 1,
-          iv: iv.toString('hex'), tag: tag.toString('hex'),
+          encrypted: true,
+          version: 1,
+          iv: iv.toString('hex'),
+          tag: tag.toString('hex'),
           ciphertext: encrypted.toString('hex'),
         });
       }
@@ -295,7 +303,7 @@ class WtcNode {
 
   /** All addresses held by this wallet. */
   getAddresses() {
-    return this._wallet.keys.map(k => k.address);
+    return this._wallet.keys.map((k) => k.address);
   }
 
   /** The primary mining/receiving address. */
@@ -328,7 +336,7 @@ class WtcNode {
    * The address must already exist in the wallet.
    */
   setPrimaryAddress(address) {
-    const kp = this._wallet.keys.find(k => k.address === address);
+    const kp = this._wallet.keys.find((k) => k.address === address);
     if (!kp) throw new Error(`Address ${address} not found in wallet`);
     this._wallet.primaryKey = kp;
     this._saveWallet(this._wallet);
@@ -340,7 +348,7 @@ class WtcNode {
     if (address === this._wallet.primaryKey.address) {
       throw new Error('Cannot delete the primary address');
     }
-    this._wallet.keys = this._wallet.keys.filter(k => k.address !== address);
+    this._wallet.keys = this._wallet.keys.filter((k) => k.address !== address);
     this._saveWallet(this._wallet);
   }
 
@@ -349,17 +357,19 @@ class WtcNode {
   _initGenesis() {
     const cfgPath = path.join(this._dataDir, GENESIS_CFG_FILE);
     let teamWallets = [];
-    let timestamp   = Date.now();
+    let timestamp = Date.now();
 
     try {
       if (fs.existsSync(cfgPath)) {
         const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
         if (Array.isArray(raw.teamWallets) && raw.teamWallets.length > 0) {
           teamWallets = raw.teamWallets;
-          timestamp   = raw.timestamp || timestamp;
+          timestamp = raw.timestamp || timestamp;
         }
       }
-    } catch (_) { /* ignore parse errors, fall through to default */ }
+    } catch (_) {
+      /* ignore parse errors, fall through to default */
+    }
 
     // Development / testnet fallback: premine to local primary address
     if (teamWallets.length === 0) {
@@ -397,23 +407,23 @@ class WtcNode {
         rewardAddresses[address] = (rewardAddresses[address] || 0) + amount;
       }
       const canonicalFields = {
-        height:          0,
-        prevHash:        '0'.repeat(64),
-        timestamp:       raw.timestamp,
-        proposer:        'genesis',
-        energyWh:        0,
+        height: 0,
+        prevHash: '0'.repeat(64),
+        timestamp: raw.timestamp,
+        proposer: 'genesis',
+        energyWh: 0,
         proofCommitment: '',
-        txsHash:         computeTxsHash([]),
-        rewardTotal:     GENESIS_PREMINE,
-        stateRoot:       '',
+        txsHash: computeTxsHash([]),
+        rewardTotal: GENESIS_PREMINE,
+        stateRoot: '',
       };
       const canonicalHash = computeBlockHash(canonicalFields);
 
       if (storedGenesis.hash !== canonicalHash) {
         console.warn(
           '[WtcNode] Genesis hash mismatch — local genesis does not match canonical config. ' +
-          `Stored: ${storedGenesis.hash.slice(0, 16)}... Expected: ${canonicalHash.slice(0, 16)}...` +
-          (this._chain.getHeight() > 0 ? ` (chain height ${this._chain.getHeight()} will be reset)` : '')
+            `Stored: ${storedGenesis.hash.slice(0, 16)}... Expected: ${canonicalHash.slice(0, 16)}...` +
+            (this._chain.getHeight() > 0 ? ` (chain height ${this._chain.getHeight()} will be reset)` : ''),
         );
         console.warn('[WtcNode] Resetting chain to re-initialize with correct genesis...');
         this._chain.reset();
@@ -428,9 +438,15 @@ class WtcNode {
 
   // ─── Chain queries ────────────────────────────────────────────────────────
 
-  getHeight()        { return this._chain.getHeight(); }
-  getTip()           { return this._chain.getTip(); }
-  getBlock(height)   { return this._chain.getBlock(height); }
+  getHeight() {
+    return this._chain.getHeight();
+  }
+  getTip() {
+    return this._chain.getTip();
+  }
+  getBlock(height) {
+    return this._chain.getBlock(height);
+  }
 
   /**
    * Balance for any address.
@@ -446,9 +462,8 @@ class WtcNode {
    */
   async getWalletReadiness() {
     const localHeight = this._chain.getHeight();
-    const consensusStatus = this._consensus && typeof this._consensus.getStatus === 'function'
-      ? this._consensus.getStatus()
-      : null;
+    const consensusStatus =
+      this._consensus && typeof this._consensus.getStatus === 'function' ? this._consensus.getStatus() : null;
     const knownPeers = consensusStatus ? Math.max(0, Number(consensusStatus.activePeers) || 0) : 0;
     let connections = 0;
     const countedPeerKeys = new Set();
@@ -456,19 +471,14 @@ class WtcNode {
     let bestPeerHeight = localHeight;
     let bestPeer = '';
 
-    if (
-      this._consensus &&
-      typeof this._consensus.requestPeerJson === 'function'
-    ) {
+    if (this._consensus && typeof this._consensus.requestPeerJson === 'function') {
       const now = Date.now();
-      const activePeers = knownPeers > 0 && typeof this._consensus.getActivePeers === 'function'
-        ? (this._consensus.getActivePeers() || [])
-        : [];
-      const directoryPeers = this._getPeerTargets ? (this._getPeerTargets() || []) : [];
-      const peers = Array.from(new Set([
-        ...activePeers,
-        ...directoryPeers,
-      ]));
+      const activePeers =
+        knownPeers > 0 && typeof this._consensus.getActivePeers === 'function'
+          ? this._consensus.getActivePeers() || []
+          : [];
+      const directoryPeers = this._getPeerTargets ? this._getPeerTargets() || [] : [];
+      const peers = Array.from(new Set([...activePeers, ...directoryPeers]));
       const preferredHttpPeers = [];
       const deferredHttpPeers = [];
       const classifyPeer = (peerUrl, httpPeerList) => {
@@ -501,11 +511,18 @@ class WtcNode {
 
       const probePeer = async (peerUrl) => {
         try {
-          const tipRes = await this._consensus.requestPeerJson(peerUrl, 'GET', '/api/v1/chain/tip', undefined, undefined, {
-            timeoutMs: PEER_CHAIN_TIP_TIMEOUT_MS,
-            trackReachability: false,
-            source: 'wallet-readiness',
-          });
+          const tipRes = await this._consensus.requestPeerJson(
+            peerUrl,
+            'GET',
+            '/api/v1/chain/tip',
+            undefined,
+            undefined,
+            {
+              timeoutMs: PEER_CHAIN_TIP_TIMEOUT_MS,
+              trackReachability: false,
+              source: 'wallet-readiness',
+            },
+          );
           if (!tipRes || !tipRes.ok) {
             this._recordPeerFailure(peerUrl);
             return;
@@ -562,17 +579,16 @@ class WtcNode {
     const lagBlocks = Math.max(0, networkHeight - localHeight);
     const syncing = lagBlocks > 0 || this._syncInProgress;
     const reachableButNotAhead = connections > 0 && lagBlocks === 0;
-    const verificationProgress = networkHeight < 0
-      ? 0
-      : Math.max(0, Math.min(1, (localHeight + 1) / (networkHeight + 1)));
+    const verificationProgress =
+      networkHeight < 0 ? 0 : Math.max(0, Math.min(1, (localHeight + 1) / (networkHeight + 1)));
 
     return {
-      ok:                   true,
-      rpcReachable:         true,
-      network:              'wtc-mainnet',
-      blocks:               networkHeight,
-      headers:              networkHeight,
-      localBlocks:          localHeight,
+      ok: true,
+      rpcReachable: true,
+      network: 'wtc-mainnet',
+      blocks: networkHeight,
+      headers: networkHeight,
+      localBlocks: localHeight,
       bestPeerHeight,
       bestPeer,
       lagBlocks,
@@ -580,12 +596,10 @@ class WtcNode {
       reachableButNotAhead,
       verificationProgress,
       initialBlockDownload: syncing,
-      scanning:             this._syncInProgress,
-      spendReady:           localHeight >= 0 && lagBlocks === 0 && connections > 0,
-      status:               syncing ? 'syncing' : 'ready',
-      message:              syncing
-        ? `Syncing blocks ${localHeight} -> ${networkHeight}`
-        : 'WTC native chain ready.',
+      scanning: this._syncInProgress,
+      spendReady: localHeight >= 0 && lagBlocks === 0 && connections > 0,
+      status: syncing ? 'syncing' : 'ready',
+      message: syncing ? `Syncing blocks ${localHeight} -> ${networkHeight}` : 'WTC native chain ready.',
     };
   }
 
@@ -628,7 +642,7 @@ class WtcNode {
     for (let h = height; h >= 0; h--) {
       const block = this._chain.getBlock(h);
       if (!block) continue;
-      if ((block.transactions || []).some(tx => tx.id === txid)) {
+      if ((block.transactions || []).some((tx) => tx.id === txid)) {
         return { status: 'confirmed' };
       }
     }
@@ -643,7 +657,7 @@ class WtcNode {
    * Replaces: runCli(['generateblock', ...]) in electron-main.js
    *
    * @param {string} proposerAddress   — wtc1... address to receive the reward
-  * @param {{ energyWh?: number, proofCommitment?: string, peerProbeVerified?: boolean, probeReceipt?: object|null }} proofData
+   * @param {{ energyWh?: number, proofCommitment?: string, peerProbeVerified?: boolean, probeReceipt?: object|null }} proofData
    *   energyWh:        Watt-hours accumulated this round (from backend-benchmark)
    *   proofCommitment: round proof hash (from round-ledger settleCurrentRound)
    * @param {{ [address: string]: number }} rewardMap
@@ -657,21 +671,21 @@ class WtcNode {
     if (!this._consensus) throw new Error('WtcNode not initialized — call init() first');
 
     // Resolve which wallet key to use
-    const address = this._wallet.keys.some(k => k.address === proposerAddress)
+    const address = this._wallet.keys.some((k) => k.address === proposerAddress)
       ? proposerAddress
       : this._wallet.primaryKey.address;
 
-    const energyWh        = Number(proofData.energyWh)        || 0;
+    const energyWh = Number(proofData.energyWh) || 0;
     const proofCommitment = String(proofData.proofCommitment || '').trim();
     const peerProbeVerified = !!proofData.peerProbeVerified;
-    const probeReceipt = proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
-      ? JSON.parse(JSON.stringify(proofData.probeReceipt))
-      : null;
+    const probeReceipt =
+      proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
+        ? JSON.parse(JSON.stringify(proofData.probeReceipt))
+        : null;
 
-    const reward   = this._chain.nextBlockReward();
-    const rewardAddresses = rewardMap && Object.keys(rewardMap).length > 0
-      ? rewardMap
-      : (reward > 0 ? { [address]: reward } : {});
+    const reward = this._chain.nextBlockReward();
+    const rewardAddresses =
+      rewardMap && Object.keys(rewardMap).length > 0 ? rewardMap : reward > 0 ? { [address]: reward } : {};
 
     // Compute nftsRoot from current NFT state (before this block is applied)
     const nftsRoot = this._nfts.computeStateHash();
@@ -680,17 +694,16 @@ class WtcNode {
     // Deduplicate by (from, nonce) — keeps only the first valid tx per sender
     // slot, preventing same-nonce double-inclusion by a malicious proposer.
     const seenNonces = new Map(); // `${from}:${nonce}` → true
-    const transactions = this._mempool.getTxs(50)
-      .filter(tx => {
-        if (!this._isTxValid(tx)) return false;
-        const key = `${tx.from}:${tx.nonce}`;
-        if (seenNonces.has(key)) return false;
-        seenNonces.set(key, true);
-        return true;
-      });
+    const transactions = this._mempool.getTxs(50).filter((tx) => {
+      if (!this._isTxValid(tx)) return false;
+      const key = `${tx.from}:${tx.nonce}`;
+      if (seenNonces.has(key)) return false;
+      seenNonces.set(key, true);
+      return true;
+    });
 
     const committed = await this._consensus.proposeBlock({
-      proposer:        address,
+      proposer: address,
       energyWh,
       proofCommitment,
       peerProbeVerified,
@@ -705,18 +718,18 @@ class WtcNode {
       throw new Error(reason);
     }
 
-    const committedTxIds = (committed.transactions || []).map(t => t.id);
+    const committedTxIds = (committed.transactions || []).map((t) => t.id);
     for (const txid of committedTxIds) {
       this._removePendingTx(txid);
     }
 
     return {
-      ok:      true,
-      height:  committed.height,
-      hash:    committed.hash,
+      ok: true,
+      height: committed.height,
+      hash: committed.hash,
       address,
       reward,
-      votes:   Object.keys(committed.votes || {}).length,
+      votes: Object.keys(committed.votes || {}).length,
     };
   }
 
@@ -731,30 +744,35 @@ class WtcNode {
    * @returns {{ ok, txid, from, to, amount, fee }}
    */
   send({ fromAddress, toAddress, amount, subtractFeeFromAmount = false }) {
-    if (!isValidAddress(toAddress))  throw new Error(`Invalid recipient address: ${toAddress}`);
+    if (!isValidAddress(toAddress)) throw new Error(`Invalid recipient address: ${toAddress}`);
     if (!isValidAddress(fromAddress)) throw new Error(`Invalid sender address: ${fromAddress}`);
 
-    const kp = this._wallet.keys.find(k => k.address === fromAddress);
+    const kp = this._wallet.keys.find((k) => k.address === fromAddress);
     if (!kp) throw new Error(`Address ${fromAddress} not found in this wallet`);
 
-    const fee        = 0.01;
+    const fee = 0.01;
     const sendAmount = subtractFeeFromAmount ? amount - fee : amount;
     if (sendAmount <= 0) throw new Error('Amount too small');
 
     const balance = this._accounts.getBalance(fromAddress);
     if (balance.confirmed < sendAmount + fee) {
-      throw new Error(
-        `Insufficient confirmed balance: ${balance.confirmed.toFixed(8)} WTC available`
-      );
+      throw new Error(`Insufficient confirmed balance: ${balance.confirmed.toFixed(8)} WTC available`);
     }
 
     const nonce = balance.nonce;
-    const tx    = Mempool.buildTx({ from: fromAddress, to: toAddress, amount: sendAmount, fee, nonce });
+    const tx = Mempool.buildTx({ from: fromAddress, to: toAddress, amount: sendAmount, fee, nonce });
 
     // Sign the transaction — cover id (which binds timestamp) so a peer
     // cannot reassign a different timestamp to reuse this signature.
-    const privBuf  = Buffer.from(kp.privateKey, 'hex');
-    const sigInput = JSON.stringify({ id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce });
+    const privBuf = Buffer.from(kp.privateKey, 'hex');
+    const sigInput = JSON.stringify({
+      id: tx.id,
+      from: tx.from,
+      to: tx.to,
+      amount: tx.amount,
+      fee: tx.fee,
+      nonce: tx.nonce,
+    });
     tx.sig = sign(txHash(sigInput), privBuf);
 
     const result = this._mempool.add(tx);
@@ -771,10 +789,10 @@ class WtcNode {
    * @returns {{ address, message, signature }}
    */
   signMessage(address, message) {
-    const kp = this._wallet.keys.find(k => k.address === address);
+    const kp = this._wallet.keys.find((k) => k.address === address);
     if (!kp) throw new Error(`Address ${address} not in wallet`);
     const privBuf = Buffer.from(kp.privateKey, 'hex');
-    const sig     = sign(txHash('\x18Wattcoin Signed Message:\n' + message), privBuf);
+    const sig = sign(txHash('\x18Wattcoin Signed Message:\n' + message), privBuf);
     return { address, message, signature: `${sig.r}${sig.s}${String(sig.v).padStart(2, '0')}` };
   }
 
@@ -822,7 +840,7 @@ class WtcNode {
     const tip = this._chain.getTip();
     const genesis = this._chain.getBlock(0);
     return {
-      ok:     true,
+      ok: true,
       height: this._chain.getHeight(),
       tip,
       peerIdentity: this.getPeerIdentity(),
@@ -875,9 +893,7 @@ class WtcNode {
    */
   handlePushBlocks({ ancestorHeight = -1, blocks = [], peer = '' } = {}) {
     const normalizedAncestor = Math.max(-1, Math.floor(Number(ancestorHeight) || -1));
-    const incomingBlocks = Array.isArray(blocks)
-      ? blocks.map((block) => JSON.parse(JSON.stringify(block)))
-      : [];
+    const incomingBlocks = Array.isArray(blocks) ? blocks.map((block) => JSON.parse(JSON.stringify(block))) : [];
     if (incomingBlocks.length === 0) {
       return { ok: false, reason: 'missing pushed blocks' };
     }
@@ -904,9 +920,7 @@ class WtcNode {
       };
     }
 
-    const prefix = normalizedAncestor >= 0
-      ? this._chain.getAllBlocks().slice(0, normalizedAncestor + 1)
-      : [];
+    const prefix = normalizedAncestor >= 0 ? this._chain.getAllBlocks().slice(0, normalizedAncestor + 1) : [];
     const ancestorBlock = normalizedAncestor >= 0 ? this._chain.getBlock(normalizedAncestor) : null;
 
     if (normalizedAncestor >= 0 && !ancestorBlock) {
@@ -932,7 +946,7 @@ class WtcNode {
     if (legacyStateRootMismatches.length > 0) {
       console.warn(
         `[WtcNode] Accepted ${legacyStateRootMismatches.length} legacy stateRoot mismatch(es) ` +
-        `during pushed chain rebuild from ${String(peer || '')}; first at height ${legacyStateRootMismatches[0].height}`
+          `during pushed chain rebuild from ${String(peer || '')}; first at height ${legacyStateRootMismatches[0].height}`,
       );
     }
     this._nfts.rebuildFromBlocks(candidate);
@@ -958,11 +972,9 @@ class WtcNode {
     if (!this._getTrustedPeerTargets) return [];
     try {
       const peers = this._getTrustedPeerTargets() || [];
-      return Array.from(new Set(
-        (Array.isArray(peers) ? peers : [])
-          .map((peerUrl) => String(peerUrl || '').trim())
-          .filter(Boolean)
-      ));
+      return Array.from(
+        new Set((Array.isArray(peers) ? peers : []).map((peerUrl) => String(peerUrl || '').trim()).filter(Boolean)),
+      );
     } catch (_) {
       return [];
     }
@@ -990,11 +1002,18 @@ class WtcNode {
         }
       }
       try {
-        const tipRes = await this._consensus.requestPeerJson(peerUrl, 'GET', '/api/v1/chain/tip', undefined, undefined, {
-          timeoutMs: PEER_CHAIN_TIP_TIMEOUT_MS,
-          trackReachability: false,
-          source: 'sync-best-peer',
-        });
+        const tipRes = await this._consensus.requestPeerJson(
+          peerUrl,
+          'GET',
+          '/api/v1/chain/tip',
+          undefined,
+          undefined,
+          {
+            timeoutMs: PEER_CHAIN_TIP_TIMEOUT_MS,
+            trackReachability: false,
+            source: 'sync-best-peer',
+          },
+        );
         if (!tipRes || !tipRes.ok) continue;
         this._clearPeerFailure(peerUrl);
         reachableCount += 1;
@@ -1009,7 +1028,10 @@ class WtcNode {
       } catch (e) {
         const fail = this._recordPeerFailure(peerUrl);
         if (fail.count === WtcNode.PEER_FAILURE_THRESHOLD) {
-          console.warn(`[WtcNode] Peer ${peerUrl} unreachable during tip poll (${fail.count} consecutive failures, backing off 30s):`, e && e.message);
+          console.warn(
+            `[WtcNode] Peer ${peerUrl} unreachable during tip poll (${fail.count} consecutive failures, backing off 30s):`,
+            e && e.message,
+          );
         }
       }
     }
@@ -1043,11 +1065,18 @@ class WtcNode {
         if (tunnelInfo && tunnelInfo.live) continue;
       }
       try {
-        const tipRes = await this._consensus.requestPeerJson(peerUrl, 'GET', '/api/v1/chain/tip', undefined, undefined, {
-          timeoutMs: PEER_CHAIN_TIP_TIMEOUT_MS,
-          trackReachability: false,
-          source: 'sync-same-height',
-        });
+        const tipRes = await this._consensus.requestPeerJson(
+          peerUrl,
+          'GET',
+          '/api/v1/chain/tip',
+          undefined,
+          undefined,
+          {
+            timeoutMs: PEER_CHAIN_TIP_TIMEOUT_MS,
+            trackReachability: false,
+            source: 'sync-same-height',
+          },
+        );
         if (!tipRes || !tipRes.ok) continue;
         this._clearPeerFailure(peerUrl);
         const peerHeight = Number(tipRes.height);
@@ -1062,7 +1091,10 @@ class WtcNode {
       } catch (e) {
         const fail = this._recordPeerFailure(peerUrl);
         if (fail.count === WtcNode.PEER_FAILURE_THRESHOLD) {
-          console.warn(`[WtcNode] Trusted peer ${peerUrl} unreachable during same-height poll (${fail.count} consecutive failures, backing off 30s):`, e && e.message);
+          console.warn(
+            `[WtcNode] Trusted peer ${peerUrl} unreachable during same-height poll (${fail.count} consecutive failures, backing off 30s):`,
+            e && e.message,
+          );
         }
       }
     }
@@ -1085,14 +1117,21 @@ class WtcNode {
       const limit = Math.min(BATCH, remaining);
       let peerBlocksRes;
       try {
-        peerBlocksRes = await this._consensus.requestPeerJson(peerUrl, 'GET', '/api/v1/chain/blocks', undefined, {
-          fromHeight: nextHeight,
-          limit,
-        }, {
-          timeoutMs: PEER_CHAIN_FETCH_TIMEOUT_MS,
-          trackReachability: false,
-          source: 'sync-block-fetch',
-        });
+        peerBlocksRes = await this._consensus.requestPeerJson(
+          peerUrl,
+          'GET',
+          '/api/v1/chain/blocks',
+          undefined,
+          {
+            fromHeight: nextHeight,
+            limit,
+          },
+          {
+            timeoutMs: PEER_CHAIN_FETCH_TIMEOUT_MS,
+            trackReachability: false,
+            source: 'sync-block-fetch',
+          },
+        );
       } catch (e) {
         return { ok: false, reason: `peer block fetch failed: ${e && e.message}` };
       }
@@ -1113,15 +1152,13 @@ class WtcNode {
       return { ok: false, reason: `candidate chain invalid: ${check.reason}` };
     }
 
-    const rollbackDepth = ancestor >= 0
-      ? Math.max(0, localHeight - ancestor)
-      : Math.max(0, localHeight + 1);
+    const rollbackDepth = ancestor >= 0 ? Math.max(0, localHeight - ancestor) : Math.max(0, localHeight + 1);
     if (rollbackDepth > 0) {
       const localTip = this._chain.getTip();
       console.warn(
         `[WtcNode] Chain replacement requires rollback depth=${rollbackDepth} ` +
-        `localTip=${localTip && localTip.hash ? localTip.hash.slice(0, 16) : ''}... ` +
-        `peer=${String(peer || '')}`
+          `localTip=${localTip && localTip.hash ? localTip.hash.slice(0, 16) : ''}... ` +
+          `peer=${String(peer || '')}`,
       );
     }
 
@@ -1135,7 +1172,7 @@ class WtcNode {
     if (legacyStateRootMismatches.length > 0) {
       console.warn(
         `[WtcNode] Accepted ${legacyStateRootMismatches.length} legacy stateRoot mismatch(es) ` +
-        `during ${mode} chain rebuild from ${String(peer || '')}; first at height ${legacyStateRootMismatches[0].height}`
+          `during ${mode} chain rebuild from ${String(peer || '')}; first at height ${legacyStateRootMismatches[0].height}`,
       );
     }
     try {
@@ -1164,7 +1201,9 @@ class WtcNode {
   }
 
   _isRecoverableSyncFailure(reason = '') {
-    const message = String(reason || '').trim().toLowerCase();
+    const message = String(reason || '')
+      .trim()
+      .toLowerCase();
     if (!message) return false;
     return (
       message.includes('no common ancestor') ||
@@ -1193,7 +1232,13 @@ class WtcNode {
     });
   }
 
-  async _tryTrustedBootstrapFallback({ reason = '', bestPeer = '', bestHeight = -1, localHeight = -1, localTipHash = '' } = {}) {
+  async _tryTrustedBootstrapFallback({
+    reason = '',
+    bestPeer = '',
+    bestHeight = -1,
+    localHeight = -1,
+    localTipHash = '',
+  } = {}) {
     if (!this._isRecoverableSyncFailure(reason)) {
       return null;
     }
@@ -1202,23 +1247,16 @@ class WtcNode {
       return null;
     }
 
-    const trustedBest = await this._findBestPeer(
-      Array.from(new Set([bestPeer, ...trustedPeers].filter(Boolean))),
-      { localHeight, localTipHash }
-    );
+    const trustedBest = await this._findBestPeer(Array.from(new Set([bestPeer, ...trustedPeers].filter(Boolean))), {
+      localHeight,
+      localTipHash,
+    });
     if (!trustedBest.peer || trustedBest.height <= localHeight || !trustedPeers.includes(trustedBest.peer)) {
       return null;
     }
 
-    console.warn(
-      `[WtcNode] Falling back to trusted bootstrap from ${trustedBest.peer} after sync failure: ${reason}`
-    );
-    return this._bootstrapFromTrustedPeer(
-      trustedBest.peer,
-      trustedBest.height,
-      localHeight,
-      reason
-    );
+    console.warn(`[WtcNode] Falling back to trusted bootstrap from ${trustedBest.peer} after sync failure: ${reason}`);
+    return this._bootstrapFromTrustedPeer(trustedBest.peer, trustedBest.height, localHeight, reason);
   }
 
   /**
@@ -1232,13 +1270,15 @@ class WtcNode {
     this._syncInProgress = true;
     try {
       const activePeers = (this._consensus.getActivePeers && this._consensus.getActivePeers()) || [];
-      const directoryPeers = this._getPeerTargets ? (this._getPeerTargets() || []) : [];
-      const peers = Array.from(new Set([
-        ...activePeers,
-        // Bootstrap sync must still work on fresh nodes before any peer has been
-        // promoted into the active discovered set.
-        ...directoryPeers,
-      ]));
+      const directoryPeers = this._getPeerTargets ? this._getPeerTargets() || [] : [];
+      const peers = Array.from(
+        new Set([
+          ...activePeers,
+          // Bootstrap sync must still work on fresh nodes before any peer has been
+          // promoted into the active discovered set.
+          ...directoryPeers,
+        ]),
+      );
       if (!Array.isArray(peers) || peers.length === 0) {
         return { ok: true, skipped: true, reason: 'no peers' };
       }
@@ -1281,10 +1321,10 @@ class WtcNode {
 
       const peerBeatsLocal =
         bestHeight > localHeight ||
-        (bestHeight === localHeight && bestTipHash && (
-          bestTipHash > localTipHash ||
-          (trustedSameHeightPeer && trustedSameHeightPeer.peer && bestTipHash !== localTipHash)
-        ));
+        (bestHeight === localHeight &&
+          bestTipHash &&
+          (bestTipHash > localTipHash ||
+            (trustedSameHeightPeer && trustedSameHeightPeer.peer && bestTipHash !== localTipHash)));
       if (!peerBeatsLocal) {
         return {
           ok: true,
@@ -1305,10 +1345,17 @@ class WtcNode {
         if (!localBlock) continue;
         let peerHeaderRes;
         try {
-          peerHeaderRes = await this._consensus.requestPeerJson(bestPeer, 'GET', '/api/v1/chain/headers', undefined, { fromHeight: h, limit: 1 }, {
-            trackReachability: false,
-            source: 'sync-ancestor-scan',
-          });
+          peerHeaderRes = await this._consensus.requestPeerJson(
+            bestPeer,
+            'GET',
+            '/api/v1/chain/headers',
+            undefined,
+            { fromHeight: h, limit: 1 },
+            {
+              trackReachability: false,
+              source: 'sync-ancestor-scan',
+            },
+          );
         } catch (e) {
           return { ok: false, reason: `peer header fetch failed during ancestor scan: ${e && e.message}` };
         }
@@ -1387,7 +1434,12 @@ class WtcNode {
     if (balance.nonce > tx.nonce) return false;
     try {
       const sigInput = JSON.stringify({
-        id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce,
+        id: tx.id,
+        from: tx.from,
+        to: tx.to,
+        amount: tx.amount,
+        fee: tx.fee,
+        nonce: tx.nonce,
       });
       return verifySignature(txHash(sigInput), tx.sig, tx.from);
     } catch (_) {
@@ -1423,21 +1475,28 @@ class WtcNode {
    * @returns {{ ok, txid }}
    */
   transferNft({ nftId, fromAddress, toAddress }) {
-    if (!isValidAddress(toAddress))   throw new Error(`Invalid recipient address: ${toAddress}`);
+    if (!isValidAddress(toAddress)) throw new Error(`Invalid recipient address: ${toAddress}`);
     if (!isValidAddress(fromAddress)) throw new Error(`Invalid sender address: ${fromAddress}`);
 
-    const kp = this._wallet.keys.find(k => k.address === fromAddress);
+    const kp = this._wallet.keys.find((k) => k.address === fromAddress);
     if (!kp) throw new Error(`Address ${fromAddress} not found in this wallet`);
 
     const token = this._nfts.getNft(nftId);
-    if (!token)                       throw new Error(`NFT ${nftId} not found`);
-    if (token.owner !== fromAddress)  throw new Error(`${fromAddress} does not own ${nftId}`);
+    if (!token) throw new Error(`NFT ${nftId} not found`);
+    if (token.owner !== fromAddress) throw new Error(`${fromAddress} does not own ${nftId}`);
 
     const nonce = this._nfts.getNonce(fromAddress);
-    const tx    = NftStore.buildTransferTx({ nftId, from: fromAddress, to: toAddress, nonce });
+    const tx = NftStore.buildTransferTx({ nftId, from: fromAddress, to: toAddress, nonce });
 
-    const privBuf  = Buffer.from(kp.privateKey, 'hex');
-    const sigInput = JSON.stringify({ id: tx.id, type: tx.type, nftId: tx.nftId, from: tx.from, to: tx.to, nonce: tx.nonce });
+    const privBuf = Buffer.from(kp.privateKey, 'hex');
+    const sigInput = JSON.stringify({
+      id: tx.id,
+      type: tx.type,
+      nftId: tx.nftId,
+      from: tx.from,
+      to: tx.to,
+      nonce: tx.nonce,
+    });
     tx.sig = sign(txHash(sigInput), privBuf);
 
     const result = this._mempool.add(tx);
@@ -1457,19 +1516,26 @@ class WtcNode {
   mintNft({ nftId, to }) {
     if (!isValidAddress(to)) throw new Error(`Invalid recipient address: ${to}`);
 
-    const kp = this._wallet.keys.find(k => k.address === MINTER_ADDRESS);
+    const kp = this._wallet.keys.find((k) => k.address === MINTER_ADDRESS);
     if (!kp) throw new Error(`Minter address ${MINTER_ADDRESS} not found in this wallet`);
 
     if (this._nfts.getNft(nftId)) throw new Error(`NFT ${nftId} already minted`);
 
-    const validDef = NFT_COLLECTION.find(d => d.nftId === nftId);
+    const validDef = NFT_COLLECTION.find((d) => d.nftId === nftId);
     if (!validDef) throw new Error(`Unknown NFT id: ${nftId}`);
 
     const nonce = this._nfts.getNonce(MINTER_ADDRESS);
-    const tx    = NftStore.buildMintTx({ nftId, from: MINTER_ADDRESS, to, nonce });
+    const tx = NftStore.buildMintTx({ nftId, from: MINTER_ADDRESS, to, nonce });
 
-    const privBuf  = Buffer.from(kp.privateKey, 'hex');
-    const sigInput = JSON.stringify({ id: tx.id, type: tx.type, nftId: tx.nftId, from: tx.from, to: tx.to, nonce: tx.nonce });
+    const privBuf = Buffer.from(kp.privateKey, 'hex');
+    const sigInput = JSON.stringify({
+      id: tx.id,
+      type: tx.type,
+      nftId: tx.nftId,
+      from: tx.from,
+      to: tx.to,
+      nonce: tx.nonce,
+    });
     tx.sig = sign(txHash(sigInput), privBuf);
 
     const result = this._mempool.add(tx);
@@ -1487,10 +1553,10 @@ class WtcNode {
    * @returns {{ ok, minted: string[], skipped: string[] }}
    */
   mintNftBatch() {
-    const kp = this._wallet.keys.find(k => k.address === MINTER_ADDRESS);
+    const kp = this._wallet.keys.find((k) => k.address === MINTER_ADDRESS);
     if (!kp) throw new Error(`Minter address ${MINTER_ADDRESS} not found in this wallet`);
 
-    const minted  = [];
+    const minted = [];
     const skipped = [];
     const privBuf = Buffer.from(kp.privateKey, 'hex');
 
@@ -1503,9 +1569,16 @@ class WtcNode {
       // for batch mempool submission the nonce must increment per tx in sequence.
       // We track it manually here since the store won't bump until blocks land.
       const nonce = this._nfts.getNonce(MINTER_ADDRESS) + minted.length;
-      const tx    = NftStore.buildMintTx({ nftId: def.nftId, from: MINTER_ADDRESS, to: MINTER_ADDRESS, nonce });
+      const tx = NftStore.buildMintTx({ nftId: def.nftId, from: MINTER_ADDRESS, to: MINTER_ADDRESS, nonce });
 
-      const sigInput = JSON.stringify({ id: tx.id, type: tx.type, nftId: tx.nftId, from: tx.from, to: tx.to, nonce: tx.nonce });
+      const sigInput = JSON.stringify({
+        id: tx.id,
+        type: tx.type,
+        nftId: tx.nftId,
+        from: tx.from,
+        to: tx.to,
+        nonce: tx.nonce,
+      });
       tx.sig = sign(txHash(sigInput), privBuf);
 
       const result = this._mempool.add(tx);
@@ -1530,9 +1603,7 @@ class WtcNode {
    * @returns {{ ok, minted: string[], skipped: string[] }}
    */
   initializeNftCollection(toAddress) {
-    const dest = typeof toAddress === 'string' && toAddress.trim()
-      ? toAddress.trim()
-      : MINTER_ADDRESS;
+    const dest = typeof toAddress === 'string' && toAddress.trim() ? toAddress.trim() : MINTER_ADDRESS;
     const result = this._nfts.directMintCollection(dest);
     return { ok: true, ...result };
   }
@@ -1557,9 +1628,35 @@ class WtcNode {
  * }} opts
  * @returns {WtcNode}
  */
-function createWtcNode({ dataDir, signingSecret, peerIdentity = '', walletKey, getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit = true, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount, getEnergyContributions }) {
+function createWtcNode({
+  dataDir,
+  signingSecret,
+  peerIdentity = '',
+  walletKey,
+  getActivePeers,
+  getPeerTargets,
+  getTrustedPeerTargets,
+  requestPeerJson,
+  onPeerTip,
+  allowPartialQuorumCommit = true,
+  isLiveLocalTunnelPeer,
+  isSelfPeerUrl,
+  getConnectedPeerCount,
+  getEnergyContributions,
+}) {
   const node = new WtcNode({ dataDir, signingSecret, peerIdentity, walletKey });
-  node.init({ getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount, getEnergyContributions });
+  node.init({
+    getActivePeers,
+    getPeerTargets,
+    getTrustedPeerTargets,
+    requestPeerJson,
+    onPeerTip,
+    allowPartialQuorumCommit,
+    isLiveLocalTunnelPeer,
+    isSelfPeerUrl,
+    getConnectedPeerCount,
+    getEnergyContributions,
+  });
   return node;
 }
 

@@ -31,10 +31,10 @@ const { parentPort } = require('worker_threads');
 // sharedInt[1]: target percent (0-100) written atomically by the controller
 const sharedInt = new Int32Array(workerData.sharedBuf);
 
-const BUF_SIZE   = 128 * 1024 * 1024;  // 128 MB -- exceeds typical L3 cache
-const CHUNK_SIZE = 2  * 1024 * 1024;   // 2 MB burst per iteration for smoother laptop load
+const BUF_SIZE = 128 * 1024 * 1024; // 128 MB -- exceeds typical L3 cache
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB burst per iteration for smoother laptop load
 
-let buf    = null;
+let buf = null;
 let cursor = 0;
 const STATS_REPORT_MS = 1000;
 let statsLastReportAt = performance.now();
@@ -73,7 +73,7 @@ function maybeReportStats(targetPercent) {
   const elapsedMs = nowMs - statsLastReportAt;
   if (elapsedMs < STATS_REPORT_MS) return;
   const secs = Math.max(0.001, elapsedMs / 1000);
-  const mbps = (statsBytesTouched / (1024 * 1024)) / secs;
+  const mbps = statsBytesTouched / (1024 * 1024) / secs;
   const duty = statsTotalMs > 0 ? Math.max(0, Math.min(1, statsBurnMs / statsTotalMs)) : 0;
   try {
     parentPort.postMessage({
@@ -99,13 +99,16 @@ function maybeReportStats(targetPercent) {
 // correction to each idle sleep.  Immune to process.cpuUsage() process-wide bias,
 // OS timer imprecision, and per-cycle preemption spikes (averaged out by the window).
 // ---------------------------------------------------------------------------
-const WINDOW  = 16;
-const burnBuf  = new Float64Array(WINDOW);
+const WINDOW = 16;
+const burnBuf = new Float64Array(WINDOW);
 const totalBuf = new Float64Array(WINDOW);
-let wIdx  = 0;
+let wIdx = 0;
 let wFull = false;
 
-function resetWindow() { wIdx = 0; wFull = false; }
+function resetWindow() {
+  wIdx = 0;
+  wFull = false;
+}
 
 function loop() {
   let lastTarget = -1;
@@ -137,16 +140,20 @@ function loop() {
     statsBurnMs += wallChunkMs;
 
     // Nominal idle: busy/(busy+idle) = f
-    const nominalIdle = (1 - f) / f * wallChunkMs;
+    const nominalIdle = ((1 - f) / f) * wallChunkMs;
 
     // Proportional correction from rolling window
     let idleMs = nominalIdle;
     const n = wFull ? WINDOW : wIdx;
     if (n >= 4) {
-      let sumBurn = 0, sumTotal = 0;
-      for (let i = 0; i < n; i++) { sumBurn += burnBuf[i]; sumTotal += totalBuf[i]; }
+      let sumBurn = 0,
+        sumTotal = 0;
+      for (let i = 0; i < n; i++) {
+        sumBurn += burnBuf[i];
+        sumTotal += totalBuf[i];
+      }
       const measuredDuty = sumBurn / sumTotal;
-      const error = f - measuredDuty;          // positive = under-shooting target
+      const error = f - measuredDuty; // positive = under-shooting target
       const avgCycle = sumTotal / n;
       idleMs = Math.max(0, nominalIdle - error * avgCycle * 1.2);
     }
@@ -158,7 +165,7 @@ function loop() {
     statsTotalMs += wallChunkMs + actualSleep;
 
     // Update rolling window
-    burnBuf[wIdx]  = wallChunkMs;
+    burnBuf[wIdx] = wallChunkMs;
     totalBuf[wIdx] = wallChunkMs + actualSleep;
     wIdx = (wIdx + 1) % WINDOW;
     if (wIdx === 0) wFull = true;

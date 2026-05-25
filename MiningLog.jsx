@@ -1,6 +1,16 @@
-﻿import React from "react";
+﻿import React from 'react';
 
-function MiningLog({ log, probeLog = [], onClearLog, onClearSearchCache, onResetHardware, hwResetOnCooldown = false, hwResetCooldownRemainingMs = 0, searchCacheOnCooldown = false, searchCacheCooldownRemainingMs = 0 }) {
+function MiningLog({
+  log,
+  probeLog = [],
+  onClearLog,
+  onClearSearchCache,
+  onResetHardware,
+  hwResetOnCooldown = false,
+  hwResetCooldownRemainingMs = 0,
+  searchCacheOnCooldown = false,
+  searchCacheCooldownRemainingMs = 0,
+}) {
   const getSeverityLabel = (entry) => {
     if (entry.type === 'error') return 'Error';
     if (entry.type === 'block') return 'Block';
@@ -76,27 +86,40 @@ function MiningLog({ log, probeLog = [], onClearLog, onClearSearchCache, onReset
   };
 
   const benchmarkLog = React.useMemo(() => (Array.isArray(log) ? log.filter(isBenchmarkEntry) : []), [log]);
-  const miningLog = React.useMemo(() => (Array.isArray(log) ? log.filter((entry) => !isBenchmarkEntry(entry)) : []), [log]);
+  const miningLog = React.useMemo(
+    () => (Array.isArray(log) ? log.filter((entry) => !isBenchmarkEntry(entry)) : []),
+    [log],
+  );
 
   const renderLogList = (entries) => {
     if (entries.length === 0) {
-      return <div style={{ color: "#a0c8a0", fontSize: 14 }}>No entries yet.</div>;
+      return <div style={{ color: '#a0c8a0', fontSize: 14 }}>No entries yet.</div>;
     }
 
     return (
-      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {entries.map((entry, i) => {
           const palette = getEntryPalette(entry);
           const label = getSeverityLabel(entry);
           return (
-          <li key={i} style={{ marginBottom: 12, background: palette.background, border: `1px solid ${palette.border}`, borderRadius: 8, padding: "12px 14px" }}>
-            <div style={{ fontSize: 12, color: palette.accent, marginBottom: 4 }}>{entry.time}</div>
-            <div style={{ fontSize: 14, wordBreak: "break-word", color: palette.text }}>
-              {label && <b style={{ color: palette.accent }}>{label}: </b>}
-              {entry.msg}
-            </div>
-          </li>
-        )})}
+            <li
+              key={i}
+              style={{
+                marginBottom: 12,
+                background: palette.background,
+                border: `1px solid ${palette.border}`,
+                borderRadius: 8,
+                padding: '12px 14px',
+              }}
+            >
+              <div style={{ fontSize: 12, color: palette.accent, marginBottom: 4 }}>{entry.time}</div>
+              <div style={{ fontSize: 14, wordBreak: 'break-word', color: palette.text }}>
+                {label && <b style={{ color: palette.accent }}>{label}: </b>}
+                {entry.msg}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     );
   };
@@ -107,8 +130,8 @@ function MiningLog({ log, probeLog = [], onClearLog, onClearSearchCache, onReset
 
   const getProbeStatus = (entry) => {
     if (entry.timedOut) return { label: 'TIMEOUT', bg: '#2d2a1a', color: '#fbbf24', border: '#92400e' };
-    if (entry.ok)       return { label: 'PASS',    bg: '#0f2a12', color: '#4ade80', border: '#166534' };
-    return               { label: 'FAIL',    bg: '#2d1a1a', color: '#f87171', border: '#7f1d1d' };
+    if (entry.ok) return { label: 'PASS', bg: '#0f2a12', color: '#4ade80', border: '#166534' };
+    return { label: 'FAIL', bg: '#2d1a1a', color: '#f87171', border: '#7f1d1d' };
   };
 
   const renderProbeEntry = (entry, i) => {
@@ -116,63 +139,84 @@ function MiningLog({ log, probeLog = [], onClearLog, onClearSearchCache, onReset
     const typeColor = TYPE_COLOR[entry.type] || '#94a3b8';
     const typeLabel = TYPE_LABEL[entry.type] || (entry.type || '?').toUpperCase();
     const isAttested = entry.role === 'attested';
-    const roleBg    = isAttested ? '#1e1a2d' : '#0d1a0d';
+    const roleBg = isAttested ? '#1e1a2d' : '#0d1a0d';
     const roleBorder = isAttested ? '#4c1d95' : status.border;
     const probeId = typeof entry.id === 'string' ? entry.id : '';
     const verifierAddress = typeof entry.verifierAddress === 'string' ? entry.verifierAddress : '';
-    const compactVerifier = verifierAddress
-      ? `${verifierAddress.slice(0, 6)}...${verifierAddress.slice(-4)}`
-      : '?';
+    const compactVerifier = verifierAddress ? `${verifierAddress.slice(0, 6)}...${verifierAddress.slice(-4)}` : '?';
     const peerLabel = isAttested
-      ? `Attested worker ${entry.workerId ? (entry.workerId.slice(0, 6) + '...' + entry.workerId.slice(-4)) : '?'}`
-      : (entry.source === 'peer'
-          ? `Verified by ${compactVerifier}`
-          : 'Local');
+      ? `Attested worker ${entry.workerId ? entry.workerId.slice(0, 6) + '...' + entry.workerId.slice(-4) : '?'}`
+      : entry.source === 'peer'
+        ? `Verified by ${compactVerifier}`
+        : 'Local';
 
     return (
-      <li key={i} style={{
-        marginBottom: 10,
-        background: roleBg,
-        border: `1px solid ${roleBorder}`,
-        borderRadius: 8,
-        padding: '10px 12px',
-        fontSize: 13,
-      }}>
+      <li
+        key={i}
+        style={{
+          marginBottom: 10,
+          background: roleBg,
+          border: `1px solid ${roleBorder}`,
+          borderRadius: 8,
+          padding: '10px 12px',
+          fontSize: 13,
+        }}
+      >
         {/* Row 1: time */}
         <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5 }}>{entry.time}</div>
         {/* Row 2: badges */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: entry.issues && entry.issues.length ? 6 : 0 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            flexWrap: 'wrap',
+            marginBottom: entry.issues && entry.issues.length ? 6 : 0,
+          }}
+        >
           {/* Type badge */}
-          <span style={{
-            background: typeColor + '22',
-            color: typeColor,
-            border: `1px solid ${typeColor}55`,
-            borderRadius: 4,
-            padding: '1px 7px',
-            fontWeight: 700,
-            fontSize: 11,
-            letterSpacing: '0.06em',
-          }}>{typeLabel}</span>
+          <span
+            style={{
+              background: typeColor + '22',
+              color: typeColor,
+              border: `1px solid ${typeColor}55`,
+              borderRadius: 4,
+              padding: '1px 7px',
+              fontWeight: 700,
+              fontSize: 11,
+              letterSpacing: '0.06em',
+            }}
+          >
+            {typeLabel}
+          </span>
           {/* Status badge */}
-          <span style={{
-            background: status.bg,
-            color: status.color,
-            border: `1px solid ${status.border}`,
-            borderRadius: 4,
-            padding: '1px 7px',
-            fontWeight: 700,
-            fontSize: 11,
-            letterSpacing: '0.06em',
-          }}>{status.label}</span>
+          <span
+            style={{
+              background: status.bg,
+              color: status.color,
+              border: `1px solid ${status.border}`,
+              borderRadius: 4,
+              padding: '1px 7px',
+              fontWeight: 700,
+              fontSize: 11,
+              letterSpacing: '0.06em',
+            }}
+          >
+            {status.label}
+          </span>
           {/* Role / source badge */}
-          <span style={{
-            background: isAttested ? '#2e1065' : '#0f172a',
-            color: isAttested ? '#c4b5fd' : '#94a3b8',
-            border: `1px solid ${isAttested ? '#5b21b6' : '#334155'}`,
-            borderRadius: 4,
-            padding: '1px 7px',
-            fontSize: 10,
-          }}>{isAttested ? 'Attested' : 'My HW'}</span>
+          <span
+            style={{
+              background: isAttested ? '#2e1065' : '#0f172a',
+              color: isAttested ? '#c4b5fd' : '#94a3b8',
+              border: `1px solid ${isAttested ? '#5b21b6' : '#334155'}`,
+              borderRadius: 4,
+              padding: '1px 7px',
+              fontSize: 10,
+            }}
+          >
+            {isAttested ? 'Attested' : 'My HW'}
+          </span>
           {/* Timing */}
           {typeof entry.wallClockMs === 'number' && (
             <span style={{ color: '#64748b', fontSize: 11 }}>{entry.wallClockMs} ms</span>
@@ -181,9 +225,7 @@ function MiningLog({ log, probeLog = [], onClearLog, onClearSearchCache, onReset
           {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (
             <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
           )}
-          {probeId && (
-            <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>
-          )}
+          {probeId && <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>}
           {entry.type === 'gpu' && typeof entry.pixelHash === 'string' && entry.pixelHash && (
             <span style={{ color: '#64748b', fontSize: 11 }}>hash {entry.pixelHash}</span>
           )}
@@ -202,76 +244,170 @@ function MiningLog({ log, probeLog = [], onClearLog, onClearSearchCache, onReset
 
   const renderProbeList = (entries) => {
     if (!entries || entries.length === 0) {
-      return <div style={{ color: '#6b7280', fontSize: 13 }}>No probes yet. Probes run every 2-8 min while mining.</div>;
+      return (
+        <div style={{ color: '#6b7280', fontSize: 13 }}>No probes yet. Probes run every 2-8 min while mining.</div>
+      );
     }
     return (
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {entries.map((e, i) => renderProbeEntry(e, i))}
-      </ul>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>{entries.map((e, i) => renderProbeEntry(e, i))}</ul>
     );
   };
 
   // Split probeLog into self (my HW) and attested sections, both sorted newest first.
-  const sortedProbeLog = React.useMemo(() => (Array.isArray(probeLog) ? [...probeLog].sort((a, b) => (b.ts || 0) - (a.ts || 0)) : []), [probeLog]);
+  const sortedProbeLog = React.useMemo(
+    () => (Array.isArray(probeLog) ? [...probeLog].sort((a, b) => (b.ts || 0) - (a.ts || 0)) : []),
+    [probeLog],
+  );
 
-  const totalProbes  = sortedProbeLog.length;
-  const passedProbes = sortedProbeLog.filter(e => e.ok && !e.timedOut).length;
-  const failedProbes = sortedProbeLog.filter(e => !e.ok && !e.timedOut).length;
-  const timedOut     = sortedProbeLog.filter(e => e.timedOut).length;
+  const totalProbes = sortedProbeLog.length;
+  const passedProbes = sortedProbeLog.filter((e) => e.ok && !e.timedOut).length;
+  const failedProbes = sortedProbeLog.filter((e) => !e.ok && !e.timedOut).length;
+  const timedOut = sortedProbeLog.filter((e) => e.timedOut).length;
 
   return (
-    <div style={{ maxWidth: 1600, margin: "40px auto", padding: "0 20px", fontFamily: "'DM Mono', monospace", color: "#e8f5e8" }}>
+    <div
+      style={{
+        maxWidth: 1600,
+        margin: '40px auto',
+        padding: '0 20px',
+        fontFamily: "'DM Mono', monospace",
+        color: '#e8f5e8',
+      }}
+    >
       {(onClearLog || onClearSearchCache || onResetHardware) && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
           {onClearLog && (
-            <button onClick={onClearLog} style={{ background: 'transparent', border: '1px solid #2e4a2e', color: '#4ade80', borderRadius: 6, padding: '4px 14px', fontSize: 12, cursor: 'pointer', letterSpacing: '0.06em', fontFamily: "'DM Mono', monospace" }}>Clear Log</button>
+            <button
+              onClick={onClearLog}
+              style={{
+                background: 'transparent',
+                border: '1px solid #2e4a2e',
+                color: '#4ade80',
+                borderRadius: 6,
+                padding: '4px 14px',
+                fontSize: 12,
+                cursor: 'pointer',
+                letterSpacing: '0.06em',
+                fontFamily: "'DM Mono', monospace",
+              }}
+            >
+              Clear Log
+            </button>
           )}
-          {onClearSearchCache && (
-            searchCacheOnCooldown
-              ? (() => {
-                  const days  = Math.floor(searchCacheCooldownRemainingMs / (24 * 60 * 60 * 1000));
-                  const hours = Math.floor((searchCacheCooldownRemainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-                  const label = days > 0 ? `Clear Search Cache (${days}d ${hours}h)` : `Clear Search Cache (${hours}h)`;
-                  return (
-                    <button disabled title="Search cache clear is on a 3-day cooldown" style={{ background: 'transparent', border: '1px solid #1a3a1a', color: '#2a5a2a', borderRadius: 6, padding: '4px 14px', fontSize: 12, cursor: 'not-allowed', letterSpacing: '0.06em', fontFamily: "'DM Mono', monospace", opacity: 0.5 }}>{label}</button>
-                  );
-                })()
-              : <button onClick={onClearSearchCache} style={{ background: 'transparent', border: '1px solid #2e4a2e', color: '#4ade80', borderRadius: 6, padding: '4px 14px', fontSize: 12, cursor: 'pointer', letterSpacing: '0.06em', fontFamily: "'DM Mono', monospace" }}>Clear Search Cache</button>
-          )}
-          {onResetHardware && (
-            hwResetOnCooldown
-              ? (() => {
-                  const days  = Math.floor(hwResetCooldownRemainingMs / (24 * 60 * 60 * 1000));
-                  const hours = Math.floor((hwResetCooldownRemainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-                  const label = days > 0 ? `Reset Hardware (${days}d ${hours}h)` : `Reset Hardware (${hours}h)`;
-                  return (
-                    <button disabled title="Hardware reset is on a 7-day cooldown to prevent abuse" style={{ background: 'transparent', border: '1px solid #3a3010', color: '#7a6a20', borderRadius: 6, padding: '4px 14px', fontSize: 12, cursor: 'not-allowed', letterSpacing: '0.06em', fontFamily: "'DM Mono', monospace", opacity: 0.5 }}>{label}</button>
-                  );
-                })()
-              : <button onClick={onResetHardware} style={{ background: 'transparent', border: '1px solid #5a3a10', color: '#facc15', borderRadius: 6, padding: '4px 14px', fontSize: 12, cursor: 'pointer', letterSpacing: '0.06em', fontFamily: "'DM Mono', monospace" }}>Reset Hardware</button>
-          )}
+          {onClearSearchCache &&
+            (searchCacheOnCooldown ? (
+              (() => {
+                const days = Math.floor(searchCacheCooldownRemainingMs / (24 * 60 * 60 * 1000));
+                const hours = Math.floor((searchCacheCooldownRemainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                const label = days > 0 ? `Clear Search Cache (${days}d ${hours}h)` : `Clear Search Cache (${hours}h)`;
+                return (
+                  <button
+                    disabled
+                    title="Search cache clear is on a 3-day cooldown"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid #1a3a1a',
+                      color: '#2a5a2a',
+                      borderRadius: 6,
+                      padding: '4px 14px',
+                      fontSize: 12,
+                      cursor: 'not-allowed',
+                      letterSpacing: '0.06em',
+                      fontFamily: "'DM Mono', monospace",
+                      opacity: 0.5,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })()
+            ) : (
+              <button
+                onClick={onClearSearchCache}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #2e4a2e',
+                  color: '#4ade80',
+                  borderRadius: 6,
+                  padding: '4px 14px',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  letterSpacing: '0.06em',
+                  fontFamily: "'DM Mono', monospace",
+                }}
+              >
+                Clear Search Cache
+              </button>
+            ))}
+          {onResetHardware &&
+            (hwResetOnCooldown ? (
+              (() => {
+                const days = Math.floor(hwResetCooldownRemainingMs / (24 * 60 * 60 * 1000));
+                const hours = Math.floor((hwResetCooldownRemainingMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                const label = days > 0 ? `Reset Hardware (${days}d ${hours}h)` : `Reset Hardware (${hours}h)`;
+                return (
+                  <button
+                    disabled
+                    title="Hardware reset is on a 7-day cooldown to prevent abuse"
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid #3a3010',
+                      color: '#7a6a20',
+                      borderRadius: 6,
+                      padding: '4px 14px',
+                      fontSize: 12,
+                      cursor: 'not-allowed',
+                      letterSpacing: '0.06em',
+                      fontFamily: "'DM Mono', monospace",
+                      opacity: 0.5,
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })()
+            ) : (
+              <button
+                onClick={onResetHardware}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #5a3a10',
+                  color: '#facc15',
+                  borderRadius: 6,
+                  padding: '4px 14px',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  letterSpacing: '0.06em',
+                  fontFamily: "'DM Mono', monospace",
+                }}
+              >
+                Reset Hardware
+              </button>
+            ))}
         </div>
       )}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 16 }}>
         {/* Column 1 — Mining */}
-        <section style={{ background: "#0b140b", border: "1px solid #1e3a1e", borderRadius: 10, padding: 14 }}>
-          <h3 style={{ margin: "0 0 12px 0", color: "#4ade80", fontSize: 16, letterSpacing: "0.04em" }}>Mining</h3>
+        <section style={{ background: '#0b140b', border: '1px solid #1e3a1e', borderRadius: 10, padding: 14 }}>
+          <h3 style={{ margin: '0 0 12px 0', color: '#4ade80', fontSize: 16, letterSpacing: '0.04em' }}>Mining</h3>
           {renderLogList(miningLog)}
         </section>
         {/* Column 2 — Benchmarking */}
-        <section style={{ background: "#0b140b", border: "1px solid #1e3a1e", borderRadius: 10, padding: 14 }}>
-          <h3 style={{ margin: "0 0 12px 0", color: "#4ade80", fontSize: 16, letterSpacing: "0.04em" }}>Benchmarking</h3>
+        <section style={{ background: '#0b140b', border: '1px solid #1e3a1e', borderRadius: 10, padding: 14 }}>
+          <h3 style={{ margin: '0 0 12px 0', color: '#4ade80', fontSize: 16, letterSpacing: '0.04em' }}>
+            Benchmarking
+          </h3>
           {renderLogList(benchmarkLog)}
         </section>
         {/* Column 3 — Probes */}
-        <section style={{ background: "#0b140b", border: "1px solid #1e3a1e", borderRadius: 10, padding: 14 }}>
+        <section style={{ background: '#0b140b', border: '1px solid #1e3a1e', borderRadius: 10, padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0, color: "#4ade80", fontSize: 16, letterSpacing: "0.04em" }}>Probes</h3>
+            <h3 style={{ margin: 0, color: '#4ade80', fontSize: 16, letterSpacing: '0.04em' }}>Probes</h3>
             {totalProbes > 0 && (
               <span style={{ fontSize: 11, color: '#6b7280' }}>
                 {passedProbes > 0 && <span style={{ color: '#4ade80' }}>{passedProbes} pass </span>}
                 {failedProbes > 0 && <span style={{ color: '#f87171' }}>{failedProbes} fail </span>}
-                {timedOut     > 0 && <span style={{ color: '#fbbf24' }}>{timedOut} timeout </span>}
+                {timedOut > 0 && <span style={{ color: '#fbbf24' }}>{timedOut} timeout </span>}
               </span>
             )}
           </div>

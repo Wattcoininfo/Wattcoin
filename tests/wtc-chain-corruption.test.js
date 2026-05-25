@@ -1,15 +1,15 @@
 'use strict';
 
 const assert = require('assert');
-const os     = require('os');
-const path   = require('path');
-const fs     = require('fs');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const { Chain, computeBlockHash, GENESIS_PREMINE } = require('../wtc-chain');
 
-const TEST_SECRET  = 'test-hmac-secret-for-chain-corruption-tests';
-const TEAM_WALLET  = 'wtc1q-test-team-wallet';
+const TEST_SECRET = 'test-hmac-secret-for-chain-corruption-tests';
+const TEAM_WALLET = 'wtc1q-test-team-wallet';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,11 @@ function captureWarns(fn) {
   const msgs = [];
   const orig = console.warn;
   console.warn = (...args) => msgs.push(args.map(String).join(' '));
-  try { fn(); } finally { console.warn = orig; }
+  try {
+    fn();
+  } finally {
+    console.warn = orig;
+  }
   return msgs;
 }
 
@@ -62,8 +66,8 @@ function testCorruptJsonLineTruncatesChain() {
   const chain = makeChain(dir);
 
   assert.ok(
-    warns.some(m => m.includes('Corrupt line')),
-    'corrupt JSON should produce a "Corrupt line" warning'
+    warns.some((m) => m.includes('Corrupt line')),
+    'corrupt JSON should produce a "Corrupt line" warning',
   );
   assert.strictEqual(chain.getHeight(), 0, 'blocks before corrupt line should be preserved');
 }
@@ -86,8 +90,8 @@ function testHmacTamperDetectedTruncatesChain() {
   const chain = makeChain(dir);
 
   assert.ok(
-    warns.some(m => m.includes('HMAC tamper')),
-    'HMAC mismatch should produce an "HMAC tamper" warning'
+    warns.some((m) => m.includes('HMAC tamper')),
+    'HMAC mismatch should produce an "HMAC tamper" warning',
   );
   assert.strictEqual(chain.getHeight(), -1, 'chain should be empty after full-genesis HMAC tamper');
 }
@@ -104,16 +108,15 @@ function testHashMismatchTruncatesChain() {
   // Set the stored hash to something wrong, then re-sign with the test secret
   // so the HMAC check passes but the hash check fires.
   block.hash = 'a'.repeat(64);
-  const newSig = crypto.createHmac('sha256', TEST_SECRET)
-    .update(JSON.stringify(block)).digest('hex');
+  const newSig = crypto.createHmac('sha256', TEST_SECRET).update(JSON.stringify(block)).digest('hex');
   fs.writeFileSync(file, JSON.stringify({ ...block, _sig: newSig }) + '\n', 'utf8');
 
   const warns = captureWarns(() => makeChain(dir));
   const chain = makeChain(dir);
 
   assert.ok(
-    warns.some(m => m.includes('Hash mismatch')),
-    'stored-hash mismatch should produce a "Hash mismatch" warning'
+    warns.some((m) => m.includes('Hash mismatch')),
+    'stored-hash mismatch should produce a "Hash mismatch" warning',
   );
   assert.strictEqual(chain.getHeight(), -1, 'chain should be empty after hash mismatch on genesis');
 }
@@ -145,8 +148,8 @@ function testCorruptSecondBlockPreservesGenesis() {
 
   // Build and append a valid block 1.
   const block1 = c1.buildBlock({
-    proposer:        'wtc1q-test-proposer',
-    energyWh:        10_000,
+    proposer: 'wtc1q-test-proposer',
+    energyWh: 10_000,
     proofCommitment: 'test-commit-1',
   });
   c1.append(block1);

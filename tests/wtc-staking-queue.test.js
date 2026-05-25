@@ -1,9 +1,9 @@
 'use strict';
 
 const assert = require('assert');
-const os     = require('os');
-const path   = require('path');
-const fs     = require('fs');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
 const sq = require('../wtc-staking-queue');
@@ -26,25 +26,39 @@ function captureWarns(fn) {
   const msgs = [];
   const orig = console.warn;
   console.warn = (...args) => msgs.push(args.map(String).join(' '));
-  try { fn(); } finally { console.warn = orig; }
+  try {
+    fn();
+  } finally {
+    console.warn = orig;
+  }
   return msgs;
 }
 
 // Silence console.log and console.warn for the duration of fn().
 function silenceLogs(fn) {
-  const origLog  = console.log;
+  const origLog = console.log;
   const origWarn = console.warn;
-  console.log  = () => {};
+  console.log = () => {};
   console.warn = () => {};
-  try { fn(); } finally { console.log = origLog; console.warn = origWarn; }
+  try {
+    fn();
+  } finally {
+    console.log = origLog;
+    console.warn = origWarn;
+  }
 }
 
 async function silenceLogsAsync(fn) {
-  const origLog  = console.log;
+  const origLog = console.log;
   const origWarn = console.warn;
-  console.log  = () => {};
+  console.log = () => {};
   console.warn = () => {};
-  try { await fn(); } finally { console.log = origLog; console.warn = origWarn; }
+  try {
+    await fn();
+  } finally {
+    console.log = origLog;
+    console.warn = origWarn;
+  }
 }
 
 /**
@@ -129,7 +143,7 @@ function testApyIgnoresCancelledEntries() {
   silenceLogs(() => {
     initQueue(dir);
     r = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 100_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 100_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 100_000 });
     sq.cancelEntry(r.entryId);
   });
   // Only Bob's 100 000 is pending → APY = 10%
@@ -164,9 +178,9 @@ function testStakeRejectsBelowMinimum() {
 function testStakeRejectsNonFiniteAmount() {
   const dir = makeTmpDir();
   silenceLogs(() => initQueue(dir));
-  assert.strictEqual(sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: NaN }).ok,       false);
-  assert.strictEqual(sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: Infinity }).ok,  false);
-  assert.strictEqual(sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: -100 }).ok,      false);
+  assert.strictEqual(sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: NaN }).ok, false);
+  assert.strictEqual(sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: Infinity }).ok, false);
+  assert.strictEqual(sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: -100 }).ok, false);
 }
 
 function testStakeAtExactMinimum() {
@@ -181,26 +195,30 @@ function testStakeCreatesEntryWithCorrectFields() {
   const dir = makeTmpDir();
   silenceLogs(() => initQueue(dir));
   let result;
-  silenceLogs(() => { result = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 }); });
+  silenceLogs(() => {
+    result = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 });
+  });
   assert.strictEqual(result.ok, true);
   const entry = sq.getEntry(result.entryId);
-  assert.ok(entry,                                     'entry must exist after stake');
+  assert.ok(entry, 'entry must exist after stake');
   assert.strictEqual(entry.fromAddress, 'wtc1q-alice');
-  assert.strictEqual(entry.wtcAmount,   5_000);
-  assert.strictEqual(entry.status,      'pending');
-  assert.ok(entry.createdAtMs > 0,                     'createdAtMs must be set');
-  assert.strictEqual(entry.rewardAtMs,   null);
+  assert.strictEqual(entry.wtcAmount, 5_000);
+  assert.strictEqual(entry.status, 'pending');
+  assert.ok(entry.createdAtMs > 0, 'createdAtMs must be set');
+  assert.strictEqual(entry.rewardAtMs, null);
   assert.strictEqual(entry.rewardAmount, null);
-  assert.strictEqual(entry.rewardTxId,   null);
-  assert.strictEqual(entry.apyAtFlush,   null);
-  assert.strictEqual(entry.failReason,   null);
+  assert.strictEqual(entry.rewardTxId, null);
+  assert.strictEqual(entry.apyAtFlush, null);
+  assert.strictEqual(entry.failReason, null);
 }
 
 function testStakeAmountIsFloored() {
   const dir = makeTmpDir();
   silenceLogs(() => initQueue(dir));
   let result;
-  silenceLogs(() => { result = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000.9 }); });
+  silenceLogs(() => {
+    result = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000.9 });
+  });
   const entry = sq.getEntry(result.entryId);
   assert.strictEqual(entry.wtcAmount, 5_000, 'fractional WTC must be floored on entry');
 }
@@ -215,9 +233,9 @@ function testStakeDuplicateAddressReturnsSameEntry() {
   });
   assert.strictEqual(r1.ok, true);
   assert.strictEqual(r2.ok, true);
-  assert.strictEqual(r2.alreadyExists, true,        'second stake from same address must set alreadyExists');
-  assert.strictEqual(r1.entryId, r2.entryId,        'both calls must return the same entryId');
-  assert.strictEqual(sq.getAllEntries().length, 1,   'duplicate entry must not be created');
+  assert.strictEqual(r2.alreadyExists, true, 'second stake from same address must set alreadyExists');
+  assert.strictEqual(r1.entryId, r2.entryId, 'both calls must return the same entryId');
+  assert.strictEqual(sq.getAllEntries().length, 1, 'duplicate entry must not be created');
 }
 
 function testStakeAllowsDifferentAddresses() {
@@ -225,7 +243,7 @@ function testStakeAllowsDifferentAddresses() {
   silenceLogs(() => {
     initQueue(dir);
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 5_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 5_000 });
   });
   assert.strictEqual(sq.getAllEntries().length, 2, 'different addresses must each get their own entry');
 }
@@ -237,7 +255,7 @@ function testTotalPendingWtcSumsAllPending() {
   silenceLogs(() => {
     initQueue(dir);
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 3_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 7_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 7_000 });
   });
   assert.strictEqual(sq.totalPendingWtc(), 10_000);
 }
@@ -248,7 +266,7 @@ function testTotalPendingWtcIgnoresCancelledEntries() {
   silenceLogs(() => {
     initQueue(dir);
     r = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 5_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 5_000 });
     sq.cancelEntry(r.entryId);
   });
   assert.strictEqual(sq.totalPendingWtc(), 5_000, 'cancelled entries must be excluded from total');
@@ -271,9 +289,9 @@ function testEntriesPersistedToDisk() {
   // Re-init from same directory — entry must survive
   silenceLogs(() => initQueue(dir));
   const entries = sq.getAllEntries();
-  assert.strictEqual(entries.length, 1,               'entry must survive re-init');
+  assert.strictEqual(entries.length, 1, 'entry must survive re-init');
   assert.strictEqual(entries[0].fromAddress, 'wtc1q-alice');
-  assert.strictEqual(entries[0].status,      'pending');
+  assert.strictEqual(entries[0].status, 'pending');
 }
 
 function testHmacTamperDetectedResetsQueue() {
@@ -291,8 +309,8 @@ function testHmacTamperDetectedResetsQueue() {
 
   const warns = captureWarns(() => sq.init(dir, null));
   assert.ok(
-    warns.some(m => m.includes('Tampered')),
-    'tampered file must produce a warning containing "Tampered"'
+    warns.some((m) => m.includes('Tampered')),
+    'tampered file must produce a warning containing "Tampered"',
   );
   assert.strictEqual(sq.getAllEntries().length, 0, 'queue must be reset after HMAC tamper detection');
 }
@@ -302,24 +320,26 @@ function testLegacyPlainArrayFileMigrates() {
   silenceLogs(() => initQueue(dir));
 
   // Write a legacy plain-array file (no { entries, _sig } wrapper).
-  const legacyEntries = [{
-    id:           'legacy-entry-1',
-    fromAddress:  'wtc1q-legacy',
-    wtcAmount:    5_000,
-    status:       'pending',
-    createdAtMs:  Date.now(),
-    rewardAtMs:   null,
-    rewardAmount: null,
-    rewardTxId:   null,
-    apyAtFlush:   null,
-    failReason:   null,
-  }];
+  const legacyEntries = [
+    {
+      id: 'legacy-entry-1',
+      fromAddress: 'wtc1q-legacy',
+      wtcAmount: 5_000,
+      status: 'pending',
+      createdAtMs: Date.now(),
+      rewardAtMs: null,
+      rewardAmount: null,
+      rewardTxId: null,
+      apyAtFlush: null,
+      failReason: null,
+    },
+  ];
   fs.writeFileSync(entriesPath(dir), JSON.stringify(legacyEntries), 'utf8');
 
   silenceLogs(() => initQueue(dir));
   const entries = sq.getAllEntries();
-  assert.strictEqual(entries.length,    1,                  'legacy plain-array format must be loaded');
-  assert.strictEqual(entries[0].id,     'legacy-entry-1');
+  assert.strictEqual(entries.length, 1, 'legacy plain-array format must be loaded');
+  assert.strictEqual(entries[0].id, 'legacy-entry-1');
   assert.strictEqual(entries[0].status, 'pending');
 }
 
@@ -331,15 +351,15 @@ function testSaveUsesAtomicTmpRename() {
   });
   // .tmp file must NOT linger after save completes
   assert.strictEqual(fs.existsSync(entriesPath(dir) + '.tmp'), false, '.tmp file must not linger after save');
-  assert.ok(fs.existsSync(entriesPath(dir)),                          'entries file must exist after save');
+  assert.ok(fs.existsSync(entriesPath(dir)), 'entries file must exist after save');
 }
 
 function testEmptyDirLoadsAsEmptyQueue() {
   const dir = makeTmpDir();
   silenceLogs(() => initQueue(dir));
-  assert.strictEqual(sq.getAllEntries().length,  0);
-  assert.strictEqual(sq.totalPendingWtc(),       0);
-  assert.strictEqual(sq.shouldFlush(),           false);
+  assert.strictEqual(sq.getAllEntries().length, 0);
+  assert.strictEqual(sq.totalPendingWtc(), 0);
+  assert.strictEqual(sq.shouldFlush(), false);
 }
 
 // ─── cancelEntry ─────────────────────────────────────────────────────────────
@@ -379,15 +399,15 @@ function testCancelAlreadyCancelledEntryFails() {
   sq.cancelEntry(r.entryId);
   const r2 = sq.cancelEntry(r.entryId);
   assert.strictEqual(r2.ok, false, 'cancelling an already-cancelled entry must fail');
-  assert.ok(r2.error,               'error message must be present');
+  assert.ok(r2.error, 'error message must be present');
 }
 
 function testCancelUnknownIdFails() {
   const dir = makeTmpDir();
   silenceLogs(() => initQueue(dir));
   const r = sq.cancelEntry('nonexistent-entry-id');
-  assert.strictEqual(r.ok, false,    'cancelling a nonexistent entry must fail');
-  assert.ok(r.error,                 'error message must be present');
+  assert.strictEqual(r.ok, false, 'cancelling a nonexistent entry must fail');
+  assert.ok(r.error, 'error message must be present');
 }
 
 function testCancelReducesTotalPendingWtc() {
@@ -457,8 +477,9 @@ async function testFlushNoNodeDoesNothing() {
   // Must not throw; entries stay pending
   await silenceLogsAsync(() => sq.flushStakingQueue());
   assert.strictEqual(
-    sq.getAllEntries()[0].status, 'pending',
-    'entries must remain pending when no wtcNode is configured'
+    sq.getAllEntries()[0].status,
+    'pending',
+    'entries must remain pending when no wtcNode is configured',
   );
 }
 
@@ -480,10 +501,10 @@ async function testFlushZeroRewardForSmallStake() {
   });
   await silenceLogsAsync(() => sq.flushStakingQueue());
   const entry = sq.getAllEntries()[0];
-  assert.strictEqual(entry.status,       'rewarded', 'entry must be rewarded even when reward rounds to 0');
-  assert.strictEqual(entry.rewardAmount,  0,         'reward amount must be 0 when stake × APY < 1 WTC');
-  assert.strictEqual(entry.apyAtFlush,    0.01);
-  assert.strictEqual(node._calls.length,  0,         'send must not be called when reward is 0');
+  assert.strictEqual(entry.status, 'rewarded', 'entry must be rewarded even when reward rounds to 0');
+  assert.strictEqual(entry.rewardAmount, 0, 'reward amount must be 0 when stake × APY < 1 WTC');
+  assert.strictEqual(entry.apyAtFlush, 0.01);
+  assert.strictEqual(node._calls.length, 0, 'send must not be called when reward is 0');
 }
 
 async function testFlushPaysCorrectRewardSingleStaker() {
@@ -497,15 +518,15 @@ async function testFlushPaysCorrectRewardSingleStaker() {
   await silenceLogsAsync(() => sq.flushStakingQueue());
 
   assert.strictEqual(node._calls.length, 1, 'send must be called exactly once');
-  assert.strictEqual(node._calls[0].toAddress,   'wtc1q-alice');
-  assert.strictEqual(node._calls[0].fromAddress,  sq.STAKING_POOL_ADDRESS);
-  assert.strictEqual(node._calls[0].amount,        10_000);
+  assert.strictEqual(node._calls[0].toAddress, 'wtc1q-alice');
+  assert.strictEqual(node._calls[0].fromAddress, sq.STAKING_POOL_ADDRESS);
+  assert.strictEqual(node._calls[0].amount, 10_000);
 
   const entry = sq.getAllEntries()[0];
-  assert.strictEqual(entry.status,       'rewarded');
-  assert.strictEqual(entry.rewardAmount,  10_000);
-  assert.strictEqual(entry.rewardTxId,   'test-txid-1');
-  assert.strictEqual(entry.apyAtFlush,    10);
+  assert.strictEqual(entry.status, 'rewarded');
+  assert.strictEqual(entry.rewardAmount, 10_000);
+  assert.strictEqual(entry.rewardTxId, 'test-txid-1');
+  assert.strictEqual(entry.apyAtFlush, 10);
   assert.ok(entry.rewardAtMs > 0, 'rewardAtMs must be set after flush');
 }
 
@@ -538,22 +559,25 @@ async function testFlushPaysMultipleStakers() {
     initQueue(dir, node);
     // Total = 200 000 WTC → APY = 20%
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 100_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 100_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 100_000 });
   });
   await silenceLogsAsync(() => sq.flushStakingQueue());
 
   assert.strictEqual(calls.length, 2, 'send must be called for each staker');
 
-  const aliceTx = calls.find(c => c.toAddress === 'wtc1q-alice');
-  const bobTx   = calls.find(c => c.toAddress === 'wtc1q-bob');
+  const aliceTx = calls.find((c) => c.toAddress === 'wtc1q-alice');
+  const bobTx = calls.find((c) => c.toAddress === 'wtc1q-bob');
   assert.ok(aliceTx, 'Alice must receive a reward tx');
-  assert.ok(bobTx,   'Bob must receive a reward tx');
+  assert.ok(bobTx, 'Bob must receive a reward tx');
   // 100 000 × 20% = 20 000 each
   assert.strictEqual(aliceTx.amount, 20_000);
-  assert.strictEqual(bobTx.amount,   20_000);
+  assert.strictEqual(bobTx.amount, 20_000);
 
   const entries = sq.getAllEntries();
-  assert.ok(entries.every(e => e.status === 'rewarded'), 'all entries must be marked rewarded');
+  assert.ok(
+    entries.every((e) => e.status === 'rewarded'),
+    'all entries must be marked rewarded',
+  );
 }
 
 async function testFlushSkipsWhenPoolBalanceIsZero() {
@@ -572,14 +596,11 @@ async function testFlushSkipsWhenPoolBalanceIsZero() {
     console.warn = origWarn;
   }
   assert.ok(
-    warnMsgs.some(m => m.includes('pool balance is 0')),
-    'zero pool balance must produce a warning'
+    warnMsgs.some((m) => m.includes('pool balance is 0')),
+    'zero pool balance must produce a warning',
   );
   assert.strictEqual(node._calls.length, 0, 'send must not be called when pool balance is 0');
-  assert.strictEqual(
-    sq.getAllEntries()[0].status, 'pending',
-    'entries must remain pending when pool is empty'
-  );
+  assert.strictEqual(sq.getAllEntries()[0].status, 'pending', 'entries must remain pending when pool is empty');
 }
 
 async function testFlushMarksFailedWhenPoolInsufficient() {
@@ -593,9 +614,9 @@ async function testFlushMarksFailedWhenPoolInsufficient() {
   await silenceLogsAsync(() => sq.flushStakingQueue());
 
   const entry = sq.getAllEntries()[0];
-  assert.strictEqual(entry.status,     'failed',           'entry must be failed when pool cannot cover reward');
+  assert.strictEqual(entry.status, 'failed', 'entry must be failed when pool cannot cover reward');
   assert.strictEqual(entry.failReason, 'pool_insufficient');
-  assert.strictEqual(node._calls.length, 0,                'send must not be called when pool is insufficient');
+  assert.strictEqual(node._calls.length, 0, 'send must not be called when pool is insufficient');
 }
 
 async function testFlushSendExceptionMarksEntryFailed() {
@@ -611,7 +632,7 @@ async function testFlushSendExceptionMarksEntryFailed() {
   assert.strictEqual(entry.status, 'failed', 'entry must be failed when send throws');
   assert.ok(
     entry.failReason && entry.failReason.includes('insufficient funds'),
-    'failReason must capture the error message'
+    'failReason must capture the error message',
   );
   assert.ok(entry.rewardAtMs > 0, 'rewardAtMs must be set even on failure');
   assert.ok(entry.apyAtFlush !== null, 'apyAtFlush must be set even on failure');
@@ -632,15 +653,15 @@ async function testFlushContinuesAfterOneEntryFails() {
     initQueue(dir, node);
     // Total = 200 000 → APY = 20%
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 100_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 100_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 100_000 });
   });
   await silenceLogsAsync(() => sq.flushStakingQueue());
 
-  const alice = sq.getAllEntries().find(e => e.fromAddress === 'wtc1q-alice');
-  const bob   = sq.getAllEntries().find(e => e.fromAddress === 'wtc1q-bob');
-  assert.strictEqual(alice.status, 'failed',   'Alice entry must be marked failed');
-  assert.strictEqual(bob.status,   'rewarded', 'Bob entry must be rewarded despite Alice failing');
-  assert.strictEqual(callCount, 2,             'send must be attempted for each entry');
+  const alice = sq.getAllEntries().find((e) => e.fromAddress === 'wtc1q-alice');
+  const bob = sq.getAllEntries().find((e) => e.fromAddress === 'wtc1q-bob');
+  assert.strictEqual(alice.status, 'failed', 'Alice entry must be marked failed');
+  assert.strictEqual(bob.status, 'rewarded', 'Bob entry must be rewarded despite Alice failing');
+  assert.strictEqual(callCount, 2, 'send must be attempted for each entry');
 }
 
 async function testFlushPersistsResultsToDisk() {
@@ -656,8 +677,8 @@ async function testFlushPersistsResultsToDisk() {
   silenceLogs(() => initQueue(dir));
   const entries = sq.getAllEntries();
   assert.strictEqual(entries[0].status, 'rewarded', 'rewarded status must survive re-init');
-  assert.ok(entries[0].rewardTxId,                  'rewardTxId must survive re-init');
-  assert.ok(entries[0].rewardAmount > 0,             'rewardAmount must survive re-init');
+  assert.ok(entries[0].rewardTxId, 'rewardTxId must survive re-init');
+  assert.ok(entries[0].rewardAmount > 0, 'rewardAmount must survive re-init');
 }
 
 async function testFlushDoesNotReprocessRewardedEntries() {
@@ -672,10 +693,7 @@ async function testFlushDoesNotReprocessRewardedEntries() {
 
   // Second flush — nothing is pending
   await silenceLogsAsync(() => sq.flushStakingQueue());
-  assert.strictEqual(
-    node._calls.length, callsAfterFirst,
-    'second flush must not re-process already-rewarded entries'
-  );
+  assert.strictEqual(node._calls.length, callsAfterFirst, 'second flush must not re-process already-rewarded entries');
 }
 
 async function testConcurrentFlushDoesNotDoublePayRewards() {
@@ -689,10 +707,7 @@ async function testConcurrentFlushDoesNotDoublePayRewards() {
     initQueue(dir, node);
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 10_000 });
   });
-  await silenceLogsAsync(() => Promise.all([
-    sq.flushStakingQueue(),
-    sq.flushStakingQueue(),
-  ]));
+  await silenceLogsAsync(() => Promise.all([sq.flushStakingQueue(), sq.flushStakingQueue()]));
   assert.strictEqual(node._calls.length, 1, 'concurrent flushes must not double-pay rewards');
 }
 
@@ -708,7 +723,9 @@ function testGetEntryReturnsShallowClone() {
   const dir = makeTmpDir();
   silenceLogs(() => initQueue(dir));
   let r;
-  silenceLogs(() => { r = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 }); });
+  silenceLogs(() => {
+    r = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 });
+  });
   const entry = sq.getEntry(r.entryId);
   // Mutating the returned clone must not affect internal state
   entry.fromAddress = 'hacked';
@@ -720,7 +737,7 @@ function testGetEntryForAddressFiltersCorrectly() {
   silenceLogs(() => {
     initQueue(dir);
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 5_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 5_000 });
   });
   const aliceEntries = sq.getEntryForAddress('wtc1q-alice');
   assert.strictEqual(aliceEntries.length, 1);
@@ -745,12 +762,12 @@ function testGetAllEntriesReturnsAllStatuses() {
   silenceLogs(() => {
     initQueue(dir);
     r = sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 5_000 });
-    sq.stakeWtc({ fromAddress: 'wtc1q-bob',   wtcAmount: 5_000 });
+    sq.stakeWtc({ fromAddress: 'wtc1q-bob', wtcAmount: 5_000 });
     sq.cancelEntry(r.entryId);
   });
   const all = sq.getAllEntries();
   assert.strictEqual(all.length, 2);
-  const statuses = all.map(e => e.status).sort();
+  const statuses = all.map((e) => e.status).sort();
   assert.deepStrictEqual(statuses, ['cancelled', 'pending']);
 }
 
@@ -764,7 +781,7 @@ async function testMaybeFlushDoesNotFireBelowThreshold() {
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 9_999 });
   });
   await silenceLogsAsync(() => sq._maybeFlushByThreshold());
-  assert.strictEqual(node._calls.length, 0,       '_maybeFlushByThreshold must not flush below threshold');
+  assert.strictEqual(node._calls.length, 0, '_maybeFlushByThreshold must not flush below threshold');
   assert.strictEqual(sq.getAllEntries()[0].status, 'pending');
 }
 
@@ -777,7 +794,7 @@ async function testMaybeFlushFiresAtThreshold() {
   });
   await silenceLogsAsync(() => sq._maybeFlushByThreshold());
   // 10 000 WTC → APY=1% → reward=100 WTC
-  assert.strictEqual(node._calls.length, 1,        '_maybeFlushByThreshold must flush at threshold');
+  assert.strictEqual(node._calls.length, 1, '_maybeFlushByThreshold must flush at threshold');
   assert.strictEqual(sq.getAllEntries()[0].status, 'rewarded');
 }
 
@@ -862,4 +879,7 @@ async function run() {
   console.log('staking queue tests passed');
 }
 
-run().catch(e => { console.error(e); process.exit(1); });
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

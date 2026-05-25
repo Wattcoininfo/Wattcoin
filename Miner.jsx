@@ -1,4 +1,4 @@
-﻿import React from "react";
+﻿import React from 'react';
 
 const COINS_PER_TIER = 1_000_000;
 const TOTAL_TIERS = 21;
@@ -8,7 +8,7 @@ const BASE_REWARD = 1000;
 const MAX_HARDWARE_LOAD_PERCENT = 85;
 const LOAD_PERCENT_STORAGE_KEY = 'wattcoin-load-percent';
 const STARTUP_BENCHMARK_DONE_STORAGE_KEY = 'wattcoin-startup-benchmark-done-v1';
-const BENCHMARK_DRIFT_THRESHOLD = 0.30; // 30% drift on any metric: triggers immediate 2x extended retry
+const BENCHMARK_DRIFT_THRESHOLD = 0.3; // 30% drift on any metric: triggers immediate 2x extended retry
 const BENCHMARK_HOLD_DURATION_MS = 5 * 60 * 1000; // 5 minutes on-hold after retry also fails
 const HW_HOLD_STORAGE_KEY = 'wattcoin-hw-hold-until-v1';
 const ENABLE_HARDWARE_HOLD = true;
@@ -21,7 +21,7 @@ const FINGERPRINT_SIG_STORAGE_KEY = 'wattcoin-fingerprint-sig-v2';
 const FINGERPRINT_SECRET_STORAGE_KEY = 'wattcoin-fingerprint-secret-v2';
 const BENCH_BASELINE_OPS_KEY = 'wattcoin-bench-baseline-ops-v1';
 const BENCH_BASELINE_GPS_KEY = 'wattcoin-bench-baseline-gps-v1';
-const BENCH_BASELINE_SIG_KEY  = 'wattcoin-bench-baseline-sig-v1';
+const BENCH_BASELINE_SIG_KEY = 'wattcoin-bench-baseline-sig-v1';
 const TRUST_SCORE_STORAGE_KEY = 'wattcoin-trust-score-v1';
 const HARDWARE_COLUMN_WIDTH_PX = 240;
 const PX_PER_MM = 96 / 25.4;
@@ -53,8 +53,7 @@ function globalTierFromHeight(height) {
   return TOTAL_TIERS - 1;
 }
 
-const fmtNum = (n, d = 0) =>
-  n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const fmtNum = (n, d = 0) => n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 
 const simpleHash = (value) => {
   const str = String(value || '');
@@ -67,11 +66,11 @@ const simpleHash = (value) => {
 };
 
 const fmtEnergy = (wh, decimals = 2) => {
-  if (wh >= 1e12) return (wh / 1e12).toFixed(decimals) + " TWh";
-  if (wh >= 1e9) return (wh / 1e9).toFixed(decimals) + " GWh";
-  if (wh >= 1e6) return (wh / 1e6).toFixed(decimals) + " MWh";
-  if (wh >= 1e3) return (wh / 1e3).toFixed(decimals) + " kWh";
-  return wh.toFixed(decimals) + " Wh";
+  if (wh >= 1e12) return (wh / 1e12).toFixed(decimals) + ' TWh';
+  if (wh >= 1e9) return (wh / 1e9).toFixed(decimals) + ' GWh';
+  if (wh >= 1e6) return (wh / 1e6).toFixed(decimals) + ' MWh';
+  if (wh >= 1e3) return (wh / 1e3).toFixed(decimals) + ' kWh';
+  return wh.toFixed(decimals) + ' Wh';
 };
 
 const CONFIDENCE_TIER_LABELS = {
@@ -80,12 +79,12 @@ const CONFIDENCE_TIER_LABELS = {
   estimated: 'Estimated (model)',
 };
 
-const ONLINE_TDP_CACHE_KEY          = 'wattcoin-online-tdp-v2';
-const ONLINE_CPU_TDP_CACHE_KEY      = 'wattcoin-online-cpu-tdp-v2';
+const ONLINE_TDP_CACHE_KEY = 'wattcoin-online-tdp-v2';
+const ONLINE_CPU_TDP_CACHE_KEY = 'wattcoin-online-cpu-tdp-v2';
 const ONLINE_LAPTOP_POWER_CACHE_KEY = 'wattcoin-online-laptop-power-v8';
-const HARDWARE_CARD_WIDTH_KEY       = 'wattcoin-hw-card-width-v1';
-const ONLINE_TDP_CACHE_TTL_MS       = 14 * 24 * 60 * 60 * 1000; // 14 days (successful lookup)
-const ONLINE_TDP_CACHE_MISS_TTL_MS  =       60 * 60 * 1000; // 1 hour  (failed lookup — retry sooner)
+const HARDWARE_CARD_WIDTH_KEY = 'wattcoin-hw-card-width-v1';
+const ONLINE_TDP_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (successful lookup)
+const ONLINE_TDP_CACHE_MISS_TTL_MS = 60 * 60 * 1000; // 1 hour  (failed lookup — retry sooner)
 
 // Proxy external fetch() calls through the main process using Node's https module.
 // Renderer fetch() uses Chromium's networking stack which enforces CORS.  TechPowerUp
@@ -134,7 +133,10 @@ function stripHtml(html) {
 // Returns the first plausible wattage value (10–800 W) found in plain text.
 function parseFirstWattage(text) {
   const m = text.match(/\b(\d{1,3}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/);
-  if (m) { const w = parseFloat(m[1]); if (w >= 10 && w <= 800) return Math.round(w); }
+  if (m) {
+    const w = parseFloat(m[1]);
+    if (w >= 10 && w <= 800) return Math.round(w);
+  }
   return null;
 }
 
@@ -154,7 +156,8 @@ function normalizeWattageText(text) {
 function parseBestWattage(text) {
   const normalized = normalizeWattageText(text);
   const re = /\b(\d{1,3}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/g;
-  let best = null, bestScore = -Infinity;
+  let best = null,
+    bestScore = -Infinity;
   let m;
   while ((m = re.exec(normalized)) !== null) {
     const w = parseFloat(m[1]);
@@ -162,11 +165,11 @@ function parseBestWattage(text) {
     // Look at ~80 chars surrounding the match for context clues
     const ctx = normalized.substring(Math.max(0, m.index - 80), m.index + m[0].length + 80).toLowerCase();
     let score = 0;
-    if (/\btdp\b/.test(ctx))                  score += 3;
+    if (/\btdp\b/.test(ctx)) score += 3;
     if (/consumption|under load|max.{0,10}power|full load|power draw|stress/i.test(ctx)) score += 2;
-    if (/rated|maximum|peak/i.test(ctx))       score += 1;
+    if (/rated|maximum|peak/i.test(ctx)) score += 1;
     if (/adapter|charger|power supply|ac adapter|psu/i.test(ctx)) score -= 3;
-    if (/idle|sleep|standby/i.test(ctx))       score -= 2;
+    if (/idle|sleep|standby/i.test(ctx)) score -= 2;
     if (score > bestScore || (score === bestScore && best === null)) {
       best = Math.round(w);
       bestScore = score;
@@ -182,17 +185,25 @@ const BRAVE_ANSWERS_URL = 'https://api.search.brave.com/res/v1/chat/completions'
 // Fetch GPU TDP via Brave Answers AI (first option for all models)
 async function fetchGpuTDPOnline(gpuModel) {
   try {
-    const clean = gpuModel.replace(/\(R\)|\(TM\)/g, '').replace(/\s+/g, ' ').trim();
+    const clean = gpuModel
+      .replace(/\(R\)|\(TM\)/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const question = `${clean} tdp`;
     const body = JSON.stringify({ stream: false, messages: [{ role: 'user', content: question }] });
     const text = await fetchUrlViaMain(BRAVE_ANSWERS_URL, {
       method: 'POST',
       timeoutMs: 15000,
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'x-subscription-token': BRAVE_ANSWERS_KEY },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'x-subscription-token': BRAVE_ANSWERS_KEY,
+      },
       body,
     });
     const data = typeof text === 'string' ? JSON.parse(text) : text;
-    const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const answer =
+      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     return answer ? parseBestWattage(answer) : null;
   } catch (_) {
     return null;
@@ -202,17 +213,25 @@ async function fetchGpuTDPOnline(gpuModel) {
 // Fetch CPU TDP via Brave Answers AI (first option for all models)
 async function fetchCpuTDPOnline(cpuModel) {
   try {
-    const clean = cpuModel.replace(/\(R\)|\(TM\)/g, '').replace(/\s+/g, ' ').trim();
+    const clean = cpuModel
+      .replace(/\(R\)|\(TM\)/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
     const question = `${clean} tdp`;
     const body = JSON.stringify({ stream: false, messages: [{ role: 'user', content: question }] });
     const text = await fetchUrlViaMain(BRAVE_ANSWERS_URL, {
       method: 'POST',
       timeoutMs: 15000,
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'x-subscription-token': BRAVE_ANSWERS_KEY },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'x-subscription-token': BRAVE_ANSWERS_KEY,
+      },
       body,
     });
     const data = typeof text === 'string' ? JSON.parse(text) : text;
-    const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const answer =
+      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     return answer ? parseBestWattage(answer) : null;
   } catch (_) {
     return null;
@@ -226,7 +245,10 @@ async function fetchLaptopSystemPowerOnline(manufacturer, version, cpu, logFn) {
   if (manufacturer && !/^unknown$/i.test(manufacturer)) parts.push(manufacturer.trim());
   if (version && !/^unknown$/i.test(version) && version !== manufacturer) parts.push(version.trim());
   if (!parts.length && cpu) parts.push(cpu.split(' (')[0].trim());
-  if (!parts.length) { log('laptop-power: no usable model identifier, aborting'); return null; }
+  if (!parts.length) {
+    log('laptop-power: no usable model identifier, aborting');
+    return null;
+  }
   const modelQuery = parts.join(' ');
   const question = `${modelQuery} tdp`;
   log(`laptop-power: query="${question}"`);
@@ -236,17 +258,27 @@ async function fetchLaptopSystemPowerOnline(manufacturer, version, cpu, logFn) {
     const text = await fetchUrlViaMain(BRAVE_ANSWERS_URL, {
       method: 'POST',
       timeoutMs: 15000,
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'x-subscription-token': BRAVE_ANSWERS_KEY },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'x-subscription-token': BRAVE_ANSWERS_KEY,
+      },
       body,
     });
     const data = typeof text === 'string' ? JSON.parse(text) : text;
-    const answer = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const answer =
+      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
     if (answer) {
       const result = parseBestWattage(answer);
-      if (result !== null) { log(`laptop-power: Brave AI → ${result} W`); return result; }
+      if (result !== null) {
+        log(`laptop-power: Brave AI → ${result} W`);
+        return result;
+      }
     }
     log('laptop-power: Brave AI no usable wattage in answer');
-  } catch (e) { log(`laptop-power: Brave AI error: ${e && e.message}`); }
+  } catch (e) {
+    log(`laptop-power: Brave AI error: ${e && e.message}`);
+  }
 
   log('laptop-power: all sources exhausted, no result');
   return null;
@@ -255,7 +287,7 @@ async function fetchLaptopSystemPowerOnline(manufacturer, version, cpu, logFn) {
 function detectMotherboardFormFactor(...values) {
   const haystack = values
     .filter(Boolean)
-    .map(value => String(value).toLowerCase())
+    .map((value) => String(value).toLowerCase())
     .join(' ');
 
   if (!haystack) return '';
@@ -311,13 +343,20 @@ const DEFAULT_LAPTOP_MODEL_FIELD_SCORES = {
   systemVersion: -150,
 };
 
-const LAPTOP_COMMERCIAL_MODEL_HINTS = /ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ|MacBook|XPS|Latitude|EliteBook|Spectre|Surface|Aspire|TravelMate|Swift|Nitro|Predator|Zenbook|Vivobook|ExpertBook|ProBook|Pavilion|Omen|MateBook|Gram|Galaxy Book/i;
-const DESKTOP_COMMERCIAL_MODEL_HINTS = /ThinkCentre|ThinkStation|ThinkServer|OptiPlex|Precision|ProDesk|EliteDesk|Z2|Z4|Z6|Z8|NUC|Mini PC|Workstation/i;
-const MINI_PC_COMMERCIAL_MODEL_HINTS = /ThinkCentre\s+(?:M\d{3,4}[a-z]?q|Tiny)|OptiPlex\s+(?:Micro|Ultra)|ProDesk\s+Mini|EliteDesk\s+Mini|EliteMini|Mini\s+PC|Mini-PC|NUC|NUCBox|BRIX|Cubi|DeskMini|Veriton\s+N|ExpertCenter\s+PN|Chromebox|TinyMiniMicro|USFF|Micro|Tiny|Nano/i;
-const MINI_PC_VENDOR_HINTS = /Beelink|Minisforum|Geekom|GMKtec|Zotac|Shuttle|ASUS|MSI|Gigabyte|Acer|Dell|HP|Lenovo|Intel/i;
-const MINI_PC_MODEL_SERIES_HINTS = /\b(?:PN\d{2,4}|SER\d|UM\d|GK\d|GT\d|NUC\d*|NUCBox|BRIX|Cubi|DeskMini|Tiny|Micro|Mini|Nano|USFF|DM\d{2,4})\b/i;
-const INTEGRATED_GPU_MODEL_HINTS = /Intel.*(?:HD|UHD|Iris(?!\s*(?:Xe\s*Max|Pro))|Xe(?!\s*Max))|Radeon\(TM\)\s+Graphics|Radeon\s+Graphics|Vega\s*(?:3|5|6|7|8|10|11)|Mali|Adreno/i;
-const DISCRETE_GPU_MODEL_HINTS = /RTX|GTX|MX\d|Arc\s*(?:A|B)|Quadro|Tesla|Titan|GeForce|Radeon\s*(?:RX|Pro|VII)|FirePro/i;
+const LAPTOP_COMMERCIAL_MODEL_HINTS =
+  /ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ|MacBook|XPS|Latitude|EliteBook|Spectre|Surface|Aspire|TravelMate|Swift|Nitro|Predator|Zenbook|Vivobook|ExpertBook|ProBook|Pavilion|Omen|MateBook|Gram|Galaxy Book/i;
+const DESKTOP_COMMERCIAL_MODEL_HINTS =
+  /ThinkCentre|ThinkStation|ThinkServer|OptiPlex|Precision|ProDesk|EliteDesk|Z2|Z4|Z6|Z8|NUC|Mini PC|Workstation/i;
+const MINI_PC_COMMERCIAL_MODEL_HINTS =
+  /ThinkCentre\s+(?:M\d{3,4}[a-z]?q|Tiny)|OptiPlex\s+(?:Micro|Ultra)|ProDesk\s+Mini|EliteDesk\s+Mini|EliteMini|Mini\s+PC|Mini-PC|NUC|NUCBox|BRIX|Cubi|DeskMini|Veriton\s+N|ExpertCenter\s+PN|Chromebox|TinyMiniMicro|USFF|Micro|Tiny|Nano/i;
+const MINI_PC_VENDOR_HINTS =
+  /Beelink|Minisforum|Geekom|GMKtec|Zotac|Shuttle|ASUS|MSI|Gigabyte|Acer|Dell|HP|Lenovo|Intel/i;
+const MINI_PC_MODEL_SERIES_HINTS =
+  /\b(?:PN\d{2,4}|SER\d|UM\d|GK\d|GT\d|NUC\d*|NUCBox|BRIX|Cubi|DeskMini|Tiny|Micro|Mini|Nano|USFF|DM\d{2,4})\b/i;
+const INTEGRATED_GPU_MODEL_HINTS =
+  /Intel.*(?:HD|UHD|Iris(?!\s*(?:Xe\s*Max|Pro))|Xe(?!\s*Max))|Radeon\(TM\)\s+Graphics|Radeon\s+Graphics|Vega\s*(?:3|5|6|7|8|10|11)|Mali|Adreno/i;
+const DISCRETE_GPU_MODEL_HINTS =
+  /RTX|GTX|MX\d|Arc\s*(?:A|B)|Quadro|Tesla|Titan|GeForce|Radeon\s*(?:RX|Pro|VII)|FirePro/i;
 
 function isWholeDeviceMiniPc(hardware = {}) {
   if (!hardware || !['PC', 'Desktop', 'Mini PC'].includes(hardware.deviceType)) return false;
@@ -326,26 +365,28 @@ function isWholeDeviceMiniPc(hardware = {}) {
   const formFactor = String(hardware.motherboardFormFactor || '').trim();
   const cpu = String(hardware.cpu || '').trim();
   const combined = [manufacturer, version, formFactor, cpu].filter(Boolean).join(' ');
-  return MINI_PC_COMMERCIAL_MODEL_HINTS.test(combined)
-    || (/lenovo/i.test(manufacturer) && /ThinkCentre/i.test(version) && /Mini|Tiny/i.test(formFactor))
-    || (MINI_PC_VENDOR_HINTS.test(manufacturer) && MINI_PC_MODEL_SERIES_HINTS.test(version))
-    || (/Mini\s?PC|Mini-PC|TinyMiniMicro/i.test(combined))
-    || (/\b(?:micro|tiny|nano|mini|usff)\b/i.test(version) && MINI_PC_VENDOR_HINTS.test(combined))
-    || (/NUC/i.test(version) && !/Laptop/i.test(cpu));
+  return (
+    MINI_PC_COMMERCIAL_MODEL_HINTS.test(combined) ||
+    (/lenovo/i.test(manufacturer) && /ThinkCentre/i.test(version) && /Mini|Tiny/i.test(formFactor)) ||
+    (MINI_PC_VENDOR_HINTS.test(manufacturer) && MINI_PC_MODEL_SERIES_HINTS.test(version)) ||
+    /Mini\s?PC|Mini-PC|TinyMiniMicro/i.test(combined) ||
+    (/\b(?:micro|tiny|nano|mini|usff)\b/i.test(version) && MINI_PC_VENDOR_HINTS.test(combined)) ||
+    (/NUC/i.test(version) && !/Laptop/i.test(cpu))
+  );
 }
 
 function hasOnlyIntegratedGpu(hardware = {}) {
   const details = Array.isArray(hardware.gpuDetailsList) ? hardware.gpuDetailsList.filter(Boolean) : [];
   if (details.length > 0) {
     const hasDedicated = details.some((entry) => {
-      const model = String(entry && entry.model || '');
+      const model = String((entry && entry.model) || '');
       const sharedMemory = !!(entry && entry.sharedMemory);
       const vramGb = Math.max(0, Number(entry && entry.vramGb) || 0);
       return (!sharedMemory && vramGb >= 1) || DISCRETE_GPU_MODEL_HINTS.test(model);
     });
     if (hasDedicated) return false;
     return details.every((entry) => {
-      const model = String(entry && entry.model || '');
+      const model = String((entry && entry.model) || '');
       return !!(entry && entry.sharedMemory) || INTEGRATED_GPU_MODEL_HINTS.test(model);
     });
   }
@@ -367,16 +408,23 @@ function pickLaptopModelCandidate({
 } = {}) {
   const normalizedManufacturer = String(manufacturer || '').trim();
   const isLenovoVendor = /lenovo/i.test(normalizedManufacturer);
-  const vendorRule = LAPTOP_MODEL_VENDOR_PRIORITIES.find(rule => rule.pattern.test(normalizedManufacturer));
+  const vendorRule = LAPTOP_MODEL_VENDOR_PRIORITIES.find((rule) => rule.pattern.test(normalizedManufacturer));
   const fieldScores = vendorRule ? vendorRule.fieldScores : DEFAULT_LAPTOP_MODEL_FIELD_SCORES;
-  const laptopFamilyHints = /thinkpad|thinkbook|ideapad|yoga|legion|loq|latitude|xps|inspiron|precision|elitebook|probook|spectre|envy|pavilion|omen|zenbook|vivobook|expertbook|rog|tuf|aspire|swift|travelmate|nitro|predator|surface|matebook|gram|blade|stealth|katana|prestige|summit|galaxy book/i;
+  const laptopFamilyHints =
+    /thinkpad|thinkbook|ideapad|yoga|legion|loq|latitude|xps|inspiron|precision|elitebook|probook|spectre|envy|pavilion|omen|zenbook|vivobook|expertbook|rog|tuf|aspire|swift|travelmate|nitro|predator|surface|matebook|gram|blade|stealth|katana|prestige|summit|galaxy book/i;
 
-  const normalizeCandidate = (value) => String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+  const normalizeCandidate = (value) =>
+    String(value || '')
+      .normalize('NFKC')
+      .replace(/\s+/g, ' ')
+      .trim();
   const looksLikeLenovoMachineType = (value) => {
     const candidate = normalizeCandidate(value);
-    return /^\d{4}[a-z0-9]{3}$/i.test(candidate)
-      || /^lenovo[_ -]*mt[_ -]*[a-z0-9]+$/i.test(candidate)
-      || /^lenovo[_ -]*[a-z0-9]{4,}$/i.test(candidate) && !laptopFamilyHints.test(candidate);
+    return (
+      /^\d{4}[a-z0-9]{3}$/i.test(candidate) ||
+      /^lenovo[_ -]*mt[_ -]*[a-z0-9]+$/i.test(candidate) ||
+      (/^lenovo[_ -]*[a-z0-9]{4,}$/i.test(candidate) && !laptopFamilyHints.test(candidate))
+    );
   };
 
   const looksLikeFirmwareString = (value, sourceKey) => {
@@ -389,7 +437,12 @@ function pickLaptopModelCandidate({
     if (/^v(?:er(?:sion)?)?\s*\d+(?:\.\d+){1,3}$/i.test(candidate)) return true;
     if (/^\d+(?:\.\d+){1,3}$/i.test(candidate)) return true;
     if (/^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/i.test(candidate)) return true;
-    if ((sourceKey === 'systemVersion' || sourceKey === 'baseboardVersion') && /^[a-z]{1,4}\d{2,}[a-z0-9.-]*$/i.test(candidate) && !laptopFamilyHints.test(candidate)) return true;
+    if (
+      (sourceKey === 'systemVersion' || sourceKey === 'baseboardVersion') &&
+      /^[a-z]{1,4}\d{2,}[a-z0-9.-]*$/i.test(candidate) &&
+      !laptopFamilyHints.test(candidate)
+    )
+      return true;
     return false;
   };
 
@@ -414,7 +467,12 @@ function pickLaptopModelCandidate({
     if (/^[a-z]{2,}\d{2,}[a-z0-9-]*$/i.test(candidate) && entry.source === 'systemSku') score += 10;
     if (!/^[a-z0-9][a-z0-9 ._()/+-]*$/i.test(candidate)) score -= 20;
     if (isLenovoVendor && looksLikeLenovoMachineType(candidate) && !laptopFamilyHints.test(candidate)) score -= 120;
-    if (isLenovoVendor && laptopFamilyHints.test(candidate) && (entry.source === 'systemVersion' || entry.source === 'baseboardModel' || entry.source === 'baseboardVersion')) score += 220;
+    if (
+      isLenovoVendor &&
+      laptopFamilyHints.test(candidate) &&
+      (entry.source === 'systemVersion' || entry.source === 'baseboardModel' || entry.source === 'baseboardVersion')
+    )
+      score += 220;
 
     if (score > bestCandidate.score) {
       bestCandidate = { value: candidate, source: entry.source, score };
@@ -435,7 +493,11 @@ function pickDesktopModelCandidate({
   baseboardModel = '',
   isOemPlaceholder = () => false,
 } = {}) {
-  const normalizeCandidate = (value) => String(value || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+  const normalizeCandidate = (value) =>
+    String(value || '')
+      .normalize('NFKC')
+      .replace(/\s+/g, ' ')
+      .trim();
   const candidates = [
     { source: 'systemModel', value: systemModel, score: 150 },
     { source: 'systemVersion', value: systemVersion, score: 90 },
@@ -475,37 +537,51 @@ async function getHardwareInfo() {
       const logicalCores = Math.max(1, Number(sys.cpu && sys.cpu.cores) || 1);
       const physicalCores = Math.max(1, Number(sys.cpu && sys.cpu.physicalCores) || logicalCores);
       const cpuSockets = Math.max(1, Number(sys.cpu && sys.cpu.processors) || 1);
-      const cpu = sys.cpu && sys.cpu.brand
-        ? `${sys.cpu.brand} (${logicalCores} logical cores${cpuSockets > 1 ? `, ${cpuSockets} CPUs` : ''})`
-        : "Unknown";
-      const gpu = sys.gpu.model || "Unknown";
+      const cpu =
+        sys.cpu && sys.cpu.brand
+          ? `${sys.cpu.brand} (${logicalCores} logical cores${cpuSockets > 1 ? `, ${cpuSockets} CPUs` : ''})`
+          : 'Unknown';
+      const gpu = sys.gpu.model || 'Unknown';
       // Collect all GPU models for multi-GPU support
-      const gpus = Array.isArray(sys.gpus) && sys.gpus.length > 0
-        ? sys.gpus.filter(g => g && g.model).map(g => g.model)
-        : (gpu !== "Unknown" ? [gpu] : []);
+      const gpus =
+        Array.isArray(sys.gpus) && sys.gpus.length > 0
+          ? sys.gpus.filter((g) => g && g.model).map((g) => g.model)
+          : gpu !== 'Unknown'
+            ? [gpu]
+            : [];
       // Build detailed GPU list: include VRAM size and GDDR type for dedicated GPUs.
       // Skip entries where vramDynamic=true (shared/integrated memory) for VRAM display.
-      const gpuDetailsList = (Array.isArray(sys.gpus) && sys.gpus.length > 0 ? sys.gpus : (sys.gpu && sys.gpu.model ? [sys.gpu] : []))
-        .filter(g => g && g.model)
-        .map(g => {
+      const gpuDetailsList = (
+        Array.isArray(sys.gpus) && sys.gpus.length > 0 ? sys.gpus : sys.gpu && sys.gpu.model ? [sys.gpu] : []
+      )
+        .filter((g) => g && g.model)
+        .map((g) => {
           const vramMb = Number(g.vram) || 0;
           const isDynamic = !!g.vramDynamic;
-          const vramGb = (!isDynamic && vramMb >= 512) ? Math.round(vramMb / 1024) : 0;
-          const memType = String(g.memoryType || '').trim().toUpperCase();
+          const vramGb = !isDynamic && vramMb >= 512 ? Math.round(vramMb / 1024) : 0;
+          const memType = String(g.memoryType || '')
+            .trim()
+            .toUpperCase();
           return { model: g.model, vramGb, memType, sharedMemory: isDynamic };
         });
       // Show both total and type for memory
-      const memTotalGB = sys.mem.total ? (sys.mem.total / (1024 ** 3)) : 0;
+      const memTotalGB = sys.mem.total ? sys.mem.total / 1024 ** 3 : 0;
       let memType = '';
       let memSpeedMhz = 0;
       let memSticks = 0;
       if (Array.isArray(sys.memLayout) && sys.memLayout.length > 0) {
         const types = sys.memLayout
-          .map(m => String(m.type || '').replace(/\s+/g, '').toUpperCase())
-          .filter(t => t && t !== 'UNKNOWN' && t !== '');
+          .map((m) =>
+            String(m.type || '')
+              .replace(/\s+/g, '')
+              .toUpperCase(),
+          )
+          .filter((t) => t && t !== 'UNKNOWN' && t !== '');
         if (types.length > 0) {
           const typeCount = {};
-          types.forEach(t => { typeCount[t] = (typeCount[t] || 0) + 1; });
+          types.forEach((t) => {
+            typeCount[t] = (typeCount[t] || 0) + 1;
+          });
           memType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0][0];
         }
         // Memory speed: take the max clockSpeed across populated sticks
@@ -514,17 +590,25 @@ async function getHardwareInfo() {
           if (spd > 0) memSpeedMhz = Math.max(memSpeedMhz, spd);
         }
         // Count populated sticks (size > 0)
-        memSticks = sys.memLayout.filter(m => Number(m.size) > 0).length;
+        memSticks = sys.memLayout.filter((m) => Number(m.size) > 0).length;
       }
-      const memory = memTotalGB > 0
-        ? `${memTotalGB.toFixed(1)} GB${memType ? ' ' + memType : ''}${memSpeedMhz > 0 ? ' ' + memSpeedMhz + ' MHz' : ''}`
-        : "Unknown";
+      const memory =
+        memTotalGB > 0
+          ? `${memTotalGB.toFixed(1)} GB${memType ? ' ' + memType : ''}${memSpeedMhz > 0 ? ' ' + memSpeedMhz + ' MHz' : ''}`
+          : 'Unknown';
       // Helper: detect BIOS/SMBIOS OEM placeholder strings
       const isOemPlaceholder = (val) => {
         if (!val) return true;
         const s = String(val).trim().toLowerCase();
-        return s.startsWith('to be filled') || s === 'default string' || s === 'system product name'
-          || s === 'not specified' || s === 'not applicable' || s === 'none' || s === 'n/a';
+        return (
+          s.startsWith('to be filled') ||
+          s === 'default string' ||
+          s === 'system product name' ||
+          s === 'not specified' ||
+          s === 'not applicable' ||
+          s === 'none' ||
+          s === 'n/a'
+        );
       };
       // Manufacturer/version: prefer system info, fall back to baseboard when OEM placeholder
       const rawSysModel = sys.system && sys.system.model ? sys.system.model : '';
@@ -535,7 +619,11 @@ async function getHardwareInfo() {
       const rawBoardModel = sys.baseboard && sys.baseboard.model ? sys.baseboard.model : '';
       const rawBoardVer = sys.baseboard && sys.baseboard.version ? sys.baseboard.version : '';
       const boardManufacturer = !isOemPlaceholder(rawBoardMfr) ? rawBoardMfr : '';
-      const boardModel = !isOemPlaceholder(rawBoardModel) ? rawBoardModel : (!isOemPlaceholder(rawBoardVer) ? rawBoardVer : '');
+      const boardModel = !isOemPlaceholder(rawBoardModel)
+        ? rawBoardModel
+        : !isOemPlaceholder(rawBoardVer)
+          ? rawBoardVer
+          : '';
       const laptopModelCandidate = pickLaptopModelCandidate({
         manufacturer: rawSysMfr || rawBoardMfr,
         systemModel: rawSysModel,
@@ -555,64 +643,99 @@ async function getHardwareInfo() {
       const chassisType = String(sys.chassis && sys.chassis.type ? sys.chassis.type : '').trim();
       // Build model string for device type detection using filtered values
       const modelStr = [
-        !isOemPlaceholder(rawSysModel) ? rawSysModel : (laptopModelCandidate.value || ''),
-        !isOemPlaceholder(rawSysMfr) ? rawSysMfr : (!isOemPlaceholder(rawBoardMfr) ? rawBoardMfr : ''),
-      ].join(' ').trim();
-      console.log('[Wattcoin] Model:', rawSysModel, '| SysSku:', rawSysSku, '| SysVer:', rawSysVer, '| SysMfr:', rawSysMfr, '| BoardMfr:', rawBoardMfr, '| BoardModel:', rawBoardModel, '| BoardVer:', rawBoardVer, '| Chassis:', chassisType, '| ModelStr:', modelStr, '| LaptopModel:', laptopModelCandidate.value, '| LaptopModelSource:', laptopModelCandidate.source);
-      let deviceType = "Unknown";
+        !isOemPlaceholder(rawSysModel) ? rawSysModel : laptopModelCandidate.value || '',
+        !isOemPlaceholder(rawSysMfr) ? rawSysMfr : !isOemPlaceholder(rawBoardMfr) ? rawBoardMfr : '',
+      ]
+        .join(' ')
+        .trim();
+      console.log(
+        '[Wattcoin] Model:',
+        rawSysModel,
+        '| SysSku:',
+        rawSysSku,
+        '| SysVer:',
+        rawSysVer,
+        '| SysMfr:',
+        rawSysMfr,
+        '| BoardMfr:',
+        rawBoardMfr,
+        '| BoardModel:',
+        rawBoardModel,
+        '| BoardVer:',
+        rawBoardVer,
+        '| Chassis:',
+        chassisType,
+        '| ModelStr:',
+        modelStr,
+        '| LaptopModel:',
+        laptopModelCandidate.value,
+        '| LaptopModelSource:',
+        laptopModelCandidate.source,
+      );
+      let deviceType = 'Unknown';
       if (/notebook|laptop|portable/i.test(chassisType) || LAPTOP_COMMERCIAL_MODEL_HINTS.test(modelStr)) {
-        deviceType = "Laptop";
+        deviceType = 'Laptop';
       } else if (/server/i.test(chassisType) || /Server/i.test(modelStr)) {
-        deviceType = "Server";
+        deviceType = 'Server';
       } else if (sys.system && sys.system.virtual) {
-        deviceType = "PC";
+        deviceType = 'PC';
       } else if (boardManufacturer || boardModel || /PC|Desktop|Workstation|Tower|NUC|Mini/i.test(modelStr)) {
-        deviceType = "PC";
+        deviceType = 'PC';
       }
       // Always use OS platform as authoritative fallback when model strings don't identify the form factor
       const osPlatform = sys.os && sys.os.platform ? sys.os.platform : '';
-      if (deviceType === "Unknown") {
-        if (osPlatform === 'darwin') deviceType = "Mac";
-        else if (osPlatform === 'win32' || osPlatform === 'linux') deviceType = "PC";
+      if (deviceType === 'Unknown') {
+        if (osPlatform === 'darwin') deviceType = 'Mac';
+        else if (osPlatform === 'win32' || osPlatform === 'linux') deviceType = 'PC';
       }
       // Board form factor: N/A for laptops and Macs; detect for desktops/servers.
       // Custom-build boards (e.g. "ROG STRIX Z790-E") rarely expose an ATX/ITX
       // keyword in SMBIOS, so fall back to "Manufacturer  Model" as a label.
-      const rawFormFactor = (deviceType === 'Laptop' || deviceType === 'Mac')
-        ? 'N/A'
-        : detectMotherboardFormFactor(
-            rawBoardModel,
-            rawBoardVer,
-            sys.system && sys.system.model,
-            sys.system && sys.system.version,
-            sys.system && sys.system.sku,
-            chassisType
-          );
-      const motherboardFormFactor = rawFormFactor ||
-        [boardManufacturer, boardModel].filter(Boolean).join(' ') || '';
-      const manufacturer = deviceType === 'PC'
-        ? (boardManufacturer || (!isOemPlaceholder(rawSysMfr) ? rawSysMfr : 'Unknown'))
-        : (!isOemPlaceholder(rawSysMfr) ? rawSysMfr : (boardManufacturer || 'Unknown'));
-      const version = deviceType === 'PC'
-        ? (desktopModelCandidate.value || boardModel || (!isOemPlaceholder(rawSysVer) ? rawSysVer : 'Unknown'))
-        : (laptopModelCandidate.value || 'Unknown');
-      if (deviceType === 'PC' && isWholeDeviceMiniPc({
-        deviceType,
-        manufacturer,
-        version,
-        motherboardFormFactor,
-        cpu,
-      })) {
+      const rawFormFactor =
+        deviceType === 'Laptop' || deviceType === 'Mac'
+          ? 'N/A'
+          : detectMotherboardFormFactor(
+              rawBoardModel,
+              rawBoardVer,
+              sys.system && sys.system.model,
+              sys.system && sys.system.version,
+              sys.system && sys.system.sku,
+              chassisType,
+            );
+      const motherboardFormFactor = rawFormFactor || [boardManufacturer, boardModel].filter(Boolean).join(' ') || '';
+      const manufacturer =
+        deviceType === 'PC'
+          ? boardManufacturer || (!isOemPlaceholder(rawSysMfr) ? rawSysMfr : 'Unknown')
+          : !isOemPlaceholder(rawSysMfr)
+            ? rawSysMfr
+            : boardManufacturer || 'Unknown';
+      const version =
+        deviceType === 'PC'
+          ? desktopModelCandidate.value || boardModel || (!isOemPlaceholder(rawSysVer) ? rawSysVer : 'Unknown')
+          : laptopModelCandidate.value || 'Unknown';
+      if (
+        deviceType === 'PC' &&
+        isWholeDeviceMiniPc({
+          deviceType,
+          manufacturer,
+          version,
+          motherboardFormFactor,
+          cpu,
+        })
+      ) {
         deviceType = 'Mini PC';
       }
-      const osName = sys.os && sys.os.distro ? sys.os.distro : (sys.os && sys.os.platform ? sys.os.platform : "Unknown");
+      const osName = sys.os && sys.os.distro ? sys.os.distro : sys.os && sys.os.platform ? sys.os.platform : 'Unknown';
       return {
         deviceType,
         manufacturer,
         version,
-        modelSource: deviceType === 'Laptop'
-          ? laptopModelCandidate.source
-          : (deviceType === 'Mini PC' ? desktopModelCandidate.source : ''),
+        modelSource:
+          deviceType === 'Laptop'
+            ? laptopModelCandidate.source
+            : deviceType === 'Mini PC'
+              ? desktopModelCandidate.source
+              : '',
         motherboardFormFactor,
         cpu,
         logicalCores,
@@ -626,7 +749,7 @@ async function getHardwareInfo() {
         memSpeedMhz,
         memSticks,
         osName,
-        source: 'electron'
+        source: 'electron',
       };
     } catch (e) {
       console.warn('[Wattcoin] Electron hardware info failed, falling back to browser', e);
@@ -634,7 +757,7 @@ async function getHardwareInfo() {
   }
   // Fallback: browser-based detection
   const nav = window.navigator;
-  const ua = nav.userAgent || "";
+  const ua = nav.userAgent || '';
   const logicalCores = Math.max(1, Number(nav.hardwareConcurrency) || 1);
   const cpu = `${logicalCores} logical cores`;
   let gpu = (() => {
@@ -646,49 +769,62 @@ async function getHardwareInfo() {
         return gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
       }
     }
-    return "Unknown";
+    return 'Unknown';
   })();
-  gpu = gpu.replace(/\(0x[0-9a-fA-F]+\) Direct3D11 vs_5_0 ps_5_0, D3D11/, "").trim();
-  const memory = nav.deviceMemory ? `${nav.deviceMemory} GB` : "Unknown";
-  let deviceType = "Unknown";
-  if (/ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ/i.test(ua) || (window && window.external && window.external.GetSystemModel && /ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ/i.test(window.external.GetSystemModel()))) {
-    deviceType = "Laptop (Lenovo ThinkPad)";
-  } else if (/CrOS/.test(ua)) deviceType = "Chromebook";
-  else if (/Android/.test(ua)) deviceType = "Android Device";
-  else if (/iPhone|iPad|iPod/.test(ua)) deviceType = "iOS Device";
-  else if (/Macintosh|Mac OS X/.test(ua)) deviceType = "Mac";
-  else if (MINI_PC_COMMERCIAL_MODEL_HINTS.test(ua)) deviceType = "Mini PC";
-  else if (/Windows/.test(ua)) deviceType = "PC";
-  else if (/Linux/.test(ua)) deviceType = "Linux PC";
-  if ((deviceType === "PC" || deviceType === "Mac" || deviceType === "Linux PC") && deviceType !== "Laptop (Lenovo ThinkPad)") {
+  gpu = gpu.replace(/\(0x[0-9a-fA-F]+\) Direct3D11 vs_5_0 ps_5_0, D3D11/, '').trim();
+  const memory = nav.deviceMemory ? `${nav.deviceMemory} GB` : 'Unknown';
+  let deviceType = 'Unknown';
+  if (
+    /ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ/i.test(ua) ||
+    (window &&
+      window.external &&
+      window.external.GetSystemModel &&
+      /ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ/i.test(window.external.GetSystemModel()))
+  ) {
+    deviceType = 'Laptop (Lenovo ThinkPad)';
+  } else if (/CrOS/.test(ua)) deviceType = 'Chromebook';
+  else if (/Android/.test(ua)) deviceType = 'Android Device';
+  else if (/iPhone|iPad|iPod/.test(ua)) deviceType = 'iOS Device';
+  else if (/Macintosh|Mac OS X/.test(ua)) deviceType = 'Mac';
+  else if (MINI_PC_COMMERCIAL_MODEL_HINTS.test(ua)) deviceType = 'Mini PC';
+  else if (/Windows/.test(ua)) deviceType = 'PC';
+  else if (/Linux/.test(ua)) deviceType = 'Linux PC';
+  if (
+    (deviceType === 'PC' || deviceType === 'Mac' || deviceType === 'Linux PC') &&
+    deviceType !== 'Laptop (Lenovo ThinkPad)'
+  ) {
     if (nav.getBattery) {
-      nav.getBattery().then(bat => {
+      nav.getBattery().then((bat) => {
         if (bat.charging !== undefined) {
-          if (bat.charging || bat.level < 1) deviceType = "Laptop";
+          if (bat.charging || bat.level < 1) deviceType = 'Laptop';
         }
       });
-    } else if (/Laptop|Notebook|Mobile|Portable|ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ|Ultrabook|Zenbook|MacBook|XPS|Latitude|EliteBook|Spectre|Surface|Aspire|Chromebook/i.test(ua)) {
-      deviceType = "Laptop";
+    } else if (
+      /Laptop|Notebook|Mobile|Portable|ThinkPad|ThinkBook|IdeaPad|Yoga|Legion|LOQ|Ultrabook|Zenbook|MacBook|XPS|Latitude|EliteBook|Spectre|Surface|Aspire|Chromebook/i.test(
+        ua,
+      )
+    ) {
+      deviceType = 'Laptop';
     }
   }
-  if (/Antminer|Whatsminer|ASIC/i.test(gpu)) deviceType = "ASIC";
-  const gpus = gpu !== "Unknown" ? [gpu] : [];
+  if (/Antminer|Whatsminer|ASIC/i.test(gpu)) deviceType = 'ASIC';
+  const gpus = gpu !== 'Unknown' ? [gpu] : [];
   return {
     deviceType,
-    manufacturer: "Unknown",
-    version: "Unknown",
-    motherboardFormFactor: "",
+    manufacturer: 'Unknown',
+    version: 'Unknown',
+    motherboardFormFactor: '',
     cpu,
     logicalCores,
     physicalCores: logicalCores,
     cpuSockets: 1,
     gpu,
     gpus,
-    gpuDetailsList: gpus.map(m => ({ model: m, vramGb: 0, memType: '' })),
+    gpuDetailsList: gpus.map((m) => ({ model: m, vramGb: 0, memType: '' })),
     memory,
     memTotalGB: Number(nav.deviceMemory) || 0,
     osName: 'browser',
-    source: 'browser'
+    source: 'browser',
   };
 }
 
@@ -703,15 +839,15 @@ function getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks) {
   // LPDDR is always one "virtual channel" per package (spec-defined 128-bit bus treats as 2 ch).
   const isLPDDR = /LPDDR/i.test(memType || '');
   const isDDR5 = /DDR5/i.test(memType || '');
-  let channels = isLPDDR ? 2 : ((memSticks >= 2) ? 2 : 1);
+  let channels = isLPDDR ? 2 : memSticks >= 2 ? 2 : 1;
   // DDR4/5: bus width = 64 bits = 8 bytes per transfer; speed in MT/s
   const theoreticalMBps = channels * memSpeedMhz * 8; // MT/s × 8 B = MB/s
   const efficiency = 0.25; // fraction of theoretical peak reported by this bench.
-                           // Stride-64 writes cause a read-for-ownership per cache line,
-                           // so actual DRAM traffic is 2× the buffer size, but we only
-                           // count bytes written.  V8 vs native adds further overhead.
-                           // Derivation: 65% peak × 50% RFO factor × 80% V8 ≈ 26%,
-                           // round down to 0.25 — applies universally across all DDR types.
+  // Stride-64 writes cause a read-for-ownership per cache line,
+  // so actual DRAM traffic is 2× the buffer size, but we only
+  // count bytes written.  V8 vs native adds further overhead.
+  // Derivation: 65% peak × 50% RFO factor × 80% V8 ≈ 26%,
+  // round down to 0.25 — applies universally across all DDR types.
   return Math.round(theoreticalMBps * efficiency);
 }
 
@@ -752,7 +888,10 @@ async function runWebGLBenchmark() {
       const s = gl.createShader(type);
       gl.shaderSource(s, src);
       gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { gl.deleteShader(s); return null; }
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        gl.deleteShader(s);
+        return null;
+      }
       return s;
     };
     const vs = compileShader(gl.VERTEX_SHADER, vsSource);
@@ -760,14 +899,15 @@ async function runWebGLBenchmark() {
     if (!vs || !fs) return { error: 'GPU-E1: shader compile failed' };
 
     const prog = gl.createProgram();
-    gl.attachShader(prog, vs); gl.attachShader(prog, fs);
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return { error: 'GPU-E2: shader link failed' };
     gl.useProgram(prog);
 
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const aPosLoc = gl.getAttribLocation(prog, 'aPos');
@@ -780,7 +920,8 @@ async function runWebGLBenchmark() {
     // the driver cannot skip the GPU work without producing wrong pixel values.
     // Per-frame sync (not batched) ensures each frame's GPU work is individually
     // timed, giving a score that reflects real pipeline throughput.
-    const SYNC_W = SIZE, SYNC_H = SIZE;
+    const SYNC_W = SIZE,
+      SYNC_H = SIZE;
     const syncBuf = new Uint8Array(SYNC_W * SYNC_H * 4);
     function gpuSync() {
       gl.readPixels(0, 0, SYNC_W, SYNC_H, gl.RGBA, gl.UNSIGNED_BYTE, syncBuf);
@@ -809,7 +950,10 @@ async function runWebGLBenchmark() {
     // Safety: if 200 frames finished in < 1 ms, readPixels is not stalling.
     if (calibMs < 1.0 && calibFrames >= 200) {
       console.warn('[GPU benchmark] readPixels not stalling (200 frames in ' + calibMs.toFixed(2) + 'ms)');
-      gl.deleteProgram(prog); gl.deleteShader(vs); gl.deleteShader(fs); gl.deleteBuffer(buf);
+      gl.deleteProgram(prog);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      gl.deleteBuffer(buf);
       return { error: 'GPU-E3: readPixels not stalling (' + calibMs.toFixed(2) + 'ms / 200 frames)' };
     }
     const msPerFrame = Math.max(0.01, calibMs / calibFrames);
@@ -826,7 +970,10 @@ async function runWebGLBenchmark() {
     }
     const elapsedMs = Math.max(1, performance.now() - t0);
 
-    gl.deleteProgram(prog); gl.deleteShader(vs); gl.deleteShader(fs); gl.deleteBuffer(buf);
+    gl.deleteProgram(prog);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    gl.deleteBuffer(buf);
 
     // Score: ALU ops executed per ms (normalised).
     // 256 iterations × 4 MAD = 1024 effective FP32 ops per pixel per frame.
@@ -847,18 +994,26 @@ async function runWebGLBenchmark() {
   let domAttached = false;
   try {
     domCanvas = document.createElement('canvas');
-    domCanvas.width  = SIZE;
+    domCanvas.width = SIZE;
     domCanvas.height = SIZE;
-    domCanvas.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;pointer-events:none;opacity:0.001;';
-    try { document.body.appendChild(domCanvas); domAttached = true; } catch (_) {}
+    domCanvas.style.cssText =
+      'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;pointer-events:none;opacity:0.001;';
+    try {
+      document.body.appendChild(domCanvas);
+      domAttached = true;
+    } catch (_) {}
     const gl = domCanvas.getContext('webgl2');
     if (!gl) return { error: 'GPU-E5: no webgl2 context' };
     return await _bench(gl, SIZE);
   } catch (e) {
     console.warn('[GPU benchmark] failed:', e && e.message);
-    return { error: 'GPU-E6: exception (' + (e && e.message || 'unknown') + ')' };
+    return { error: 'GPU-E6: exception (' + ((e && e.message) || 'unknown') + ')' };
   } finally {
-    if (domAttached && domCanvas) { try { document.body.removeChild(domCanvas); } catch (_) {} }
+    if (domAttached && domCanvas) {
+      try {
+        document.body.removeChild(domCanvas);
+      } catch (_) {}
+    }
   }
 }
 
@@ -881,12 +1036,16 @@ async function runGpuProbe(seed, size, shaderIterations) {
     canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
-    canvas.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;pointer-events:none;opacity:0.001;';
-    try { document.body.appendChild(canvas); attached = true; } catch (_) {}
+    canvas.style.cssText =
+      'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;pointer-events:none;opacity:0.001;';
+    try {
+      document.body.appendChild(canvas);
+      attached = true;
+    } catch (_) {}
 
     // Prefer WebGL2 for the integer-shader path (item 3).
     const gl2 = canvas.getContext('webgl2');
-    const gl  = gl2 || canvas.getContext('webgl');
+    const gl = gl2 || canvas.getContext('webgl');
     if (!gl) {
       console.error('[runGpuProbe] No WebGL context');
       return null;
@@ -915,11 +1074,13 @@ async function runGpuProbe(seed, size, shaderIterations) {
 
     const compile = (type, src) => {
       const sh = gl.createShader(type);
-      gl.shaderSource(sh, src); gl.compileShader(sh);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
       if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
         const err = gl.getShaderInfoLog(sh);
         console.error('[runGpuProbe] Shader compile failed:', err, src);
-        gl.deleteShader(sh); return null;
+        gl.deleteShader(sh);
+        return null;
       }
       return sh;
     };
@@ -930,7 +1091,9 @@ async function runGpuProbe(seed, size, shaderIterations) {
       return null;
     }
     const prog = gl.createProgram();
-    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       const err = gl.getProgramInfoLog(prog);
       console.error('[runGpuProbe] Program link failed:', err);
@@ -939,21 +1102,24 @@ async function runGpuProbe(seed, size, shaderIterations) {
     gl.useProgram(prog);
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     // WebGL2: bind an explicit VAO so vertex state is self-contained. On strict
     // ANGLE/D3D11 drivers, a deleted buffer still referenced by the default VAO can
     // silently corrupt subsequent draw calls (same issue noted in runGpuBenchmarkProof).
     let vao = null;
-    if (useIntShader) { vao = gl.createVertexArray(); gl.bindVertexArray(vao); }
+    if (useIntShader) {
+      vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+    }
     const loc = gl.getAttribLocation(prog, 'aPos');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
     if (useIntShader) {
       // Pass seed as signed integer — constrained to [1, 0x7FFFFFFF] at probe issuance.
-      gl.uniform1i(gl.getUniformLocation(prog, 'uSeedInt'), (seed | 0) || 1);
+      gl.uniform1i(gl.getUniformLocation(prog, 'uSeedInt'), seed | 0 || 1);
     } else {
-      gl.uniform1f(gl.getUniformLocation(prog, 'uSeed'), (seed >>> 0) / 0xFFFFFFFF);
+      gl.uniform1f(gl.getUniformLocation(prog, 'uSeed'), (seed >>> 0) / 0xffffffff);
     }
     gl.viewport(0, 0, size, size);
 
@@ -971,33 +1137,40 @@ async function runGpuProbe(seed, size, shaderIterations) {
     let h = 5381;
     let allZero = true;
     for (let i = 0; i < pixels.length; i += 16) {
-      if (pixels[i] !== 0 || pixels[i+1] !== 0 || pixels[i+2] !== 0 || pixels[i+3] !== 0) allZero = false;
-      h = ((h << 5) + h + pixels[i])   | 0; // R = bits 31–24
-      h = ((h << 5) + h + pixels[i+1]) | 0; // G = bits 23–16
-      h = ((h << 5) + h + pixels[i+2]) | 0; // B = bits 15–8
-      h = ((h << 5) + h + pixels[i+3]) | 0; // A = bits 7–0
+      if (pixels[i] !== 0 || pixels[i + 1] !== 0 || pixels[i + 2] !== 0 || pixels[i + 3] !== 0) allZero = false;
+      h = ((h << 5) + h + pixels[i]) | 0; // R = bits 31–24
+      h = ((h << 5) + h + pixels[i + 1]) | 0; // G = bits 23–16
+      h = ((h << 5) + h + pixels[i + 2]) | 0; // B = bits 15–8
+      h = ((h << 5) + h + pixels[i + 3]) | 0; // A = bits 7–0
     }
     // Clean up GL resources — prevents per-probe leaks on long-running sessions.
     // Matches the cleanup pattern in runGpuBenchmarkProof.
-    if (vao) { gl.bindVertexArray(null); gl.deleteVertexArray(vao); }
-    gl.deleteProgram(prog); gl.deleteShader(vs); gl.deleteShader(fs); gl.deleteBuffer(buf);
+    if (vao) {
+      gl.bindVertexArray(null);
+      gl.deleteVertexArray(vao);
+    }
+    gl.deleteProgram(prog);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    gl.deleteBuffer(buf);
 
     if (allZero) {
       console.error('[runGpuProbe] All pixels zero after readPixels');
       return null;
     }
     return {
-      pixelHash:     (h >>> 0).toString(16).padStart(8, '0'),
-      elapsedMs:     Math.round(elapsed),
+      pixelHash: (h >>> 0).toString(16).padStart(8, '0'),
+      elapsedMs: Math.round(elapsed),
       integerShader: useIntShader,
     };
   } catch (err) {
     console.error('[runGpuProbe] Exception:', err);
     return null;
-  }
-  finally {
+  } finally {
     if (attached && canvas && canvas.parentNode) {
-      try { canvas.parentNode.removeChild(canvas); } catch (_) {}
+      try {
+        canvas.parentNode.removeChild(canvas);
+      } catch (_) {}
     }
   }
 }
@@ -1014,8 +1187,8 @@ async function runGpuProbe(seed, size, shaderIterations) {
 //
 // The pixel hash algorithm is IDENTICAL to the hash loop in runGpuProbe — every 4th
 // pixel, all 4 RGBA channels (full 32-bit x) fed into a djb2 accumulator — so both use the same verification.
-const GPU_PROOF_SIZE  = 128; // 128×128 pixels — fast but sufficient for a unique hash
-const GPU_PROOF_ITERS = 32;  // 32 XOR-shift iterations per pixel
+const GPU_PROOF_SIZE = 128; // 128×128 pixels — fast but sufficient for a unique hash
+const GPU_PROOF_ITERS = 32; // 32 XOR-shift iterations per pixel
 async function runGpuBenchmarkProof(seed, size, shaderIterations) {
   let canvas = null;
   let attached = false;
@@ -1026,10 +1199,14 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     // state (and causes context loss on some AMD/Intel drivers), which silently
     // discards all shader programs and makes the embedded benchmark return gpuScore=0.
     // The proof render uses gl.viewport(0, 0, size, size) so its hash is unaffected.
-    canvas.width  = 512;
+    canvas.width = 512;
     canvas.height = 512;
-    canvas.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;pointer-events:none;opacity:0.001;';
-    try { document.body.appendChild(canvas); attached = true; } catch (_) {}
+    canvas.style.cssText =
+      'position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;pointer-events:none;opacity:0.001;';
+    try {
+      document.body.appendChild(canvas);
+      attached = true;
+    } catch (_) {}
 
     const gl = canvas.getContext('webgl2');
     if (!gl) return null; // integer shader requires WebGL2 for Node-verifiability
@@ -1067,8 +1244,12 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
 
     const compile = (type, src) => {
       const sh = gl.createShader(type);
-      gl.shaderSource(sh, src); gl.compileShader(sh);
-      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) { gl.deleteShader(sh); return null; }
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+        gl.deleteShader(sh);
+        return null;
+      }
       return sh;
     };
     const vs = compile(gl.VERTEX_SHADER, vsSource);
@@ -1076,19 +1257,21 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     if (!vs || !fs) return null;
 
     const prog = gl.createProgram();
-    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
     gl.useProgram(prog);
 
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const loc = gl.getAttribLocation(prog, 'aPos');
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform1i(gl.getUniformLocation(prog, 'uSeedInt'), (seed | 0) || 1);
+    gl.uniform1i(gl.getUniformLocation(prog, 'uSeedInt'), seed | 0 || 1);
     gl.viewport(0, 0, size, size);
 
     const pixels = new Uint8Array(size * size * 4);
@@ -1101,7 +1284,10 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     // Check all 4 channels: R holds bits 31–24 which may legitimately be 0 for some seeds.
     let allZero = true;
     for (let i = 0; i < pixels.length; i += 64) {
-      if (pixels[i] !== 0 || pixels[i+1] !== 0 || pixels[i+2] !== 0 || pixels[i+3] !== 0) { allZero = false; break; }
+      if (pixels[i] !== 0 || pixels[i + 1] !== 0 || pixels[i + 2] !== 0 || pixels[i + 3] !== 0) {
+        allZero = false;
+        break;
+      }
     }
     if (allZero) return null;
 
@@ -1109,16 +1295,20 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     // `buf` which is about to be deleted. On strict ANGLE/D3D11 drivers, keeping a
     // deleted buffer referenced by the active VAO causes all subsequent draw calls
     // to silently fail, making the embedded MAD benchmark produce gpuScore=0.
-    gl.bindVertexArray(null); gl.deleteVertexArray(vao);
-    gl.deleteProgram(prog); gl.deleteShader(vs); gl.deleteShader(fs); gl.deleteBuffer(buf);
+    gl.bindVertexArray(null);
+    gl.deleteVertexArray(vao);
+    gl.deleteProgram(prog);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    gl.deleteBuffer(buf);
 
     // Hash: every 4th pixel, all 4 channels (full 32-bit x) through djb2 — identical to runGpuProbe.
     let h = 5381;
     for (let i = 0; i < pixels.length; i += 16) {
-      h = ((h << 5) + h + pixels[i])   | 0; // R = bits 31–24
-      h = ((h << 5) + h + pixels[i+1]) | 0; // G = bits 23–16
-      h = ((h << 5) + h + pixels[i+2]) | 0; // B = bits 15–8
-      h = ((h << 5) + h + pixels[i+3]) | 0; // A = bits 7–0
+      h = ((h << 5) + h + pixels[i]) | 0; // R = bits 31–24
+      h = ((h << 5) + h + pixels[i + 1]) | 0; // G = bits 23–16
+      h = ((h << 5) + h + pixels[i + 2]) | 0; // B = bits 15–8
+      h = ((h << 5) + h + pixels[i + 3]) | 0; // A = bits 7–0
     }
 
     // Float MAD benchmark: run on this same canvas so GPU score is available even
@@ -1133,19 +1323,23 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
       const vsBSrc = `#version 300 es\nin vec2 aPos;\nvoid main(){gl_Position=vec4(aPos,0.0,1.0);}`;
       const fsBSrc = `#version 300 es\nprecision highp float;\nuniform float uSeed;\nout vec4 fragColor;\nvoid main(){\n  vec4 c=vec4(gl_FragCoord.xy/${BENCH_SIZE}.0,uSeed,1.0-uSeed);\n  for(int i=0;i<256;i++){\n    c.x=c.x*c.y+c.z*0.00013;\n    c.y=c.y*c.z+c.w*0.00017;\n    c.z=c.z*c.w+c.x*0.00019;\n    c.w=c.w*c.x+c.y*0.00023;\n  }\n  fragColor=c;\n}`;
       const cmpB = (type, src) => {
-        const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
         return gl.getShaderParameter(sh, gl.COMPILE_STATUS) ? sh : (gl.deleteShader(sh), null);
       };
       const vsB = cmpB(gl.VERTEX_SHADER, vsBSrc);
       const fsB = cmpB(gl.FRAGMENT_SHADER, fsBSrc);
       if (vsB && fsB) {
         const progB = gl.createProgram();
-        gl.attachShader(progB, vsB); gl.attachShader(progB, fsB); gl.linkProgram(progB);
+        gl.attachShader(progB, vsB);
+        gl.attachShader(progB, fsB);
+        gl.linkProgram(progB);
         if (gl.getProgramParameter(progB, gl.LINK_STATUS)) {
           gl.useProgram(progB);
           const bufB = gl.createBuffer();
           gl.bindBuffer(gl.ARRAY_BUFFER, bufB);
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
           const vaoB = gl.createVertexArray();
           gl.bindVertexArray(vaoB);
           const aPosB = gl.getAttribLocation(progB, 'aPos');
@@ -1153,7 +1347,8 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
           gl.vertexAttribPointer(aPosB, 2, gl.FLOAT, false, 0, 0);
           const uSeedB = gl.getUniformLocation(progB, 'uSeed');
           // Per-frame readPixels sync — same approach as runWebGLBenchmark._bench.
-          const SYNC_W = BENCH_SIZE, SYNC_H = BENCH_SIZE;
+          const SYNC_W = BENCH_SIZE,
+            SYNC_H = BENCH_SIZE;
           const syncB = new Uint8Array(SYNC_W * SYNC_H * 4);
           function gpuSyncB() {
             gl.readPixels(0, 0, SYNC_W, SYNC_H, gl.RGBA, gl.UNSIGNED_BYTE, syncB);
@@ -1188,10 +1383,13 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
             const benchMs = Math.max(1, performance.now() - tB);
             gpuScore = Math.round((benchFrames * BENCH_SIZE * BENCH_SIZE * 1024) / benchMs);
           }
-          gl.bindVertexArray(null); gl.deleteVertexArray(vaoB); gl.deleteBuffer(bufB);
+          gl.bindVertexArray(null);
+          gl.deleteVertexArray(vaoB);
+          gl.deleteBuffer(bufB);
           gl.deleteProgram(progB);
         }
-        gl.deleteShader(vsB); gl.deleteShader(fsB);
+        gl.deleteShader(vsB);
+        gl.deleteShader(fsB);
       }
     } catch (_) {}
 
@@ -1201,7 +1399,9 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     return null;
   } finally {
     if (attached && canvas && canvas.parentNode) {
-      try { canvas.parentNode.removeChild(canvas); } catch (_) {}
+      try {
+        canvas.parentNode.removeChild(canvas);
+      } catch (_) {}
     }
   }
 }
@@ -1214,98 +1414,98 @@ function getGpuVramInfo(model) {
   if (!model) return { vramGb: 0, memType: '' };
   const m = model;
   // NVIDIA RTX 40-series
-  if (/RTX\s*4090/i.test(m))              return { vramGb: 24, memType: 'GDDR6X' };
-  if (/RTX\s*4080\s*Super/i.test(m))      return { vramGb: 16, memType: 'GDDR6X' };
-  if (/RTX\s*4080/i.test(m))              return { vramGb: 16, memType: 'GDDR6X' };
+  if (/RTX\s*4090/i.test(m)) return { vramGb: 24, memType: 'GDDR6X' };
+  if (/RTX\s*4080\s*Super/i.test(m)) return { vramGb: 16, memType: 'GDDR6X' };
+  if (/RTX\s*4080/i.test(m)) return { vramGb: 16, memType: 'GDDR6X' };
   if (/RTX\s*4070\s*Ti\s*Super/i.test(m)) return { vramGb: 16, memType: 'GDDR6X' };
-  if (/RTX\s*4070\s*Ti/i.test(m))         return { vramGb: 12, memType: 'GDDR6X' };
-  if (/RTX\s*4070\s*Super/i.test(m))      return { vramGb: 12, memType: 'GDDR6X' };
-  if (/RTX\s*4070/i.test(m))              return { vramGb: 12, memType: 'GDDR6X' };
-  if (/RTX\s*4060\s*Ti/i.test(m))         return { vramGb: 16, memType: 'GDDR6' };
-  if (/RTX\s*4060/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*4050/i.test(m))              return { vramGb: 6,  memType: 'GDDR6' };
+  if (/RTX\s*4070\s*Ti/i.test(m)) return { vramGb: 12, memType: 'GDDR6X' };
+  if (/RTX\s*4070\s*Super/i.test(m)) return { vramGb: 12, memType: 'GDDR6X' };
+  if (/RTX\s*4070/i.test(m)) return { vramGb: 12, memType: 'GDDR6X' };
+  if (/RTX\s*4060\s*Ti/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RTX\s*4060/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*4050/i.test(m)) return { vramGb: 6, memType: 'GDDR6' };
   // NVIDIA RTX 30-series
-  if (/RTX\s*3090\s*Ti/i.test(m))         return { vramGb: 24, memType: 'GDDR6X' };
-  if (/RTX\s*3090/i.test(m))              return { vramGb: 24, memType: 'GDDR6X' };
-  if (/RTX\s*3080\s*Ti/i.test(m))         return { vramGb: 12, memType: 'GDDR6X' };
-  if (/RTX\s*3080\s*12/i.test(m))         return { vramGb: 12, memType: 'GDDR6X' };
-  if (/RTX\s*3080/i.test(m))              return { vramGb: 10, memType: 'GDDR6X' };
-  if (/RTX\s*3070\s*Ti/i.test(m))         return { vramGb: 8,  memType: 'GDDR6X' };
-  if (/RTX\s*3070/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*3060\s*Ti/i.test(m))         return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*3060/i.test(m))              return { vramGb: 12, memType: 'GDDR6' };
-  if (/RTX\s*3050/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
+  if (/RTX\s*3090\s*Ti/i.test(m)) return { vramGb: 24, memType: 'GDDR6X' };
+  if (/RTX\s*3090/i.test(m)) return { vramGb: 24, memType: 'GDDR6X' };
+  if (/RTX\s*3080\s*Ti/i.test(m)) return { vramGb: 12, memType: 'GDDR6X' };
+  if (/RTX\s*3080\s*12/i.test(m)) return { vramGb: 12, memType: 'GDDR6X' };
+  if (/RTX\s*3080/i.test(m)) return { vramGb: 10, memType: 'GDDR6X' };
+  if (/RTX\s*3070\s*Ti/i.test(m)) return { vramGb: 8, memType: 'GDDR6X' };
+  if (/RTX\s*3070/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*3060\s*Ti/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*3060/i.test(m)) return { vramGb: 12, memType: 'GDDR6' };
+  if (/RTX\s*3050/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
   // NVIDIA RTX 20-series
-  if (/RTX\s*2080\s*Ti/i.test(m))         return { vramGb: 11, memType: 'GDDR6' };
-  if (/RTX\s*2080\s*Super/i.test(m))      return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*2080/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*2070\s*Super/i.test(m))      return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*2070/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*2060\s*Super/i.test(m))      return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RTX\s*2060/i.test(m))              return { vramGb: 6,  memType: 'GDDR6' };
+  if (/RTX\s*2080\s*Ti/i.test(m)) return { vramGb: 11, memType: 'GDDR6' };
+  if (/RTX\s*2080\s*Super/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*2080/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*2070\s*Super/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*2070/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*2060\s*Super/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RTX\s*2060/i.test(m)) return { vramGb: 6, memType: 'GDDR6' };
   // NVIDIA GTX 16-series
-  if (/GTX\s*1660\s*Ti/i.test(m))         return { vramGb: 6,  memType: 'GDDR6' };
-  if (/GTX\s*1660\s*Super/i.test(m))      return { vramGb: 6,  memType: 'GDDR6' };
-  if (/GTX\s*1660/i.test(m))              return { vramGb: 6,  memType: 'GDDR5' };
-  if (/GTX\s*1650\s*Super/i.test(m))      return { vramGb: 4,  memType: 'GDDR6' };
-  if (/GTX\s*1650/i.test(m))              return { vramGb: 4,  memType: 'GDDR5' };
+  if (/GTX\s*1660\s*Ti/i.test(m)) return { vramGb: 6, memType: 'GDDR6' };
+  if (/GTX\s*1660\s*Super/i.test(m)) return { vramGb: 6, memType: 'GDDR6' };
+  if (/GTX\s*1660/i.test(m)) return { vramGb: 6, memType: 'GDDR5' };
+  if (/GTX\s*1650\s*Super/i.test(m)) return { vramGb: 4, memType: 'GDDR6' };
+  if (/GTX\s*1650/i.test(m)) return { vramGb: 4, memType: 'GDDR5' };
   // NVIDIA GTX 10-series
-  if (/GTX\s*1080\s*Ti/i.test(m))         return { vramGb: 11, memType: 'GDDR5X' };
-  if (/GTX\s*1080/i.test(m))              return { vramGb: 8,  memType: 'GDDR5X' };
-  if (/GTX\s*1070\s*Ti/i.test(m))         return { vramGb: 8,  memType: 'GDDR5' };
-  if (/GTX\s*1070/i.test(m))              return { vramGb: 8,  memType: 'GDDR5' };
-  if (/GTX\s*1060\s*6/i.test(m))          return { vramGb: 6,  memType: 'GDDR5' };
-  if (/GTX\s*1060\s*3/i.test(m))          return { vramGb: 3,  memType: 'GDDR5' };
-  if (/GTX\s*1060/i.test(m))              return { vramGb: 6,  memType: 'GDDR5' };
-  if (/GTX\s*1050\s*Ti/i.test(m))         return { vramGb: 4,  memType: 'GDDR5' };
-  if (/GTX\s*1050/i.test(m))              return { vramGb: 2,  memType: 'GDDR5' };
+  if (/GTX\s*1080\s*Ti/i.test(m)) return { vramGb: 11, memType: 'GDDR5X' };
+  if (/GTX\s*1080/i.test(m)) return { vramGb: 8, memType: 'GDDR5X' };
+  if (/GTX\s*1070\s*Ti/i.test(m)) return { vramGb: 8, memType: 'GDDR5' };
+  if (/GTX\s*1070/i.test(m)) return { vramGb: 8, memType: 'GDDR5' };
+  if (/GTX\s*1060\s*6/i.test(m)) return { vramGb: 6, memType: 'GDDR5' };
+  if (/GTX\s*1060\s*3/i.test(m)) return { vramGb: 3, memType: 'GDDR5' };
+  if (/GTX\s*1060/i.test(m)) return { vramGb: 6, memType: 'GDDR5' };
+  if (/GTX\s*1050\s*Ti/i.test(m)) return { vramGb: 4, memType: 'GDDR5' };
+  if (/GTX\s*1050/i.test(m)) return { vramGb: 2, memType: 'GDDR5' };
   // AMD RX 9000-series (RDNA 4)
-  if (/RX\s*9070\s*XT/i.test(m))          return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*9070/i.test(m))               return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*9070\s*XT/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*9070/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
   // AMD RX 7000-series (RDNA 3)
-  if (/RX\s*7900\s*XTX/i.test(m))         return { vramGb: 24, memType: 'GDDR6' };
-  if (/RX\s*7900\s*GRE/i.test(m))         return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*7900\s*XT/i.test(m))          return { vramGb: 20, memType: 'GDDR6' };
-  if (/RX\s*7800\s*XT/i.test(m))          return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*7700\s*XT/i.test(m))          return { vramGb: 12, memType: 'GDDR6' };
-  if (/RX\s*7600\s*XT/i.test(m))          return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*7600/i.test(m))               return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RX\s*7500\s*XT/i.test(m))          return { vramGb: 8,  memType: 'GDDR6' };
+  if (/RX\s*7900\s*XTX/i.test(m)) return { vramGb: 24, memType: 'GDDR6' };
+  if (/RX\s*7900\s*GRE/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*7900\s*XT/i.test(m)) return { vramGb: 20, memType: 'GDDR6' };
+  if (/RX\s*7800\s*XT/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*7700\s*XT/i.test(m)) return { vramGb: 12, memType: 'GDDR6' };
+  if (/RX\s*7600\s*XT/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*7600/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RX\s*7500\s*XT/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
   // AMD RX 6000-series (RDNA 2)
-  if (/RX\s*6950\s*XT/i.test(m))          return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*6900\s*XT/i.test(m))          return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*6800\s*XT/i.test(m))          return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*6800/i.test(m))               return { vramGb: 16, memType: 'GDDR6' };
-  if (/RX\s*6750\s*XT/i.test(m))          return { vramGb: 12, memType: 'GDDR6' };
-  if (/RX\s*6700\s*XT/i.test(m))          return { vramGb: 12, memType: 'GDDR6' };
-  if (/RX\s*6700/i.test(m))               return { vramGb: 10, memType: 'GDDR6' };
-  if (/RX\s*6650\s*XT/i.test(m))          return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RX\s*6600\s*XT/i.test(m))          return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RX\s*6600/i.test(m))               return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RX\s*6500\s*XT/i.test(m))          return { vramGb: 4,  memType: 'GDDR6' };
-  if (/RX\s*6400/i.test(m))               return { vramGb: 4,  memType: 'GDDR6' };
+  if (/RX\s*6950\s*XT/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*6900\s*XT/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*6800\s*XT/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*6800/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/RX\s*6750\s*XT/i.test(m)) return { vramGb: 12, memType: 'GDDR6' };
+  if (/RX\s*6700\s*XT/i.test(m)) return { vramGb: 12, memType: 'GDDR6' };
+  if (/RX\s*6700/i.test(m)) return { vramGb: 10, memType: 'GDDR6' };
+  if (/RX\s*6650\s*XT/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RX\s*6600\s*XT/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RX\s*6600/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RX\s*6500\s*XT/i.test(m)) return { vramGb: 4, memType: 'GDDR6' };
+  if (/RX\s*6400/i.test(m)) return { vramGb: 4, memType: 'GDDR6' };
   // AMD RX 5000-series (RDNA 1)
-  if (/RX\s*5700\s*XT/i.test(m))          return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RX\s*5700/i.test(m))               return { vramGb: 8,  memType: 'GDDR6' };
-  if (/RX\s*5600\s*XT/i.test(m))          return { vramGb: 6,  memType: 'GDDR6' };
-  if (/RX\s*5500\s*XT/i.test(m))          return { vramGb: 8,  memType: 'GDDR6' };
+  if (/RX\s*5700\s*XT/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RX\s*5700/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/RX\s*5600\s*XT/i.test(m)) return { vramGb: 6, memType: 'GDDR6' };
+  if (/RX\s*5500\s*XT/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
   // AMD RX 500/400-series (Polaris)
-  if (/RX\s*590/i.test(m))                return { vramGb: 8,  memType: 'GDDR5' };
-  if (/RX\s*580/i.test(m))                return { vramGb: 8,  memType: 'GDDR5' };
-  if (/RX\s*570/i.test(m))                return { vramGb: 4,  memType: 'GDDR5' };
-  if (/RX\s*480/i.test(m))                return { vramGb: 8,  memType: 'GDDR5' };
-  if (/RX\s*470/i.test(m))                return { vramGb: 4,  memType: 'GDDR5' };
+  if (/RX\s*590/i.test(m)) return { vramGb: 8, memType: 'GDDR5' };
+  if (/RX\s*580/i.test(m)) return { vramGb: 8, memType: 'GDDR5' };
+  if (/RX\s*570/i.test(m)) return { vramGb: 4, memType: 'GDDR5' };
+  if (/RX\s*480/i.test(m)) return { vramGb: 8, memType: 'GDDR5' };
+  if (/RX\s*470/i.test(m)) return { vramGb: 4, memType: 'GDDR5' };
   // AMD Vega
-  if (/Vega\s*64/i.test(m))               return { vramGb: 8,  memType: 'HBM2' };
-  if (/Vega\s*56/i.test(m))               return { vramGb: 8,  memType: 'HBM2' };
-  if (/Radeon\s*VII/i.test(m))            return { vramGb: 16, memType: 'HBM2' };
+  if (/Vega\s*64/i.test(m)) return { vramGb: 8, memType: 'HBM2' };
+  if (/Vega\s*56/i.test(m)) return { vramGb: 8, memType: 'HBM2' };
+  if (/Radeon\s*VII/i.test(m)) return { vramGb: 16, memType: 'HBM2' };
   // Intel Arc
-  if (/Arc\s*A770/i.test(m))              return { vramGb: 16, memType: 'GDDR6' };
-  if (/Arc\s*A750/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
-  if (/Arc\s*A580/i.test(m))              return { vramGb: 8,  memType: 'GDDR6' };
-  if (/Arc\s*A380/i.test(m))              return { vramGb: 6,  memType: 'GDDR6' };
-  if (/Arc\s*B580/i.test(m))              return { vramGb: 12, memType: 'GDDR6' };
-  if (/Arc\s*B570/i.test(m))              return { vramGb: 10, memType: 'GDDR6' };
+  if (/Arc\s*A770/i.test(m)) return { vramGb: 16, memType: 'GDDR6' };
+  if (/Arc\s*A750/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/Arc\s*A580/i.test(m)) return { vramGb: 8, memType: 'GDDR6' };
+  if (/Arc\s*A380/i.test(m)) return { vramGb: 6, memType: 'GDDR6' };
+  if (/Arc\s*B580/i.test(m)) return { vramGb: 12, memType: 'GDDR6' };
+  if (/Arc\s*B570/i.test(m)) return { vramGb: 10, memType: 'GDDR6' };
   return { vramGb: 0, memType: '' };
 }
 
@@ -1319,131 +1519,131 @@ function getExpectedGpuScore(gpuModel) {
 
   // ── NVIDIA RTX 40-series ──────────────────────────────────────────────────────
   // All values calibrated for per-frame readPixels benchmark (×41 vs old fenceSync table).
-  if (/RTX\s*4090/i.test(m))          return 1_150_000_000;
-  if (/RTX\s*4080\s*Super/i.test(m))  return   900_000_000;
-  if (/RTX\s*4080/i.test(m))          return   820_000_000;
+  if (/RTX\s*4090/i.test(m)) return 1_150_000_000;
+  if (/RTX\s*4080\s*Super/i.test(m)) return 900_000_000;
+  if (/RTX\s*4080/i.test(m)) return 820_000_000;
   if (/RTX\s*4070\s*Ti\s*Super/i.test(m)) return 700_000_000;
-  if (/RTX\s*4070\s*Ti/i.test(m))     return   655_000_000;
-  if (/RTX\s*4070\s*Super/i.test(m))  return   595_000_000;
-  if (/RTX\s*4070/i.test(m))          return   533_000_000;
-  if (/RTX\s*4060\s*Ti/i.test(m))     return   430_000_000;
-  if (/RTX\s*4060/i.test(m))          return   349_000_000;
-  if (/RTX\s*4050/i.test(m))          return   287_000_000;
+  if (/RTX\s*4070\s*Ti/i.test(m)) return 655_000_000;
+  if (/RTX\s*4070\s*Super/i.test(m)) return 595_000_000;
+  if (/RTX\s*4070/i.test(m)) return 533_000_000;
+  if (/RTX\s*4060\s*Ti/i.test(m)) return 430_000_000;
+  if (/RTX\s*4060/i.test(m)) return 349_000_000;
+  if (/RTX\s*4050/i.test(m)) return 287_000_000;
 
   // ── NVIDIA RTX 30-series ──────────────────────────────────────────────────────
-  if (/RTX\s*3090\s*Ti/i.test(m))     return   738_000_000;
-  if (/RTX\s*3090/i.test(m))          return   677_000_000;
-  if (/RTX\s*3080\s*Ti/i.test(m))     return   656_000_000;
-  if (/RTX\s*3080\s*12/i.test(m))     return   595_000_000;
-  if (/RTX\s*3080/i.test(m))          return   554_000_000;
-  if (/RTX\s*3070\s*Ti/i.test(m))     return   472_000_000;
-  if (/RTX\s*3070/i.test(m))          return   451_000_000;
-  if (/RTX\s*3060\s*Ti/i.test(m))     return   369_000_000;
-  if (/RTX\s*3060/i.test(m))          return   308_000_000;
-  if (/RTX\s*3050/i.test(m))          return   205_000_000;
+  if (/RTX\s*3090\s*Ti/i.test(m)) return 738_000_000;
+  if (/RTX\s*3090/i.test(m)) return 677_000_000;
+  if (/RTX\s*3080\s*Ti/i.test(m)) return 656_000_000;
+  if (/RTX\s*3080\s*12/i.test(m)) return 595_000_000;
+  if (/RTX\s*3080/i.test(m)) return 554_000_000;
+  if (/RTX\s*3070\s*Ti/i.test(m)) return 472_000_000;
+  if (/RTX\s*3070/i.test(m)) return 451_000_000;
+  if (/RTX\s*3060\s*Ti/i.test(m)) return 369_000_000;
+  if (/RTX\s*3060/i.test(m)) return 308_000_000;
+  if (/RTX\s*3050/i.test(m)) return 205_000_000;
 
   // ── NVIDIA RTX 20-series ──────────────────────────────────────────────────────
-  if (/RTX\s*2080\s*Ti/i.test(m))     return   472_000_000;
-  if (/RTX\s*2080\s*Super/i.test(m))  return   410_000_000;
-  if (/RTX\s*2080/i.test(m))          return   390_000_000;
-  if (/RTX\s*2070\s*Super/i.test(m))  return   369_000_000;
-  if (/RTX\s*2070/i.test(m))          return   328_000_000;
-  if (/RTX\s*2060\s*Super/i.test(m))  return   308_000_000;
-  if (/RTX\s*2060/i.test(m))          return   267_000_000;
+  if (/RTX\s*2080\s*Ti/i.test(m)) return 472_000_000;
+  if (/RTX\s*2080\s*Super/i.test(m)) return 410_000_000;
+  if (/RTX\s*2080/i.test(m)) return 390_000_000;
+  if (/RTX\s*2070\s*Super/i.test(m)) return 369_000_000;
+  if (/RTX\s*2070/i.test(m)) return 328_000_000;
+  if (/RTX\s*2060\s*Super/i.test(m)) return 308_000_000;
+  if (/RTX\s*2060/i.test(m)) return 267_000_000;
 
   // ── NVIDIA GTX 16-series ──────────────────────────────────────────────────────
-  if (/GTX\s*1660\s*Ti/i.test(m))     return   226_000_000;
-  if (/GTX\s*1660\s*Super/i.test(m))  return   205_000_000;
-  if (/GTX\s*1660/i.test(m))          return   185_000_000;
-  if (/GTX\s*1650\s*Super/i.test(m))  return   164_000_000;
-  if (/GTX\s*1650/i.test(m))          return   123_000_000;
+  if (/GTX\s*1660\s*Ti/i.test(m)) return 226_000_000;
+  if (/GTX\s*1660\s*Super/i.test(m)) return 205_000_000;
+  if (/GTX\s*1660/i.test(m)) return 185_000_000;
+  if (/GTX\s*1650\s*Super/i.test(m)) return 164_000_000;
+  if (/GTX\s*1650/i.test(m)) return 123_000_000;
 
   // ── NVIDIA GTX 10-series ──────────────────────────────────────────────────────
-  if (/GTX\s*1080\s*Ti/i.test(m))     return   308_000_000;
-  if (/GTX\s*1080/i.test(m))          return   267_000_000;
-  if (/GTX\s*1070\s*Ti/i.test(m))     return   226_000_000;
-  if (/GTX\s*1070/i.test(m))          return   205_000_000;
-  if (/GTX\s*1060\s*6/i.test(m))      return   144_000_000;
-  if (/GTX\s*1060/i.test(m))          return   123_000_000;
-  if (/GTX\s*1050\s*Ti/i.test(m))     return    90_000_000;
-  if (/GTX\s*1050/i.test(m))          return    74_000_000;
+  if (/GTX\s*1080\s*Ti/i.test(m)) return 308_000_000;
+  if (/GTX\s*1080/i.test(m)) return 267_000_000;
+  if (/GTX\s*1070\s*Ti/i.test(m)) return 226_000_000;
+  if (/GTX\s*1070/i.test(m)) return 205_000_000;
+  if (/GTX\s*1060\s*6/i.test(m)) return 144_000_000;
+  if (/GTX\s*1060/i.test(m)) return 123_000_000;
+  if (/GTX\s*1050\s*Ti/i.test(m)) return 90_000_000;
+  if (/GTX\s*1050/i.test(m)) return 74_000_000;
 
   // ── NVIDIA Quadro / Professional ─────────────────────────────────────────────
-  if (/RTX\s*[Aa]\s*6000/i.test(m))   return   738_000_000;
-  if (/RTX\s*[Aa]\s*5000/i.test(m))   return   574_000_000;
-  if (/RTX\s*[Aa]\s*4000/i.test(m))   return   369_000_000;
-  if (/RTX\s*[Aa]\s*2000/i.test(m))   return   205_000_000;
+  if (/RTX\s*[Aa]\s*6000/i.test(m)) return 738_000_000;
+  if (/RTX\s*[Aa]\s*5000/i.test(m)) return 574_000_000;
+  if (/RTX\s*[Aa]\s*4000/i.test(m)) return 369_000_000;
+  if (/RTX\s*[Aa]\s*2000/i.test(m)) return 205_000_000;
   if (/Quadro\s*P[45][0-9]{3}/i.test(m)) return 205_000_000;
   if (/Quadro\s*P[12][0-9]{3}/i.test(m)) return 103_000_000;
 
   // ── AMD Radeon RX 7000-series ─────────────────────────────────────────────────
-  if (/RX\s*7900\s*XTX/i.test(m))     return   902_000_000;
-  if (/RX\s*7900\s*XT/i.test(m))      return   779_000_000;
-  if (/RX\s*7800\s*XT/i.test(m))      return   574_000_000;
-  if (/RX\s*7700\s*XT/i.test(m))      return   492_000_000;
-  if (/RX\s*7600/i.test(m))           return   349_000_000;
-  if (/RX\s*7500\s*XT/i.test(m))      return   246_000_000;
+  if (/RX\s*7900\s*XTX/i.test(m)) return 902_000_000;
+  if (/RX\s*7900\s*XT/i.test(m)) return 779_000_000;
+  if (/RX\s*7800\s*XT/i.test(m)) return 574_000_000;
+  if (/RX\s*7700\s*XT/i.test(m)) return 492_000_000;
+  if (/RX\s*7600/i.test(m)) return 349_000_000;
+  if (/RX\s*7500\s*XT/i.test(m)) return 246_000_000;
 
   // ── AMD Radeon RX 6000-series ─────────────────────────────────────────────────
-  if (/RX\s*6950\s*XT/i.test(m))      return   759_000_000;
-  if (/RX\s*6900\s*XT/i.test(m))      return   718_000_000;
-  if (/RX\s*6800\s*XT/i.test(m))      return   677_000_000;
-  if (/RX\s*6800/i.test(m))           return   615_000_000;
-  if (/RX\s*6750\s*XT/i.test(m))      return   533_000_000;
-  if (/RX\s*6700\s*XT/i.test(m))      return   492_000_000;
-  if (/RX\s*6700/i.test(m))           return   451_000_000;
-  if (/RX\s*6650\s*XT/i.test(m))      return   390_000_000;
-  if (/RX\s*6600\s*XT/i.test(m))      return   369_000_000;
-  if (/RX\s*6600/i.test(m))           return   328_000_000;
-  if (/RX\s*6500\s*XT/i.test(m))      return   185_000_000;
-  if (/RX\s*6400/i.test(m))           return   123_000_000;
+  if (/RX\s*6950\s*XT/i.test(m)) return 759_000_000;
+  if (/RX\s*6900\s*XT/i.test(m)) return 718_000_000;
+  if (/RX\s*6800\s*XT/i.test(m)) return 677_000_000;
+  if (/RX\s*6800/i.test(m)) return 615_000_000;
+  if (/RX\s*6750\s*XT/i.test(m)) return 533_000_000;
+  if (/RX\s*6700\s*XT/i.test(m)) return 492_000_000;
+  if (/RX\s*6700/i.test(m)) return 451_000_000;
+  if (/RX\s*6650\s*XT/i.test(m)) return 390_000_000;
+  if (/RX\s*6600\s*XT/i.test(m)) return 369_000_000;
+  if (/RX\s*6600/i.test(m)) return 328_000_000;
+  if (/RX\s*6500\s*XT/i.test(m)) return 185_000_000;
+  if (/RX\s*6400/i.test(m)) return 123_000_000;
 
   // ── AMD Radeon RX 5000-series ─────────────────────────────────────────────────
-  if (/RX\s*5700\s*XT/i.test(m))      return   410_000_000;
-  if (/RX\s*5700/i.test(m))           return   369_000_000;
-  if (/RX\s*5600\s*XT/i.test(m))      return   308_000_000;
-  if (/RX\s*5500\s*XT/i.test(m))      return   205_000_000;
+  if (/RX\s*5700\s*XT/i.test(m)) return 410_000_000;
+  if (/RX\s*5700/i.test(m)) return 369_000_000;
+  if (/RX\s*5600\s*XT/i.test(m)) return 308_000_000;
+  if (/RX\s*5500\s*XT/i.test(m)) return 205_000_000;
 
   // ── AMD Radeon Vega / RX 400–580 ─────────────────────────────────────────────
-  if (/Vega\s*64/i.test(m))           return   328_000_000;
-  if (/Vega\s*56/i.test(m))           return   287_000_000;
-  if (/RX\s*590/i.test(m))            return   205_000_000;
-  if (/RX\s*580/i.test(m))            return   185_000_000;
-  if (/RX\s*570/i.test(m))            return   164_000_000;
-  if (/RX\s*480/i.test(m))            return   185_000_000;
-  if (/RX\s*470/i.test(m))            return   164_000_000;
+  if (/Vega\s*64/i.test(m)) return 328_000_000;
+  if (/Vega\s*56/i.test(m)) return 287_000_000;
+  if (/RX\s*590/i.test(m)) return 205_000_000;
+  if (/RX\s*580/i.test(m)) return 185_000_000;
+  if (/RX\s*570/i.test(m)) return 164_000_000;
+  if (/RX\s*480/i.test(m)) return 185_000_000;
+  if (/RX\s*470/i.test(m)) return 164_000_000;
 
   // ── Intel Arc ─────────────────────────────────────────────────────────────────
-  if (/Arc\s*A770/i.test(m))          return   451_000_000;
-  if (/Arc\s*A750/i.test(m))          return   390_000_000;
-  if (/Arc\s*A580/i.test(m))          return   308_000_000;
-  if (/Arc\s*A380/i.test(m))          return   164_000_000;
-  if (/Arc\s*A310/i.test(m))          return   103_000_000;
+  if (/Arc\s*A770/i.test(m)) return 451_000_000;
+  if (/Arc\s*A750/i.test(m)) return 390_000_000;
+  if (/Arc\s*A580/i.test(m)) return 308_000_000;
+  if (/Arc\s*A380/i.test(m)) return 164_000_000;
+  if (/Arc\s*A310/i.test(m)) return 103_000_000;
 
   // ── Intel Iris Xe (discrete / Evo) ───────────────────────────────────────────
-  if (/Iris\s*Xe\s*Max/i.test(m))     return    74_000_000;
-  if (/Iris\s*Xe/i.test(m))           return    37_000_000;
+  if (/Iris\s*Xe\s*Max/i.test(m)) return 74_000_000;
+  if (/Iris\s*Xe/i.test(m)) return 37_000_000;
 
   // ── Intel UHD / HD integrated ────────────────────────────────────────────────
-  if (/UHD\s*Graphics\s*770/i.test(m)) return   21_000_000;
+  if (/UHD\s*Graphics\s*770/i.test(m)) return 21_000_000;
   if (/UHD\s*Graphics\s*7[0-9]{2}/i.test(m)) return 20_000_000;
   if (/UHD\s*Graphics\s*6[0-9]{2}/i.test(m)) return 16_000_000;
-  if (/UHD\s*Graphics/i.test(m))      return    16_000_000;
+  if (/UHD\s*Graphics/i.test(m)) return 16_000_000;
   if (/HD\s*Graphics\s*[6-9][3-9]0/i.test(m)) return 8_000_000;
-  if (/HD\s*Graphics/i.test(m))       return     6_000_000;
+  if (/HD\s*Graphics/i.test(m)) return 6_000_000;
 
   // ── AMD Radeon Graphics (integrated RDNA2/3) ──────────────────────────────────
-  if (/Radeon\s*Graphics/i.test(m))   return    29_000_000; // Ryzen iGPU generic
+  if (/Radeon\s*Graphics/i.test(m)) return 29_000_000; // Ryzen iGPU generic
 
   // ── Apple (Metal — GPU perf via system-reported model) ───────────────────────
-  if (/M4\s*(Pro|Max|Ultra)/i.test(m)) return  369_000_000;
-  if (/\bM4\b/i.test(m))              return   205_000_000;
-  if (/M3\s*(Pro|Max|Ultra)/i.test(m)) return  287_000_000;
-  if (/\bM3\b/i.test(m))              return   164_000_000;
-  if (/M2\s*(Pro|Max|Ultra)/i.test(m)) return  226_000_000;
-  if (/\bM2\b/i.test(m))              return   131_000_000;
-  if (/M1\s*(Pro|Max|Ultra)/i.test(m)) return  164_000_000;
-  if (/\bM1\b/i.test(m))              return   103_000_000;
+  if (/M4\s*(Pro|Max|Ultra)/i.test(m)) return 369_000_000;
+  if (/\bM4\b/i.test(m)) return 205_000_000;
+  if (/M3\s*(Pro|Max|Ultra)/i.test(m)) return 287_000_000;
+  if (/\bM3\b/i.test(m)) return 164_000_000;
+  if (/M2\s*(Pro|Max|Ultra)/i.test(m)) return 226_000_000;
+  if (/\bM2\b/i.test(m)) return 131_000_000;
+  if (/M1\s*(Pro|Max|Ultra)/i.test(m)) return 164_000_000;
+  if (/\bM1\b/i.test(m)) return 103_000_000;
 
   // Unknown GPU: conservative mid-range fallback (≈ GTX 1060 / RX 580 class).
   return 144_000_000;
@@ -1458,241 +1658,246 @@ function getExpectedCpuSpeedOps(cpuModel) {
   const m = cpuModel;
 
   // ── Intel 14th / 13th Gen Desktop (Raptor Lake / Refresh) ────────────────────
-  if (/Core.*i9-1[34]900KS/i.test(m))        return 620_000_000;
-  if (/Core.*i9-1[34]900KF?/i.test(m))        return 600_000_000;
-  if (/Core.*i9-1[34]900[FT]?/i.test(m))      return 575_000_000;
-  if (/Core.*i7-1[34]700KF?/i.test(m))         return 560_000_000;
-  if (/Core.*i7-1[34]700[FT]?/i.test(m))       return 540_000_000;
-  if (/Core.*i5-1[34]600KF?/i.test(m))         return 530_000_000;
+  if (/Core.*i9-1[34]900KS/i.test(m)) return 620_000_000;
+  if (/Core.*i9-1[34]900KF?/i.test(m)) return 600_000_000;
+  if (/Core.*i9-1[34]900[FT]?/i.test(m)) return 575_000_000;
+  if (/Core.*i7-1[34]700KF?/i.test(m)) return 560_000_000;
+  if (/Core.*i7-1[34]700[FT]?/i.test(m)) return 540_000_000;
+  if (/Core.*i5-1[34]600KF?/i.test(m)) return 530_000_000;
   if (/Core.*i5-1[34][5-9]0{2}[FT]?/i.test(m)) return 510_000_000;
-  if (/Core.*i5-1[34]400[FT]?/i.test(m))       return 480_000_000;
-  if (/Core.*i3-1[34]1[0-9]0[FT]?/i.test(m))   return 460_000_000;
-  if (/Core.*i3-133[0-9]0/i.test(m))           return 460_000_000;
+  if (/Core.*i5-1[34]400[FT]?/i.test(m)) return 480_000_000;
+  if (/Core.*i3-1[34]1[0-9]0[FT]?/i.test(m)) return 460_000_000;
+  if (/Core.*i3-133[0-9]0/i.test(m)) return 460_000_000;
 
   // ── Intel 12th Gen Desktop (Alder Lake P-core) ───────────────────────────────
-  if (/Core.*i9-12900KS/i.test(m))             return 520_000_000;
-  if (/Core.*i9-12900KF?/i.test(m))             return 500_000_000;
-  if (/Core.*i9-12900[FT]?/i.test(m))           return 490_000_000;
-  if (/Core.*i7-12700KF?/i.test(m))             return 490_000_000;
-  if (/Core.*i7-12700[FT]?/i.test(m))           return 470_000_000;
-  if (/Core.*i5-12600KF?/i.test(m))             return 470_000_000;
-  if (/Core.*i5-12[56]0{2}[FT]?/i.test(m))      return 450_000_000;
-  if (/Core.*i5-124[024]0[FT]?/i.test(m))       return 430_000_000;
+  if (/Core.*i9-12900KS/i.test(m)) return 520_000_000;
+  if (/Core.*i9-12900KF?/i.test(m)) return 500_000_000;
+  if (/Core.*i9-12900[FT]?/i.test(m)) return 490_000_000;
+  if (/Core.*i7-12700KF?/i.test(m)) return 490_000_000;
+  if (/Core.*i7-12700[FT]?/i.test(m)) return 470_000_000;
+  if (/Core.*i5-12600KF?/i.test(m)) return 470_000_000;
+  if (/Core.*i5-12[56]0{2}[FT]?/i.test(m)) return 450_000_000;
+  if (/Core.*i5-124[024]0[FT]?/i.test(m)) return 430_000_000;
   if (/Core.*i3-12[13][02][015][FT]?/i.test(m)) return 420_000_000;
 
   // ── Intel 11th Gen Desktop (Rocket Lake) ─────────────────────────────────────
-  if (/Core.*i9-11900KF?/i.test(m))             return 490_000_000;
-  if (/Core.*i9-11900[FT]?/i.test(m))           return 480_000_000;
-  if (/Core.*i7-11700KF?/i.test(m))             return 480_000_000;
-  if (/Core.*i7-11700[FT]?/i.test(m))           return 460_000_000;
+  if (/Core.*i9-11900KF?/i.test(m)) return 490_000_000;
+  if (/Core.*i9-11900[FT]?/i.test(m)) return 480_000_000;
+  if (/Core.*i7-11700KF?/i.test(m)) return 480_000_000;
+  if (/Core.*i7-11700[FT]?/i.test(m)) return 460_000_000;
   if (/Core.*i5-11[456][0-9]0[FKT]?[F]?/i.test(m)) return 440_000_000;
 
   // ── Intel 10th Gen Desktop (Comet Lake) ──────────────────────────────────────
-  if (/Core.*i9-10900KF?S?/i.test(m))           return 470_000_000;
-  if (/Core.*i9-10[89][0-9]0[FKST]?/i.test(m))  return 460_000_000;
-  if (/Core.*i7-10700KF?/i.test(m))             return 450_000_000;
-  if (/Core.*i7-10700[FT]?/i.test(m))           return 420_000_000;
+  if (/Core.*i9-10900KF?S?/i.test(m)) return 470_000_000;
+  if (/Core.*i9-10[89][0-9]0[FKST]?/i.test(m)) return 460_000_000;
+  if (/Core.*i7-10700KF?/i.test(m)) return 450_000_000;
+  if (/Core.*i7-10700[FT]?/i.test(m)) return 420_000_000;
   if (/Core.*i5-10[456][0-9]0[FKST]?/i.test(m)) return 400_000_000;
-  if (/Core.*i3-10[1-9][0-9]0[FT]?/i.test(m))  return 390_000_000;
+  if (/Core.*i3-10[1-9][0-9]0[FT]?/i.test(m)) return 390_000_000;
 
   // ── Intel 9th / 8th Gen Desktop (Coffee Lake / Refresh) ─────────────────────
-  if (/Core.*i9-9900KF?S?/i.test(m))            return 430_000_000;
-  if (/Core.*i9-9900[FT]?/i.test(m))            return 430_000_000;
-  if (/Core.*i7-9700KF?/i.test(m))              return 420_000_000;
-  if (/Core.*i7-9700[FT]?/i.test(m))            return 400_000_000;
-  if (/Core.*i5-9[456][0-9]0[FKT]?/i.test(m))  return 380_000_000;
-  if (/Core.*i3-9[1-9][0-9]0[FKT]?/i.test(m))  return 360_000_000;
-  if (/Core.*i7-8700KF?/i.test(m))              return 400_000_000;
-  if (/Core.*i7-8700[FT]?/i.test(m))            return 385_000_000;
-  if (/Core.*i5-8[456][0-9]0[FKT]?/i.test(m))  return 360_000_000;
-  if (/Core.*i3-8[1-4][0-9]0[FKT]?/i.test(m))  return 340_000_000;
+  if (/Core.*i9-9900KF?S?/i.test(m)) return 430_000_000;
+  if (/Core.*i9-9900[FT]?/i.test(m)) return 430_000_000;
+  if (/Core.*i7-9700KF?/i.test(m)) return 420_000_000;
+  if (/Core.*i7-9700[FT]?/i.test(m)) return 400_000_000;
+  if (/Core.*i5-9[456][0-9]0[FKT]?/i.test(m)) return 380_000_000;
+  if (/Core.*i3-9[1-9][0-9]0[FKT]?/i.test(m)) return 360_000_000;
+  if (/Core.*i7-8700KF?/i.test(m)) return 400_000_000;
+  if (/Core.*i7-8700[FT]?/i.test(m)) return 385_000_000;
+  if (/Core.*i5-8[456][0-9]0[FKT]?/i.test(m)) return 360_000_000;
+  if (/Core.*i3-8[1-4][0-9]0[FKT]?/i.test(m)) return 340_000_000;
 
   // ── Intel 7th Gen Desktop (Kaby Lake) ────────────────────────────────────────
-  if (/Core.*i7-7700KF?/i.test(m))              return 375_000_000;
-  if (/Core.*i7-7700[T]?/i.test(m))             return 350_000_000;
-  if (/Core.*i5-7[456][0-9]0[KT]?/i.test(m))   return 335_000_000;
-  if (/Core.*i3-73[0-9]0[KT]?/i.test(m))       return 330_000_000;
-  if (/Core.*i3-71[0-9]0[T]?/i.test(m))        return 320_000_000;
+  if (/Core.*i7-7700KF?/i.test(m)) return 375_000_000;
+  if (/Core.*i7-7700[T]?/i.test(m)) return 350_000_000;
+  if (/Core.*i5-7[456][0-9]0[KT]?/i.test(m)) return 335_000_000;
+  if (/Core.*i3-73[0-9]0[KT]?/i.test(m)) return 330_000_000;
+  if (/Core.*i3-71[0-9]0[T]?/i.test(m)) return 320_000_000;
 
   // ── Intel 6th Gen Desktop (Skylake) ──────────────────────────────────────────
-  if (/Core.*i7-6700KF?/i.test(m))              return 340_000_000;
-  if (/Core.*i7-6700[T]?/i.test(m))             return 320_000_000;
-  if (/Core.*i5-6[456][0-9]0[KT]?/i.test(m))   return 310_000_000;
-  if (/Core.*i3-6[1-3][0-9]0[T]?/i.test(m))    return 300_000_000;
+  if (/Core.*i7-6700KF?/i.test(m)) return 340_000_000;
+  if (/Core.*i7-6700[T]?/i.test(m)) return 320_000_000;
+  if (/Core.*i5-6[456][0-9]0[KT]?/i.test(m)) return 310_000_000;
+  if (/Core.*i3-6[1-3][0-9]0[T]?/i.test(m)) return 300_000_000;
 
   // ── Intel 5th Gen Desktop (Broadwell) ────────────────────────────────────────
-  if (/Core.*i[57]-5[67][0-9]5C/i.test(m))     return 285_000_000;
+  if (/Core.*i[57]-5[67][0-9]5C/i.test(m)) return 285_000_000;
 
   // ── Intel 4th Gen Desktop (Haswell) ──────────────────────────────────────────
-  if (/Core.*i7-4790K/i.test(m))                return 330_000_000;
-  if (/Core.*i7-47[0-9]0[T]?/i.test(m))         return 300_000_000;
-  if (/Core.*i5-4[5-9][0-9]0[KT]?/i.test(m))   return 295_000_000;
-  if (/Core.*i5-4[34][0-9]0[T]?/i.test(m))      return 270_000_000;
-  if (/Core.*i3-4[1-4][0-9]0[T]?/i.test(m))    return 265_000_000;
+  if (/Core.*i7-4790K/i.test(m)) return 330_000_000;
+  if (/Core.*i7-47[0-9]0[T]?/i.test(m)) return 300_000_000;
+  if (/Core.*i5-4[5-9][0-9]0[KT]?/i.test(m)) return 295_000_000;
+  if (/Core.*i5-4[34][0-9]0[T]?/i.test(m)) return 270_000_000;
+  if (/Core.*i3-4[1-4][0-9]0[T]?/i.test(m)) return 265_000_000;
 
   // ── Intel 3rd Gen Desktop (Ivy Bridge) ───────────────────────────────────────
-  if (/Core.*i7-377[0-9]K?/i.test(m))           return 260_000_000;
-  if (/Core.*i5-35[2-7]0[KT]?/i.test(m))        return 250_000_000;
-  if (/Core.*i5-34[3-7]0[T]?/i.test(m))         return 240_000_000;
-  if (/Core.*i3-3[1-3][0-9]0/i.test(m))         return 220_000_000;
+  if (/Core.*i7-377[0-9]K?/i.test(m)) return 260_000_000;
+  if (/Core.*i5-35[2-7]0[KT]?/i.test(m)) return 250_000_000;
+  if (/Core.*i5-34[3-7]0[T]?/i.test(m)) return 240_000_000;
+  if (/Core.*i3-3[1-3][0-9]0/i.test(m)) return 220_000_000;
 
   // ── Intel 2nd Gen Desktop (Sandy Bridge) ─────────────────────────────────────
-  if (/Core.*i7-2[6-7]00K?/i.test(m))           return 240_000_000;
-  if (/Core.*i7-2[5-9][0-9]0[S]?/i.test(m))     return 230_000_000;
-  if (/Core.*i5-2[3-6][0-9]0K?/i.test(m))       return 220_000_000;
-  if (/Core.*i3-2[1-3][0-9]0/i.test(m))         return 200_000_000;
+  if (/Core.*i7-2[6-7]00K?/i.test(m)) return 240_000_000;
+  if (/Core.*i7-2[5-9][0-9]0[S]?/i.test(m)) return 230_000_000;
+  if (/Core.*i5-2[3-6][0-9]0K?/i.test(m)) return 220_000_000;
+  if (/Core.*i3-2[1-3][0-9]0/i.test(m)) return 200_000_000;
 
   // ── Intel Core Ultra 200S (Arrow Lake Desktop) ───────────────────────────────
-  if (/Core.*Ultra 9 2[0-9]{2}K/i.test(m))      return 560_000_000;
-  if (/Core.*Ultra 7 2[0-9]{2}KF?/i.test(m))    return 540_000_000;
-  if (/Core.*Ultra 5 2[0-9]{2}KF?/i.test(m))    return 510_000_000;
+  if (/Core.*Ultra 9 2[0-9]{2}K/i.test(m)) return 560_000_000;
+  if (/Core.*Ultra 7 2[0-9]{2}KF?/i.test(m)) return 540_000_000;
+  if (/Core.*Ultra 5 2[0-9]{2}KF?/i.test(m)) return 510_000_000;
 
   // ── Intel Core Ultra 100H/U (Meteor Lake Mobile) ─────────────────────────────
-  if (/Core.*Ultra 9 1[0-9]{2}H/i.test(m))      return 430_000_000;
-  if (/Core.*Ultra 7 1[0-9]{2}H/i.test(m))      return 415_000_000;
-  if (/Core.*Ultra 5 1[0-9]{2}H/i.test(m))      return 390_000_000;
-  if (/Core.*Ultra [579] 1[0-9]{2}U/i.test(m))  return 350_000_000;
+  if (/Core.*Ultra 9 1[0-9]{2}H/i.test(m)) return 430_000_000;
+  if (/Core.*Ultra 7 1[0-9]{2}H/i.test(m)) return 415_000_000;
+  if (/Core.*Ultra 5 1[0-9]{2}H/i.test(m)) return 390_000_000;
+  if (/Core.*Ultra [579] 1[0-9]{2}U/i.test(m)) return 350_000_000;
 
   // ── Intel 13th Gen Mobile (HX / H / U) ───────────────────────────────────────
-  if (/Core.*i9-139[0-9]0HX/i.test(m))          return 520_000_000;
-  if (/Core.*i9-139[0-9]0H/i.test(m))           return 490_000_000;
-  if (/Core.*i7-137[0-9]0HX/i.test(m))          return 480_000_000;
-  if (/Core.*i7-137[0-9]0H/i.test(m))           return 460_000_000;
-  if (/Core.*i5-13[3-6][0-9]0H/i.test(m))       return 440_000_000;
-  if (/Core.*i[37]-13[3-7][0-9]U/i.test(m))     return 420_000_000;
-  if (/Core.*i[35]-13[1-5][0-9]U/i.test(m))     return 390_000_000;
+  if (/Core.*i9-139[0-9]0HX/i.test(m)) return 520_000_000;
+  if (/Core.*i9-139[0-9]0H/i.test(m)) return 490_000_000;
+  if (/Core.*i7-137[0-9]0HX/i.test(m)) return 480_000_000;
+  if (/Core.*i7-137[0-9]0H/i.test(m)) return 460_000_000;
+  if (/Core.*i5-13[3-6][0-9]0H/i.test(m)) return 440_000_000;
+  if (/Core.*i[37]-13[3-7][0-9]U/i.test(m)) return 420_000_000;
+  if (/Core.*i[35]-13[1-5][0-9]U/i.test(m)) return 390_000_000;
 
   // ── Intel 12th Gen Mobile ─────────────────────────────────────────────────────
-  if (/Core.*i9-129[0-9]0H[KX]?/i.test(m))      return 450_000_000;
-  if (/Core.*i7-127[0-9]0H/i.test(m))           return 420_000_000;
-  if (/Core.*i5-12[45][0-9]0H/i.test(m))        return 400_000_000;
-  if (/Core.*i7-12[78][0-9]P/i.test(m))         return 390_000_000;
-  if (/Core.*i[35]-12[34][0-9]P/i.test(m))      return 360_000_000;
-  if (/Core.*i[37]-12[25][0-9]U/i.test(m))      return 380_000_000;
-  if (/Core.*i5-12[23][0-9]U/i.test(m))         return 350_000_000;
+  if (/Core.*i9-129[0-9]0H[KX]?/i.test(m)) return 450_000_000;
+  if (/Core.*i7-127[0-9]0H/i.test(m)) return 420_000_000;
+  if (/Core.*i5-12[45][0-9]0H/i.test(m)) return 400_000_000;
+  if (/Core.*i7-12[78][0-9]P/i.test(m)) return 390_000_000;
+  if (/Core.*i[35]-12[34][0-9]P/i.test(m)) return 360_000_000;
+  if (/Core.*i[37]-12[25][0-9]U/i.test(m)) return 380_000_000;
+  if (/Core.*i5-12[23][0-9]U/i.test(m)) return 350_000_000;
 
   // ── Intel 11th Gen Mobile ─────────────────────────────────────────────────────
-  if (/Core.*i9-11980HK/i.test(m))              return 420_000_000;
-  if (/Core.*i9-119[0-9]0H/i.test(m))           return 390_000_000;
-  if (/Core.*i7-118[0-9]0H/i.test(m))           return 380_000_000;
-  if (/Core.*i5-115[0-9]0H/i.test(m))           return 360_000_000;
-  if (/Core.*i7-118[56]G[47]/i.test(m))         return 350_000_000;
-  if (/Core.*i7-116[56]G7/i.test(m))            return 340_000_000;
-  if (/Core.*i5-1135G7/i.test(m))               return 320_000_000;
-  if (/Core.*i3-11[12][0-9]G[47]/i.test(m))     return 290_000_000;
+  if (/Core.*i9-11980HK/i.test(m)) return 420_000_000;
+  if (/Core.*i9-119[0-9]0H/i.test(m)) return 390_000_000;
+  if (/Core.*i7-118[0-9]0H/i.test(m)) return 380_000_000;
+  if (/Core.*i5-115[0-9]0H/i.test(m)) return 360_000_000;
+  if (/Core.*i7-118[56]G[47]/i.test(m)) return 350_000_000;
+  if (/Core.*i7-116[56]G7/i.test(m)) return 340_000_000;
+  if (/Core.*i5-1135G7/i.test(m)) return 320_000_000;
+  if (/Core.*i3-11[12][0-9]G[47]/i.test(m)) return 290_000_000;
 
   // ── Intel 10th Gen Mobile ─────────────────────────────────────────────────────
-  if (/Core.*i7-108[0-9]5H/i.test(m))           return 380_000_000;
-  if (/Core.*i7-107[0-9]0H/i.test(m))           return 360_000_000;
-  if (/Core.*i5-103[0-9]0H/i.test(m))           return 340_000_000;
-  if (/Core.*i7-1065G7/i.test(m))               return 320_000_000;  // Ice Lake
-  if (/Core.*i5-1035G[14]/i.test(m))            return 290_000_000;
-  if (/Core.*i3-1005G1/i.test(m))               return 260_000_000;
+  if (/Core.*i7-108[0-9]5H/i.test(m)) return 380_000_000;
+  if (/Core.*i7-107[0-9]0H/i.test(m)) return 360_000_000;
+  if (/Core.*i5-103[0-9]0H/i.test(m)) return 340_000_000;
+  if (/Core.*i7-1065G7/i.test(m)) return 320_000_000; // Ice Lake
+  if (/Core.*i5-1035G[14]/i.test(m)) return 290_000_000;
+  if (/Core.*i3-1005G1/i.test(m)) return 260_000_000;
 
   // ── Intel Xeon ────────────────────────────────────────────────────────────────
-  if (/Xeon.*w9-35[0-9]{2}X/i.test(m))          return 490_000_000;
-  if (/Xeon.*w7-3[0-9]{3}X/i.test(m))           return 470_000_000;
-  if (/Xeon.*w7-2[0-9]{3}X/i.test(m))           return 450_000_000;
-  if (/Xeon.*W-3175X/i.test(m))                 return 390_000_000;
-  if (/Xeon.*W-2[2-9][0-9]{2}/i.test(m))        return 410_000_000;
-  if (/Xeon.*Gold 6[12][0-9]{2}R?/i.test(m))    return 360_000_000;
-  if (/Xeon.*Silver 4[23][0-9]{2}/i.test(m))    return 330_000_000;
-  if (/Xeon.*E5-2[6-9][0-9]{2}/i.test(m))       return 260_000_000;
+  if (/Xeon.*w9-35[0-9]{2}X/i.test(m)) return 490_000_000;
+  if (/Xeon.*w7-3[0-9]{3}X/i.test(m)) return 470_000_000;
+  if (/Xeon.*w7-2[0-9]{3}X/i.test(m)) return 450_000_000;
+  if (/Xeon.*W-3175X/i.test(m)) return 390_000_000;
+  if (/Xeon.*W-2[2-9][0-9]{2}/i.test(m)) return 410_000_000;
+  if (/Xeon.*Gold 6[12][0-9]{2}R?/i.test(m)) return 360_000_000;
+  if (/Xeon.*Silver 4[23][0-9]{2}/i.test(m)) return 330_000_000;
+  if (/Xeon.*E5-2[6-9][0-9]{2}/i.test(m)) return 260_000_000;
 
   // ── AMD Ryzen 9000 (Zen 5) ────────────────────────────────────────────────────
-  if (/Ryzen 9 9950X/i.test(m))                 return 580_000_000;
-  if (/Ryzen 9 9900X/i.test(m))                 return 570_000_000;
-  if (/Ryzen 7 9800X3D/i.test(m))               return 520_000_000;
-  if (/Ryzen 7 9700X/i.test(m))                 return 560_000_000;
-  if (/Ryzen 5 9600X/i.test(m))                 return 540_000_000;
-  if (/Ryzen 5 9600/i.test(m))                  return 510_000_000;
+  if (/Ryzen 9 9950X/i.test(m)) return 580_000_000;
+  if (/Ryzen 9 9900X/i.test(m)) return 570_000_000;
+  if (/Ryzen 7 9800X3D/i.test(m)) return 520_000_000;
+  if (/Ryzen 7 9700X/i.test(m)) return 560_000_000;
+  if (/Ryzen 5 9600X/i.test(m)) return 540_000_000;
+  if (/Ryzen 5 9600/i.test(m)) return 510_000_000;
 
   // ── AMD Ryzen 7000 (Zen 4) ────────────────────────────────────────────────────
-  if (/Ryzen 9 7950X3D/i.test(m))               return 540_000_000;
-  if (/Ryzen 9 7950X/i.test(m))                 return 560_000_000;
-  if (/Ryzen 9 7900X3D/i.test(m))               return 530_000_000;
-  if (/Ryzen 9 7900X/i.test(m))                 return 550_000_000;
-  if (/Ryzen 9 7900/i.test(m))                  return 530_000_000;
-  if (/Ryzen 7 7800X3D/i.test(m))               return 490_000_000;
-  if (/Ryzen 7 7700X/i.test(m))                 return 530_000_000;
-  if (/Ryzen 7 7700/i.test(m))                  return 520_000_000;
-  if (/Ryzen 5 7600X/i.test(m))                 return 520_000_000;
-  if (/Ryzen 5 7600/i.test(m))                  return 500_000_000;
-  if (/Ryzen 5 7500F/i.test(m))                 return 490_000_000;
+  if (/Ryzen 9 7950X3D/i.test(m)) return 540_000_000;
+  if (/Ryzen 9 7950X/i.test(m)) return 560_000_000;
+  if (/Ryzen 9 7900X3D/i.test(m)) return 530_000_000;
+  if (/Ryzen 9 7900X/i.test(m)) return 550_000_000;
+  if (/Ryzen 9 7900/i.test(m)) return 530_000_000;
+  if (/Ryzen 7 7800X3D/i.test(m)) return 490_000_000;
+  if (/Ryzen 7 7700X/i.test(m)) return 530_000_000;
+  if (/Ryzen 7 7700/i.test(m)) return 520_000_000;
+  if (/Ryzen 5 7600X/i.test(m)) return 520_000_000;
+  if (/Ryzen 5 7600/i.test(m)) return 500_000_000;
+  if (/Ryzen 5 7500F/i.test(m)) return 490_000_000;
 
   // ── AMD Ryzen 5000 (Zen 3) ────────────────────────────────────────────────────
-  if (/Ryzen 9 5950X/i.test(m))                 return 470_000_000;
-  if (/Ryzen 9 5900X/i.test(m))                 return 460_000_000;
-  if (/Ryzen 9 5900HX/i.test(m))                return 420_000_000;
-  if (/Ryzen 9 5900/i.test(m))                  return 450_000_000;
-  if (/Ryzen 7 5800X3D/i.test(m))               return 430_000_000;
-  if (/Ryzen 7 5800X/i.test(m))                 return 450_000_000;
-  if (/Ryzen 7 5800H/i.test(m))                 return 410_000_000;
-  if (/Ryzen 7 5800/i.test(m))                  return 440_000_000;
-  if (/Ryzen 7 5700[GX]?/i.test(m))             return 440_000_000;
-  if (/Ryzen 5 5600X/i.test(m))                 return 440_000_000;
-  if (/Ryzen 5 5600H/i.test(m))                 return 400_000_000;
-  if (/Ryzen 5 5600[G]?/i.test(m))              return 420_000_000;
-  if (/Ryzen 5 5500/i.test(m))                  return 400_000_000;
-  if (/Ryzen 3 5[13][0-9]{2}G?/i.test(m))       return 385_000_000;
+  if (/Ryzen 9 5950X/i.test(m)) return 470_000_000;
+  if (/Ryzen 9 5900X/i.test(m)) return 460_000_000;
+  if (/Ryzen 9 5900HX/i.test(m)) return 420_000_000;
+  if (/Ryzen 9 5900/i.test(m)) return 450_000_000;
+  if (/Ryzen 7 5800X3D/i.test(m)) return 430_000_000;
+  if (/Ryzen 7 5800X/i.test(m)) return 450_000_000;
+  if (/Ryzen 7 5800H/i.test(m)) return 410_000_000;
+  if (/Ryzen 7 5800/i.test(m)) return 440_000_000;
+  if (/Ryzen 7 5700[GX]?/i.test(m)) return 440_000_000;
+  if (/Ryzen 5 5600X/i.test(m)) return 440_000_000;
+  if (/Ryzen 5 5600H/i.test(m)) return 400_000_000;
+  if (/Ryzen 5 5600[G]?/i.test(m)) return 420_000_000;
+  if (/Ryzen 5 5500/i.test(m)) return 400_000_000;
+  if (/Ryzen 3 5[13][0-9]{2}G?/i.test(m)) return 385_000_000;
 
   // ── AMD Ryzen 3000 (Zen 2) ────────────────────────────────────────────────────
-  if (/Ryzen 9 3950X/i.test(m))                 return 420_000_000;
-  if (/Ryzen 9 3900X?T?/i.test(m))              return 415_000_000;
-  if (/Ryzen 7 3800X?T?/i.test(m))              return 410_000_000;
-  if (/Ryzen 7 3700X/i.test(m))                 return 400_000_000;
-  if (/Ryzen 5 3600X?T?/i.test(m))              return 400_000_000;
-  if (/Ryzen 5 3600/i.test(m))                  return 380_000_000;
-  if (/Ryzen 5 3500X?/i.test(m))                return 360_000_000;
-  if (/Ryzen 3 3[13][0-9]{2}X?/i.test(m))       return 370_000_000;
+  if (/Ryzen 9 3950X/i.test(m)) return 420_000_000;
+  if (/Ryzen 9 3900X?T?/i.test(m)) return 415_000_000;
+  if (/Ryzen 7 3800X?T?/i.test(m)) return 410_000_000;
+  if (/Ryzen 7 3700X/i.test(m)) return 400_000_000;
+  if (/Ryzen 5 3600X?T?/i.test(m)) return 400_000_000;
+  if (/Ryzen 5 3600/i.test(m)) return 380_000_000;
+  if (/Ryzen 5 3500X?/i.test(m)) return 360_000_000;
+  if (/Ryzen 3 3[13][0-9]{2}X?/i.test(m)) return 370_000_000;
 
   // ── AMD Ryzen 2000 (Zen+) ─────────────────────────────────────────────────────
-  if (/Ryzen 7 2700X/i.test(m))                 return 330_000_000;
-  if (/Ryzen 7 2700/i.test(m))                  return 310_000_000;
-  if (/Ryzen 5 2600X/i.test(m))                 return 320_000_000;
-  if (/Ryzen 5 2600/i.test(m))                  return 300_000_000;
-  if (/Ryzen 3 2[23][0-9]{2}[GX]?/i.test(m))   return 280_000_000;
+  if (/Ryzen 7 2700X/i.test(m)) return 330_000_000;
+  if (/Ryzen 7 2700/i.test(m)) return 310_000_000;
+  if (/Ryzen 5 2600X/i.test(m)) return 320_000_000;
+  if (/Ryzen 5 2600/i.test(m)) return 300_000_000;
+  if (/Ryzen 3 2[23][0-9]{2}[GX]?/i.test(m)) return 280_000_000;
 
   // ── AMD Threadripper ──────────────────────────────────────────────────────────
-  if (/Threadripper PRO 79[0-9]{2}W/i.test(m))  return 490_000_000;
-  if (/Threadripper PRO 59[0-9]{2}W/i.test(m))  return 440_000_000;
-  if (/Threadripper PRO 59[0-9]{2}W/i.test(m))  return 440_000_000;
-  if (/Threadripper 39[0-9]{2}X/i.test(m))      return 400_000_000;
-  if (/Threadripper 29[0-9]{2}[WX]/i.test(m))   return 310_000_000;
+  if (/Threadripper PRO 79[0-9]{2}W/i.test(m)) return 490_000_000;
+  if (/Threadripper PRO 59[0-9]{2}W/i.test(m)) return 440_000_000;
+  if (/Threadripper PRO 59[0-9]{2}W/i.test(m)) return 440_000_000;
+  if (/Threadripper 39[0-9]{2}X/i.test(m)) return 400_000_000;
+  if (/Threadripper 29[0-9]{2}[WX]/i.test(m)) return 310_000_000;
 
   // ── AMD EPYC ──────────────────────────────────────────────────────────────────
-  if (/EPYC 9[5-9][0-9]{2}/i.test(m))           return 390_000_000;  // Zen4
-  if (/EPYC 9[1-4][0-9]{2}/i.test(m))           return 375_000_000;
-  if (/EPYC 7[6-9][0-9]{2}/i.test(m))           return 310_000_000;  // Zen3
-  if (/EPYC 7[3-5][0-9]{2}/i.test(m))           return 280_000_000;  // Zen2
-  if (/EPYC 7[0-2][0-9]{2}/i.test(m))           return 260_000_000;
+  if (/EPYC 9[5-9][0-9]{2}/i.test(m)) return 390_000_000; // Zen4
+  if (/EPYC 9[1-4][0-9]{2}/i.test(m)) return 375_000_000;
+  if (/EPYC 7[6-9][0-9]{2}/i.test(m)) return 310_000_000; // Zen3
+  if (/EPYC 7[3-5][0-9]{2}/i.test(m)) return 280_000_000; // Zen2
+  if (/EPYC 7[0-2][0-9]{2}/i.test(m)) return 260_000_000;
 
   // ── Apple Silicon ─────────────────────────────────────────────────────────────
-  if (/M4 (Pro|Max|Ultra)/i.test(m))            return 620_000_000;
-  if (/\bM4\b/i.test(m))                        return 590_000_000;
-  if (/M3 Max/i.test(m))                        return 560_000_000;
-  if (/M3 (Pro|Ultra)/i.test(m))                return 550_000_000;
-  if (/\bM3\b/i.test(m))                        return 540_000_000;
-  if (/M2 (Pro|Max|Ultra)/i.test(m))            return 500_000_000;
-  if (/\bM2\b/i.test(m))                        return 480_000_000;
-  if (/M1 (Pro|Max|Ultra)/i.test(m))            return 440_000_000;
-  if (/\bM1\b/i.test(m))                        return 420_000_000;
+  if (/M4 (Pro|Max|Ultra)/i.test(m)) return 620_000_000;
+  if (/\bM4\b/i.test(m)) return 590_000_000;
+  if (/M3 Max/i.test(m)) return 560_000_000;
+  if (/M3 (Pro|Ultra)/i.test(m)) return 550_000_000;
+  if (/\bM3\b/i.test(m)) return 540_000_000;
+  if (/M2 (Pro|Max|Ultra)/i.test(m)) return 500_000_000;
+  if (/\bM2\b/i.test(m)) return 480_000_000;
+  if (/M1 (Pro|Max|Ultra)/i.test(m)) return 440_000_000;
+  if (/\bM1\b/i.test(m)) return 420_000_000;
 
   return 0; // unknown — skip validation
 }
 
 // Add a prop: isActive (true if dashboard is visible)
 export default function Miner({
-  mining, setMining,
-  coins, setCoins,
+  mining,
+  setMining,
+  coins,
+  setCoins,
   maturedCoins = 0,
   unmaturedCoins = 0,
-  energy, setEnergy,
-  log, setLog,
-  probeLog = [], setProbeLog,
+  energy,
+  setEnergy,
+  log,
+  setLog,
+  probeLog = [],
+  setProbeLog,
   isActive = true,
   setPowerW, // NEW: callback to lift powerW
-  miningAddress = "",
+  miningAddress = '',
   onBlockMined,
   chainHeight = -1,
   hardwareLookupResetNonce = 0,
@@ -1700,13 +1905,22 @@ export default function Miner({
   // Helper for timestamp
   const now = () => new Date().toLocaleString();
   const [realMineBusy, setRealMineBusy] = React.useState(false);
-  const [realMineStatus, setRealMineStatus] = React.useState("");
+  const [realMineStatus, setRealMineStatus] = React.useState('');
   const [peerCount, setPeerCount] = React.useState(null);
   const [connectedPeerCount, setConnectedPeerCount] = React.useState(0);
   const [peerCountSource, setPeerCountSource] = React.useState(null); // null | 'standalone' | 'coordinator'
-  const [peerDiscoveryInfo, setPeerDiscoveryInfo] = React.useState({ configuredPeers: 0, seedPeers: 0, discoveredPeers: 0 });
+  const [peerDiscoveryInfo, setPeerDiscoveryInfo] = React.useState({
+    configuredPeers: 0,
+    seedPeers: 0,
+    discoveredPeers: 0,
+  });
   const [lastSyncInfo, setLastSyncInfo] = React.useState({ trigger: '', ok: false });
-  const [chainReadiness, setChainReadiness] = React.useState({ spendReady: false, message: 'Checking...', connections: 0, blocks: 0 });
+  const [chainReadiness, setChainReadiness] = React.useState({
+    spendReady: false,
+    message: 'Checking...',
+    connections: 0,
+    blocks: 0,
+  });
   const [sharedRoundTotalWh, setSharedRoundTotalWh] = React.useState(0);
 
   const [baselinePowerW, setBaselinePowerW] = React.useState(0);
@@ -1751,11 +1965,11 @@ export default function Miner({
   const lastHandledSliderAdjustNonceRef = React.useRef(0);
   const lastSliderCommitAtMsRef = React.useRef(0);
   // Drift-detection baselines — set on startup/slider-stop, compared on every subsequent run.
-  const benchmarkRefCpuOpsRef   = React.useRef(null);
-  const benchmarkRefMemBwRef    = React.useRef(null);
+  const benchmarkRefCpuOpsRef = React.useRef(null);
+  const benchmarkRefMemBwRef = React.useRef(null);
   const benchmarkRefMemLatencyRef = React.useRef(null);
   const benchmarkRefGpuScoreRef = React.useRef(null);
-  const benchmarkRefJitterRef   = React.useRef(null);
+  const benchmarkRefJitterRef = React.useRef(null);
 
   // Holds the most recent benchmark proof data for inclusion in the next mineBlock call.
   // Fields: cpuSpeedProof, cpuSpeedInitialSeed, memProof, challengeSeed, cpuOpsPerSec,
@@ -1790,34 +2004,37 @@ export default function Miner({
         return 0;
       }
       return stored;
-    } catch (_) { return 0; }
+    } catch (_) {
+      return 0;
+    }
   });
   const hardwareHoldUntilRef = React.useRef(hardwareHoldUntilMs);
   const [holdSecondsLeft, setHoldSecondsLeft] = React.useState(0);
   const isHardwareOnHold = ENABLE_HARDWARE_HOLD && hardwareHoldUntilMs > Date.now();
 
   // Try to load hardware info from sessionStorage first
-  const [hardware, setHardware] = React.useState(() => { // eslint-disable-line no-unused-vars
+  const [hardware, setHardware] = React.useState(() => {
+    // eslint-disable-line no-unused-vars
     const saved = sessionStorage.getItem('wattcoinHardware');
     if (saved) return JSON.parse(saved);
     return {
-      deviceType: "Unknown",
-      manufacturer: "Unknown",
-      version: "Unknown",
-      motherboardFormFactor: "",
-      cpu: "Unknown",
+      deviceType: 'Unknown',
+      manufacturer: 'Unknown',
+      version: 'Unknown',
+      motherboardFormFactor: '',
+      cpu: 'Unknown',
       logicalCores: 1,
       physicalCores: 1,
       cpuSockets: 1,
-      gpu: "Unknown",
+      gpu: 'Unknown',
       gpus: [],
       gpuDetailsList: [],
-      memory: "Unknown",
+      memory: 'Unknown',
       memTotalGB: 0,
       memSpeedMhz: 0,
       memSticks: 1,
-      osName: "Unknown",
-      source: ""
+      osName: 'Unknown',
+      source: '',
     };
   });
 
@@ -1833,7 +2050,12 @@ export default function Miner({
   // Persisted hardware card width — saved after hardware is recognized so the card
   // doesn't jump from "Unknown" placeholder size to full content size on next launch.
   const [savedHwCardWidth, setSavedHwCardWidth] = React.useState(() => {
-    try { const v = parseInt(localStorage.getItem(HARDWARE_CARD_WIDTH_KEY), 10); return v > 0 ? v : null; } catch (_) { return null; }
+    try {
+      const v = parseInt(localStorage.getItem(HARDWARE_CARD_WIDTH_KEY), 10);
+      return v > 0 ? v : null;
+    } catch (_) {
+      return null;
+    }
   });
   const hwCardRef = React.useRef(null);
   const [benchmarkPowerCapW, setBenchmarkPowerCapW] = React.useState(null);
@@ -1873,7 +2095,7 @@ export default function Miner({
         const fresh = {};
         for (const [k, v] of Object.entries(parsed)) {
           if (!v || typeof v.ts !== 'number') continue;
-          const ttl = (typeof v.tdp === 'number') ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
+          const ttl = typeof v.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
           if (t - v.ts < ttl) fresh[k] = v;
         }
         return fresh;
@@ -1894,7 +2116,7 @@ export default function Miner({
         const fresh = {};
         for (const [k, v] of Object.entries(parsed)) {
           if (!v || typeof v.ts !== 'number') continue;
-          const ttl = (typeof v.tdp === 'number') ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
+          const ttl = typeof v.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
           if (t - v.ts < ttl) fresh[k] = v;
         }
         return fresh;
@@ -1938,11 +2160,8 @@ export default function Miner({
     return [];
   }, [hardware.gpu, hardware.gpus]);
   const isWholeDeviceMiniPcModel = isWholeDeviceMiniPc(hardware);
-  const allowGpuWorkloads = hardware.deviceType !== 'Laptop'
-    && !isWholeDeviceMiniPcModel
-    && !hasOnlyIntegratedGpu(hardware);
-
-
+  const allowGpuWorkloads =
+    hardware.deviceType !== 'Laptop' && !isWholeDeviceMiniPcModel && !hasOnlyIntegratedGpu(hardware);
 
   React.useEffect(() => {
     hardwareHoldUntilRef.current = hardwareHoldUntilMs;
@@ -1955,8 +2174,12 @@ export default function Miner({
     // Trust score is persisted by the main process (hw-auth-state.json in userData).
     // localStorage is no longer the authoritative store; main owns the value.
   }, [trustScore]);
-  React.useEffect(() => { loadPercentRef.current = loadPercent; }, [loadPercent]);
-  React.useEffect(() => { miningRef.current = mining; }, [mining]);
+  React.useEffect(() => {
+    loadPercentRef.current = loadPercent;
+  }, [loadPercent]);
+  React.useEffect(() => {
+    miningRef.current = mining;
+  }, [mining]);
 
   // Fetch global average electricity price from main (cached 24 h, refreshed every 30 min).
   React.useEffect(() => {
@@ -1967,10 +2190,12 @@ export default function Miner({
           setElectricityPrice(res.price);
           setElectricityPriceSource(res.source || null);
         }
-      } catch (_) { /* non-fatal — UI just shows nothing */ }
+      } catch (_) {
+        /* non-fatal — UI just shows nothing */
+      }
     };
     fetchPrice();
-    const id = setInterval(fetchPrice, 30 * 60 * 1000);  // refresh every 30 min
+    const id = setInterval(fetchPrice, 30 * 60 * 1000); // refresh every 30 min
     return () => clearInterval(id);
   }, []);
 
@@ -1987,7 +2212,7 @@ export default function Miner({
             if (auth.isFirstRun) {
               try {
                 const legacyTrust = Number(localStorage.getItem(TRUST_SCORE_STORAGE_KEY));
-                const legacyHold  = Number(localStorage.getItem(HW_HOLD_STORAGE_KEY) || 0);
+                const legacyHold = Number(localStorage.getItem(HW_HOLD_STORAGE_KEY) || 0);
                 const seedPayload = {};
                 if (Number.isFinite(legacyTrust) && legacyTrust > 0 && legacyTrust <= 100) {
                   seedPayload.trustScore = legacyTrust;
@@ -1995,7 +2220,9 @@ export default function Miner({
                 if (legacyHold > Date.now()) {
                   seedPayload.hwHoldUntilMs = legacyHold;
                 }
-                const seeded = await window.wattcoinHardware.invoke('wattcoin-seed-authority-state', seedPayload).catch(() => null);
+                const seeded = await window.wattcoinHardware
+                  .invoke('wattcoin-seed-authority-state', seedPayload)
+                  .catch(() => null);
                 if (seeded && seeded.ok && typeof seeded.trustScore === 'number') {
                   setTrustScore(seeded.trustScore);
                   trustScoreRef.current = seeded.trustScore;
@@ -2017,781 +2244,869 @@ export default function Miner({
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activateHardwareHold = React.useCallback(async (reason, durationMs = BENCHMARK_HOLD_DURATION_MS) => {
-    if (!ENABLE_HARDWARE_HOLD) {
-      return 0;
-    }
-    const nowMs = Date.now();
-    const existingHoldUntil = Number(hardwareHoldUntilRef.current) || 0;
-    if (existingHoldUntil > nowMs) {
-      return existingHoldUntil;
-    }
-
-    const holdUntil = nowMs + durationMs;
-    hardwareHoldUntilRef.current = holdUntil;
-    setHardwareHoldUntilMs(holdUntil);
-    // Trust decrement is applied by the main process in wattcoin-activate-hardware-hold;
-    // renderer syncs the new value below after the IPC call returns.
-    // Notify main process so the hold is persisted to the authoritative store
-    // (hw-auth-state.json in userData) and cannot be cleared via localStorage.
-    try {
-      if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-        const holdResult = await window.wattcoinHardware.invoke('wattcoin-activate-hardware-hold', { durationMs }).catch(() => null);
-        // Sync trust + hold from main after it applies the decrement.
-        const authAfterHold = await window.wattcoinHardware.invoke('wattcoin-get-authority-state').catch(() => null);
-        if (authAfterHold && typeof authAfterHold.trustScore === 'number') {
-          setTrustScore(authAfterHold.trustScore);
-          trustScoreRef.current = authAfterHold.trustScore;
-        }
-        void holdResult;
+  const activateHardwareHold = React.useCallback(
+    async (reason, durationMs = BENCHMARK_HOLD_DURATION_MS) => {
+      if (!ENABLE_HARDWARE_HOLD) {
+        return 0;
       }
-    } catch (_) {}
-
-    if (mining) {
-      setMining(false);
-      setRealMineStatus('Mining stopped: hardware on hold');
-      try {
-        if (window.wattcoinHardware && window.wattcoinHardware.stopHardwareLoad) {
-          await window.wattcoinHardware.stopHardwareLoad();
-        } else if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
-          await window.wattcoinHardware.setHardwareLoad(0);
-        }
-      } catch (_) {
-        // Best effort stop when hold is activated.
-      }
-      setLog(log => [
-        {
-          time: now(),
-          msg: `Hardware hold activated: ${reason}. Mining stopped automatically.`,
-          type: 'warn'
-        },
-        ...log,
-      ]);
-    }
-
-    return holdUntil;
-  }, [mining, setMining, setLog]);
-
-  const runBenchmark = React.useCallback(async (reason = 'manual', { extended = false } = {}) => {
-    if (ENABLE_HARDWARE_HOLD && hardwareHoldUntilRef.current > Date.now()) {
-      return { skipped: true, reason: 'hold-active' };
-    }
-    if (benchmarkInFlightRef.current) return null;
-    benchmarkInFlightRef.current = true;
-    setBenchmarkState(prev => ({ ...prev, running: true }));
-
-    // For startup and slider-stop benchmarks: apply the slider's hardware load so
-    // measurements are taken under real working conditions.  The hardware load ramp
-    // takes ~3 s, so we wait before measuring.  Afterward the load is stopped if
-    // mining was not already active when the benchmark started.
-    const isBaselineBench = reason === 'startup' || reason === 'slider-stop';
-    const wasMiningAtStart = miningRef.current;
-    const _rawBenchLoad = isBaselineBench
-      ? Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, loadPercentRef.current || 0))
-      : 0;
-    // Apply the same trust cap used by syncHardwareLoadTarget and effectiveLoadPercent
-    // so the baseline benchmark runs at the same load ceiling as live mining.
-    const _trustFBench = Math.min(1.0, 0.60 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.40);
-    const benchLoadPct = Math.min(_rawBenchLoad, Math.round(_trustFBench * 100));
-    if (benchLoadPct > 0 && !wasMiningAtStart) {
-      try {
-        if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
-          await window.wattcoinHardware.setHardwareLoad(benchLoadPct);
-        }
-      } catch (_) {}
-      // Wait for the full 3-second hardware load ramp to complete before measuring.
-      await new Promise(r => setTimeout(r, 3200));
-    } else if (isBaselineBench && wasMiningAtStart && benchLoadPct > 0) {
-      // Mining: syncHardwareLoadTarget already started the ramp when the slider changed,
-      // but only ~1500ms ago (the slider-stop debounce). The ramp takes 3000ms total, so
-      // wait for the remaining ~1700ms to ensure load is fully settled before measuring.
-      await new Promise(r => setTimeout(r, 1700));
-    }
-
-    try {
-      const issues = [];
-      const startedAt = performance.now();
-
-      // Device fingerprint — stored in userData (not localStorage) so clearing browser
-      // storage cannot reset cross-session drift detection (item 6).
-      // Falls back to localStorage if the IPC API isn't available (dev/browser mode).
-      let fingerprintHash = '';
-      try {
-        const fingerprintPayload = JSON.stringify({
-          deviceType:   hardware.deviceType   || '',
-          manufacturer: hardware.manufacturer || '',
-          version:      hardware.version      || '',
-          cpu:          hardware.cpu          || '',
-          gpu:          hardware.gpu          || '',
-          memTotalGB:   Math.round(hardware.memTotalGB || 0),
-          source:       hardware.source       || '',
-          // osName, userAgent, and platform intentionally excluded: all change on
-          // OS/app/Electron updates and are not indicators of hardware substitution.
-          // navigator.platform is also deprecated in modern Electron/Chrome.
-        });
-        fingerprintHash = simpleHash(fingerprintPayload);
-
-        const hw = window.wattcoinHardware;
-        if (hw && hw.readFingerprintFile && hw.writeFingerprintFile) {
-          // File-based path: userData-persisted, wallet-HMAC-signed (items 6).
-          const stored = await hw.readFingerprintFile().catch(() => ({ ok: true, data: null }));
-          const prevData = stored && stored.data ? stored.data : null;
-          const prevHash = prevData && prevData.hash ? String(prevData.hash) : '';
-          const prevFmtVer = prevData && prevData.fmtVer ? Number(prevData.fmtVer) : 1;
-          // Only compare if stored hash uses the same format version.  A format bump
-          // (e.g. removing volatile fields) would produce a different hash for the same
-          // hardware, so we silently re-baseline instead of flagging a false change.
-          if (prevHash && prevFmtVer === 2 && prevHash !== fingerprintHash) {
-            issues.push('device fingerprint changed unexpectedly');
-          }
-          await hw.writeFingerprintFile({ hash: fingerprintHash, fmtVer: 2, ts: Date.now() }).catch(() => null);
-        } else {
-          // localStorage fallback (browser/dev mode).
-          let secret = localStorage.getItem(FINGERPRINT_SECRET_STORAGE_KEY);
-          if (!secret) {
-            secret = `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-            localStorage.setItem(FINGERPRINT_SECRET_STORAGE_KEY, secret);
-          }
-          const expectedSig = simpleHash(`${secret}|${fingerprintHash}`);
-          const prevHash = localStorage.getItem(FINGERPRINT_HASH_STORAGE_KEY) || '';
-          const prevSig  = localStorage.getItem(FINGERPRINT_SIG_STORAGE_KEY)  || '';
-          if (prevHash && prevSig === simpleHash(`${secret}|${prevHash}`) && prevHash !== fingerprintHash) {
-            issues.push('device fingerprint changed unexpectedly');
-          }
-          localStorage.setItem(FINGERPRINT_HASH_STORAGE_KEY, fingerprintHash);
-          localStorage.setItem(FINGERPRINT_SIG_STORAGE_KEY, expectedSig);
-        }
-      } catch (_) {
-        issues.push('fingerprint persistence check failed');
+      const nowMs = Date.now();
+      const existingHoldUntil = Number(hardwareHoldUntilRef.current) || 0;
+      if (existingHoldUntil > nowMs) {
+        return existingHoldUntil;
       }
 
-      // Backend benchmark workload (CPU, memory, GPU provider metric).
-      const backendBench = (window.wattcoinHardware && window.wattcoinHardware.runBackendBenchmark)
-        ? await window.wattcoinHardware.runBackendBenchmark({
-            reason,
-            allowGpuWorkloads,
-            phaseCount: 4,
-            phaseDurationMs: extended ? 200 : 100,
-            cpuSpeedRuns: (reason === 'startup' || reason === 'slider-stop') ? 3 : 2,
-            memBytes: 128 * 1024 * 1024, // 128 MB — exceeds L3 cache on virtually all consumer
-                                          // CPUs (Intel max ~36 MB, standard AMD max ~64 MB),
-                                          // ensuring DRAM bandwidth is measured, not L3 cache.
-            // Hardware description strings for main-process authoritative calibration.
-            // Main uses its own copy of the lookup tables (hardware-tables.cjs) so these
-            // cannot be spoofed to inflate the calibration ratio.
-            // Main also cross-checks these against OS-level APIs (os.cpus(), Electron
-            // GPU info, systeminformation chassis) and applies a trust penalty + TDP
-            // clamp if mismatches are detected.
-            declaredCpuModel:    hardware.cpu ? hardware.cpu.split(' (')[0] : '',
-            declaredGpuModel:    hardware.gpu || '',
-            declaredDeviceType:  hardware.deviceType || '',
-            declaredMemType:     hardware.memory   || '',
-            declaredMemSpeedMhz: hardware.memSpeedMhz || 0,
-            declaredMemSticks:   hardware.memSticks   || 1,
-            // Declared calibrated TDP so main can establish the per-tick energy ceiling.
-            // Main applies its own calibration factor on top so declaring a wrong model
-            // is penalised by the benchmark-measured ops ratio.
-            declaredUnitPowerW:  unitFullPowerWRef.current || 0,
-            isBaselineBenchmark: reason === 'startup' || reason === 'slider-stop',
-          }).catch((e) => { console.error('[Benchmark] IPC error:', e && e.message ? e.message : e); return null; })
-        : null;
-      if (!(backendBench && backendBench.ok)) {
-        throw new Error(`backend benchmark unavailable${backendBench && backendBench.message ? `: ${backendBench.message}` : ''}`);
-      }
-      const challengeSeed = Number(backendBench.challengeSeed) || 0;
-      const cpuOpsPerSec = Math.max(0, Number(backendBench.cpuOpsPerSec) || 0);
-      const memoryMBps = Math.max(0, Number(backendBench.memoryMBps) || 0);
-      const jitterRatio = Math.max(0, Number(backendBench.jitterRatio) || 0);
-      const cpuSpeedOpsPerSec = Math.max(0, Number(backendBench.cpuSpeedOpsPerSec) || 0);
-      const cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
-      const memLatencyNs = Math.max(0, Number(backendBench.memLatencyNs) || 0);
-
-      // Item 2: measurement-derived hardware tiers — independent of declared hardware names.
-      // Power credit is anchored to what was actually measured, not what was declared.
-      // Tier 1 = weakest measurable / VM; tier 5 = enthusiast.
-      const cpuSpeedTier = cpuSpeedOpsPerSec < 1e8 ? 1
-                         : cpuSpeedOpsPerSec < 2e8 ? 2
-                         : cpuSpeedOpsPerSec < 4e8 ? 3
-                         : cpuSpeedOpsPerSec < 6e8 ? 4 : 5;
-      // Memory latency tier: lower ns = faster RAM = higher tier.
-      const memLatencyTier = memLatencyNs <= 0 ? 1
-                           : memLatencyNs < 40  ? 5  // DDR5 / HBM
-                           : memLatencyNs < 70  ? 4  // DDR4-3600+
-                           : memLatencyNs < 100 ? 3  // DDR4-2400
-                           : memLatencyNs < 150 ? 2  // DDR3 / slow DDR4
-                           : 1;                       // very slow / virtual
-
-      // Proof integrity: Node re-runs the same computation and confirms the hash matches.
-      // A false value means the Node process itself is corrupted/patched — treat as fatal.
-      if (backendBench.cpuSpeedProofVerified === false) {
-        issues.push('cpu speed proof failed verification — benchmark integrity compromised');
-      }
-      if (backendBench.memProofVerified === false) {
-        issues.push('memory proof failed verification — benchmark integrity compromised');
-      }
-      if (jitterRatio > 0.45) {
-        issues.push('high benchmark jitter detected');
-      }
-      const logicalCores = Math.max(
-        1,
-        Number(hardware.logicalCores)
-          || Number(hardware.physicalCores)
-          || Number(navigator.hardwareConcurrency)
-          || 1
-      );
-      const minExpectedCpu = logicalCores * 50_000;
-      if (cpuOpsPerSec < minExpectedCpu) {
-        issues.push('cpu throughput below expected envelope');
-      }
-      if (memoryMBps < 500) {
-        issues.push('memory bandwidth below expected envelope');
-      }
-
-      // Hardware-specific ops/s validation: compare measured CPU speed against the
-      // expected throughput for the declared CPU model.  Catches extreme mismatches
-      // (claimed hardware that would be physically impossible at the reported ops/s)
-      // and calibrates the TDP power estimate using the actual performance fraction.
-      const cpuKey = hardware.cpu ? hardware.cpu.split(' (')[0] : '';
-      const expectedSpeedOps = getExpectedCpuSpeedOps(cpuKey);
-      let hardwareOpsRatio = 1.0; // default: no calibration data
-      if (expectedSpeedOps > 0 && cpuSpeedOpsPerSec > 0) {
-        hardwareOpsRatio = cpuSpeedOpsPerSec / expectedSpeedOps;
-        if (hardwareOpsRatio > 3.5) {
-          // Measured ops/s is impossibly high for the declared CPU → possible spoofing.
-          issues.push(`cpu speed ${Math.round(cpuSpeedOpsPerSec / 1e6)}M ops/s exceeds expected ${Math.round(expectedSpeedOps / 1e6)}M for declared hardware`);
-        }
-        if (hardwareOpsRatio < 0.08) {
-          // More than 12× below expected → hardware claim implausible (VM with wrong CPU label?).
-          issues.push(`cpu speed ${Math.round(cpuSpeedOpsPerSec / 1e6)}M ops/s far below expected ${Math.round(expectedSpeedOps / 1e6)}M for declared hardware`);
-        }
-      }
-      // Ops calibration: blend 50% fixed + 50% ratio-adjusted, clamped 0.20–1.20.
-      // At ratio=1.0 → 1.0 (no change); at ratio=0.5 → 0.75 (thermal throttle reflected).
-      const newOpsCalibration = expectedSpeedOps > 0 && cpuSpeedOpsPerSec > 0
-        ? Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * hardwareOpsRatio))
-        : 1.0;
-      setBenchmarkOpsCalibration(newOpsCalibration);
-
-      // Memory bandwidth calibration: compare measured sequential bandwidth to expected for
-      // the declared memory type + speed.  Flags impossible values (e.g. DDR5-6000 speed but
-      // DDR3-tier bandwidth) and scales the memory TDP contribution accordingly.
-      const randomMemBandwidthMBps = Math.max(0, Number(backendBench.randomMemBandwidthMBps) || 0);
-      // memLatencyNs already declared above (used for tier computation).
-      const expectedMemBwMBps = getExpectedMemBandwidthMBps(
-        hardware.memory, hardware.memSpeedMhz || 0, hardware.memSticks || 1
-      );
-      let memBwRatio = 1.0;
-      if (expectedMemBwMBps > 0 && memoryMBps > 0) {
-        memBwRatio = memoryMBps / expectedMemBwMBps;
-        if (memBwRatio > 3.0) {
-          issues.push(`memory bandwidth ${Math.round(memoryMBps / 1024)} GB/s exceeds expected ${Math.round(expectedMemBwMBps / 1024)} GB/s for declared spec`);
-        }
-        if (memBwRatio < 0.25) {
-          issues.push(`memory bandwidth ${Math.round(memoryMBps / 1024)} GB/s far below expected ${Math.round(expectedMemBwMBps / 1024)} GB/s for declared spec`);
-        }
-      }
-      const newMemCalibration = expectedMemBwMBps > 0 && memoryMBps > 0
-        ? Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * memBwRatio))
-        : 1.0;
-      setBenchmarkMemCalibration(newMemCalibration);
-
-      // GPU ALU-score calibration: only run for desktops with discrete GPUs.
-      // Laptops are modelled as a single thermal unit (CPU+iGPU envelope), so GPU
-      // benchmarking is meaningless there.  Also skip for any device where GPU
-      // workloads are disabled (allowGpuWorkloads = false).
-      // runWebGLBenchmark now uses a DOM canvas (hardware-accelerated path) and
-      // already returns null if readPixels failed to actually drag the GPU pipeline.
-      let gpuScore = 0;
-      let gpuScoreElapsedMs = 0;
-      if (allowGpuWorkloads) {
-        try {
-          const gpuBench = await runWebGLBenchmark();
-          if (gpuBench && gpuBench.score) {
-            gpuScore = gpuBench.score;
-            gpuScoreElapsedMs = gpuBench.elapsedMs;
-          } else if (gpuBench && gpuBench.error) {
-            issues.push('gpu-bench: ' + gpuBench.error);
-          }
-        } catch (_) {
-          // WebGL unavailable or context lost — skip GPU calibration silently
-        }
-      }
-      const declaredGpus = Array.isArray(hardware.gpus) && hardware.gpus.length > 0
-        ? hardware.gpus : (hardware.gpu && hardware.gpu !== 'Unknown' ? [hardware.gpu] : []);
-      // Use the highest-ranked expected score among declared GPUs (multi-GPU systems)
-      let maxExpectedGpuScore = 0;
-      let gpuTableMatch = false;
-      for (const g of declaredGpus) {
-        const exp = getExpectedGpuScore(g);
-        if (exp > maxExpectedGpuScore) { maxExpectedGpuScore = exp; gpuTableMatch = true; }
-      }
-      if (maxExpectedGpuScore > 0 && !declaredGpus.some(g => {
-        // Re-check if any GPU was truly matched (not just the fallback 3_500_000)
-        // by seeing if at least one model string matched a named entry.
-        return /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g);
-      })) {
-        console.warn('[GPU] Unrecognised GPU model(s):', declaredGpus.join(', '), '- using fallback expected score 3.5M ops/ms');
-      }
-      // True when at least one declared GPU is a named, table-matched entry.
-      // For known GPUs, substituting the table value when readPixels doesn’t stall
-      // is correct behaviour — not an anomaly worth flagging.
-      const isNamedGpu = declaredGpus.some(g =>
-        /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g)
-      );
-      let gpuScoreRatio = 1.0;
-      if (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0) {
-        gpuScoreRatio = gpuScore / maxExpectedGpuScore;
-        if (gpuScoreRatio < 0.05) {
-          issues.push(`GPU score ${Math.round(gpuScore / 1e3)}K ops/ms far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`);
-        }
-      }
-      const newGpuCalibration = allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0
-        ? Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * gpuScoreRatio))
-        : 1.0;
-      setBenchmarkGpuCalibration(newGpuCalibration);
-      // Report GPU calibration to main process so it owns the authoritative value.
-      // GPU benchmarking requires WebGL and must run in the renderer; main process
-      // receives the raw score and performs the same ratio calc independently.
-      let gpuCalibResult = null;
-      if (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0) {
-        try {
-          if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-            gpuCalibResult = await window.wattcoinHardware.invoke('wattcoin-report-gpu-calibration', {
-              gpuScore,
-              maxExpectedScore: maxExpectedGpuScore,
-            }).catch(() => null);
-          }
-        } catch (_) {}
-      }
-
-      // GPU proof: single deterministic integer-shader render keyed by challengeSeed.
-      // Node verifies it independently using computeGpuProbeExpectedHash (pure JS,
-      // no GPU needed) — requires WebGL2; skipped on software-rendered contexts.
-      let gpuProofHash    = '';
-      let gpuProofVerified = false;
-      if (allowGpuWorkloads) {
-        try {
-          const gpuProof = await runGpuBenchmarkProof(challengeSeed, GPU_PROOF_SIZE, GPU_PROOF_ITERS);
-          if (gpuProof) {
-            gpuProofHash = gpuProof.proofHash;
-            if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-              const vr = await window.wattcoinHardware.invoke('wattcoin-verify-gpu-proof', {
-                seed: challengeSeed,
-                size: GPU_PROOF_SIZE,
-                shaderIterations: GPU_PROOF_ITERS,
-                proofHash: gpuProofHash,
-              }).catch(() => null);
-              gpuProofVerified = !!(vr && vr.verified);
-            }
-            if (!gpuProofVerified) {
-              issues.push('gpu proof failed verification — GPU render may be software-emulated');
-            }
-            if (gpuProof.benchError) {
-              issues.push(gpuProof.benchError);
-            }
-            // Always use the proof's embedded MAD benchmark score — it runs on the
-            // same DOM canvas path that produced the proof, so it is guaranteed to
-            // reflect real GPU execution. Prefer it over runWebGLBenchmark which has
-            // historically been unreliable on discrete GPUs with ANGLE/D3D11.
-            if (gpuProof.gpuScore > 0) {
-              // Always use the raw measured score — let the real number show.
-              gpuScore      = gpuProof.gpuScore;
-              gpuScoreRatio = maxExpectedGpuScore > 0 ? gpuProof.gpuScore / maxExpectedGpuScore : 1.0;
-              if (gpuScoreRatio < 0.05) {
-                issues.push(`GPU score ${Math.round(gpuScore / 1e3)}K ops/ms far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`);
-              }
-              setBenchmarkGpuCalibration(Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * gpuScoreRatio)));
-              try {
-                if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-                  gpuCalibResult = await window.wattcoinHardware.invoke('wattcoin-report-gpu-calibration', {
-                    gpuScore,
-                    maxExpectedScore: maxExpectedGpuScore,
-                  }).catch(() => null);
-                }
-              } catch (_) {}
-            }
-          }
-        } catch (_) {}
-      }
-
-      // Startup and slider-stop benchmarks define new baselines — no drift check.
-      const adoptSliderBaseline = reason === 'slider-stop';
-      const isBaselineBenchmark = reason === 'startup' || reason === 'slider-stop';
-      if (isBaselineBenchmark) {
-        benchmarkRefCpuOpsRef.current   = cpuOpsPerSec;
-        benchmarkRefMemBwRef.current    = memoryMBps;
-        benchmarkRefMemLatencyRef.current = memLatencyNs > 0 ? memLatencyNs : null;
-        benchmarkRefGpuScoreRef.current = gpuScore > 0 ? gpuScore : null;
-        benchmarkRefJitterRef.current   = jitterRatio > 0 ? jitterRatio : null;
-        benchmarkRetryPendingRef.current = false;
-      } else {
-        let retryEscalationReason = '';
-        let scheduleExtendedRetry = false;
-        // Multi-metric drift detection: flag any metric that drifts >25% from its per-session baseline.
-        const driftChecks = [];
-
-        const refOps = benchmarkRefCpuOpsRef.current;
-        if (refOps !== null && refOps > 0) {
-          const d = Math.abs(cpuOpsPerSec - refOps) / refOps;
-          if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`cpu ${(d * 100).toFixed(1)}%`);
-        } else {
-          benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
-        }
-
-        const refMemLatency = benchmarkRefMemLatencyRef.current;
-        if (refMemLatency !== null && refMemLatency > 0 && memLatencyNs > 0) {
-          const d = Math.abs(memLatencyNs - refMemLatency) / refMemLatency;
-          if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`ddr latency ${(d * 100).toFixed(1)}%`);
-        } else if (memLatencyNs > 0) {
-          benchmarkRefMemLatencyRef.current = memLatencyNs;
-        }
-
-        const refGpu = benchmarkRefGpuScoreRef.current;
-        if (refGpu !== null && refGpu > 0 && gpuScore > 0) {
-          const d = Math.abs(gpuScore - refGpu) / refGpu;
-          if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`gpu ${(d * 100).toFixed(1)}%`);
-        } else if (gpuScore > 0) {
-          benchmarkRefGpuScoreRef.current = gpuScore;
-        }
-
-        // Jitter is inherently noisy; relative drift against a small baseline produces massive
-        // false positives. It is already capped by the absolute >45% threshold above, so skip
-        // relative jitter drift here and just keep the baseline current.
-        if (jitterRatio > 0) benchmarkRefJitterRef.current = jitterRatio;
-
-        if (driftChecks.length > 0) {
-          const driftDesc = driftChecks.join(', ');
-          if (benchmarkRetryPendingRef.current) {
-            // Second consecutive drift: 5-min hardware hold + -10 trust (applied by activateHardwareHold).
-            retryEscalationReason = `drift on retry: ${driftDesc}`;
-            issues.push(`benchmark drift on retry: ${driftDesc}`);
-          } else {
-            // First drift: immediate 2x extended re-benchmark.
-            scheduleExtendedRetry = true;
-            issues.push(`benchmark drift (${driftDesc}) extended re-benchmark scheduled`);
-          }
-        } else {
-          // No significant drift: update baselines to track gradual hardware changes.
-          if (cpuOpsPerSec > 0)  benchmarkRefCpuOpsRef.current   = cpuOpsPerSec;
-          if (memoryMBps > 0)    benchmarkRefMemBwRef.current    = memoryMBps;
-          if (memLatencyNs > 0)  benchmarkRefMemLatencyRef.current = memLatencyNs;
-          if (gpuScore > 0)      benchmarkRefGpuScoreRef.current = gpuScore;
-          if (jitterRatio > 0)   benchmarkRefJitterRef.current   = jitterRatio;
-        }
-
-        const benchmarkIssues = issues.filter((issue) => {
-          const text = String(issue || '');
-          return text
-            && !text.includes('extended re-benchmark scheduled')
-            && !text.startsWith('benchmark drift on retry:');
-        });
-
-        if (!retryEscalationReason && benchmarkIssues.length > 0) {
-          const issueDesc = benchmarkIssues.join(', ');
-          if (benchmarkRetryPendingRef.current || reason === 'retry-drift') {
-            retryEscalationReason = `benchmark issues on retry: ${issueDesc}`;
-            issues.push(`benchmark issues persisted on retry: ${issueDesc}`);
-          } else if (!scheduleExtendedRetry) {
-            scheduleExtendedRetry = true;
-            issues.push(`benchmark issues (${issueDesc}) extended re-benchmark scheduled`);
-          }
-        }
-
-        if (retryEscalationReason) {
-          await activateHardwareHold(retryEscalationReason);
-          benchmarkRetryPendingRef.current = false;
-        } else if (scheduleExtendedRetry) {
-          benchmarkRetryPendingRef.current = true;
-          setTimeout(() => {
-            if (!benchmarkInFlightRef.current && hardwareHoldUntilRef.current <= Date.now()) {
-              runBenchmark('retry-drift', { extended: true });
-            }
-          }, 0);
-        } else {
-          benchmarkRetryPendingRef.current = false;
-        }
-      }
-
-      // Score — computed after all issue checks so every detected issue penalises the result.
-      let score = 100;
-      if (!isBaselineBenchmark) {
-        score -= Math.min(60, issues.length * 12);
-        if (jitterRatio > 0.30) score -= 8;
-      }
-      score = Math.max(0, Math.min(100, Math.round(score)));
-
-      // Cross-session performance baseline: persist ops/sec to detect hardware spoofing between sessions.
-      try {
-        const baselineSecret = localStorage.getItem(FINGERPRINT_SECRET_STORAGE_KEY) || '';
-        const prevOpsStr = localStorage.getItem(BENCH_BASELINE_OPS_KEY) || '';
-        const prevSig = localStorage.getItem(BENCH_BASELINE_SIG_KEY) || '';
-        if (prevOpsStr && prevSig === simpleHash(`${baselineSecret}|${prevOpsStr}|0`)) {
-          const prevOps = Number(prevOpsStr);
-          if (Number.isFinite(prevOps) && prevOps > 0) {
-            const crossDrift = Math.abs(cpuOpsPerSec - prevOps) / prevOps;
-            if (crossDrift > 0.65) {
-              issues.push(`cross-session cpu drift ${(crossDrift * 100).toFixed(1)}%`);
-            }
-          }
-        }
-        const opsStr = Math.round(cpuOpsPerSec).toString();
-        const newSig = simpleHash(`${baselineSecret}|${opsStr}|0`);
-        localStorage.setItem(BENCH_BASELINE_OPS_KEY, opsStr);
-        localStorage.setItem(BENCH_BASELINE_GPS_KEY, '0');
-        localStorage.setItem(BENCH_BASELINE_SIG_KEY, newSig);
-      } catch (_) {
-        // Ignore persistence failures.
-      }
-
-      // Benchmark-derived power cap: conservative on first run, raises gradually after 10 consecutive underestimates.
-      {
-        const isLaptopForCap = hardware.deviceType === 'Laptop';
-        const navCoresForCap = Math.max(1, navigator.hardwareConcurrency || 1);
-        let newCapW;
-        if (isLaptopForCap) {
-          // For laptops, cap is anchored to real manufacturer TDP fetched online.
-          // Starting cap = 60% of declared TDP (40% conservative buffer; max mining load is 85%).
-          // It grows back toward 100% via the consecutive-clean-benchmark raise logic.
-          const refTDP = totalHardwareTDPRef.current;
-          if (refTDP > 0) {
-            newCapW = Math.round(refTDP * 0.60);
-          } else {
-            // No TDP data yet: conservative ops-based fallback (small absolute numbers).
-            if (cpuOpsPerSec < 200_000)        newCapW = 25;
-            else if (cpuOpsPerSec < 500_000)   newCapW = 35;
-            else if (cpuOpsPerSec < 1_000_000) newCapW = 50;
-            else                               newCapW = 65;
-          }
-        } else {
-          // Desktop / PC / Server: derive cap from CPU ops throughput per core + GPU metric.
-          let benchCpuCapW;
-          if (cpuOpsPerSec < 80_000)         benchCpuCapW = 20 * navCoresForCap;
-          else if (cpuOpsPerSec < 200_000)   benchCpuCapW = 40 * navCoresForCap;
-          else if (cpuOpsPerSec < 500_000)   benchCpuCapW = 65 * navCoresForCap;
-          else if (cpuOpsPerSec < 1_000_000) benchCpuCapW = 100 * navCoresForCap;
-          else                               benchCpuCapW = 160 * navCoresForCap;
-          benchCpuCapW = Math.min(benchCpuCapW, 800);
-          const benchGpuCapW = allowGpuWorkloads ? 80 : 25;
-          newCapW = benchCpuCapW + benchGpuCapW + 30;
-        }
-        // TDP ceiling: upper bound for raise steps (laptops: full 100% TDP; desktops: static table).
-        // Item 2: when hardware name lookup returns 0 (unknown CPU), use measurement-derived tier
-        // ceiling so declaring an unknown high-end CPU doesn't give free power headroom.
-        let tdpCeilingW = 0;
-        if (isLaptopForCap) {
-          // Ceiling is the full declared TDP — base is 80%, raises stop at 100%.
-          tdpCeilingW = totalHardwareTDPRef.current > 0 ? totalHardwareTDPRef.current : newCapW * 1.5;
-        } else {
-          const cpuSocketsForCap = Math.max(1, Number(hardware.cpuSockets) || 1);
-          const navCoresCap2 = Math.max(1, navigator.hardwareConcurrency || 1);
-          const validSocketsCap = Math.min(cpuSocketsForCap, Math.max(1, Math.floor(navCoresCap2 / 2)));
-          if (hardware.cpu) {
-            const cpuKeyForCap = hardware.cpu.split(' (')[0];
-            const staticCpuTdp = cpuTDPTable[cpuKeyForCap];
-            if (staticCpuTdp) tdpCeilingW += staticCpuTdp * validSocketsCap;
-          }
-          for (const m of allGpuModels) {
-            const staticGpuTdp = gpuTDPTable[m];
-            if (staticGpuTdp) tdpCeilingW += staticGpuTdp;
-          }
-          tdpCeilingW += 30; // overhead margin
-          // Item 2: if hardware name tables gave us nothing (unknown CPU/GPU), fall back to
-          // a tier-based ceiling derived purely from measured ops/s — prevents fake declarations
-          // from granting an artificially high power ceiling.
-          if (tdpCeilingW <= 30) {
-            const tierCpuCeilingPerSocket = cpuSpeedTier === 5 ? 600
-                                          : cpuSpeedTier === 4 ? 350
-                                          : cpuSpeedTier === 3 ? 220
-                                          : cpuSpeedTier === 2 ? 125 : 65;
-            tdpCeilingW = tierCpuCeilingPerSocket * validSocketsCap + (allowGpuWorkloads ? 120 : 30) + 30;
-          }
-        }
-        const effectiveCeiling = Math.max(tdpCeilingW, newCapW);
-        const currentCap = benchmarkPowerCapWRef.current;
-        if (currentCap === null) {
-          // First benchmark: establish the cap conservatively.
-          setBenchmarkPowerCapW(newCapW);
-          consecutiveUnderestimateRef.current = 0;
-        } else if (newCapW > currentCap) {
-          // Throughput implies more power than current cap allows — count as underestimate.
-          consecutiveUnderestimateRef.current += 1;
-          if (consecutiveUnderestimateRef.current >= 10) {
-            const raisable = effectiveCeiling - currentCap;
-            if (raisable > 0) {
-              setBenchmarkPowerCapW(Math.min(currentCap + raisable / 10, effectiveCeiling));
-            }
-            consecutiveUnderestimateRef.current = 0;
-          }
-        } else {
-          // Throughput within cap — keep cap, reset counter.
-          consecutiveUnderestimateRef.current = 0;
-        }
-      }
-
-      // Sync trust score and hw-hold from the main-process authority.
-      // Main is the only party that computes trust changes — renderer reads back
-      // the authoritative values including before/after snapshots for the delta.
-      // trustScoreBefore / trustScoreAfter are injected by the benchmark handler.
-      let lastTrustDelta = 0;
-      const prevTrustForDelta = typeof backendBench.trustScoreBefore === 'number'
-        ? backendBench.trustScoreBefore
-        : trustScoreRef.current;
+      const holdUntil = nowMs + durationMs;
+      hardwareHoldUntilRef.current = holdUntil;
+      setHardwareHoldUntilMs(holdUntil);
+      // Trust decrement is applied by the main process in wattcoin-activate-hardware-hold;
+      // renderer syncs the new value below after the IPC call returns.
+      // Notify main process so the hold is persisted to the authoritative store
+      // (hw-auth-state.json in userData) and cannot be cleared via localStorage.
       try {
         if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-          const auth = await window.wattcoinHardware.invoke('wattcoin-get-authority-state').catch(() => null);
-          if (auth) {
-            if (typeof auth.trustScore === 'number') {
-              setTrustScore(auth.trustScore);
-              trustScoreRef.current = auth.trustScore;
-              if (!isBaselineBenchmark) {
-                lastTrustDelta = auth.trustScore - prevTrustForDelta;
-              }
-              // If main triggered a hold (trust hit 0), reflect it in the renderer.
-              if (!isBaselineBenchmark && auth.trustScore === 0 && prevTrustForDelta > 0 && !auth.isOnHold) {
-                await activateHardwareHold('trust score depleted: repeated anomalies detected', 24 * 60 * 60 * 1000);
-              }
-            }
-            if (typeof auth.hwHoldUntilMs === 'number' && auth.hwHoldUntilMs > Date.now()) {
-              hardwareHoldUntilRef.current = auth.hwHoldUntilMs;
-              setHardwareHoldUntilMs(auth.hwHoldUntilMs);
-            }
+          const holdResult = await window.wattcoinHardware
+            .invoke('wattcoin-activate-hardware-hold', { durationMs })
+            .catch(() => null);
+          // Sync trust + hold from main after it applies the decrement.
+          const authAfterHold = await window.wattcoinHardware.invoke('wattcoin-get-authority-state').catch(() => null);
+          if (authAfterHold && typeof authAfterHold.trustScore === 'number') {
+            setTrustScore(authAfterHold.trustScore);
+            trustScoreRef.current = authAfterHold.trustScore;
           }
+          void holdResult;
         }
       } catch (_) {}
 
-      const elapsedMs = performance.now() - startedAt;
-      const trustAfter = trustScoreRef.current;
-      let bgCpuOpsPerSec = 0;
-      let bgMemMBps = 0;
-      let bgCpuDutyPct = 0;
-      let bgMemDutyPct = 0;
-      try {
-        if (window.wattcoinHardware && window.wattcoinHardware.getHardwareLoadState) {
-          const hwState = await window.wattcoinHardware.getHardwareLoadState();
-          if (hwState && hwState.ok) {
-            bgCpuOpsPerSec = Math.max(0, Number(hwState.cpuLoadOpsPerSec) || 0);
-            bgMemMBps = Math.max(0, Number(hwState.memLoadMBps) || 0);
-            bgCpuDutyPct = Math.max(0, Math.min(100, (Number(hwState.avgCpuWorkerDuty) || 0) * 100));
-            bgMemDutyPct = Math.max(0, Math.min(100, (Number(hwState.memDuty) || 0) * 100));
-          }
-        }
-      } catch (_) {}
-      const totalCpuWorkOpsPerSec = cpuOpsPerSec + bgCpuOpsPerSec;
-      const totalMemWorkMBps = memoryMBps + bgMemMBps;
-      const gpuDutyPct = Math.max(0, Math.min(100, gpuMeasuredDutyRef.current * 100));
-      const gpuActualWorkOpsPerMs = gpuScore > 0 ? (gpuScore * (gpuDutyPct / 100)) : 0;
-      const summary = `Benchmark score: ${score}/100` +
-        `, cpu-speed ${fmtNum(cpuSpeedOpsPerSec, 0)} ops/s${expectedSpeedOps > 0 ? ` (${(hardwareOpsRatio * 100).toFixed(0)}% of expected)` : ''}` +
-        `, cpu-phase ${fmtNum(cpuOpsPerSec, 0)} ops/s` +
-        `, cpu-total ${fmtNum(totalCpuWorkOpsPerSec, 0)} ops/s (bench ${fmtNum(cpuOpsPerSec, 0)} + bg ${fmtNum(bgCpuOpsPerSec, 0)} @${bgCpuDutyPct.toFixed(0)}%)` +
-        `, mem-seq ${fmtNum(memoryMBps, 0)} MB/s${expectedMemBwMBps > 0 ? ` (${(memBwRatio * 100).toFixed(0)}% of expected)` : ''}` +
-        `, mem-total ${fmtNum(totalMemWorkMBps, 0)} MB/s (bench ${fmtNum(memoryMBps, 0)} + bg ${fmtNum(bgMemMBps, 0)} @${bgMemDutyPct.toFixed(0)}%)` +
-        (memLatencyNs > 0 ? `, mem-latency ${memLatencyNs.toFixed(0)} ns` : '') +
-        (allowGpuWorkloads ? (gpuScore > 0 ? `, gpu-score ${fmtNum(gpuScore, 0)} ops/ms${maxExpectedGpuScore > 0 ? ` (${(gpuScoreRatio * 100).toFixed(0)}% of expected)` : ''}` : ', gpu-score n/a') : '') +
-        (allowGpuWorkloads ? (gpuScore > 0
-          ? `, gpu-total ${fmtNum(gpuActualWorkOpsPerMs, 0)} ops/ms (bench ${fmtNum(gpuScore, 0)} @${gpuDutyPct.toFixed(1)}%)`
-          : `, gpu-total duty ${gpuDutyPct.toFixed(1)}%`) : '') +
-        `, jitter ${(jitterRatio * 100).toFixed(1)}%, challenge ${challengeSeed}` +
-        `, trust ${trustAfter}/100${!isBaselineBenchmark ? ` (${lastTrustDelta > 0 ? '+' : ''}${lastTrustDelta})` : ''}` +
-        `, cpu-proof ${backendBench.cpuSpeedProof || 'n/a'} (seed ${backendBench.cpuSpeedInitialSeed || 0})` +
-        `, mem-proof ${backendBench.memProof || 'n/a'}` +
-        (gpuProofHash ? `, gpu-proof ${gpuProofHash}${gpuProofVerified ? '' : ' (unverified)'}` : (allowGpuWorkloads ? ', gpu-proof n/a' : ''));
-      const issueSummary = issues.length ? `issues: ${issues.join('; ')}` : 'no anomalies';
-
-      // Compute vs-average deviation percentages using personal mean returned by main.
-      const personalMeanCpu = Number(backendBench.personalMeanCpu) || 0;
-      const personalMeanMem = Number(backendBench.personalMeanMem) || 0;
-      const personalMeanGpuRatio = Number(gpuCalibResult && gpuCalibResult.personalMeanGpuRatio) || 0;
-      const lastAvgCpuPct = personalMeanCpu > 0 ? Math.round((cpuSpeedOpsPerSec / personalMeanCpu - 1) * 100) : null;
-      const lastAvgMemPct = personalMeanMem > 0 ? Math.round((memoryMBps      / personalMeanMem - 1) * 100) : null;
-      const lastAvgGpuPct = (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0 && hardware.deviceType !== 'Laptop')
-        ? Math.round((gpuScoreRatio / (personalMeanGpuRatio > 0 ? personalMeanGpuRatio : 1.0) - 1) * 100)
-        : null;
-
-      setBenchmarkState({
-        running: false,
-        startupDone: true,
-        lastScore: score,
-        lastReason: reason,
-        lastSummary: `${summary} (${issueSummary})`,
-        issues,
-        lastJitterPct: Math.round(jitterRatio * 1000) / 10,
-        lastTrustDelta,
-        lastAvgCpuPct,
-        lastAvgMemPct,
-        lastAvgGpuPct,
-      });
-
-      // Persist proof data so the next mineBlock call can include it in the OP_RETURN
-      // commitment.  Other nodes can then re-run cpuSpeedStep(initialSeed, N=20M) and
-      // confirm the proof hash, giving them independent verification of the computation.
-      benchmarkProofRef.current = {
-        cpuSpeedProof:        backendBench.cpuSpeedProof        || '',
-        cpuSpeedInitialSeed:  Number(backendBench.cpuSpeedInitialSeed) || 0,
-        memProof:             backendBench.memProof              || '',
-        memLatencyNs:         Math.max(0, Number(backendBench.memLatencyNs) || 0),
-        gpuProof:             gpuProofHash                       || '',
-        gpuProofSeed:         gpuProofHash ? challengeSeed       : 0,
-        gpuProofVerified,
-        challengeSeed:        Number(backendBench.challengeSeed) || 0,
-        cpuOpsPerSec:         Math.round(cpuOpsPerSec),
-        cpuSpeedOpsPerSec:    Math.round(cpuSpeedOpsPerSec),
-        cpuTotalWorkOpsPerSec: Math.round(totalCpuWorkOpsPerSec),
-        backgroundCpuOpsPerSec: Math.round(bgCpuOpsPerSec),
-        memoryMBps:           Math.round(memoryMBps),
-        memoryTotalWorkMBps:   Math.round(totalMemWorkMBps),
-        backgroundMemMBps:     Math.round(bgMemMBps),
-        gpuScoreOpsPerMs:      Math.round(gpuScore),
-        gpuActualWorkOpsPerMs: Math.round(gpuActualWorkOpsPerMs),
-        gpuMeasuredDutyPct:    Math.round(gpuDutyPct * 10) / 10,
-        jitterRatio:          Math.round(jitterRatio * 10000) / 10000,
-        cpuSpeedTier,   // item 2: measurement-derived tier
-        memLatencyTier, // item 2: measurement-derived tier
-        score,
-        issues: [...issues],
-        benchmarkTs:          Date.now(),
-      };
-      try {
-        sessionStorage.setItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY, '1');
-      } catch (_) {
-        // Ignore storage failures.
-      }
-
-      setLog(log => [
-        { time: now(), msg: `Benchmark (${reason}${isBaselineBenchmark && benchLoadPct > 0 ? ` @${benchLoadPct}%` : ''}) in ${fmtNum(elapsedMs, 0)} ms: ${summary} (${issueSummary})`, type: (!isBaselineBenchmark && issues.length) ? 'warn' : 'info' },
-        ...log,
-      ]);
-
-      return { score, issues };
-    } catch (e) {
-      setBenchmarkState(prev => ({
-        ...prev,
-        running: false,
-        startupDone: true,
-        lastSummary: `benchmark failed: ${e && e.message ? e.message : 'unknown error'}`,
-      }));
-      try {
-        sessionStorage.setItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY, '1');
-      } catch (_) {
-        // Ignore storage failures.
-      }
-      setLog(log => [{ time: now(), msg: `Benchmark failed (${reason}): ${e && e.message ? e.message : 'unknown error'}`, type: 'error' }, ...log]);
-      return null;
-    } finally {
-      benchmarkInFlightRef.current = false;
-      // Stop the synthetic load if we applied it for this benchmark and mining
-      // has not been activated in the meantime.
-      if (benchLoadPct > 0 && !wasMiningAtStart && !miningRef.current) {
+      if (mining) {
+        setMining(false);
+        setRealMineStatus('Mining stopped: hardware on hold');
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.stopHardwareLoad) {
             await window.wattcoinHardware.stopHardwareLoad();
           } else if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
             await window.wattcoinHardware.setHardwareLoad(0);
           }
-        } catch (_) {}
+        } catch (_) {
+          // Best effort stop when hold is activated.
+        }
+        setLog((log) => [
+          {
+            time: now(),
+            msg: `Hardware hold activated: ${reason}. Mining stopped automatically.`,
+            type: 'warn',
+          },
+          ...log,
+        ]);
       }
-    }
-  }, [activateHardwareHold, allowGpuWorkloads, hardware, setLog]);
+
+      return holdUntil;
+    },
+    [mining, setMining, setLog],
+  );
+
+  const runBenchmark = React.useCallback(
+    async (reason = 'manual', { extended = false } = {}) => {
+      if (ENABLE_HARDWARE_HOLD && hardwareHoldUntilRef.current > Date.now()) {
+        return { skipped: true, reason: 'hold-active' };
+      }
+      if (benchmarkInFlightRef.current) return null;
+      benchmarkInFlightRef.current = true;
+      setBenchmarkState((prev) => ({ ...prev, running: true }));
+
+      // For startup and slider-stop benchmarks: apply the slider's hardware load so
+      // measurements are taken under real working conditions.  The hardware load ramp
+      // takes ~3 s, so we wait before measuring.  Afterward the load is stopped if
+      // mining was not already active when the benchmark started.
+      const isBaselineBench = reason === 'startup' || reason === 'slider-stop';
+      const wasMiningAtStart = miningRef.current;
+      const _rawBenchLoad = isBaselineBench
+        ? Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, loadPercentRef.current || 0))
+        : 0;
+      // Apply the same trust cap used by syncHardwareLoadTarget and effectiveLoadPercent
+      // so the baseline benchmark runs at the same load ceiling as live mining.
+      const _trustFBench = Math.min(1.0, 0.6 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.4);
+      const benchLoadPct = Math.min(_rawBenchLoad, Math.round(_trustFBench * 100));
+      if (benchLoadPct > 0 && !wasMiningAtStart) {
+        try {
+          if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
+            await window.wattcoinHardware.setHardwareLoad(benchLoadPct);
+          }
+        } catch (_) {}
+        // Wait for the full 3-second hardware load ramp to complete before measuring.
+        await new Promise((r) => setTimeout(r, 3200));
+      } else if (isBaselineBench && wasMiningAtStart && benchLoadPct > 0) {
+        // Mining: syncHardwareLoadTarget already started the ramp when the slider changed,
+        // but only ~1500ms ago (the slider-stop debounce). The ramp takes 3000ms total, so
+        // wait for the remaining ~1700ms to ensure load is fully settled before measuring.
+        await new Promise((r) => setTimeout(r, 1700));
+      }
+
+      try {
+        const issues = [];
+        const startedAt = performance.now();
+
+        // Device fingerprint — stored in userData (not localStorage) so clearing browser
+        // storage cannot reset cross-session drift detection (item 6).
+        // Falls back to localStorage if the IPC API isn't available (dev/browser mode).
+        let fingerprintHash = '';
+        try {
+          const fingerprintPayload = JSON.stringify({
+            deviceType: hardware.deviceType || '',
+            manufacturer: hardware.manufacturer || '',
+            version: hardware.version || '',
+            cpu: hardware.cpu || '',
+            gpu: hardware.gpu || '',
+            memTotalGB: Math.round(hardware.memTotalGB || 0),
+            source: hardware.source || '',
+            // osName, userAgent, and platform intentionally excluded: all change on
+            // OS/app/Electron updates and are not indicators of hardware substitution.
+            // navigator.platform is also deprecated in modern Electron/Chrome.
+          });
+          fingerprintHash = simpleHash(fingerprintPayload);
+
+          const hw = window.wattcoinHardware;
+          if (hw && hw.readFingerprintFile && hw.writeFingerprintFile) {
+            // File-based path: userData-persisted, wallet-HMAC-signed (items 6).
+            const stored = await hw.readFingerprintFile().catch(() => ({ ok: true, data: null }));
+            const prevData = stored && stored.data ? stored.data : null;
+            const prevHash = prevData && prevData.hash ? String(prevData.hash) : '';
+            const prevFmtVer = prevData && prevData.fmtVer ? Number(prevData.fmtVer) : 1;
+            // Only compare if stored hash uses the same format version.  A format bump
+            // (e.g. removing volatile fields) would produce a different hash for the same
+            // hardware, so we silently re-baseline instead of flagging a false change.
+            if (prevHash && prevFmtVer === 2 && prevHash !== fingerprintHash) {
+              issues.push('device fingerprint changed unexpectedly');
+            }
+            await hw.writeFingerprintFile({ hash: fingerprintHash, fmtVer: 2, ts: Date.now() }).catch(() => null);
+          } else {
+            // localStorage fallback (browser/dev mode).
+            let secret = localStorage.getItem(FINGERPRINT_SECRET_STORAGE_KEY);
+            if (!secret) {
+              secret = `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+              localStorage.setItem(FINGERPRINT_SECRET_STORAGE_KEY, secret);
+            }
+            const expectedSig = simpleHash(`${secret}|${fingerprintHash}`);
+            const prevHash = localStorage.getItem(FINGERPRINT_HASH_STORAGE_KEY) || '';
+            const prevSig = localStorage.getItem(FINGERPRINT_SIG_STORAGE_KEY) || '';
+            if (prevHash && prevSig === simpleHash(`${secret}|${prevHash}`) && prevHash !== fingerprintHash) {
+              issues.push('device fingerprint changed unexpectedly');
+            }
+            localStorage.setItem(FINGERPRINT_HASH_STORAGE_KEY, fingerprintHash);
+            localStorage.setItem(FINGERPRINT_SIG_STORAGE_KEY, expectedSig);
+          }
+        } catch (_) {
+          issues.push('fingerprint persistence check failed');
+        }
+
+        // Backend benchmark workload (CPU, memory, GPU provider metric).
+        const backendBench =
+          window.wattcoinHardware && window.wattcoinHardware.runBackendBenchmark
+            ? await window.wattcoinHardware
+                .runBackendBenchmark({
+                  reason,
+                  allowGpuWorkloads,
+                  phaseCount: 4,
+                  phaseDurationMs: extended ? 200 : 100,
+                  cpuSpeedRuns: reason === 'startup' || reason === 'slider-stop' ? 3 : 2,
+                  memBytes: 128 * 1024 * 1024, // 128 MB — exceeds L3 cache on virtually all consumer
+                  // CPUs (Intel max ~36 MB, standard AMD max ~64 MB),
+                  // ensuring DRAM bandwidth is measured, not L3 cache.
+                  // Hardware description strings for main-process authoritative calibration.
+                  // Main uses its own copy of the lookup tables (hardware-tables.cjs) so these
+                  // cannot be spoofed to inflate the calibration ratio.
+                  // Main also cross-checks these against OS-level APIs (os.cpus(), Electron
+                  // GPU info, systeminformation chassis) and applies a trust penalty + TDP
+                  // clamp if mismatches are detected.
+                  declaredCpuModel: hardware.cpu ? hardware.cpu.split(' (')[0] : '',
+                  declaredGpuModel: hardware.gpu || '',
+                  declaredDeviceType: hardware.deviceType || '',
+                  declaredMemType: hardware.memory || '',
+                  declaredMemSpeedMhz: hardware.memSpeedMhz || 0,
+                  declaredMemSticks: hardware.memSticks || 1,
+                  // Declared calibrated TDP so main can establish the per-tick energy ceiling.
+                  // Main applies its own calibration factor on top so declaring a wrong model
+                  // is penalised by the benchmark-measured ops ratio.
+                  declaredUnitPowerW: unitFullPowerWRef.current || 0,
+                  isBaselineBenchmark: reason === 'startup' || reason === 'slider-stop',
+                })
+                .catch((e) => {
+                  console.error('[Benchmark] IPC error:', e && e.message ? e.message : e);
+                  return null;
+                })
+            : null;
+        if (!(backendBench && backendBench.ok)) {
+          throw new Error(
+            `backend benchmark unavailable${backendBench && backendBench.message ? `: ${backendBench.message}` : ''}`,
+          );
+        }
+        const challengeSeed = Number(backendBench.challengeSeed) || 0;
+        const cpuOpsPerSec = Math.max(0, Number(backendBench.cpuOpsPerSec) || 0);
+        const memoryMBps = Math.max(0, Number(backendBench.memoryMBps) || 0);
+        const jitterRatio = Math.max(0, Number(backendBench.jitterRatio) || 0);
+        const cpuSpeedOpsPerSec = Math.max(0, Number(backendBench.cpuSpeedOpsPerSec) || 0);
+        const cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
+        const memLatencyNs = Math.max(0, Number(backendBench.memLatencyNs) || 0);
+
+        // Item 2: measurement-derived hardware tiers — independent of declared hardware names.
+        // Power credit is anchored to what was actually measured, not what was declared.
+        // Tier 1 = weakest measurable / VM; tier 5 = enthusiast.
+        const cpuSpeedTier =
+          cpuSpeedOpsPerSec < 1e8
+            ? 1
+            : cpuSpeedOpsPerSec < 2e8
+              ? 2
+              : cpuSpeedOpsPerSec < 4e8
+                ? 3
+                : cpuSpeedOpsPerSec < 6e8
+                  ? 4
+                  : 5;
+        // Memory latency tier: lower ns = faster RAM = higher tier.
+        const memLatencyTier =
+          memLatencyNs <= 0
+            ? 1
+            : memLatencyNs < 40
+              ? 5 // DDR5 / HBM
+              : memLatencyNs < 70
+                ? 4 // DDR4-3600+
+                : memLatencyNs < 100
+                  ? 3 // DDR4-2400
+                  : memLatencyNs < 150
+                    ? 2 // DDR3 / slow DDR4
+                    : 1; // very slow / virtual
+
+        // Proof integrity: Node re-runs the same computation and confirms the hash matches.
+        // A false value means the Node process itself is corrupted/patched — treat as fatal.
+        if (backendBench.cpuSpeedProofVerified === false) {
+          issues.push('cpu speed proof failed verification — benchmark integrity compromised');
+        }
+        if (backendBench.memProofVerified === false) {
+          issues.push('memory proof failed verification — benchmark integrity compromised');
+        }
+        if (jitterRatio > 0.45) {
+          issues.push('high benchmark jitter detected');
+        }
+        const logicalCores = Math.max(
+          1,
+          Number(hardware.logicalCores) || Number(hardware.physicalCores) || Number(navigator.hardwareConcurrency) || 1,
+        );
+        const minExpectedCpu = logicalCores * 50_000;
+        if (cpuOpsPerSec < minExpectedCpu) {
+          issues.push('cpu throughput below expected envelope');
+        }
+        if (memoryMBps < 500) {
+          issues.push('memory bandwidth below expected envelope');
+        }
+
+        // Hardware-specific ops/s validation: compare measured CPU speed against the
+        // expected throughput for the declared CPU model.  Catches extreme mismatches
+        // (claimed hardware that would be physically impossible at the reported ops/s)
+        // and calibrates the TDP power estimate using the actual performance fraction.
+        const cpuKey = hardware.cpu ? hardware.cpu.split(' (')[0] : '';
+        const expectedSpeedOps = getExpectedCpuSpeedOps(cpuKey);
+        let hardwareOpsRatio = 1.0; // default: no calibration data
+        if (expectedSpeedOps > 0 && cpuSpeedOpsPerSec > 0) {
+          hardwareOpsRatio = cpuSpeedOpsPerSec / expectedSpeedOps;
+          if (hardwareOpsRatio > 3.5) {
+            // Measured ops/s is impossibly high for the declared CPU → possible spoofing.
+            issues.push(
+              `cpu speed ${Math.round(cpuSpeedOpsPerSec / 1e6)}M ops/s exceeds expected ${Math.round(expectedSpeedOps / 1e6)}M for declared hardware`,
+            );
+          }
+          if (hardwareOpsRatio < 0.08) {
+            // More than 12× below expected → hardware claim implausible (VM with wrong CPU label?).
+            issues.push(
+              `cpu speed ${Math.round(cpuSpeedOpsPerSec / 1e6)}M ops/s far below expected ${Math.round(expectedSpeedOps / 1e6)}M for declared hardware`,
+            );
+          }
+        }
+        // Ops calibration: blend 50% fixed + 50% ratio-adjusted, clamped 0.20–1.20.
+        // At ratio=1.0 → 1.0 (no change); at ratio=0.5 → 0.75 (thermal throttle reflected).
+        const newOpsCalibration =
+          expectedSpeedOps > 0 && cpuSpeedOpsPerSec > 0
+            ? Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * hardwareOpsRatio))
+            : 1.0;
+        setBenchmarkOpsCalibration(newOpsCalibration);
+
+        // Memory bandwidth calibration: compare measured sequential bandwidth to expected for
+        // the declared memory type + speed.  Flags impossible values (e.g. DDR5-6000 speed but
+        // DDR3-tier bandwidth) and scales the memory TDP contribution accordingly.
+        const randomMemBandwidthMBps = Math.max(0, Number(backendBench.randomMemBandwidthMBps) || 0);
+        // memLatencyNs already declared above (used for tier computation).
+        const expectedMemBwMBps = getExpectedMemBandwidthMBps(
+          hardware.memory,
+          hardware.memSpeedMhz || 0,
+          hardware.memSticks || 1,
+        );
+        let memBwRatio = 1.0;
+        if (expectedMemBwMBps > 0 && memoryMBps > 0) {
+          memBwRatio = memoryMBps / expectedMemBwMBps;
+          if (memBwRatio > 3.0) {
+            issues.push(
+              `memory bandwidth ${Math.round(memoryMBps / 1024)} GB/s exceeds expected ${Math.round(expectedMemBwMBps / 1024)} GB/s for declared spec`,
+            );
+          }
+          if (memBwRatio < 0.25) {
+            issues.push(
+              `memory bandwidth ${Math.round(memoryMBps / 1024)} GB/s far below expected ${Math.round(expectedMemBwMBps / 1024)} GB/s for declared spec`,
+            );
+          }
+        }
+        const newMemCalibration =
+          expectedMemBwMBps > 0 && memoryMBps > 0 ? Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * memBwRatio)) : 1.0;
+        setBenchmarkMemCalibration(newMemCalibration);
+
+        // GPU ALU-score calibration: only run for desktops with discrete GPUs.
+        // Laptops are modelled as a single thermal unit (CPU+iGPU envelope), so GPU
+        // benchmarking is meaningless there.  Also skip for any device where GPU
+        // workloads are disabled (allowGpuWorkloads = false).
+        // runWebGLBenchmark now uses a DOM canvas (hardware-accelerated path) and
+        // already returns null if readPixels failed to actually drag the GPU pipeline.
+        let gpuScore = 0;
+        let gpuScoreElapsedMs = 0;
+        if (allowGpuWorkloads) {
+          try {
+            const gpuBench = await runWebGLBenchmark();
+            if (gpuBench && gpuBench.score) {
+              gpuScore = gpuBench.score;
+              gpuScoreElapsedMs = gpuBench.elapsedMs;
+            } else if (gpuBench && gpuBench.error) {
+              issues.push('gpu-bench: ' + gpuBench.error);
+            }
+          } catch (_) {
+            // WebGL unavailable or context lost — skip GPU calibration silently
+          }
+        }
+        const declaredGpus =
+          Array.isArray(hardware.gpus) && hardware.gpus.length > 0
+            ? hardware.gpus
+            : hardware.gpu && hardware.gpu !== 'Unknown'
+              ? [hardware.gpu]
+              : [];
+        // Use the highest-ranked expected score among declared GPUs (multi-GPU systems)
+        let maxExpectedGpuScore = 0;
+        let gpuTableMatch = false;
+        for (const g of declaredGpus) {
+          const exp = getExpectedGpuScore(g);
+          if (exp > maxExpectedGpuScore) {
+            maxExpectedGpuScore = exp;
+            gpuTableMatch = true;
+          }
+        }
+        if (
+          maxExpectedGpuScore > 0 &&
+          !declaredGpus.some((g) => {
+            // Re-check if any GPU was truly matched (not just the fallback 3_500_000)
+            // by seeing if at least one model string matched a named entry.
+            return /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g);
+          })
+        ) {
+          console.warn(
+            '[GPU] Unrecognised GPU model(s):',
+            declaredGpus.join(', '),
+            '- using fallback expected score 3.5M ops/ms',
+          );
+        }
+        // True when at least one declared GPU is a named, table-matched entry.
+        // For known GPUs, substituting the table value when readPixels doesn’t stall
+        // is correct behaviour — not an anomaly worth flagging.
+        const isNamedGpu = declaredGpus.some((g) =>
+          /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g),
+        );
+        let gpuScoreRatio = 1.0;
+        if (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0) {
+          gpuScoreRatio = gpuScore / maxExpectedGpuScore;
+          if (gpuScoreRatio < 0.05) {
+            issues.push(
+              `GPU score ${Math.round(gpuScore / 1e3)}K ops/ms far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`,
+            );
+          }
+        }
+        const newGpuCalibration =
+          allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0
+            ? Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * gpuScoreRatio))
+            : 1.0;
+        setBenchmarkGpuCalibration(newGpuCalibration);
+        // Report GPU calibration to main process so it owns the authoritative value.
+        // GPU benchmarking requires WebGL and must run in the renderer; main process
+        // receives the raw score and performs the same ratio calc independently.
+        let gpuCalibResult = null;
+        if (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0) {
+          try {
+            if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+              gpuCalibResult = await window.wattcoinHardware
+                .invoke('wattcoin-report-gpu-calibration', {
+                  gpuScore,
+                  maxExpectedScore: maxExpectedGpuScore,
+                })
+                .catch(() => null);
+            }
+          } catch (_) {}
+        }
+
+        // GPU proof: single deterministic integer-shader render keyed by challengeSeed.
+        // Node verifies it independently using computeGpuProbeExpectedHash (pure JS,
+        // no GPU needed) — requires WebGL2; skipped on software-rendered contexts.
+        let gpuProofHash = '';
+        let gpuProofVerified = false;
+        if (allowGpuWorkloads) {
+          try {
+            const gpuProof = await runGpuBenchmarkProof(challengeSeed, GPU_PROOF_SIZE, GPU_PROOF_ITERS);
+            if (gpuProof) {
+              gpuProofHash = gpuProof.proofHash;
+              if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+                const vr = await window.wattcoinHardware
+                  .invoke('wattcoin-verify-gpu-proof', {
+                    seed: challengeSeed,
+                    size: GPU_PROOF_SIZE,
+                    shaderIterations: GPU_PROOF_ITERS,
+                    proofHash: gpuProofHash,
+                  })
+                  .catch(() => null);
+                gpuProofVerified = !!(vr && vr.verified);
+              }
+              if (!gpuProofVerified) {
+                issues.push('gpu proof failed verification — GPU render may be software-emulated');
+              }
+              if (gpuProof.benchError) {
+                issues.push(gpuProof.benchError);
+              }
+              // Always use the proof's embedded MAD benchmark score — it runs on the
+              // same DOM canvas path that produced the proof, so it is guaranteed to
+              // reflect real GPU execution. Prefer it over runWebGLBenchmark which has
+              // historically been unreliable on discrete GPUs with ANGLE/D3D11.
+              if (gpuProof.gpuScore > 0) {
+                // Always use the raw measured score — let the real number show.
+                gpuScore = gpuProof.gpuScore;
+                gpuScoreRatio = maxExpectedGpuScore > 0 ? gpuProof.gpuScore / maxExpectedGpuScore : 1.0;
+                if (gpuScoreRatio < 0.05) {
+                  issues.push(
+                    `GPU score ${Math.round(gpuScore / 1e3)}K ops/ms far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`,
+                  );
+                }
+                setBenchmarkGpuCalibration(Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * gpuScoreRatio)));
+                try {
+                  if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+                    gpuCalibResult = await window.wattcoinHardware
+                      .invoke('wattcoin-report-gpu-calibration', {
+                        gpuScore,
+                        maxExpectedScore: maxExpectedGpuScore,
+                      })
+                      .catch(() => null);
+                  }
+                } catch (_) {}
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Startup and slider-stop benchmarks define new baselines — no drift check.
+        const adoptSliderBaseline = reason === 'slider-stop';
+        const isBaselineBenchmark = reason === 'startup' || reason === 'slider-stop';
+        if (isBaselineBenchmark) {
+          benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
+          benchmarkRefMemBwRef.current = memoryMBps;
+          benchmarkRefMemLatencyRef.current = memLatencyNs > 0 ? memLatencyNs : null;
+          benchmarkRefGpuScoreRef.current = gpuScore > 0 ? gpuScore : null;
+          benchmarkRefJitterRef.current = jitterRatio > 0 ? jitterRatio : null;
+          benchmarkRetryPendingRef.current = false;
+        } else {
+          let retryEscalationReason = '';
+          let scheduleExtendedRetry = false;
+          // Multi-metric drift detection: flag any metric that drifts >25% from its per-session baseline.
+          const driftChecks = [];
+
+          const refOps = benchmarkRefCpuOpsRef.current;
+          if (refOps !== null && refOps > 0) {
+            const d = Math.abs(cpuOpsPerSec - refOps) / refOps;
+            if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`cpu ${(d * 100).toFixed(1)}%`);
+          } else {
+            benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
+          }
+
+          const refMemLatency = benchmarkRefMemLatencyRef.current;
+          if (refMemLatency !== null && refMemLatency > 0 && memLatencyNs > 0) {
+            const d = Math.abs(memLatencyNs - refMemLatency) / refMemLatency;
+            if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`ddr latency ${(d * 100).toFixed(1)}%`);
+          } else if (memLatencyNs > 0) {
+            benchmarkRefMemLatencyRef.current = memLatencyNs;
+          }
+
+          const refGpu = benchmarkRefGpuScoreRef.current;
+          if (refGpu !== null && refGpu > 0 && gpuScore > 0) {
+            const d = Math.abs(gpuScore - refGpu) / refGpu;
+            if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`gpu ${(d * 100).toFixed(1)}%`);
+          } else if (gpuScore > 0) {
+            benchmarkRefGpuScoreRef.current = gpuScore;
+          }
+
+          // Jitter is inherently noisy; relative drift against a small baseline produces massive
+          // false positives. It is already capped by the absolute >45% threshold above, so skip
+          // relative jitter drift here and just keep the baseline current.
+          if (jitterRatio > 0) benchmarkRefJitterRef.current = jitterRatio;
+
+          if (driftChecks.length > 0) {
+            const driftDesc = driftChecks.join(', ');
+            if (benchmarkRetryPendingRef.current) {
+              // Second consecutive drift: 5-min hardware hold + -10 trust (applied by activateHardwareHold).
+              retryEscalationReason = `drift on retry: ${driftDesc}`;
+              issues.push(`benchmark drift on retry: ${driftDesc}`);
+            } else {
+              // First drift: immediate 2x extended re-benchmark.
+              scheduleExtendedRetry = true;
+              issues.push(`benchmark drift (${driftDesc}) extended re-benchmark scheduled`);
+            }
+          } else {
+            // No significant drift: update baselines to track gradual hardware changes.
+            if (cpuOpsPerSec > 0) benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
+            if (memoryMBps > 0) benchmarkRefMemBwRef.current = memoryMBps;
+            if (memLatencyNs > 0) benchmarkRefMemLatencyRef.current = memLatencyNs;
+            if (gpuScore > 0) benchmarkRefGpuScoreRef.current = gpuScore;
+            if (jitterRatio > 0) benchmarkRefJitterRef.current = jitterRatio;
+          }
+
+          const benchmarkIssues = issues.filter((issue) => {
+            const text = String(issue || '');
+            return (
+              text && !text.includes('extended re-benchmark scheduled') && !text.startsWith('benchmark drift on retry:')
+            );
+          });
+
+          if (!retryEscalationReason && benchmarkIssues.length > 0) {
+            const issueDesc = benchmarkIssues.join(', ');
+            if (benchmarkRetryPendingRef.current || reason === 'retry-drift') {
+              retryEscalationReason = `benchmark issues on retry: ${issueDesc}`;
+              issues.push(`benchmark issues persisted on retry: ${issueDesc}`);
+            } else if (!scheduleExtendedRetry) {
+              scheduleExtendedRetry = true;
+              issues.push(`benchmark issues (${issueDesc}) extended re-benchmark scheduled`);
+            }
+          }
+
+          if (retryEscalationReason) {
+            await activateHardwareHold(retryEscalationReason);
+            benchmarkRetryPendingRef.current = false;
+          } else if (scheduleExtendedRetry) {
+            benchmarkRetryPendingRef.current = true;
+            setTimeout(() => {
+              if (!benchmarkInFlightRef.current && hardwareHoldUntilRef.current <= Date.now()) {
+                runBenchmark('retry-drift', { extended: true });
+              }
+            }, 0);
+          } else {
+            benchmarkRetryPendingRef.current = false;
+          }
+        }
+
+        // Score — computed after all issue checks so every detected issue penalises the result.
+        let score = 100;
+        if (!isBaselineBenchmark) {
+          score -= Math.min(60, issues.length * 12);
+          if (jitterRatio > 0.3) score -= 8;
+        }
+        score = Math.max(0, Math.min(100, Math.round(score)));
+
+        // Cross-session performance baseline: persist ops/sec to detect hardware spoofing between sessions.
+        try {
+          const baselineSecret = localStorage.getItem(FINGERPRINT_SECRET_STORAGE_KEY) || '';
+          const prevOpsStr = localStorage.getItem(BENCH_BASELINE_OPS_KEY) || '';
+          const prevSig = localStorage.getItem(BENCH_BASELINE_SIG_KEY) || '';
+          if (prevOpsStr && prevSig === simpleHash(`${baselineSecret}|${prevOpsStr}|0`)) {
+            const prevOps = Number(prevOpsStr);
+            if (Number.isFinite(prevOps) && prevOps > 0) {
+              const crossDrift = Math.abs(cpuOpsPerSec - prevOps) / prevOps;
+              if (crossDrift > 0.65) {
+                issues.push(`cross-session cpu drift ${(crossDrift * 100).toFixed(1)}%`);
+              }
+            }
+          }
+          const opsStr = Math.round(cpuOpsPerSec).toString();
+          const newSig = simpleHash(`${baselineSecret}|${opsStr}|0`);
+          localStorage.setItem(BENCH_BASELINE_OPS_KEY, opsStr);
+          localStorage.setItem(BENCH_BASELINE_GPS_KEY, '0');
+          localStorage.setItem(BENCH_BASELINE_SIG_KEY, newSig);
+        } catch (_) {
+          // Ignore persistence failures.
+        }
+
+        // Benchmark-derived power cap: conservative on first run, raises gradually after 10 consecutive underestimates.
+        {
+          const isLaptopForCap = hardware.deviceType === 'Laptop';
+          const navCoresForCap = Math.max(1, navigator.hardwareConcurrency || 1);
+          let newCapW;
+          if (isLaptopForCap) {
+            // For laptops, cap is anchored to real manufacturer TDP fetched online.
+            // Starting cap = 60% of declared TDP (40% conservative buffer; max mining load is 85%).
+            // It grows back toward 100% via the consecutive-clean-benchmark raise logic.
+            const refTDP = totalHardwareTDPRef.current;
+            if (refTDP > 0) {
+              newCapW = Math.round(refTDP * 0.6);
+            } else {
+              // No TDP data yet: conservative ops-based fallback (small absolute numbers).
+              if (cpuOpsPerSec < 200_000) newCapW = 25;
+              else if (cpuOpsPerSec < 500_000) newCapW = 35;
+              else if (cpuOpsPerSec < 1_000_000) newCapW = 50;
+              else newCapW = 65;
+            }
+          } else {
+            // Desktop / PC / Server: derive cap from CPU ops throughput per core + GPU metric.
+            let benchCpuCapW;
+            if (cpuOpsPerSec < 80_000) benchCpuCapW = 20 * navCoresForCap;
+            else if (cpuOpsPerSec < 200_000) benchCpuCapW = 40 * navCoresForCap;
+            else if (cpuOpsPerSec < 500_000) benchCpuCapW = 65 * navCoresForCap;
+            else if (cpuOpsPerSec < 1_000_000) benchCpuCapW = 100 * navCoresForCap;
+            else benchCpuCapW = 160 * navCoresForCap;
+            benchCpuCapW = Math.min(benchCpuCapW, 800);
+            const benchGpuCapW = allowGpuWorkloads ? 80 : 25;
+            newCapW = benchCpuCapW + benchGpuCapW + 30;
+          }
+          // TDP ceiling: upper bound for raise steps (laptops: full 100% TDP; desktops: static table).
+          // Item 2: when hardware name lookup returns 0 (unknown CPU), use measurement-derived tier
+          // ceiling so declaring an unknown high-end CPU doesn't give free power headroom.
+          let tdpCeilingW = 0;
+          if (isLaptopForCap) {
+            // Ceiling is the full declared TDP — base is 80%, raises stop at 100%.
+            tdpCeilingW = totalHardwareTDPRef.current > 0 ? totalHardwareTDPRef.current : newCapW * 1.5;
+          } else {
+            const cpuSocketsForCap = Math.max(1, Number(hardware.cpuSockets) || 1);
+            const navCoresCap2 = Math.max(1, navigator.hardwareConcurrency || 1);
+            const validSocketsCap = Math.min(cpuSocketsForCap, Math.max(1, Math.floor(navCoresCap2 / 2)));
+            if (hardware.cpu) {
+              const cpuKeyForCap = hardware.cpu.split(' (')[0];
+              const staticCpuTdp = cpuTDPTable[cpuKeyForCap];
+              if (staticCpuTdp) tdpCeilingW += staticCpuTdp * validSocketsCap;
+            }
+            for (const m of allGpuModels) {
+              const staticGpuTdp = gpuTDPTable[m];
+              if (staticGpuTdp) tdpCeilingW += staticGpuTdp;
+            }
+            tdpCeilingW += 30; // overhead margin
+            // Item 2: if hardware name tables gave us nothing (unknown CPU/GPU), fall back to
+            // a tier-based ceiling derived purely from measured ops/s — prevents fake declarations
+            // from granting an artificially high power ceiling.
+            if (tdpCeilingW <= 30) {
+              const tierCpuCeilingPerSocket =
+                cpuSpeedTier === 5
+                  ? 600
+                  : cpuSpeedTier === 4
+                    ? 350
+                    : cpuSpeedTier === 3
+                      ? 220
+                      : cpuSpeedTier === 2
+                        ? 125
+                        : 65;
+              tdpCeilingW = tierCpuCeilingPerSocket * validSocketsCap + (allowGpuWorkloads ? 120 : 30) + 30;
+            }
+          }
+          const effectiveCeiling = Math.max(tdpCeilingW, newCapW);
+          const currentCap = benchmarkPowerCapWRef.current;
+          if (currentCap === null) {
+            // First benchmark: establish the cap conservatively.
+            setBenchmarkPowerCapW(newCapW);
+            consecutiveUnderestimateRef.current = 0;
+          } else if (newCapW > currentCap) {
+            // Throughput implies more power than current cap allows — count as underestimate.
+            consecutiveUnderestimateRef.current += 1;
+            if (consecutiveUnderestimateRef.current >= 10) {
+              const raisable = effectiveCeiling - currentCap;
+              if (raisable > 0) {
+                setBenchmarkPowerCapW(Math.min(currentCap + raisable / 10, effectiveCeiling));
+              }
+              consecutiveUnderestimateRef.current = 0;
+            }
+          } else {
+            // Throughput within cap — keep cap, reset counter.
+            consecutiveUnderestimateRef.current = 0;
+          }
+        }
+
+        // Sync trust score and hw-hold from the main-process authority.
+        // Main is the only party that computes trust changes — renderer reads back
+        // the authoritative values including before/after snapshots for the delta.
+        // trustScoreBefore / trustScoreAfter are injected by the benchmark handler.
+        let lastTrustDelta = 0;
+        const prevTrustForDelta =
+          typeof backendBench.trustScoreBefore === 'number' ? backendBench.trustScoreBefore : trustScoreRef.current;
+        try {
+          if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+            const auth = await window.wattcoinHardware.invoke('wattcoin-get-authority-state').catch(() => null);
+            if (auth) {
+              if (typeof auth.trustScore === 'number') {
+                setTrustScore(auth.trustScore);
+                trustScoreRef.current = auth.trustScore;
+                if (!isBaselineBenchmark) {
+                  lastTrustDelta = auth.trustScore - prevTrustForDelta;
+                }
+                // If main triggered a hold (trust hit 0), reflect it in the renderer.
+                if (!isBaselineBenchmark && auth.trustScore === 0 && prevTrustForDelta > 0 && !auth.isOnHold) {
+                  await activateHardwareHold('trust score depleted: repeated anomalies detected', 24 * 60 * 60 * 1000);
+                }
+              }
+              if (typeof auth.hwHoldUntilMs === 'number' && auth.hwHoldUntilMs > Date.now()) {
+                hardwareHoldUntilRef.current = auth.hwHoldUntilMs;
+                setHardwareHoldUntilMs(auth.hwHoldUntilMs);
+              }
+            }
+          }
+        } catch (_) {}
+
+        const elapsedMs = performance.now() - startedAt;
+        const trustAfter = trustScoreRef.current;
+        let bgCpuOpsPerSec = 0;
+        let bgMemMBps = 0;
+        let bgCpuDutyPct = 0;
+        let bgMemDutyPct = 0;
+        try {
+          if (window.wattcoinHardware && window.wattcoinHardware.getHardwareLoadState) {
+            const hwState = await window.wattcoinHardware.getHardwareLoadState();
+            if (hwState && hwState.ok) {
+              bgCpuOpsPerSec = Math.max(0, Number(hwState.cpuLoadOpsPerSec) || 0);
+              bgMemMBps = Math.max(0, Number(hwState.memLoadMBps) || 0);
+              bgCpuDutyPct = Math.max(0, Math.min(100, (Number(hwState.avgCpuWorkerDuty) || 0) * 100));
+              bgMemDutyPct = Math.max(0, Math.min(100, (Number(hwState.memDuty) || 0) * 100));
+            }
+          }
+        } catch (_) {}
+        const totalCpuWorkOpsPerSec = cpuOpsPerSec + bgCpuOpsPerSec;
+        const totalMemWorkMBps = memoryMBps + bgMemMBps;
+        const gpuDutyPct = Math.max(0, Math.min(100, gpuMeasuredDutyRef.current * 100));
+        const gpuActualWorkOpsPerMs = gpuScore > 0 ? gpuScore * (gpuDutyPct / 100) : 0;
+        const summary =
+          `Benchmark score: ${score}/100` +
+          `, cpu-speed ${fmtNum(cpuSpeedOpsPerSec, 0)} ops/s${expectedSpeedOps > 0 ? ` (${(hardwareOpsRatio * 100).toFixed(0)}% of expected)` : ''}` +
+          `, cpu-phase ${fmtNum(cpuOpsPerSec, 0)} ops/s` +
+          `, cpu-total ${fmtNum(totalCpuWorkOpsPerSec, 0)} ops/s (bench ${fmtNum(cpuOpsPerSec, 0)} + bg ${fmtNum(bgCpuOpsPerSec, 0)} @${bgCpuDutyPct.toFixed(0)}%)` +
+          `, mem-seq ${fmtNum(memoryMBps, 0)} MB/s${expectedMemBwMBps > 0 ? ` (${(memBwRatio * 100).toFixed(0)}% of expected)` : ''}` +
+          `, mem-total ${fmtNum(totalMemWorkMBps, 0)} MB/s (bench ${fmtNum(memoryMBps, 0)} + bg ${fmtNum(bgMemMBps, 0)} @${bgMemDutyPct.toFixed(0)}%)` +
+          (memLatencyNs > 0 ? `, mem-latency ${memLatencyNs.toFixed(0)} ns` : '') +
+          (allowGpuWorkloads
+            ? gpuScore > 0
+              ? `, gpu-score ${fmtNum(gpuScore, 0)} ops/ms${maxExpectedGpuScore > 0 ? ` (${(gpuScoreRatio * 100).toFixed(0)}% of expected)` : ''}`
+              : ', gpu-score n/a'
+            : '') +
+          (allowGpuWorkloads
+            ? gpuScore > 0
+              ? `, gpu-total ${fmtNum(gpuActualWorkOpsPerMs, 0)} ops/ms (bench ${fmtNum(gpuScore, 0)} @${gpuDutyPct.toFixed(1)}%)`
+              : `, gpu-total duty ${gpuDutyPct.toFixed(1)}%`
+            : '') +
+          `, jitter ${(jitterRatio * 100).toFixed(1)}%, challenge ${challengeSeed}` +
+          `, trust ${trustAfter}/100${!isBaselineBenchmark ? ` (${lastTrustDelta > 0 ? '+' : ''}${lastTrustDelta})` : ''}` +
+          `, cpu-proof ${backendBench.cpuSpeedProof || 'n/a'} (seed ${backendBench.cpuSpeedInitialSeed || 0})` +
+          `, mem-proof ${backendBench.memProof || 'n/a'}` +
+          (gpuProofHash
+            ? `, gpu-proof ${gpuProofHash}${gpuProofVerified ? '' : ' (unverified)'}`
+            : allowGpuWorkloads
+              ? ', gpu-proof n/a'
+              : '');
+        const issueSummary = issues.length ? `issues: ${issues.join('; ')}` : 'no anomalies';
+
+        // Compute vs-average deviation percentages using personal mean returned by main.
+        const personalMeanCpu = Number(backendBench.personalMeanCpu) || 0;
+        const personalMeanMem = Number(backendBench.personalMeanMem) || 0;
+        const personalMeanGpuRatio = Number(gpuCalibResult && gpuCalibResult.personalMeanGpuRatio) || 0;
+        const lastAvgCpuPct = personalMeanCpu > 0 ? Math.round((cpuSpeedOpsPerSec / personalMeanCpu - 1) * 100) : null;
+        const lastAvgMemPct = personalMeanMem > 0 ? Math.round((memoryMBps / personalMeanMem - 1) * 100) : null;
+        const lastAvgGpuPct =
+          allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0 && hardware.deviceType !== 'Laptop'
+            ? Math.round((gpuScoreRatio / (personalMeanGpuRatio > 0 ? personalMeanGpuRatio : 1.0) - 1) * 100)
+            : null;
+
+        setBenchmarkState({
+          running: false,
+          startupDone: true,
+          lastScore: score,
+          lastReason: reason,
+          lastSummary: `${summary} (${issueSummary})`,
+          issues,
+          lastJitterPct: Math.round(jitterRatio * 1000) / 10,
+          lastTrustDelta,
+          lastAvgCpuPct,
+          lastAvgMemPct,
+          lastAvgGpuPct,
+        });
+
+        // Persist proof data so the next mineBlock call can include it in the OP_RETURN
+        // commitment.  Other nodes can then re-run cpuSpeedStep(initialSeed, N=20M) and
+        // confirm the proof hash, giving them independent verification of the computation.
+        benchmarkProofRef.current = {
+          cpuSpeedProof: backendBench.cpuSpeedProof || '',
+          cpuSpeedInitialSeed: Number(backendBench.cpuSpeedInitialSeed) || 0,
+          memProof: backendBench.memProof || '',
+          memLatencyNs: Math.max(0, Number(backendBench.memLatencyNs) || 0),
+          gpuProof: gpuProofHash || '',
+          gpuProofSeed: gpuProofHash ? challengeSeed : 0,
+          gpuProofVerified,
+          challengeSeed: Number(backendBench.challengeSeed) || 0,
+          cpuOpsPerSec: Math.round(cpuOpsPerSec),
+          cpuSpeedOpsPerSec: Math.round(cpuSpeedOpsPerSec),
+          cpuTotalWorkOpsPerSec: Math.round(totalCpuWorkOpsPerSec),
+          backgroundCpuOpsPerSec: Math.round(bgCpuOpsPerSec),
+          memoryMBps: Math.round(memoryMBps),
+          memoryTotalWorkMBps: Math.round(totalMemWorkMBps),
+          backgroundMemMBps: Math.round(bgMemMBps),
+          gpuScoreOpsPerMs: Math.round(gpuScore),
+          gpuActualWorkOpsPerMs: Math.round(gpuActualWorkOpsPerMs),
+          gpuMeasuredDutyPct: Math.round(gpuDutyPct * 10) / 10,
+          jitterRatio: Math.round(jitterRatio * 10000) / 10000,
+          cpuSpeedTier, // item 2: measurement-derived tier
+          memLatencyTier, // item 2: measurement-derived tier
+          score,
+          issues: [...issues],
+          benchmarkTs: Date.now(),
+        };
+        try {
+          sessionStorage.setItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY, '1');
+        } catch (_) {
+          // Ignore storage failures.
+        }
+
+        setLog((log) => [
+          {
+            time: now(),
+            msg: `Benchmark (${reason}${isBaselineBenchmark && benchLoadPct > 0 ? ` @${benchLoadPct}%` : ''}) in ${fmtNum(elapsedMs, 0)} ms: ${summary} (${issueSummary})`,
+            type: !isBaselineBenchmark && issues.length ? 'warn' : 'info',
+          },
+          ...log,
+        ]);
+
+        return { score, issues };
+      } catch (e) {
+        setBenchmarkState((prev) => ({
+          ...prev,
+          running: false,
+          startupDone: true,
+          lastSummary: `benchmark failed: ${e && e.message ? e.message : 'unknown error'}`,
+        }));
+        try {
+          sessionStorage.setItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY, '1');
+        } catch (_) {
+          // Ignore storage failures.
+        }
+        setLog((log) => [
+          {
+            time: now(),
+            msg: `Benchmark failed (${reason}): ${e && e.message ? e.message : 'unknown error'}`,
+            type: 'error',
+          },
+          ...log,
+        ]);
+        return null;
+      } finally {
+        benchmarkInFlightRef.current = false;
+        // Stop the synthetic load if we applied it for this benchmark and mining
+        // has not been activated in the meantime.
+        if (benchLoadPct > 0 && !wasMiningAtStart && !miningRef.current) {
+          try {
+            if (window.wattcoinHardware && window.wattcoinHardware.stopHardwareLoad) {
+              await window.wattcoinHardware.stopHardwareLoad();
+            } else if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
+              await window.wattcoinHardware.setHardwareLoad(0);
+            }
+          } catch (_) {}
+        }
+      }
+    },
+    [activateHardwareHold, allowGpuWorkloads, hardware, setLog],
+  );
 
   function computeCoinsFromEnergy(energyWh) {
     let remainingWh = Math.max(0, Number(energyWh) || 0);
@@ -2821,13 +3136,13 @@ export default function Miner({
   const mineOneRealBlock = async (blockEnergyWh = 0) => {
     if (!(window.wattcoinHardware && window.wattcoinHardware.mineBlock)) {
       console.error('[MinerSimulator] Mining API unavailable - window.wattcoinHardware.mineBlock not found');
-      setRealMineStatus("Mining API unavailable");
+      setRealMineStatus('Mining API unavailable');
       return false;
     }
     if (realMineBusy) return false;
 
     setRealMineBusy(true);
-    setRealMineStatus("Mining block...");
+    setRealMineStatus('Mining block...');
     try {
       console.log('[MinerSimulator] Starting mining attempt with address:', miningAddress);
       // Attach the most recent benchmark proof so the OP_RETURN commitment includes
@@ -2836,14 +3151,15 @@ export default function Miner({
       const proofData = benchmarkProofRef.current
         ? {
             ...benchmarkProofRef.current,
-            energyWh:          blockEnergyWh,
-            proofTs:           Date.now(),
-            miningAddress:     miningAddress || '',
-            peerProbeVerified: peerProbeVerifiedRef.current,  // item 4
-            probeReceipt:      probeReceiptRef.current,       // item 5
-            probeChain: {                                     // chained-probe continuity record
-              chainHead:   probeChainRef.current.chainHead,
-              chainIndex:  probeChainRef.current.chainIndex,
+            energyWh: blockEnergyWh,
+            proofTs: Date.now(),
+            miningAddress: miningAddress || '',
+            peerProbeVerified: peerProbeVerifiedRef.current, // item 4
+            probeReceipt: probeReceiptRef.current, // item 5
+            probeChain: {
+              // chained-probe continuity record
+              chainHead: probeChainRef.current.chainHead,
+              chainIndex: probeChainRef.current.chainIndex,
               chainBroken: probeChainRef.current.chainBroken,
             },
           }
@@ -2858,7 +3174,7 @@ export default function Miner({
       console.log('[MinerSimulator] Mining result:', result);
 
       // If selected address path fails, retry once without forcing address.
-      if ((result && result.error) && miningAddress) {
+      if (result && result.error && miningAddress) {
         console.log('[MinerSimulator] Retrying without forcing address due to error:', result.error);
         result = await window.wattcoinHardware.mineBlock(undefined, proofData);
         console.log('[MinerSimulator] Retry result:', result);
@@ -2875,46 +3191,42 @@ export default function Miner({
               address: result.address,
               walletName,
               // Proof fields for Tier 4c coordinator re-verification (item 1).
-              cpuSpeedInitialSeed: benchmarkProofRef.current ? Number(benchmarkProofRef.current.cpuSpeedInitialSeed) || 0 : 0,
-              cpuSpeedProof:       benchmarkProofRef.current ? String(benchmarkProofRef.current.cpuSpeedProof || '') : '',
-              memProof:            benchmarkProofRef.current ? String(benchmarkProofRef.current.memProof || '') : '',
-              proofIssues:         benchmarkProofRef.current ? (benchmarkState.issues || []) : [],
-              proofCommitment:     result.proofCommitment || null,
-              peerProbeVerified:   !!(proofData && proofData.peerProbeVerified), // item 4
-              probeReceipt:        proofData && proofData.probeReceipt ? proofData.probeReceipt : null, // item 5
-              probeChain:          proofData && proofData.probeChain   ? proofData.probeChain   : null,  // Tier 4e coverage ratio
+              cpuSpeedInitialSeed: benchmarkProofRef.current
+                ? Number(benchmarkProofRef.current.cpuSpeedInitialSeed) || 0
+                : 0,
+              cpuSpeedProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.cpuSpeedProof || '') : '',
+              memProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.memProof || '') : '',
+              proofIssues: benchmarkProofRef.current ? benchmarkState.issues || [] : [],
+              proofCommitment: result.proofCommitment || null,
+              peerProbeVerified: !!(proofData && proofData.peerProbeVerified), // item 4
+              probeReceipt: proofData && proofData.probeReceipt ? proofData.probeReceipt : null, // item 5
+              probeChain: proofData && proofData.probeChain ? proofData.probeChain : null, // Tier 4e coverage ratio
             });
           } catch (_) {
             // Keep mining even if immediate balance refresh fails.
           }
         }
-        setLog(log => [
+        setLog((log) => [
           {
             time: now(),
             msg: blockHash
               ? `Real block mined: hash=${blockHash}, address=${result.address}`
               : `Real block mined: address=${result.address}`,
-            type: "block"
+            type: 'block',
           },
-          ...log
+          ...log,
         ]);
         return true;
       } else {
         const errMsg = result && result.error ? result.error : 'Unknown error';
         setRealMineStatus(`Mining failed: ${errMsg}`);
-        setLog(log => [
-          { time: now(), msg: `Mining failed: ${errMsg}`, type: "error" },
-          ...log
-        ]);
+        setLog((log) => [{ time: now(), msg: `Mining failed: ${errMsg}`, type: 'error' }, ...log]);
         return false;
       }
     } catch (e) {
       const errMsg = e && e.message ? e.message : 'Unknown error';
       setRealMineStatus(`Mining failed: ${errMsg}`);
-      setLog(log => [
-        { time: now(), msg: `Mining failed: ${errMsg}`, type: "error" },
-        ...log
-      ]);
+      setLog((log) => [{ time: now(), msg: `Mining failed: ${errMsg}`, type: 'error' }, ...log]);
       return false;
     } finally {
       setRealMineBusy(false);
@@ -2923,7 +3235,7 @@ export default function Miner({
 
   // Fetch hardware info at startup if not already found, or if deviceType is still unknown
   React.useEffect(() => {
-    if (hardware && hardware.cpu !== "Unknown" && hardware.deviceType !== "Unknown") return;
+    if (hardware && hardware.cpu !== 'Unknown' && hardware.deviceType !== 'Unknown') return;
     let cancelled = false;
     (async () => {
       try {
@@ -2931,18 +3243,25 @@ export default function Miner({
         if (cancelled) return;
         if (hw && hw.source) {
           setHardware(hw);
-          try { sessionStorage.setItem('wattcoinHardware', JSON.stringify(hw)); } catch (_) {}
+          try {
+            sessionStorage.setItem('wattcoinHardware', JSON.stringify(hw));
+          } catch (_) {}
         }
       } catch (_) {
         // Hardware detection failed — keep existing state; will retry on next render cycle.
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [hardware]);
 
   React.useEffect(() => {
     try {
-      localStorage.setItem(LOAD_PERCENT_STORAGE_KEY, String(Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0))));
+      localStorage.setItem(
+        LOAD_PERCENT_STORAGE_KEY,
+        String(Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0))),
+      );
     } catch (_) {
       // Ignore storage failures.
     }
@@ -2957,7 +3276,7 @@ export default function Miner({
       if (benchmarkInFlightRef.current) return;
       const clamped = Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0));
       // Cap physical OS load at the trust ceiling so the machine doesn't do work that won't be credited.
-      const trustF = Math.min(1.0, 0.60 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.40);
+      const trustF = Math.min(1.0, 0.6 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.4);
       const trustCappedLoad = Math.min(clamped, Math.round(trustF * 100));
       try {
         if (isHardwareOnHold) {
@@ -2989,13 +3308,13 @@ export default function Miner({
   // Improved benchmark: only run when dashboard is active
   React.useEffect(() => {
     if (!isActive) return;
-    if (!hardware || hardware.cpu === "Unknown") return;
+    if (!hardware || hardware.cpu === 'Unknown') return;
     // Run the benchmark asynchronously to avoid blocking the UI
     let cancelled = false;
     let rafId = null;
     let timeoutId = null;
-    if (hardware.deviceType === "Laptop" && navigator.getBattery) {
-      navigator.getBattery().then(bat => {
+    if (hardware.deviceType === 'Laptop' && navigator.getBattery) {
+      navigator.getBattery().then((bat) => {
         const initialLevel = bat.level;
         const initialTime = Date.now();
         timeoutId = setTimeout(() => {
@@ -3003,7 +3322,7 @@ export default function Miner({
           function sha256(str) {
             let hash = 5381;
             for (let i = 0; i < str.length; i++) {
-              hash = ((hash << 5) + hash) + str.charCodeAt(i);
+              hash = (hash << 5) + hash + str.charCodeAt(i);
             }
             return hash >>> 0;
           }
@@ -3013,7 +3332,7 @@ export default function Miner({
             if (cancelled) return;
             if (performance.now() - start < 5000) {
               for (let i = 0; i < 1000; i++) {
-                sha256("wattcoin-bench" + (count++));
+                sha256('wattcoin-bench' + count++);
               }
               rafId = requestAnimationFrame(runBench);
             } else {
@@ -3023,7 +3342,7 @@ export default function Miner({
               const deltaTime = (endTime - initialTime) / 1000; // seconds
               if (deltaLevel > 0 && bat.dischargingTime > 0) {
                 const batteryCapacityWh = (bat.dischargingTime / 3600) * (bat.level * 100);
-                const power = batteryCapacityWh * (deltaLevel) / (deltaTime / 3600);
+                const power = (batteryCapacityWh * deltaLevel) / (deltaTime / 3600);
                 if (power > 0 && power < 200) setBenchPower(Math.round(power));
                 else setBenchPower(0);
               } else {
@@ -3046,7 +3365,7 @@ export default function Miner({
         function sha256(str) {
           let hash = 5381;
           for (let i = 0; i < str.length; i++) {
-            hash = ((hash << 5) + hash) + str.charCodeAt(i);
+            hash = (hash << 5) + hash + str.charCodeAt(i);
           }
           return hash >>> 0;
         }
@@ -3056,7 +3375,7 @@ export default function Miner({
           if (cancelled) return;
           if (performance.now() - start < 500) {
             for (let i = 0; i < 1000; i++) {
-              sha256("wattcoin-bench" + (count++));
+              sha256('wattcoin-bench' + count++);
             }
             rafId = requestAnimationFrame(runBench);
           } else {
@@ -3110,7 +3429,16 @@ export default function Miner({
       runBenchmark('startup');
     }, 1200);
     return () => clearTimeout(timeoutId);
-  }, [isHardwareOnHold, hardware, tdpFetchingCount, tdpFetchTimedOut, benchmarkState.startupDone, benchmarkState.running, runBenchmark, hardwareLookupResetNonce]);
+  }, [
+    isHardwareOnHold,
+    hardware,
+    tdpFetchingCount,
+    tdpFetchTimedOut,
+    benchmarkState.startupDone,
+    benchmarkState.running,
+    runBenchmark,
+    hardwareLookupResetNonce,
+  ]);
 
   // Run a benchmark after user stops adjusting hardware load slider.
   // Not dashboard-gated: slider-triggered baseline checks must run on any tab.
@@ -3170,7 +3498,9 @@ export default function Miner({
   // full duration (~500-2000 ms) — this is intentional and ensures the timing
   // measurement reflects true hardware throughput and is not easily faked by sleeping.
   const walletAddressRef = React.useRef(miningAddress);
-  React.useEffect(() => { walletAddressRef.current = miningAddress; }, [miningAddress]);
+  React.useEffect(() => {
+    walletAddressRef.current = miningAddress;
+  }, [miningAddress]);
 
   React.useEffect(() => {
     if (!mining) return;
@@ -3193,11 +3523,11 @@ export default function Miner({
       try {
         // Ask Node (which knows if we're worker/standalone) for a probe.
         const response = await hw.requestPeerProbe({
-          workerId:         walletAddressRef.current,
+          workerId: walletAddressRef.current,
           allowGpuWorkloads,
         });
         if (!response || !response.probe) return;
-        const probe  = response.probe;
+        const probe = response.probe;
         const source = response.source || 'local'; // 'peer' | 'local'
 
         let probeResult = null;
@@ -3205,23 +3535,22 @@ export default function Miner({
         if (probe.type === 'cpu') {
           // Must exactly match cpuSpeedStep in backend-benchmark.js.
           // Runs for ~1000-4000 ms intentionally - do NOT add await/yield inside this loop.
-          let x = (probe.params.seed | 0) || 1;
+          let x = probe.params.seed | 0 || 1;
           const N = probe.params.iterations | 0;
           for (let i = 0; i < N; i++) {
             x = (Math.imul(x, 48271) + 9973) | 0;
             x ^= x << 13;
             x ^= x >> 17;
             x ^= x << 5;
-            x &= 0x7FFFFFFF;
+            x &= 0x7fffffff;
           }
           probeResult = { id: probe.id, type: 'cpu', proof: (x >>> 0).toString(16).padStart(8, '0') };
-
         } else if (probe.type === 'memory') {
           // Must exactly match runMemProbe in backend-benchmark.js.
           // Use the coordinator-provided array size so the renderer stays aligned
           // with backend-benchmark.js when probe sizing changes.
-          const ENTRIES = Math.max(1, Number(probe.params.entries) || (1 << 24));
-          const s = (probe.params.arraySeed | 0) || 1;
+          const ENTRIES = Math.max(1, Number(probe.params.entries) || 1 << 24);
+          const s = probe.params.arraySeed | 0 || 1;
           const arr = new Uint32Array(ENTRIES);
           for (let i = 0; i < ENTRIES; i++) {
             arr[i] = ((i * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
@@ -3230,7 +3559,6 @@ export default function Miner({
           const N = probe.params.iterations | 0;
           for (let i = 0; i < N; i++) idx = arr[idx & (ENTRIES - 1)];
           probeResult = { id: probe.id, type: 'memory', proof: (idx >>> 0).toString(16).padStart(8, '0') };
-
         } else if (probe.type === 'gpu') {
           // GPU probe: backend-defined render size with readPixels() for true synchronous completion.
           const gpuResult = allowGpuWorkloads
@@ -3243,7 +3571,7 @@ export default function Miner({
 
         const submitPayload = {
           source,
-          result:       { ...probeResult, _peerUrl: probe._peerUrl },
+          result: { ...probeResult, _peerUrl: probe._peerUrl },
           hardwareSpec: {
             measuredCpuOpsPerSec: Number(benchmarkProofRef.current && benchmarkProofRef.current.cpuSpeedOpsPerSec) || 0,
             measuredMemLatencyNs: Number(benchmarkProofRef.current && benchmarkProofRef.current.memLatencyNs) || 0,
@@ -3255,7 +3583,7 @@ export default function Miner({
         // Avoids the probe computation being wasted due to a momentary network hiccup
         // and reduces coordinator-side timeouts from flaky connections.
         if (verdict && !verdict.ok && verdict.transient && source === 'peer') {
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise((r) => setTimeout(r, 5000));
           verdict = await hw.submitPeerProbeResult(submitPayload);
         }
 
@@ -3270,14 +3598,16 @@ export default function Miner({
           // Peer probes embed chain state in the receipt (coordinator-side chain).
           if (verdict.chainHead !== undefined) {
             probeChainRef.current = {
-              chainHead:   verdict.chainHead,
-              chainIndex:  typeof verdict.chainIndex === 'number' ? verdict.chainIndex : probeChainRef.current.chainIndex,
+              chainHead: verdict.chainHead,
+              chainIndex:
+                typeof verdict.chainIndex === 'number' ? verdict.chainIndex : probeChainRef.current.chainIndex,
               chainBroken: probeChainRef.current.chainBroken || !!verdict.chainBroken,
             };
           } else if (verdict.receipt && typeof verdict.receipt.chainIndex === 'number') {
             probeChainRef.current = {
-              chainHead:   verdict.receipt.chainHead   !== undefined ? verdict.receipt.chainHead   : probeChainRef.current.chainHead,
-              chainIndex:  verdict.receipt.chainIndex,
+              chainHead:
+                verdict.receipt.chainHead !== undefined ? verdict.receipt.chainHead : probeChainRef.current.chainHead,
+              chainIndex: verdict.receipt.chainIndex,
               chainBroken: probeChainRef.current.chainBroken,
             };
           }
@@ -3291,40 +3621,52 @@ export default function Miner({
           // Record to probe log (real-time capture; covers both local and peer probe paths).
           if (typeof setProbeLog === 'function') {
             const ts = Date.now();
-            setProbeLog(prev => [{
-              ts,
-              id: probe.id,
-              time: now(),
-              role: 'self',
-              source,
-              type: probe.type,
-              ok: !!verdict.ok,
-              timedOut: false,
-              wallClockMs: typeof verdict.wallClockMs === 'number' ? verdict.wallClockMs : null,
-              pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
-              proof: typeof probeResult.proof === 'string' ? probeResult.proof : '',
-              verifierAddress: verdict.receipt && typeof verdict.receipt.verifierAddress === 'string'
-                ? verdict.receipt.verifierAddress
-                : '',
-              chainIndex: typeof verdict.chainIndex === 'number'
-                ? verdict.chainIndex
-                : (verdict.receipt && typeof verdict.receipt.chainIndex === 'number' ? verdict.receipt.chainIndex : null),
-              issues: Array.isArray(verdict.issues) ? verdict.issues : [],
-            }, ...prev].slice(0, 150));
+            setProbeLog((prev) =>
+              [
+                {
+                  ts,
+                  id: probe.id,
+                  time: now(),
+                  role: 'self',
+                  source,
+                  type: probe.type,
+                  ok: !!verdict.ok,
+                  timedOut: false,
+                  wallClockMs: typeof verdict.wallClockMs === 'number' ? verdict.wallClockMs : null,
+                  pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
+                  proof: typeof probeResult.proof === 'string' ? probeResult.proof : '',
+                  verifierAddress:
+                    verdict.receipt && typeof verdict.receipt.verifierAddress === 'string'
+                      ? verdict.receipt.verifierAddress
+                      : '',
+                  chainIndex:
+                    typeof verdict.chainIndex === 'number'
+                      ? verdict.chainIndex
+                      : verdict.receipt && typeof verdict.receipt.chainIndex === 'number'
+                        ? verdict.receipt.chainIndex
+                        : null,
+                  issues: Array.isArray(verdict.issues) ? verdict.issues : [],
+                },
+                ...prev,
+              ].slice(0, 150),
+            );
           }
           if (!verdict.ok) {
-            setLog(prev => [{
-              time: now(),
-              msg: `Hardware probe FAILED (${probe.type}, ${source}): ${(verdict.issues || []).join('; ')}`,
-              type: 'warn',
-            }, ...prev]);
+            setLog((prev) => [
+              {
+                time: now(),
+                msg: `Hardware probe FAILED (${probe.type}, ${source}): ${(verdict.issues || []).join('; ')}`,
+                type: 'warn',
+              },
+              ...prev,
+            ]);
           }
         }
-        } catch (_) {
+      } catch (_) {
         // Probe errors must never interrupt mining.
-        } finally {
-          inFlight = false;
-        }
+      } finally {
+        inFlight = false;
+      }
     };
 
     runProbeTick().catch(() => {});
@@ -3351,42 +3693,48 @@ export default function Miner({
           hw.invoke('wattcoin-get-probe-history'),
           hw.invoke('wattcoin-get-attest-history'),
         ]);
-        const selfHistory   = (selfRes.status   === 'fulfilled' && selfRes.value   && Array.isArray(selfRes.value.history))   ? selfRes.value.history   : [];
-        const attestHistory = (attestRes.status === 'fulfilled' && attestRes.value && Array.isArray(attestRes.value.history)) ? attestRes.value.history : [];
+        const selfHistory =
+          selfRes.status === 'fulfilled' && selfRes.value && Array.isArray(selfRes.value.history)
+            ? selfRes.value.history
+            : [];
+        const attestHistory =
+          attestRes.status === 'fulfilled' && attestRes.value && Array.isArray(attestRes.value.history)
+            ? attestRes.value.history
+            : [];
 
-        const selfEntries   = selfHistory.map(h => ({
-          ts:         typeof h.ts === 'number' ? h.ts : 0,
-          id:         typeof h.id === 'string' ? h.id : '',
-          time:       h.ts ? new Date(h.ts).toLocaleString() : '—',
-          role:       'self',
-          source:     'local',
-          type:       h.type || '?',
-          ok:         !!h.ok,
-          timedOut:   Array.isArray(h.issues) && h.issues.some(i => String(i).includes('timed out')),
+        const selfEntries = selfHistory.map((h) => ({
+          ts: typeof h.ts === 'number' ? h.ts : 0,
+          id: typeof h.id === 'string' ? h.id : '',
+          time: h.ts ? new Date(h.ts).toLocaleString() : '—',
+          role: 'self',
+          source: 'local',
+          type: h.type || '?',
+          ok: !!h.ok,
+          timedOut: Array.isArray(h.issues) && h.issues.some((i) => String(i).includes('timed out')),
           wallClockMs: typeof h.wallClockMs === 'number' ? h.wallClockMs : null,
-          chainIndex:  typeof h.chainIndex  === 'number' ? h.chainIndex  : null,
-          issues:     Array.isArray(h.issues) ? h.issues : [],
+          chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
+          issues: Array.isArray(h.issues) ? h.issues : [],
         }));
-        const attestEntries = attestHistory.map(h => ({
-          ts:         typeof h.ts === 'number' ? h.ts : 0,
-          id:         typeof h.id === 'string' ? h.id : '',
-          time:       h.ts ? new Date(h.ts).toLocaleString() : '—',
-          role:       'attested',
-          source:     'peer',
-          type:       h.type || '?',
-          ok:         !!h.ok,
-          timedOut:   false,
+        const attestEntries = attestHistory.map((h) => ({
+          ts: typeof h.ts === 'number' ? h.ts : 0,
+          id: typeof h.id === 'string' ? h.id : '',
+          time: h.ts ? new Date(h.ts).toLocaleString() : '—',
+          role: 'attested',
+          source: 'peer',
+          type: h.type || '?',
+          ok: !!h.ok,
+          timedOut: false,
           wallClockMs: typeof h.wallClockMs === 'number' ? h.wallClockMs : null,
-          chainIndex:  typeof h.chainIndex  === 'number' ? h.chainIndex  : null,
-          workerId:   typeof h.workerId === 'string' ? h.workerId : '',
-          pixelHash:  typeof h.pixelHash === 'string' ? h.pixelHash : '',
-          proof:      typeof h.proof === 'string' ? h.proof : '',
-          issues:     Array.isArray(h.issues) ? h.issues : [],
+          chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
+          workerId: typeof h.workerId === 'string' ? h.workerId : '',
+          pixelHash: typeof h.pixelHash === 'string' ? h.pixelHash : '',
+          proof: typeof h.proof === 'string' ? h.proof : '',
+          issues: Array.isArray(h.issues) ? h.issues : [],
         }));
 
-        setProbeLog(prev => {
-          const seen = new Set(prev.map(e => e.ts));
-          const newEntries = [...selfEntries, ...attestEntries].filter(e => e.ts > 0 && !seen.has(e.ts));
+        setProbeLog((prev) => {
+          const seen = new Set(prev.map((e) => e.ts));
+          const newEntries = [...selfEntries, ...attestEntries].filter((e) => e.ts > 0 && !seen.has(e.ts));
           if (newEntries.length === 0) return prev;
           return [...newEntries, ...prev].sort((a, b) => b.ts - a.ts).slice(0, 150);
         });
@@ -3404,678 +3752,678 @@ export default function Miner({
   // Exact TDP tables (expand as needed)
   const cpuTDPTable = {
     // ── Intel Core 14th Gen (Raptor Lake Refresh) — PL2 sustained all-core ─
-    "Intel(R) Core(TM) i9-14900KS": 253,
-    "Intel(R) Core(TM) i9-14900K":  253,
-    "Intel(R) Core(TM) i9-14900KF": 253,
-    "Intel(R) Core(TM) i9-14900":    65,
-    "Intel(R) Core(TM) i9-14900F":   65,
-    "Intel(R) Core(TM) i9-14900T":   35,
-    "Intel(R) Core(TM) i7-14700K":  192,
-    "Intel(R) Core(TM) i7-14700KF": 192,
-    "Intel(R) Core(TM) i7-14700":    65,
-    "Intel(R) Core(TM) i7-14700F":   65,
-    "Intel(R) Core(TM) i7-14700T":   35,
-    "Intel(R) Core(TM) i5-14600K":  181,
-    "Intel(R) Core(TM) i5-14600KF": 181,
-    "Intel(R) Core(TM) i5-14600":    65,
-    "Intel(R) Core(TM) i5-14500":    65,
-    "Intel(R) Core(TM) i5-14400":    65,
-    "Intel(R) Core(TM) i5-14400F":   65,
-    "Intel(R) Core(TM) i5-14400T":   35,
-    "Intel(R) Core(TM) i3-14100":    60,
-    "Intel(R) Core(TM) i3-14100F":   58,
-    "Intel(R) Core(TM) i3-14100T":   35,
+    'Intel(R) Core(TM) i9-14900KS': 253,
+    'Intel(R) Core(TM) i9-14900K': 253,
+    'Intel(R) Core(TM) i9-14900KF': 253,
+    'Intel(R) Core(TM) i9-14900': 65,
+    'Intel(R) Core(TM) i9-14900F': 65,
+    'Intel(R) Core(TM) i9-14900T': 35,
+    'Intel(R) Core(TM) i7-14700K': 192,
+    'Intel(R) Core(TM) i7-14700KF': 192,
+    'Intel(R) Core(TM) i7-14700': 65,
+    'Intel(R) Core(TM) i7-14700F': 65,
+    'Intel(R) Core(TM) i7-14700T': 35,
+    'Intel(R) Core(TM) i5-14600K': 181,
+    'Intel(R) Core(TM) i5-14600KF': 181,
+    'Intel(R) Core(TM) i5-14600': 65,
+    'Intel(R) Core(TM) i5-14500': 65,
+    'Intel(R) Core(TM) i5-14400': 65,
+    'Intel(R) Core(TM) i5-14400F': 65,
+    'Intel(R) Core(TM) i5-14400T': 35,
+    'Intel(R) Core(TM) i3-14100': 60,
+    'Intel(R) Core(TM) i3-14100F': 58,
+    'Intel(R) Core(TM) i3-14100T': 35,
     // ── Intel Core 13th Gen (Raptor Lake) — PL2 sustained all-core ─────────
-    "Intel(R) Core(TM) i9-13900KS": 253,
-    "Intel(R) Core(TM) i9-13900K":  253,
-    "Intel(R) Core(TM) i9-13900KF": 253,
-    "Intel(R) Core(TM) i9-13900":    65,
-    "Intel(R) Core(TM) i9-13900F":   65,
-    "Intel(R) Core(TM) i9-13900T":   35,
-    "Intel(R) Core(TM) i7-13700K":  192,
-    "Intel(R) Core(TM) i7-13700KF": 192,
-    "Intel(R) Core(TM) i7-13700":    65,
-    "Intel(R) Core(TM) i7-13700F":   65,
-    "Intel(R) Core(TM) i7-13700T":   35,
-    "Intel(R) Core(TM) i5-13600K":  181,
-    "Intel(R) Core(TM) i5-13600KF": 181,
-    "Intel(R) Core(TM) i5-13600":    65,
-    "Intel(R) Core(TM) i5-13500":    65,
-    "Intel(R) Core(TM) i5-13400":    65,
-    "Intel(R) Core(TM) i5-13400F":   65,
-    "Intel(R) Core(TM) i5-13400T":   35,
-    "Intel(R) Core(TM) i3-13100":    60,
-    "Intel(R) Core(TM) i3-13100F":   58,
-    "Intel(R) Core(TM) i3-13100T":   35,
-    "Intel(R) Core(TM) i3-13300":    60,
+    'Intel(R) Core(TM) i9-13900KS': 253,
+    'Intel(R) Core(TM) i9-13900K': 253,
+    'Intel(R) Core(TM) i9-13900KF': 253,
+    'Intel(R) Core(TM) i9-13900': 65,
+    'Intel(R) Core(TM) i9-13900F': 65,
+    'Intel(R) Core(TM) i9-13900T': 35,
+    'Intel(R) Core(TM) i7-13700K': 192,
+    'Intel(R) Core(TM) i7-13700KF': 192,
+    'Intel(R) Core(TM) i7-13700': 65,
+    'Intel(R) Core(TM) i7-13700F': 65,
+    'Intel(R) Core(TM) i7-13700T': 35,
+    'Intel(R) Core(TM) i5-13600K': 181,
+    'Intel(R) Core(TM) i5-13600KF': 181,
+    'Intel(R) Core(TM) i5-13600': 65,
+    'Intel(R) Core(TM) i5-13500': 65,
+    'Intel(R) Core(TM) i5-13400': 65,
+    'Intel(R) Core(TM) i5-13400F': 65,
+    'Intel(R) Core(TM) i5-13400T': 35,
+    'Intel(R) Core(TM) i3-13100': 60,
+    'Intel(R) Core(TM) i3-13100F': 58,
+    'Intel(R) Core(TM) i3-13100T': 35,
+    'Intel(R) Core(TM) i3-13300': 60,
     // ── Intel Core 12th Gen (Alder Lake) — PL2 sustained all-core ──────────
-    "Intel(R) Core(TM) i9-12900KS": 241,
-    "Intel(R) Core(TM) i9-12900K":  241,
-    "Intel(R) Core(TM) i9-12900KF": 241,
-    "Intel(R) Core(TM) i9-12900":    65,
-    "Intel(R) Core(TM) i9-12900F":   65,
-    "Intel(R) Core(TM) i9-12900T":   35,
-    "Intel(R) Core(TM) i7-12700K":  190,
-    "Intel(R) Core(TM) i7-12700KF": 190,
-    "Intel(R) Core(TM) i7-12700":    65,
-    "Intel(R) Core(TM) i7-12700F":   65,
-    "Intel(R) Core(TM) i7-12700T":   35,
-    "Intel(R) Core(TM) i5-12600K":  150,
-    "Intel(R) Core(TM) i5-12600KF": 150,
-    "Intel(R) Core(TM) i5-12600":    65,
-    "Intel(R) Core(TM) i5-12500":    65,
-    "Intel(R) Core(TM) i5-12400":    65,
-    "Intel(R) Core(TM) i5-12400F":   65,
-    "Intel(R) Core(TM) i5-12400T":   35,
-    "Intel(R) Core(TM) i3-12300":    60,
-    "Intel(R) Core(TM) i3-12100":    60,
-    "Intel(R) Core(TM) i3-12100F":   58,
-    "Intel(R) Core(TM) i3-12100T":   35,
+    'Intel(R) Core(TM) i9-12900KS': 241,
+    'Intel(R) Core(TM) i9-12900K': 241,
+    'Intel(R) Core(TM) i9-12900KF': 241,
+    'Intel(R) Core(TM) i9-12900': 65,
+    'Intel(R) Core(TM) i9-12900F': 65,
+    'Intel(R) Core(TM) i9-12900T': 35,
+    'Intel(R) Core(TM) i7-12700K': 190,
+    'Intel(R) Core(TM) i7-12700KF': 190,
+    'Intel(R) Core(TM) i7-12700': 65,
+    'Intel(R) Core(TM) i7-12700F': 65,
+    'Intel(R) Core(TM) i7-12700T': 35,
+    'Intel(R) Core(TM) i5-12600K': 150,
+    'Intel(R) Core(TM) i5-12600KF': 150,
+    'Intel(R) Core(TM) i5-12600': 65,
+    'Intel(R) Core(TM) i5-12500': 65,
+    'Intel(R) Core(TM) i5-12400': 65,
+    'Intel(R) Core(TM) i5-12400F': 65,
+    'Intel(R) Core(TM) i5-12400T': 35,
+    'Intel(R) Core(TM) i3-12300': 60,
+    'Intel(R) Core(TM) i3-12100': 60,
+    'Intel(R) Core(TM) i3-12100F': 58,
+    'Intel(R) Core(TM) i3-12100T': 35,
     // ── Intel Core 11th Gen (Rocket Lake) — PL2 sustained all-core ─────────
-    "Intel(R) Core(TM) i9-11900K":  250,
-    "Intel(R) Core(TM) i9-11900KF": 250,
-    "Intel(R) Core(TM) i9-11900":    65,
-    "Intel(R) Core(TM) i9-11900F":   65,
-    "Intel(R) Core(TM) i9-11900T":   35,
-    "Intel(R) Core(TM) i7-11700K":  250,
-    "Intel(R) Core(TM) i7-11700KF": 250,
-    "Intel(R) Core(TM) i7-11700":    65,
-    "Intel(R) Core(TM) i7-11700F":   65,
-    "Intel(R) Core(TM) i7-11700T":   35,
-    "Intel(R) Core(TM) i5-11600K":  154,
-    "Intel(R) Core(TM) i5-11600KF": 154,
-    "Intel(R) Core(TM) i5-11600":    65,
-    "Intel(R) Core(TM) i5-11500":    65,
-    "Intel(R) Core(TM) i5-11500T":   35,
-    "Intel(R) Core(TM) i5-11400":    65,
-    "Intel(R) Core(TM) i5-11400F":   65,
-    "Intel(R) Core(TM) i5-11400T":   35,
+    'Intel(R) Core(TM) i9-11900K': 250,
+    'Intel(R) Core(TM) i9-11900KF': 250,
+    'Intel(R) Core(TM) i9-11900': 65,
+    'Intel(R) Core(TM) i9-11900F': 65,
+    'Intel(R) Core(TM) i9-11900T': 35,
+    'Intel(R) Core(TM) i7-11700K': 250,
+    'Intel(R) Core(TM) i7-11700KF': 250,
+    'Intel(R) Core(TM) i7-11700': 65,
+    'Intel(R) Core(TM) i7-11700F': 65,
+    'Intel(R) Core(TM) i7-11700T': 35,
+    'Intel(R) Core(TM) i5-11600K': 154,
+    'Intel(R) Core(TM) i5-11600KF': 154,
+    'Intel(R) Core(TM) i5-11600': 65,
+    'Intel(R) Core(TM) i5-11500': 65,
+    'Intel(R) Core(TM) i5-11500T': 35,
+    'Intel(R) Core(TM) i5-11400': 65,
+    'Intel(R) Core(TM) i5-11400F': 65,
+    'Intel(R) Core(TM) i5-11400T': 35,
     // ── Intel Core 10th Gen (Comet Lake) — PL2 sustained all-core ──────────
-    "Intel(R) Core(TM) i9-10900KS": 250,
-    "Intel(R) Core(TM) i9-10900K":  250,
-    "Intel(R) Core(TM) i9-10900KF": 250,
-    "Intel(R) Core(TM) i9-10900":    65,
-    "Intel(R) Core(TM) i9-10900F":   65,
-    "Intel(R) Core(TM) i9-10900T":   35,
-    "Intel(R) Core(TM) i9-10850K":  250,
-    "Intel(R) Core(TM) i7-10700K":  229,
-    "Intel(R) Core(TM) i7-10700KF": 229,
-    "Intel(R) Core(TM) i7-10700":    65,
-    "Intel(R) Core(TM) i7-10700F":   65,
-    "Intel(R) Core(TM) i7-10700T":   35,
-    "Intel(R) Core(TM) i5-10600K":  182,
-    "Intel(R) Core(TM) i5-10600KF": 182,
-    "Intel(R) Core(TM) i5-10600":    65,
-    "Intel(R) Core(TM) i5-10500":    65,
-    "Intel(R) Core(TM) i5-10500T":   35,
-    "Intel(R) Core(TM) i5-10400":    65,
-    "Intel(R) Core(TM) i5-10400F":   65,
-    "Intel(R) Core(TM) i5-10400T":   35,
-    "Intel(R) Core(TM) i3-10320":    65,
-    "Intel(R) Core(TM) i3-10300":    65,
-    "Intel(R) Core(TM) i3-10105":    65,
-    "Intel(R) Core(TM) i3-10105F":   65,
-    "Intel(R) Core(TM) i3-10100":    65,
-    "Intel(R) Core(TM) i3-10100F":   65,
+    'Intel(R) Core(TM) i9-10900KS': 250,
+    'Intel(R) Core(TM) i9-10900K': 250,
+    'Intel(R) Core(TM) i9-10900KF': 250,
+    'Intel(R) Core(TM) i9-10900': 65,
+    'Intel(R) Core(TM) i9-10900F': 65,
+    'Intel(R) Core(TM) i9-10900T': 35,
+    'Intel(R) Core(TM) i9-10850K': 250,
+    'Intel(R) Core(TM) i7-10700K': 229,
+    'Intel(R) Core(TM) i7-10700KF': 229,
+    'Intel(R) Core(TM) i7-10700': 65,
+    'Intel(R) Core(TM) i7-10700F': 65,
+    'Intel(R) Core(TM) i7-10700T': 35,
+    'Intel(R) Core(TM) i5-10600K': 182,
+    'Intel(R) Core(TM) i5-10600KF': 182,
+    'Intel(R) Core(TM) i5-10600': 65,
+    'Intel(R) Core(TM) i5-10500': 65,
+    'Intel(R) Core(TM) i5-10500T': 35,
+    'Intel(R) Core(TM) i5-10400': 65,
+    'Intel(R) Core(TM) i5-10400F': 65,
+    'Intel(R) Core(TM) i5-10400T': 35,
+    'Intel(R) Core(TM) i3-10320': 65,
+    'Intel(R) Core(TM) i3-10300': 65,
+    'Intel(R) Core(TM) i3-10105': 65,
+    'Intel(R) Core(TM) i3-10105F': 65,
+    'Intel(R) Core(TM) i3-10100': 65,
+    'Intel(R) Core(TM) i3-10100F': 65,
     // ── Intel Core 9th Gen (Coffee Lake Refresh) — PL2 sustained all-core ──
-    "Intel(R) Core(TM) i9-9900KS":  212,
-    "Intel(R) Core(TM) i9-9900K":   212,
-    "Intel(R) Core(TM) i9-9900KF":  212,
-    "Intel(R) Core(TM) i9-9900":     65,
-    "Intel(R) Core(TM) i7-9700K":   180,
-    "Intel(R) Core(TM) i7-9700KF":  180,
-    "Intel(R) Core(TM) i7-9700":     65,
-    "Intel(R) Core(TM) i7-9700F":    65,
-    "Intel(R) Core(TM) i5-9600K":   152,
-    "Intel(R) Core(TM) i5-9600KF":  152,
-    "Intel(R) Core(TM) i5-9600":     65,
-    "Intel(R) Core(TM) i5-9500":     65,
-    "Intel(R) Core(TM) i5-9500F":    65,
-    "Intel(R) Core(TM) i5-9400":     65,
-    "Intel(R) Core(TM) i5-9400F":    65,
-    "Intel(R) Core(TM) i3-9350K":    91,
-    "Intel(R) Core(TM) i3-9300":     62,
-    "Intel(R) Core(TM) i3-9100":     65,
-    "Intel(R) Core(TM) i3-9100F":    65,
+    'Intel(R) Core(TM) i9-9900KS': 212,
+    'Intel(R) Core(TM) i9-9900K': 212,
+    'Intel(R) Core(TM) i9-9900KF': 212,
+    'Intel(R) Core(TM) i9-9900': 65,
+    'Intel(R) Core(TM) i7-9700K': 180,
+    'Intel(R) Core(TM) i7-9700KF': 180,
+    'Intel(R) Core(TM) i7-9700': 65,
+    'Intel(R) Core(TM) i7-9700F': 65,
+    'Intel(R) Core(TM) i5-9600K': 152,
+    'Intel(R) Core(TM) i5-9600KF': 152,
+    'Intel(R) Core(TM) i5-9600': 65,
+    'Intel(R) Core(TM) i5-9500': 65,
+    'Intel(R) Core(TM) i5-9500F': 65,
+    'Intel(R) Core(TM) i5-9400': 65,
+    'Intel(R) Core(TM) i5-9400F': 65,
+    'Intel(R) Core(TM) i3-9350K': 91,
+    'Intel(R) Core(TM) i3-9300': 62,
+    'Intel(R) Core(TM) i3-9100': 65,
+    'Intel(R) Core(TM) i3-9100F': 65,
     // ── Intel Core 8th Gen (Coffee Lake) — PL2 sustained all-core ──────────
-    "Intel(R) Core(TM) i7-8700K":   180,
-    "Intel(R) Core(TM) i7-8700":     65,
-    "Intel(R) Core(TM) i5-8600K":   152,
-    "Intel(R) Core(TM) i5-8600":     65,
-    "Intel(R) Core(TM) i5-8500":     65,
-    "Intel(R) Core(TM) i5-8400":     65,
-    "Intel(R) Core(TM) i3-8350K":    91,
-    "Intel(R) Core(TM) i3-8300":     62,
-    "Intel(R) Core(TM) i3-8100":     65,
+    'Intel(R) Core(TM) i7-8700K': 180,
+    'Intel(R) Core(TM) i7-8700': 65,
+    'Intel(R) Core(TM) i5-8600K': 152,
+    'Intel(R) Core(TM) i5-8600': 65,
+    'Intel(R) Core(TM) i5-8500': 65,
+    'Intel(R) Core(TM) i5-8400': 65,
+    'Intel(R) Core(TM) i3-8350K': 91,
+    'Intel(R) Core(TM) i3-8300': 62,
+    'Intel(R) Core(TM) i3-8100': 65,
     // ── Intel Core Ultra 200S (Arrow Lake, desktop) — PL2 sustained ────────
-    "Intel(R) Core(TM) Ultra 9 285K":  250,
-    "Intel(R) Core(TM) Ultra 7 265K":  225,
-    "Intel(R) Core(TM) Ultra 7 265KF": 225,
-    "Intel(R) Core(TM) Ultra 5 245K":  159,
-    "Intel(R) Core(TM) Ultra 5 245KF": 159,
+    'Intel(R) Core(TM) Ultra 9 285K': 250,
+    'Intel(R) Core(TM) Ultra 7 265K': 225,
+    'Intel(R) Core(TM) Ultra 7 265KF': 225,
+    'Intel(R) Core(TM) Ultra 5 245K': 159,
+    'Intel(R) Core(TM) Ultra 5 245KF': 159,
     // ── Intel Core Ultra 100H/U (Meteor Lake, mobile) ─────────────────────
-    "Intel(R) Core(TM) Ultra 9 185H": 45,
-    "Intel(R) Core(TM) Ultra 7 165H": 45,
-    "Intel(R) Core(TM) Ultra 7 155H": 45,
-    "Intel(R) Core(TM) Ultra 5 135H": 45,
-    "Intel(R) Core(TM) Ultra 5 125H": 45,
-    "Intel(R) Core(TM) Ultra 7 165U": 15,
-    "Intel(R) Core(TM) Ultra 7 155U": 15,
-    "Intel(R) Core(TM) Ultra 5 135U": 15,
+    'Intel(R) Core(TM) Ultra 9 185H': 45,
+    'Intel(R) Core(TM) Ultra 7 165H': 45,
+    'Intel(R) Core(TM) Ultra 7 155H': 45,
+    'Intel(R) Core(TM) Ultra 5 135H': 45,
+    'Intel(R) Core(TM) Ultra 5 125H': 45,
+    'Intel(R) Core(TM) Ultra 7 165U': 15,
+    'Intel(R) Core(TM) Ultra 7 155U': 15,
+    'Intel(R) Core(TM) Ultra 5 135U': 15,
     // ── Intel 13th Gen Mobile (HX / H / U) ────────────────────────────────
-    "Intel(R) Core(TM) i9-13950HX": 55,
-    "Intel(R) Core(TM) i9-13900HX": 55,
-    "Intel(R) Core(TM) i9-13900H":  45,
-    "Intel(R) Core(TM) i7-13700HX": 55,
-    "Intel(R) Core(TM) i7-13700H":  45,
-    "Intel(R) Core(TM) i5-13600H":  45,
-    "Intel(R) Core(TM) i5-13500H":  45,
-    "Intel(R) Core(TM) i5-13450H":  45,
-    "Intel(R) Core(TM) i7-1365U":   15,
-    "Intel(R) Core(TM) i7-1355U":   15,
-    "Intel(R) Core(TM) i5-1345U":   15,
-    "Intel(R) Core(TM) i5-1335U":   15,
-    "Intel(R) Core(TM) i3-1315U":   15,
+    'Intel(R) Core(TM) i9-13950HX': 55,
+    'Intel(R) Core(TM) i9-13900HX': 55,
+    'Intel(R) Core(TM) i9-13900H': 45,
+    'Intel(R) Core(TM) i7-13700HX': 55,
+    'Intel(R) Core(TM) i7-13700H': 45,
+    'Intel(R) Core(TM) i5-13600H': 45,
+    'Intel(R) Core(TM) i5-13500H': 45,
+    'Intel(R) Core(TM) i5-13450H': 45,
+    'Intel(R) Core(TM) i7-1365U': 15,
+    'Intel(R) Core(TM) i7-1355U': 15,
+    'Intel(R) Core(TM) i5-1345U': 15,
+    'Intel(R) Core(TM) i5-1335U': 15,
+    'Intel(R) Core(TM) i3-1315U': 15,
     // ── Intel 12th Gen Mobile ─────────────────────────────────────────────
-    "Intel(R) Core(TM) i9-12950HX": 55,
-    "Intel(R) Core(TM) i9-12900HK": 45,
-    "Intel(R) Core(TM) i9-12900H":  45,
-    "Intel(R) Core(TM) i7-12700H":  45,
-    "Intel(R) Core(TM) i7-12650H":  45,
-    "Intel(R) Core(TM) i5-12500H":  45,
-    "Intel(R) Core(TM) i5-12450H":  45,
-    "Intel(R) Core(TM) i7-1280P":   28,
-    "Intel(R) Core(TM) i7-1270P":   28,
-    "Intel(R) Core(TM) i5-1240P":   28,
-    "Intel(R) Core(TM) i7-1255U":   15,
-    "Intel(R) Core(TM) i5-1235U":   15,
+    'Intel(R) Core(TM) i9-12950HX': 55,
+    'Intel(R) Core(TM) i9-12900HK': 45,
+    'Intel(R) Core(TM) i9-12900H': 45,
+    'Intel(R) Core(TM) i7-12700H': 45,
+    'Intel(R) Core(TM) i7-12650H': 45,
+    'Intel(R) Core(TM) i5-12500H': 45,
+    'Intel(R) Core(TM) i5-12450H': 45,
+    'Intel(R) Core(TM) i7-1280P': 28,
+    'Intel(R) Core(TM) i7-1270P': 28,
+    'Intel(R) Core(TM) i5-1240P': 28,
+    'Intel(R) Core(TM) i7-1255U': 15,
+    'Intel(R) Core(TM) i5-1235U': 15,
     // ── Intel 11th Gen Mobile ─────────────────────────────────────────────
-    "Intel(R) Core(TM) i9-11980HK": 45,
-    "Intel(R) Core(TM) i9-11900H":  45,
-    "Intel(R) Core(TM) i7-11800H":  45,
-    "Intel(R) Core(TM) i5-11500H":  45,
-    "Intel(R) Core(TM) i7-1185G7":  28,
-    "Intel(R) Core(TM) i7-1165G7":  28,
-    "Intel(R) Core(TM) i5-1135G7":  28,
-    "Intel(R) Core(TM) i3-1125G4":  28,
-    "Intel(R) Core(TM) i3-1115G4":  15,
+    'Intel(R) Core(TM) i9-11980HK': 45,
+    'Intel(R) Core(TM) i9-11900H': 45,
+    'Intel(R) Core(TM) i7-11800H': 45,
+    'Intel(R) Core(TM) i5-11500H': 45,
+    'Intel(R) Core(TM) i7-1185G7': 28,
+    'Intel(R) Core(TM) i7-1165G7': 28,
+    'Intel(R) Core(TM) i5-1135G7': 28,
+    'Intel(R) Core(TM) i3-1125G4': 28,
+    'Intel(R) Core(TM) i3-1115G4': 15,
     // ── Intel 10th Gen Mobile ─────────────────────────────────────────────
-    "Intel(R) Core(TM) i7-10875H":  45,
-    "Intel(R) Core(TM) i7-10750H":  45,
-    "Intel(R) Core(TM) i5-10500H":  45,
-    "Intel(R) Core(TM) i5-10300H":  45,
-    "Intel(R) Core(TM) i7-1065G7":  15,
-    "Intel(R) Core(TM) i5-1035G1":  15,
-    "Intel(R) Core(TM) i3-1005G1":  15,
+    'Intel(R) Core(TM) i7-10875H': 45,
+    'Intel(R) Core(TM) i7-10750H': 45,
+    'Intel(R) Core(TM) i5-10500H': 45,
+    'Intel(R) Core(TM) i5-10300H': 45,
+    'Intel(R) Core(TM) i7-1065G7': 15,
+    'Intel(R) Core(TM) i5-1035G1': 15,
+    'Intel(R) Core(TM) i3-1005G1': 15,
     // ── Intel Xeon ────────────────────────────────────────────────────────
-    "Intel(R) Xeon(R) w9-3595X":         350,
-    "Intel(R) Xeon(R) w9-3575X":         300,
-    "Intel(R) Xeon(R) w7-3465X":         300,
-    "Intel(R) Xeon(R) w7-2495X":         225,
-    "Intel(R) Xeon(R) W-3175X":          255,
-    "Intel(R) Xeon(R) W-2295":           165,
-    "Intel(R) Xeon(R) W-2255":           165,
-    "Intel(R) Xeon(R) W-2245":           155,
-    "Intel(R) Xeon(R) Gold 6258R":       205,
-    "Intel(R) Xeon(R) Gold 6248R":       205,
-    "Intel(R) Xeon(R) Gold 6154":        200,
-    "Intel(R) Xeon(R) Silver 4310":      120,
-    "Intel(R) Xeon(R) Silver 4210R":     100,
-    "Intel(R) Xeon(R) Silver 4210":       85,
-    "Intel(R) Xeon(R) E5-2699 v4":       145,
-    "Intel(R) Xeon(R) E5-2690 v4":       135,
-    "Intel(R) Xeon(R) E5-2680 v4":       120,
-    "Intel(R) Xeon(R) E5-2670 v3":       120,
+    'Intel(R) Xeon(R) w9-3595X': 350,
+    'Intel(R) Xeon(R) w9-3575X': 300,
+    'Intel(R) Xeon(R) w7-3465X': 300,
+    'Intel(R) Xeon(R) w7-2495X': 225,
+    'Intel(R) Xeon(R) W-3175X': 255,
+    'Intel(R) Xeon(R) W-2295': 165,
+    'Intel(R) Xeon(R) W-2255': 165,
+    'Intel(R) Xeon(R) W-2245': 155,
+    'Intel(R) Xeon(R) Gold 6258R': 205,
+    'Intel(R) Xeon(R) Gold 6248R': 205,
+    'Intel(R) Xeon(R) Gold 6154': 200,
+    'Intel(R) Xeon(R) Silver 4310': 120,
+    'Intel(R) Xeon(R) Silver 4210R': 100,
+    'Intel(R) Xeon(R) Silver 4210': 85,
+    'Intel(R) Xeon(R) E5-2699 v4': 145,
+    'Intel(R) Xeon(R) E5-2690 v4': 135,
+    'Intel(R) Xeon(R) E5-2680 v4': 120,
+    'Intel(R) Xeon(R) E5-2670 v3': 120,
     // ── AMD Ryzen 9000 Series (Zen 5, AM5) — PPT (actual all-core power) ──
-    "AMD Ryzen 9 9950X":   230,
-    "AMD Ryzen 9 9900X":   162,
-    "AMD Ryzen 7 9800X3D": 162,
-    "AMD Ryzen 7 9700X":    88,
-    "AMD Ryzen 5 9600X":    88,
-    "AMD Ryzen 5 9600":     65,
+    'AMD Ryzen 9 9950X': 230,
+    'AMD Ryzen 9 9900X': 162,
+    'AMD Ryzen 7 9800X3D': 162,
+    'AMD Ryzen 7 9700X': 88,
+    'AMD Ryzen 5 9600X': 88,
+    'AMD Ryzen 5 9600': 65,
     // ── AMD Ryzen 7000 Series (Zen 4, AM5) — PPT (actual all-core power) ──
-    "AMD Ryzen 9 7950X":   230,
-    "AMD Ryzen 9 7950X3D": 162,
-    "AMD Ryzen 9 7900X":   230,
-    "AMD Ryzen 9 7900X3D": 162,
-    "AMD Ryzen 9 7900":     88,
-    "AMD Ryzen 7 7800X3D": 162,
-    "AMD Ryzen 7 7700X":   142,
-    "AMD Ryzen 7 7700":     88,
-    "AMD Ryzen 5 7600X":   142,
-    "AMD Ryzen 5 7600":     88,
-    "AMD Ryzen 5 7500F":    88,
+    'AMD Ryzen 9 7950X': 230,
+    'AMD Ryzen 9 7950X3D': 162,
+    'AMD Ryzen 9 7900X': 230,
+    'AMD Ryzen 9 7900X3D': 162,
+    'AMD Ryzen 9 7900': 88,
+    'AMD Ryzen 7 7800X3D': 162,
+    'AMD Ryzen 7 7700X': 142,
+    'AMD Ryzen 7 7700': 88,
+    'AMD Ryzen 5 7600X': 142,
+    'AMD Ryzen 5 7600': 88,
+    'AMD Ryzen 5 7500F': 88,
     // ── AMD Ryzen 5000 Series (Zen 3, AM4) ────────────────────────────────
-    "AMD Ryzen 9 5950X":   142,
-    "AMD Ryzen 9 5900X":   142,
-    "AMD Ryzen 9 5900":     88,
-    "AMD Ryzen 9 5900HX":   45,
-    "AMD Ryzen 7 5800X3D":  88,
-    "AMD Ryzen 7 5800X":   142,
-    "AMD Ryzen 7 5800":     88,
-    "AMD Ryzen 7 5800H":    45,
-    "AMD Ryzen 7 5700X":    88,
-    "AMD Ryzen 7 5700G":    88,
-    "AMD Ryzen 5 5600X":    88,
-    "AMD Ryzen 5 5600":     88,
-    "AMD Ryzen 5 5600G":    88,
-    "AMD Ryzen 5 5600H":    45,
-    "AMD Ryzen 5 5500":     88,
-    "AMD Ryzen 3 5300G":    88,
-    "AMD Ryzen 3 5100":     88,
+    'AMD Ryzen 9 5950X': 142,
+    'AMD Ryzen 9 5900X': 142,
+    'AMD Ryzen 9 5900': 88,
+    'AMD Ryzen 9 5900HX': 45,
+    'AMD Ryzen 7 5800X3D': 88,
+    'AMD Ryzen 7 5800X': 142,
+    'AMD Ryzen 7 5800': 88,
+    'AMD Ryzen 7 5800H': 45,
+    'AMD Ryzen 7 5700X': 88,
+    'AMD Ryzen 7 5700G': 88,
+    'AMD Ryzen 5 5600X': 88,
+    'AMD Ryzen 5 5600': 88,
+    'AMD Ryzen 5 5600G': 88,
+    'AMD Ryzen 5 5600H': 45,
+    'AMD Ryzen 5 5500': 88,
+    'AMD Ryzen 3 5300G': 88,
+    'AMD Ryzen 3 5100': 88,
     // ── AMD Ryzen 3000 Series (Zen 2, AM4) ────────────────────────────────
-    "AMD Ryzen 9 3950X":   142,
-    "AMD Ryzen 9 3900XT":  142,
-    "AMD Ryzen 9 3900X":   142,
-    "AMD Ryzen 9 3900":     88,
-    "AMD Ryzen 7 3800XT":  142,
-    "AMD Ryzen 7 3800X":   142,
-    "AMD Ryzen 7 3700X":    88,
-    "AMD Ryzen 5 3600XT":  128,
-    "AMD Ryzen 5 3600X":   128,
-    "AMD Ryzen 5 3600":     88,
-    "AMD Ryzen 5 3500X":    88,
-    "AMD Ryzen 5 3500":     88,
-    "AMD Ryzen 3 3300X":    88,
-    "AMD Ryzen 3 3100":     88,
+    'AMD Ryzen 9 3950X': 142,
+    'AMD Ryzen 9 3900XT': 142,
+    'AMD Ryzen 9 3900X': 142,
+    'AMD Ryzen 9 3900': 88,
+    'AMD Ryzen 7 3800XT': 142,
+    'AMD Ryzen 7 3800X': 142,
+    'AMD Ryzen 7 3700X': 88,
+    'AMD Ryzen 5 3600XT': 128,
+    'AMD Ryzen 5 3600X': 128,
+    'AMD Ryzen 5 3600': 88,
+    'AMD Ryzen 5 3500X': 88,
+    'AMD Ryzen 5 3500': 88,
+    'AMD Ryzen 3 3300X': 88,
+    'AMD Ryzen 3 3100': 88,
     // ── AMD Ryzen 2000 Series (Zen+, AM4) ─────────────────────────────────
-    "AMD Ryzen 7 2700X":   128,
-    "AMD Ryzen 7 2700":     88,
-    "AMD Ryzen 5 2600X":   110,
-    "AMD Ryzen 5 2600":     88,
-    "AMD Ryzen 3 2300X":    88,
-    "AMD Ryzen 3 2200G":    88,
+    'AMD Ryzen 7 2700X': 128,
+    'AMD Ryzen 7 2700': 88,
+    'AMD Ryzen 5 2600X': 110,
+    'AMD Ryzen 5 2600': 88,
+    'AMD Ryzen 3 2300X': 88,
+    'AMD Ryzen 3 2200G': 88,
     // ── AMD Threadripper ──────────────────────────────────────────────────
-    "AMD Ryzen Threadripper PRO 7995WX": 350,
-    "AMD Ryzen Threadripper PRO 7985WX": 350,
-    "AMD Ryzen Threadripper PRO 7975WX": 350,
-    "AMD Ryzen Threadripper PRO 5995WX": 280,
-    "AMD Ryzen Threadripper PRO 5975WX": 280,
-    "AMD Ryzen Threadripper PRO 5965WX": 280,
-    "AMD Ryzen Threadripper 3990X":      280,
-    "AMD Ryzen Threadripper 3970X":      280,
-    "AMD Ryzen Threadripper 3960X":      280,
-    "AMD Ryzen Threadripper 2990WX":     250,
-    "AMD Ryzen Threadripper 2970WX":     250,
-    "AMD Ryzen Threadripper 2950X":      180,
-    "AMD Ryzen Threadripper 2920X":      180,
+    'AMD Ryzen Threadripper PRO 7995WX': 350,
+    'AMD Ryzen Threadripper PRO 7985WX': 350,
+    'AMD Ryzen Threadripper PRO 7975WX': 350,
+    'AMD Ryzen Threadripper PRO 5995WX': 280,
+    'AMD Ryzen Threadripper PRO 5975WX': 280,
+    'AMD Ryzen Threadripper PRO 5965WX': 280,
+    'AMD Ryzen Threadripper 3990X': 280,
+    'AMD Ryzen Threadripper 3970X': 280,
+    'AMD Ryzen Threadripper 3960X': 280,
+    'AMD Ryzen Threadripper 2990WX': 250,
+    'AMD Ryzen Threadripper 2970WX': 250,
+    'AMD Ryzen Threadripper 2950X': 180,
+    'AMD Ryzen Threadripper 2920X': 180,
     // ── AMD EPYC ──────────────────────────────────────────────────────────
-    "AMD EPYC 9654": 360,
-    "AMD EPYC 9554": 360,
-    "AMD EPYC 9454": 290,
-    "AMD EPYC 9354": 280,
-    "AMD EPYC 7763": 280,
-    "AMD EPYC 7742": 225,
-    "AMD EPYC 7713": 225,
-    "AMD EPYC 7663": 240,
-    "AMD EPYC 7601": 180,
-    "AMD EPYC 7551": 180,
-    "AMD EPYC 7543": 225,
-    "AMD EPYC 7502": 180,
-    "AMD EPYC 7401": 170,
-    "AMD EPYC 7301": 155,
+    'AMD EPYC 9654': 360,
+    'AMD EPYC 9554': 360,
+    'AMD EPYC 9454': 290,
+    'AMD EPYC 9354': 280,
+    'AMD EPYC 7763': 280,
+    'AMD EPYC 7742': 225,
+    'AMD EPYC 7713': 225,
+    'AMD EPYC 7663': 240,
+    'AMD EPYC 7601': 180,
+    'AMD EPYC 7551': 180,
+    'AMD EPYC 7543': 225,
+    'AMD EPYC 7502': 180,
+    'AMD EPYC 7401': 170,
+    'AMD EPYC 7301': 155,
     // ── Apple Silicon ─────────────────────────────────────────────────────
-    "Apple M1":       20,
-    "Apple M1 Pro":   30,
-    "Apple M1 Max":   60,
-    "Apple M1 Ultra": 60,
-    "Apple M2":       22,
-    "Apple M2 Pro":   35,
-    "Apple M2 Max":   60,
-    "Apple M2 Ultra": 60,
-    "Apple M3":       22,
-    "Apple M3 Pro":   35,
-    "Apple M3 Max":   92,
-    "Apple M4":       20,
-    "Apple M4 Pro":   31,
-    "Apple M4 Max":   50,
+    'Apple M1': 20,
+    'Apple M1 Pro': 30,
+    'Apple M1 Max': 60,
+    'Apple M1 Ultra': 60,
+    'Apple M2': 22,
+    'Apple M2 Pro': 35,
+    'Apple M2 Max': 60,
+    'Apple M2 Ultra': 60,
+    'Apple M3': 22,
+    'Apple M3 Pro': 35,
+    'Apple M3 Max': 92,
+    'Apple M4': 20,
+    'Apple M4 Pro': 31,
+    'Apple M4 Max': 50,
     // ── Intel Core 7th Gen (Kaby Lake) ────────────────────────────────────
-    "Intel(R) Core(TM) i7-7700K":   91,
-    "Intel(R) Core(TM) i7-7700":    65,
-    "Intel(R) Core(TM) i7-7700T":   35,
-    "Intel(R) Core(TM) i5-7600K":   91,
-    "Intel(R) Core(TM) i5-7600":    65,
-    "Intel(R) Core(TM) i5-7500":    65,
-    "Intel(R) Core(TM) i5-7400":    65,
-    "Intel(R) Core(TM) i5-7400T":   35,
-    "Intel(R) Core(TM) i3-7350K":   60,
-    "Intel(R) Core(TM) i3-7300":    51,
-    "Intel(R) Core(TM) i3-7100":    51,
-    "Intel(R) Core(TM) i3-7100T":   35,
-    "Intel(R) Core(TM) i7-7700HQ":  45,
-    "Intel(R) Core(TM) i7-7500U":   15,
-    "Intel(R) Core(TM) i5-7300HQ":  45,
-    "Intel(R) Core(TM) i5-7200U":   15,
-    "Intel(R) Core(TM) i3-7100U":   15,
+    'Intel(R) Core(TM) i7-7700K': 91,
+    'Intel(R) Core(TM) i7-7700': 65,
+    'Intel(R) Core(TM) i7-7700T': 35,
+    'Intel(R) Core(TM) i5-7600K': 91,
+    'Intel(R) Core(TM) i5-7600': 65,
+    'Intel(R) Core(TM) i5-7500': 65,
+    'Intel(R) Core(TM) i5-7400': 65,
+    'Intel(R) Core(TM) i5-7400T': 35,
+    'Intel(R) Core(TM) i3-7350K': 60,
+    'Intel(R) Core(TM) i3-7300': 51,
+    'Intel(R) Core(TM) i3-7100': 51,
+    'Intel(R) Core(TM) i3-7100T': 35,
+    'Intel(R) Core(TM) i7-7700HQ': 45,
+    'Intel(R) Core(TM) i7-7500U': 15,
+    'Intel(R) Core(TM) i5-7300HQ': 45,
+    'Intel(R) Core(TM) i5-7200U': 15,
+    'Intel(R) Core(TM) i3-7100U': 15,
     // ── Intel Core 6th Gen (Skylake) ───────────────────────────────────────
-    "Intel(R) Core(TM) i7-6700K":   91,
-    "Intel(R) Core(TM) i7-6700":    65,
-    "Intel(R) Core(TM) i7-6700T":   35,
-    "Intel(R) Core(TM) i5-6600K":   91,
-    "Intel(R) Core(TM) i5-6600":    65,
-    "Intel(R) Core(TM) i5-6500":    65,
-    "Intel(R) Core(TM) i5-6400":    65,
-    "Intel(R) Core(TM) i5-6400T":   35,
-    "Intel(R) Core(TM) i3-6300":    51,
-    "Intel(R) Core(TM) i3-6100":    51,
-    "Intel(R) Core(TM) i3-6100T":   35,
-    "Intel(R) Core(TM) i7-6700HQ":  45,
-    "Intel(R) Core(TM) i7-6500U":   15,
-    "Intel(R) Core(TM) i5-6300HQ":  45,
-    "Intel(R) Core(TM) i5-6200U":   15,
-    "Intel(R) Core(TM) i3-6100U":   15,
+    'Intel(R) Core(TM) i7-6700K': 91,
+    'Intel(R) Core(TM) i7-6700': 65,
+    'Intel(R) Core(TM) i7-6700T': 35,
+    'Intel(R) Core(TM) i5-6600K': 91,
+    'Intel(R) Core(TM) i5-6600': 65,
+    'Intel(R) Core(TM) i5-6500': 65,
+    'Intel(R) Core(TM) i5-6400': 65,
+    'Intel(R) Core(TM) i5-6400T': 35,
+    'Intel(R) Core(TM) i3-6300': 51,
+    'Intel(R) Core(TM) i3-6100': 51,
+    'Intel(R) Core(TM) i3-6100T': 35,
+    'Intel(R) Core(TM) i7-6700HQ': 45,
+    'Intel(R) Core(TM) i7-6500U': 15,
+    'Intel(R) Core(TM) i5-6300HQ': 45,
+    'Intel(R) Core(TM) i5-6200U': 15,
+    'Intel(R) Core(TM) i3-6100U': 15,
     // ── Intel Core 5th Gen (Broadwell) ────────────────────────────────────
-    "Intel(R) Core(TM) i7-5775C":   65,
-    "Intel(R) Core(TM) i5-5675C":   65,
-    "Intel(R) Core(TM) i7-5700HQ":  47,
-    "Intel(R) Core(TM) i7-5500U":   15,
-    "Intel(R) Core(TM) i5-5300U":   15,
-    "Intel(R) Core(TM) i3-5005U":   15,
+    'Intel(R) Core(TM) i7-5775C': 65,
+    'Intel(R) Core(TM) i5-5675C': 65,
+    'Intel(R) Core(TM) i7-5700HQ': 47,
+    'Intel(R) Core(TM) i7-5500U': 15,
+    'Intel(R) Core(TM) i5-5300U': 15,
+    'Intel(R) Core(TM) i3-5005U': 15,
     // ── Intel Core 4th Gen (Haswell) ──────────────────────────────────────
-    "Intel(R) Core(TM) i7-4790K":   88,
-    "Intel(R) Core(TM) i7-4790":    84,
-    "Intel(R) Core(TM) i7-4770K":   84,
-    "Intel(R) Core(TM) i7-4770":    84,
-    "Intel(R) Core(TM) i7-4770T":   45,
-    "Intel(R) Core(TM) i5-4690K":   88,
-    "Intel(R) Core(TM) i5-4690":    84,
-    "Intel(R) Core(TM) i5-4670K":   84,
-    "Intel(R) Core(TM) i5-4670":    84,
-    "Intel(R) Core(TM) i5-4590":    84,
-    "Intel(R) Core(TM) i5-4570":    84,
-    "Intel(R) Core(TM) i5-4460":    84,
-    "Intel(R) Core(TM) i3-4370":    54,
-    "Intel(R) Core(TM) i3-4160":    54,
-    "Intel(R) Core(TM) i3-4130":    54,
-    "Intel(R) Core(TM) i7-4720HQ":  47,
-    "Intel(R) Core(TM) i7-4700MQ":  47,
-    "Intel(R) Core(TM) i7-4500U":   15,
-    "Intel(R) Core(TM) i5-4300U":   15,
-    "Intel(R) Core(TM) i3-4010U":   15,
+    'Intel(R) Core(TM) i7-4790K': 88,
+    'Intel(R) Core(TM) i7-4790': 84,
+    'Intel(R) Core(TM) i7-4770K': 84,
+    'Intel(R) Core(TM) i7-4770': 84,
+    'Intel(R) Core(TM) i7-4770T': 45,
+    'Intel(R) Core(TM) i5-4690K': 88,
+    'Intel(R) Core(TM) i5-4690': 84,
+    'Intel(R) Core(TM) i5-4670K': 84,
+    'Intel(R) Core(TM) i5-4670': 84,
+    'Intel(R) Core(TM) i5-4590': 84,
+    'Intel(R) Core(TM) i5-4570': 84,
+    'Intel(R) Core(TM) i5-4460': 84,
+    'Intel(R) Core(TM) i3-4370': 54,
+    'Intel(R) Core(TM) i3-4160': 54,
+    'Intel(R) Core(TM) i3-4130': 54,
+    'Intel(R) Core(TM) i7-4720HQ': 47,
+    'Intel(R) Core(TM) i7-4700MQ': 47,
+    'Intel(R) Core(TM) i7-4500U': 15,
+    'Intel(R) Core(TM) i5-4300U': 15,
+    'Intel(R) Core(TM) i3-4010U': 15,
     // ── Intel Core 3rd Gen (Ivy Bridge) ───────────────────────────────────
-    "Intel(R) Core(TM) i7-3770K":   77,
-    "Intel(R) Core(TM) i7-3770":    77,
-    "Intel(R) Core(TM) i7-3770T":   45,
-    "Intel(R) Core(TM) i5-3570K":   77,
-    "Intel(R) Core(TM) i5-3570":    77,
-    "Intel(R) Core(TM) i5-3570T":   45,
-    "Intel(R) Core(TM) i5-3470":    77,
-    "Intel(R) Core(TM) i5-3450":    77,
-    "Intel(R) Core(TM) i3-3240":    55,
-    "Intel(R) Core(TM) i3-3225":    55,
-    "Intel(R) Core(TM) i3-3220":    55,
-    "Intel(R) Core(TM) i7-3720QM":  45,
-    "Intel(R) Core(TM) i7-3630QM":  45,
-    "Intel(R) Core(TM) i5-3320M":   35,
-    "Intel(R) Core(TM) i5-3210M":   35,
-    "Intel(R) Core(TM) i3-3110M":   35,
+    'Intel(R) Core(TM) i7-3770K': 77,
+    'Intel(R) Core(TM) i7-3770': 77,
+    'Intel(R) Core(TM) i7-3770T': 45,
+    'Intel(R) Core(TM) i5-3570K': 77,
+    'Intel(R) Core(TM) i5-3570': 77,
+    'Intel(R) Core(TM) i5-3570T': 45,
+    'Intel(R) Core(TM) i5-3470': 77,
+    'Intel(R) Core(TM) i5-3450': 77,
+    'Intel(R) Core(TM) i3-3240': 55,
+    'Intel(R) Core(TM) i3-3225': 55,
+    'Intel(R) Core(TM) i3-3220': 55,
+    'Intel(R) Core(TM) i7-3720QM': 45,
+    'Intel(R) Core(TM) i7-3630QM': 45,
+    'Intel(R) Core(TM) i5-3320M': 35,
+    'Intel(R) Core(TM) i5-3210M': 35,
+    'Intel(R) Core(TM) i3-3110M': 35,
     // ── Intel Core 2nd Gen (Sandy Bridge) ─────────────────────────────────
-    "Intel(R) Core(TM) i7-2700K":   95,
-    "Intel(R) Core(TM) i7-2600K":   95,
-    "Intel(R) Core(TM) i7-2600":    95,
-    "Intel(R) Core(TM) i7-2600S":   65,
-    "Intel(R) Core(TM) i5-2500K":   95,
-    "Intel(R) Core(TM) i5-2500":    95,
-    "Intel(R) Core(TM) i5-2400":    95,
-    "Intel(R) Core(TM) i5-2310":    95,
-    "Intel(R) Core(TM) i3-2120":    65,
-    "Intel(R) Core(TM) i3-2100":    65,
-    "Intel(R) Core(TM) i7-2630QM":  45,
-    "Intel(R) Core(TM) i5-2520M":   35,
-    "Intel(R) Core(TM) i5-2410M":   35,
-    "Intel(R) Core(TM) i3-2310M":   35,
+    'Intel(R) Core(TM) i7-2700K': 95,
+    'Intel(R) Core(TM) i7-2600K': 95,
+    'Intel(R) Core(TM) i7-2600': 95,
+    'Intel(R) Core(TM) i7-2600S': 65,
+    'Intel(R) Core(TM) i5-2500K': 95,
+    'Intel(R) Core(TM) i5-2500': 95,
+    'Intel(R) Core(TM) i5-2400': 95,
+    'Intel(R) Core(TM) i5-2310': 95,
+    'Intel(R) Core(TM) i3-2120': 65,
+    'Intel(R) Core(TM) i3-2100': 65,
+    'Intel(R) Core(TM) i7-2630QM': 45,
+    'Intel(R) Core(TM) i5-2520M': 35,
+    'Intel(R) Core(TM) i5-2410M': 35,
+    'Intel(R) Core(TM) i3-2310M': 35,
     // ── Intel Xeon E3 (v1-v4) ─────────────────────────────────────────────
-    "Intel(R) Xeon(R) E3-1280 v5":   80,
-    "Intel(R) Xeon(R) E3-1270 v5":   80,
-    "Intel(R) Xeon(R) E3-1240 v5":   80,
-    "Intel(R) Xeon(R) E3-1230 v5":   80,
-    "Intel(R) Xeon(R) E3-1280 v3":   84,
-    "Intel(R) Xeon(R) E3-1270 v3":   80,
-    "Intel(R) Xeon(R) E3-1240 v3":   80,
-    "Intel(R) Xeon(R) E3-1230 v3":   80,
-    "Intel(R) Xeon(R) E3-1220 v3":   80,
-    "Intel(R) Xeon(R) E3-1275 v2":   77,
-    "Intel(R) Xeon(R) E3-1245 v2":   77,
-    "Intel(R) Xeon(R) E3-1225 v2":   77,
+    'Intel(R) Xeon(R) E3-1280 v5': 80,
+    'Intel(R) Xeon(R) E3-1270 v5': 80,
+    'Intel(R) Xeon(R) E3-1240 v5': 80,
+    'Intel(R) Xeon(R) E3-1230 v5': 80,
+    'Intel(R) Xeon(R) E3-1280 v3': 84,
+    'Intel(R) Xeon(R) E3-1270 v3': 80,
+    'Intel(R) Xeon(R) E3-1240 v3': 80,
+    'Intel(R) Xeon(R) E3-1230 v3': 80,
+    'Intel(R) Xeon(R) E3-1220 v3': 80,
+    'Intel(R) Xeon(R) E3-1275 v2': 77,
+    'Intel(R) Xeon(R) E3-1245 v2': 77,
+    'Intel(R) Xeon(R) E3-1225 v2': 77,
     // ── Intel Pentium / Celeron (Desktop) ─────────────────────────────────
-    "Intel(R) Pentium(R) Gold G7400":  46,
-    "Intel(R) Pentium(R) Gold G6605":  58,
-    "Intel(R) Pentium(R) Gold G6400":  58,
-    "Intel(R) Pentium(R) Gold G5620":  54,
-    "Intel(R) Pentium(R) Gold G5600":  54,
-    "Intel(R) Pentium(R) Gold G5400":  54,
-    "Intel(R) Pentium(R) G4560":       54,
-    "Intel(R) Pentium(R) G4400":       54,
-    "Intel(R) Pentium(R) G3258":       53,
-    "Intel(R) Pentium(R) G3220":       53,
-    "Intel(R) Celeron(R) G6900":        46,
-    "Intel(R) Celeron(R) G5905":        58,
-    "Intel(R) Celeron(R) G4900":        54,
-    "Intel(R) Celeron(R) G3900":        51,
+    'Intel(R) Pentium(R) Gold G7400': 46,
+    'Intel(R) Pentium(R) Gold G6605': 58,
+    'Intel(R) Pentium(R) Gold G6400': 58,
+    'Intel(R) Pentium(R) Gold G5620': 54,
+    'Intel(R) Pentium(R) Gold G5600': 54,
+    'Intel(R) Pentium(R) Gold G5400': 54,
+    'Intel(R) Pentium(R) G4560': 54,
+    'Intel(R) Pentium(R) G4400': 54,
+    'Intel(R) Pentium(R) G3258': 53,
+    'Intel(R) Pentium(R) G3220': 53,
+    'Intel(R) Celeron(R) G6900': 46,
+    'Intel(R) Celeron(R) G5905': 58,
+    'Intel(R) Celeron(R) G4900': 54,
+    'Intel(R) Celeron(R) G3900': 51,
     // ── AMD Ryzen 1000 Series (Zen 1, AM4) ────────────────────────────────
-    "AMD Ryzen 7 1800X":  95,
-    "AMD Ryzen 7 1700X":  95,
-    "AMD Ryzen 7 1700":   65,
-    "AMD Ryzen 5 1600X":  95,
-    "AMD Ryzen 5 1600":   65,
-    "AMD Ryzen 5 1500X":  65,
-    "AMD Ryzen 5 1400":   65,
-    "AMD Ryzen 3 1300X":  65,
-    "AMD Ryzen 3 1200":   65,
+    'AMD Ryzen 7 1800X': 95,
+    'AMD Ryzen 7 1700X': 95,
+    'AMD Ryzen 7 1700': 65,
+    'AMD Ryzen 5 1600X': 95,
+    'AMD Ryzen 5 1600': 65,
+    'AMD Ryzen 5 1500X': 65,
+    'AMD Ryzen 5 1400': 65,
+    'AMD Ryzen 3 1300X': 65,
+    'AMD Ryzen 3 1200': 65,
     // ── AMD FX Series (Vishera / Piledriver, AM3+) ────────────────────────
-    "AMD FX-9590":    220,
-    "AMD FX-9370":    220,
-    "AMD FX-8370":    125,
-    "AMD FX-8350":    125,
-    "AMD FX-8320E":    95,
-    "AMD FX-8320":    125,
-    "AMD FX-8300":    95,
-    "AMD FX-6350":    125,
-    "AMD FX-6300":    95,
-    "AMD FX-4350":    125,
-    "AMD FX-4300":    95,
+    'AMD FX-9590': 220,
+    'AMD FX-9370': 220,
+    'AMD FX-8370': 125,
+    'AMD FX-8350': 125,
+    'AMD FX-8320E': 95,
+    'AMD FX-8320': 125,
+    'AMD FX-8300': 95,
+    'AMD FX-6350': 125,
+    'AMD FX-6300': 95,
+    'AMD FX-4350': 125,
+    'AMD FX-4300': 95,
     // ── AMD A-Series APU (FM2+) ───────────────────────────────────────────
-    "AMD A10-7890K":  95,
-    "AMD A10-7870K":  95,
-    "AMD A10-7850K":  95,
-    "AMD A10-7800":   65,
-    "AMD A8-7670K":   95,
-    "AMD A8-7650K":   65,
-    "AMD A6-7470K":   65,
-    "AMD A6-7400K":   65,
+    'AMD A10-7890K': 95,
+    'AMD A10-7870K': 95,
+    'AMD A10-7850K': 95,
+    'AMD A10-7800': 65,
+    'AMD A8-7670K': 95,
+    'AMD A8-7650K': 65,
+    'AMD A6-7470K': 65,
+    'AMD A6-7400K': 65,
     // ── AMD Phenom II (AM3) ───────────────────────────────────────────────
-    "AMD Phenom(tm) II X6 1100T": 125,
-    "AMD Phenom(tm) II X6 1090T": 125,
-    "AMD Phenom(tm) II X4 980":    125,
-    "AMD Phenom(tm) II X4 970":    125,
-    "AMD Phenom(tm) II X4 965":    125,
-    "AMD Phenom(tm) II X4 955":    125,
-    "AMD Phenom(tm) II X4 945":    95,
+    'AMD Phenom(tm) II X6 1100T': 125,
+    'AMD Phenom(tm) II X6 1090T': 125,
+    'AMD Phenom(tm) II X4 980': 125,
+    'AMD Phenom(tm) II X4 970': 125,
+    'AMD Phenom(tm) II X4 965': 125,
+    'AMD Phenom(tm) II X4 955': 125,
+    'AMD Phenom(tm) II X4 945': 95,
   };
   const gpuTDPTable = {
     // ── NVIDIA GeForce RTX 50 Series ──────────────────────────────────────
-    "NVIDIA GeForce RTX 5090":    575,
-    "NVIDIA GeForce RTX 5080":    360,
-    "NVIDIA GeForce RTX 5070 Ti": 300,
-    "NVIDIA GeForce RTX 5070":    250,
-    "NVIDIA GeForce RTX 5060 Ti": 180,
-    "NVIDIA GeForce RTX 5060":    150,
+    'NVIDIA GeForce RTX 5090': 575,
+    'NVIDIA GeForce RTX 5080': 360,
+    'NVIDIA GeForce RTX 5070 Ti': 300,
+    'NVIDIA GeForce RTX 5070': 250,
+    'NVIDIA GeForce RTX 5060 Ti': 180,
+    'NVIDIA GeForce RTX 5060': 150,
     // ── NVIDIA GeForce RTX 40 Series ──────────────────────────────────────
-    "NVIDIA GeForce RTX 4090":          450,
-    "NVIDIA GeForce RTX 4080 SUPER":    320,
-    "NVIDIA GeForce RTX 4080":          320,
-    "NVIDIA GeForce RTX 4070 Ti SUPER": 285,
-    "NVIDIA GeForce RTX 4070 Ti":       285,
-    "NVIDIA GeForce RTX 4070 SUPER":    220,
-    "NVIDIA GeForce RTX 4070":          200,
-    "NVIDIA GeForce RTX 4060 Ti":       160,
-    "NVIDIA GeForce RTX 4060":          115,
-    "NVIDIA GeForce RTX 4050":          115,
+    'NVIDIA GeForce RTX 4090': 450,
+    'NVIDIA GeForce RTX 4080 SUPER': 320,
+    'NVIDIA GeForce RTX 4080': 320,
+    'NVIDIA GeForce RTX 4070 Ti SUPER': 285,
+    'NVIDIA GeForce RTX 4070 Ti': 285,
+    'NVIDIA GeForce RTX 4070 SUPER': 220,
+    'NVIDIA GeForce RTX 4070': 200,
+    'NVIDIA GeForce RTX 4060 Ti': 160,
+    'NVIDIA GeForce RTX 4060': 115,
+    'NVIDIA GeForce RTX 4050': 115,
     // ── NVIDIA GeForce RTX 30 Series ──────────────────────────────────────
-    "NVIDIA GeForce RTX 3090 Ti":  450,
-    "NVIDIA GeForce RTX 3090":     350,
-    "NVIDIA GeForce RTX 3080 Ti":  350,
-    "NVIDIA GeForce RTX 3080 12GB":350,
-    "NVIDIA GeForce RTX 3080 10GB":320,
-    "NVIDIA GeForce RTX 3080":     320,
-    "NVIDIA GeForce RTX 3070 Ti":  290,
-    "NVIDIA GeForce RTX 3070":     220,
-    "NVIDIA GeForce RTX 3060 Ti":  200,
-    "NVIDIA GeForce RTX 3060 12GB":170,
-    "NVIDIA GeForce RTX 3060":     170,
-    "NVIDIA GeForce RTX 3050 OEM":  90,
-    "NVIDIA GeForce RTX 3050":     130,
+    'NVIDIA GeForce RTX 3090 Ti': 450,
+    'NVIDIA GeForce RTX 3090': 350,
+    'NVIDIA GeForce RTX 3080 Ti': 350,
+    'NVIDIA GeForce RTX 3080 12GB': 350,
+    'NVIDIA GeForce RTX 3080 10GB': 320,
+    'NVIDIA GeForce RTX 3080': 320,
+    'NVIDIA GeForce RTX 3070 Ti': 290,
+    'NVIDIA GeForce RTX 3070': 220,
+    'NVIDIA GeForce RTX 3060 Ti': 200,
+    'NVIDIA GeForce RTX 3060 12GB': 170,
+    'NVIDIA GeForce RTX 3060': 170,
+    'NVIDIA GeForce RTX 3050 OEM': 90,
+    'NVIDIA GeForce RTX 3050': 130,
     // ── NVIDIA GeForce RTX 20 Series ──────────────────────────────────────
-    "NVIDIA GeForce RTX 2080 Ti":    250,
-    "NVIDIA GeForce RTX 2080 SUPER": 250,
-    "NVIDIA GeForce RTX 2080":       215,
-    "NVIDIA GeForce RTX 2070 SUPER": 215,
-    "NVIDIA GeForce RTX 2070":       175,
-    "NVIDIA GeForce RTX 2060 SUPER": 175,
-    "NVIDIA GeForce RTX 2060":       160,
+    'NVIDIA GeForce RTX 2080 Ti': 250,
+    'NVIDIA GeForce RTX 2080 SUPER': 250,
+    'NVIDIA GeForce RTX 2080': 215,
+    'NVIDIA GeForce RTX 2070 SUPER': 215,
+    'NVIDIA GeForce RTX 2070': 175,
+    'NVIDIA GeForce RTX 2060 SUPER': 175,
+    'NVIDIA GeForce RTX 2060': 160,
     // ── NVIDIA GeForce GTX 16 Series ──────────────────────────────────────
-    "NVIDIA GeForce GTX 1660 Ti":    120,
-    "NVIDIA GeForce GTX 1660 SUPER": 125,
-    "NVIDIA GeForce GTX 1660":       120,
-    "NVIDIA GeForce GTX 1650 SUPER": 100,
-    "NVIDIA GeForce GTX 1650":        75,
+    'NVIDIA GeForce GTX 1660 Ti': 120,
+    'NVIDIA GeForce GTX 1660 SUPER': 125,
+    'NVIDIA GeForce GTX 1660': 120,
+    'NVIDIA GeForce GTX 1650 SUPER': 100,
+    'NVIDIA GeForce GTX 1650': 75,
     // ── NVIDIA GeForce GTX 10 Series ──────────────────────────────────────
-    "NVIDIA GeForce GTX 1080 Ti": 250,
-    "NVIDIA GeForce GTX 1080":    180,
-    "NVIDIA GeForce GTX 1070 Ti": 180,
-    "NVIDIA GeForce GTX 1070":    150,
-    "NVIDIA GeForce GTX 1060 6GB":120,
-    "NVIDIA GeForce GTX 1060 3GB":120,
-    "NVIDIA GeForce GTX 1060":    120,
-    "NVIDIA GeForce GTX 1050 Ti":  75,
-    "NVIDIA GeForce GTX 1050":     75,
-    "NVIDIA GeForce GTX 1030":     30,
+    'NVIDIA GeForce GTX 1080 Ti': 250,
+    'NVIDIA GeForce GTX 1080': 180,
+    'NVIDIA GeForce GTX 1070 Ti': 180,
+    'NVIDIA GeForce GTX 1070': 150,
+    'NVIDIA GeForce GTX 1060 6GB': 120,
+    'NVIDIA GeForce GTX 1060 3GB': 120,
+    'NVIDIA GeForce GTX 1060': 120,
+    'NVIDIA GeForce GTX 1050 Ti': 75,
+    'NVIDIA GeForce GTX 1050': 75,
+    'NVIDIA GeForce GTX 1030': 30,
     // ── NVIDIA GeForce GTX 9 Series ───────────────────────────────────────
-    "NVIDIA GeForce GTX 980 Ti": 250,
-    "NVIDIA GeForce GTX 980":    165,
-    "NVIDIA GeForce GTX 970":    145,
-    "NVIDIA GeForce GTX 960":    120,
-    "NVIDIA GeForce GTX 950":     90,
+    'NVIDIA GeForce GTX 980 Ti': 250,
+    'NVIDIA GeForce GTX 980': 165,
+    'NVIDIA GeForce GTX 970': 145,
+    'NVIDIA GeForce GTX 960': 120,
+    'NVIDIA GeForce GTX 950': 90,
     // ── NVIDIA RTX Workstation / Professional ─────────────────────────────
-    "NVIDIA RTX 6000 Ada": 300,
-    "NVIDIA RTX 5000 Ada": 250,
-    "NVIDIA RTX 4500 Ada": 210,
-    "NVIDIA RTX 4000 Ada": 130,
-    "NVIDIA RTX 2000 Ada":  70,
-    "NVIDIA RTX A6000":    300,
-    "NVIDIA RTX A5000":    230,
-    "NVIDIA RTX A4000":    140,
-    "NVIDIA RTX A2000":     70,
-    "NVIDIA Quadro RTX 8000": 295,
-    "NVIDIA Quadro RTX 6000": 295,
-    "NVIDIA Quadro RTX 5000": 230,
-    "NVIDIA Quadro RTX 4000": 160,
+    'NVIDIA RTX 6000 Ada': 300,
+    'NVIDIA RTX 5000 Ada': 250,
+    'NVIDIA RTX 4500 Ada': 210,
+    'NVIDIA RTX 4000 Ada': 130,
+    'NVIDIA RTX 2000 Ada': 70,
+    'NVIDIA RTX A6000': 300,
+    'NVIDIA RTX A5000': 230,
+    'NVIDIA RTX A4000': 140,
+    'NVIDIA RTX A2000': 70,
+    'NVIDIA Quadro RTX 8000': 295,
+    'NVIDIA Quadro RTX 6000': 295,
+    'NVIDIA Quadro RTX 5000': 230,
+    'NVIDIA Quadro RTX 4000': 160,
     // ── AMD Radeon RX 9000 Series (RDNA 4) ───────────────────────────────
-    "AMD Radeon RX 9070 XT": 304,
-    "AMD Radeon RX 9070":    220,
+    'AMD Radeon RX 9070 XT': 304,
+    'AMD Radeon RX 9070': 220,
     // ── AMD Radeon RX 7000 Series (RDNA 3) ───────────────────────────────
-    "AMD Radeon RX 7900 XTX": 355,
-    "AMD Radeon RX 7900 XT":  315,
-    "AMD Radeon RX 7900 GRE": 260,
-    "AMD Radeon RX 7800 XT":  263,
-    "AMD Radeon RX 7700 XT":  245,
-    "AMD Radeon RX 7600 XT":  190,
-    "AMD Radeon RX 7600":     165,
-    "AMD Radeon RX 7500 XT":  100,
+    'AMD Radeon RX 7900 XTX': 355,
+    'AMD Radeon RX 7900 XT': 315,
+    'AMD Radeon RX 7900 GRE': 260,
+    'AMD Radeon RX 7800 XT': 263,
+    'AMD Radeon RX 7700 XT': 245,
+    'AMD Radeon RX 7600 XT': 190,
+    'AMD Radeon RX 7600': 165,
+    'AMD Radeon RX 7500 XT': 100,
     // ── AMD Radeon RX 6000 Series (RDNA 2) ───────────────────────────────
-    "AMD Radeon RX 6950 XT": 335,
-    "AMD Radeon RX 6900 XT": 300,
-    "AMD Radeon RX 6800 XT": 300,
-    "AMD Radeon RX 6800":    250,
-    "AMD Radeon RX 6750 XT": 250,
-    "AMD Radeon RX 6700 XT": 230,
-    "AMD Radeon RX 6700":    175,
-    "AMD Radeon RX 6650 XT": 180,
-    "AMD Radeon RX 6600 XT": 160,
-    "AMD Radeon RX 6600":    132,
-    "AMD Radeon RX 6500 XT": 107,
-    "AMD Radeon RX 6400":     53,
+    'AMD Radeon RX 6950 XT': 335,
+    'AMD Radeon RX 6900 XT': 300,
+    'AMD Radeon RX 6800 XT': 300,
+    'AMD Radeon RX 6800': 250,
+    'AMD Radeon RX 6750 XT': 250,
+    'AMD Radeon RX 6700 XT': 230,
+    'AMD Radeon RX 6700': 175,
+    'AMD Radeon RX 6650 XT': 180,
+    'AMD Radeon RX 6600 XT': 160,
+    'AMD Radeon RX 6600': 132,
+    'AMD Radeon RX 6500 XT': 107,
+    'AMD Radeon RX 6400': 53,
     // ── AMD Radeon RX 5000 Series (RDNA 1) ───────────────────────────────
-    "AMD Radeon RX 5700 XT": 225,
-    "AMD Radeon RX 5700":    180,
-    "AMD Radeon RX 5600 XT": 150,
-    "AMD Radeon RX 5500 XT": 130,
+    'AMD Radeon RX 5700 XT': 225,
+    'AMD Radeon RX 5700': 180,
+    'AMD Radeon RX 5600 XT': 150,
+    'AMD Radeon RX 5500 XT': 130,
     // ── AMD Radeon Vega / GCN ─────────────────────────────────────────────
-    "AMD Radeon RX Vega 64": 295,
-    "AMD Radeon RX Vega 56": 210,
-    "AMD Radeon VII":        300,
-    "AMD Radeon RX 590":     225,
-    "AMD Radeon RX 580":     185,
-    "AMD Radeon RX 570":     150,
-    "AMD Radeon RX 480":     150,
-    "AMD Radeon RX 470":     120,
+    'AMD Radeon RX Vega 64': 295,
+    'AMD Radeon RX Vega 56': 210,
+    'AMD Radeon VII': 300,
+    'AMD Radeon RX 590': 225,
+    'AMD Radeon RX 580': 185,
+    'AMD Radeon RX 570': 150,
+    'AMD Radeon RX 480': 150,
+    'AMD Radeon RX 470': 120,
     // ── AMD Radeon PRO Workstation ────────────────────────────────────────
-    "AMD Radeon PRO W7900": 295,
-    "AMD Radeon PRO W7800": 260,
-    "AMD Radeon PRO W6800": 250,
-    "AMD Radeon PRO W6600": 130,
-    "AMD Radeon PRO W6400":  50,
+    'AMD Radeon PRO W7900': 295,
+    'AMD Radeon PRO W7800': 260,
+    'AMD Radeon PRO W6800': 250,
+    'AMD Radeon PRO W6600': 130,
+    'AMD Radeon PRO W6400': 50,
     // ── Intel Arc ────────────────────────────────────────────────────────
-    "Intel Arc A770": 225,
-    "Intel Arc A750": 225,
-    "Intel Arc A580": 185,
-    "Intel Arc A380":  75,
-    "Intel Arc A310":  30,
-    "Intel Arc B580": 190,
-    "Intel Arc B570": 150,
+    'Intel Arc A770': 225,
+    'Intel Arc A750': 225,
+    'Intel Arc A580': 185,
+    'Intel Arc A380': 75,
+    'Intel Arc A310': 30,
+    'Intel Arc B580': 190,
+    'Intel Arc B570': 150,
     // ── NVIDIA GeForce GTX 700 Series (Kepler) ────────────────────────────
-    "NVIDIA GeForce GTX 780 Ti": 250,
-    "NVIDIA GeForce GTX 780":    250,
-    "NVIDIA GeForce GTX 770":    230,
-    "NVIDIA GeForce GTX 760":    170,
-    "NVIDIA GeForce GTX 750 Ti":  60,
-    "NVIDIA GeForce GTX 750":     55,
+    'NVIDIA GeForce GTX 780 Ti': 250,
+    'NVIDIA GeForce GTX 780': 250,
+    'NVIDIA GeForce GTX 770': 230,
+    'NVIDIA GeForce GTX 760': 170,
+    'NVIDIA GeForce GTX 750 Ti': 60,
+    'NVIDIA GeForce GTX 750': 55,
     // ── NVIDIA GeForce GTX 600 Series (Kepler) ────────────────────────────
-    "NVIDIA GeForce GTX 690":    300,
-    "NVIDIA GeForce GTX 680":    195,
-    "NVIDIA GeForce GTX 670":    170,
-    "NVIDIA GeForce GTX 660 Ti": 150,
-    "NVIDIA GeForce GTX 660":    140,
-    "NVIDIA GeForce GTX 650 Ti": 110,
-    "NVIDIA GeForce GTX 650":     64,
+    'NVIDIA GeForce GTX 690': 300,
+    'NVIDIA GeForce GTX 680': 195,
+    'NVIDIA GeForce GTX 670': 170,
+    'NVIDIA GeForce GTX 660 Ti': 150,
+    'NVIDIA GeForce GTX 660': 140,
+    'NVIDIA GeForce GTX 650 Ti': 110,
+    'NVIDIA GeForce GTX 650': 64,
     // ── NVIDIA GeForce GTX 500 Series (Fermi) ─────────────────────────────
-    "NVIDIA GeForce GTX 590":    365,
-    "NVIDIA GeForce GTX 580":    244,
-    "NVIDIA GeForce GTX 570":    219,
-    "NVIDIA GeForce GTX 560 Ti": 170,
-    "NVIDIA GeForce GTX 560":    150,
-    "NVIDIA GeForce GTX 550 Ti": 116,
+    'NVIDIA GeForce GTX 590': 365,
+    'NVIDIA GeForce GTX 580': 244,
+    'NVIDIA GeForce GTX 570': 219,
+    'NVIDIA GeForce GTX 560 Ti': 170,
+    'NVIDIA GeForce GTX 560': 150,
+    'NVIDIA GeForce GTX 550 Ti': 116,
     // ── AMD Radeon RX 400 Series (Polaris) ───────────────────────────────
-    "AMD Radeon RX 460":     75,
+    'AMD Radeon RX 460': 75,
     // ── AMD Radeon R9 / R7 / R5 (GCN 1â€“3) ───────────────────────────────
-    "AMD Radeon R9 Fury X":    275,
-    "AMD Radeon R9 Fury":      275,
-    "AMD Radeon R9 Nano":      175,
-    "AMD Radeon R9 390X":      275,
-    "AMD Radeon R9 390":       275,
-    "AMD Radeon R9 380X":      190,
-    "AMD Radeon R9 380":       190,
-    "AMD Radeon R9 290X":      290,
-    "AMD Radeon R9 290":       275,
-    "AMD Radeon R9 285":       190,
-    "AMD Radeon R9 280X":      250,
-    "AMD Radeon R9 280":       200,
-    "AMD Radeon R9 270X":      180,
-    "AMD Radeon R9 270":       150,
-    "AMD Radeon R7 370":       110,
-    "AMD Radeon R7 360":        80,
-    "AMD Radeon R7 265":       150,
-    "AMD Radeon R7 260X":       95,
-    "AMD Radeon R5 230":        19,
+    'AMD Radeon R9 Fury X': 275,
+    'AMD Radeon R9 Fury': 275,
+    'AMD Radeon R9 Nano': 175,
+    'AMD Radeon R9 390X': 275,
+    'AMD Radeon R9 390': 275,
+    'AMD Radeon R9 380X': 190,
+    'AMD Radeon R9 380': 190,
+    'AMD Radeon R9 290X': 290,
+    'AMD Radeon R9 290': 275,
+    'AMD Radeon R9 285': 190,
+    'AMD Radeon R9 280X': 250,
+    'AMD Radeon R9 280': 200,
+    'AMD Radeon R9 270X': 180,
+    'AMD Radeon R9 270': 150,
+    'AMD Radeon R7 370': 110,
+    'AMD Radeon R7 360': 80,
+    'AMD Radeon R7 265': 150,
+    'AMD Radeon R7 260X': 95,
+    'AMD Radeon R5 230': 19,
     // ── AMD Radeon HD 7000 Series (GCN 1) ─────────────────────────────────
-    "AMD Radeon HD 7990":  375,
-    "AMD Radeon HD 7970":  250,
-    "AMD Radeon HD 7950":  200,
-    "AMD Radeon HD 7870":  175,
-    "AMD Radeon HD 7850":  130,
-    "AMD Radeon HD 7790":  100,
-    "AMD Radeon HD 7770":   80,
-    "AMD Radeon HD 7750":   55,
+    'AMD Radeon HD 7990': 375,
+    'AMD Radeon HD 7970': 250,
+    'AMD Radeon HD 7950': 200,
+    'AMD Radeon HD 7870': 175,
+    'AMD Radeon HD 7850': 130,
+    'AMD Radeon HD 7790': 100,
+    'AMD Radeon HD 7770': 80,
+    'AMD Radeon HD 7750': 55,
   };
 
   // Online TDP lookup (Brave Answers AI): fire for all GPU models not yet cached.
@@ -4086,11 +4434,11 @@ export default function Miner({
   React.useEffect(() => {
     if (!hardware || !hardware.source) return;
     if (hardware.deviceType === 'Laptop') return;
-    const modelsToFetch = allGpuModels.filter(m => {
+    const modelsToFetch = allGpuModels.filter((m) => {
       const cached = dynamicTDPCache[m];
       if (cached && typeof cached.ts === 'number') {
         const age = Date.now() - cached.ts;
-        const ttl = (typeof cached.tdp === 'number') ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
+        const ttl = typeof cached.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
         if (age < ttl) return false; // fresh cache (success or recent miss)
       }
       // Skip integrated GPU models — their power is inside the CPU TDP envelope
@@ -4099,22 +4447,27 @@ export default function Miner({
     });
     if (modelsToFetch.length === 0) return;
     modelsToFetch.forEach(async (model) => {
-      setTdpFetchingCount(n => n + 1);
+      setTdpFetchingCount((n) => n + 1);
       try {
         const tdp = await fetchGpuTDPOnline(model);
-        setDynamicTDPCache(prev => {
+        setDynamicTDPCache((prev) => {
           const entry = { tdp, ts: Date.now() };
           const next = { ...prev, [model]: entry };
-          try { localStorage.setItem(ONLINE_TDP_CACHE_KEY, JSON.stringify(next)); } catch (_) {}
+          try {
+            localStorage.setItem(ONLINE_TDP_CACHE_KEY, JSON.stringify(next));
+          } catch (_) {}
           return next;
         });
         if (tdp !== null) {
-          setLog(log => [{ time: now(), msg: `Online GPU TDP: ${model} → ${tdp} W`, type: 'info' }, ...log]);
+          setLog((log) => [{ time: now(), msg: `Online GPU TDP: ${model} → ${tdp} W`, type: 'info' }, ...log]);
         } else {
-          setLog(log => [{ time: now(), msg: `Online GPU TDP: ${model} → no result, using fallback`, type: 'warn' }, ...log]);
+          setLog((log) => [
+            { time: now(), msg: `Online GPU TDP: ${model} → no result, using fallback`, type: 'warn' },
+            ...log,
+          ]);
         }
       } finally {
-        setTdpFetchingCount(n => n - 1);
+        setTdpFetchingCount((n) => n - 1);
       }
     });
     // gpuTDPTable is static data defined inline — stable, safe to omit from deps
@@ -4131,29 +4484,34 @@ export default function Miner({
     const cpuCached = dynamicCPUTDPCache[cpuKey];
     if (cpuCached && typeof cpuCached.ts === 'number') {
       const age = Date.now() - cpuCached.ts;
-      const ttl = (typeof cpuCached.tdp === 'number') ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
+      const ttl = typeof cpuCached.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
       if (age < ttl) return; // fresh cache (success or recent miss)
     }
-    setTdpFetchingCount(n => n + 1);
+    setTdpFetchingCount((n) => n + 1);
     (async () => {
       try {
         const tdp = await fetchCpuTDPOnline(cpuKey);
-        setDynamicCPUTDPCache(prev => {
+        setDynamicCPUTDPCache((prev) => {
           const entry = { tdp, ts: Date.now() };
           const next = { ...prev, [cpuKey]: entry };
-          try { localStorage.setItem(ONLINE_CPU_TDP_CACHE_KEY, JSON.stringify(next)); } catch (_) {}
+          try {
+            localStorage.setItem(ONLINE_CPU_TDP_CACHE_KEY, JSON.stringify(next));
+          } catch (_) {}
           return next;
         });
         if (tdp !== null) {
-          setLog(log => [{ time: now(), msg: `Online CPU TDP: ${cpuKey} → ${tdp} W`, type: 'info' }, ...log]);
+          setLog((log) => [{ time: now(), msg: `Online CPU TDP: ${cpuKey} → ${tdp} W`, type: 'info' }, ...log]);
         } else {
-          setLog(log => [{ time: now(), msg: `Online CPU TDP: ${cpuKey} → no result, using fallback`, type: 'warn' }, ...log]);
+          setLog((log) => [
+            { time: now(), msg: `Online CPU TDP: ${cpuKey} → no result, using fallback`, type: 'warn' },
+            ...log,
+          ]);
         }
       } finally {
-        setTdpFetchingCount(n => n - 1);
+        setTdpFetchingCount((n) => n - 1);
       }
     })();
-  // cpuTDPTable is static inline data - safe to omit from deps
+    // cpuTDPTable is static inline data - safe to omit from deps
   }, [hardware, dynamicCPUTDPCache, hardwareLookupResetNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Online whole-device system power lookup (measured wall-socket watts at max load).
@@ -4165,10 +4523,12 @@ export default function Miner({
     // Check if we already have a fresh cached value.
     // Discard null-result cache entries immediately so a previously-blocked
     // lookup (e.g. before CSP fix) retries on next launch.
-    const unitLabel = [hardware.manufacturer, hardware.version]
-      .map(s => (s || '').trim())
-      .filter(s => s && !/^unknown$/i.test(s))
-      .join(' ').trim() || (hardware.cpu || 'unknown').trim();
+    const unitLabel =
+      [hardware.manufacturer, hardware.version]
+        .map((s) => (s || '').trim())
+        .filter((s) => s && !/^unknown$/i.test(s))
+        .join(' ')
+        .trim() || (hardware.cpu || 'unknown').trim();
     try {
       const s = localStorage.getItem(ONLINE_LAPTOP_POWER_CACHE_KEY);
       if (s) {
@@ -4190,30 +4550,59 @@ export default function Miner({
         }
       }
     } catch (_) {}
-    setTdpFetchingCount(n => n + 1);
+    setTdpFetchingCount((n) => n + 1);
     (async () => {
       try {
-        const tdp = await fetchLaptopSystemPowerOnline(
-          hardware.manufacturer, hardware.version, hardware.cpu, null
-        );
+        const tdp = await fetchLaptopSystemPowerOnline(hardware.manufacturer, hardware.version, hardware.cpu, null);
         const entry = { tdp, ts: Date.now() };
-        try { localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry)); } catch (_) {}
+        try {
+          localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry));
+        } catch (_) {}
         if (tdp !== null) {
           setLaptopLivePowerW(tdp);
           // Reset benchmark cap so the next benchmark re-establishes from the live TDP base.
           setBenchmarkPowerCapW(null);
           consecutiveUnderestimateRef.current = 0;
-          setLog(log => [{ time: now(), msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: "${unitLabel}" → ${tdp} W (live, benchmark cap reset)`, type: 'info' }, ...log]);
+          setLog((log) => [
+            {
+              time: now(),
+              msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: "${unitLabel}" → ${tdp} W (live, benchmark cap reset)`,
+              type: 'info',
+            },
+            ...log,
+          ]);
         } else {
-          setLog(log => [{ time: now(), msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: no result found for "${unitLabel}", keeping static estimate`, type: 'warn' }, ...log]);
+          setLog((log) => [
+            {
+              time: now(),
+              msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: no result found for "${unitLabel}", keeping static estimate`,
+              type: 'warn',
+            },
+            ...log,
+          ]);
         }
       } catch (e) {
-        setLog(log => [{ time: now(), msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup failed for "${unitLabel}": ${e && e.message ? e.message : String(e)}`, type: 'warn' }, ...log]);
+        setLog((log) => [
+          {
+            time: now(),
+            msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup failed for "${unitLabel}": ${e && e.message ? e.message : String(e)}`,
+            type: 'warn',
+          },
+          ...log,
+        ]);
       } finally {
-        setTdpFetchingCount(n => n - 1);
+        setTdpFetchingCount((n) => n - 1);
       }
     })();
-  }, [hardware.deviceType, hardware.source, hardware.manufacturer, hardware.version, hardware.cpu, hardwareLookupResetNonce, isWholeDeviceMiniPcModel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    hardware.deviceType,
+    hardware.source,
+    hardware.manufacturer,
+    hardware.version,
+    hardware.cpu,
+    hardwareLookupResetNonce,
+    isWholeDeviceMiniPcModel,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Family regex fallback tables
   const cpuPowerTable = [
@@ -4291,7 +4680,10 @@ export default function Miner({
         if (dynW) pcOnlineTdpUsed = true;
       }
     }
-    if (anyGpuMatched) { gpuTDP = gpuTDPSum; matched = true; }
+    if (anyGpuMatched) {
+      gpuTDP = gpuTDPSum;
+      matched = true;
+    }
   }
   // Memory power estimate — per-type W/GB based on JEDEC specs at active load.
   // LPDDR (mobile): ~0.15 W/GB (1.1 V, low-power)
@@ -4305,13 +4697,9 @@ export default function Miner({
   const memType = (hardware.memType || '').toUpperCase();
   const isServer = hardware.deviceType === 'Server';
   const isLPDDR = /LPDDR/.test(memType);
-  const isDDR5  = /DDR5/.test(memType);
-  const isDDR3  = /DDR3/.test(memType);
-  const wPerGB = isServer  ? 0.6
-               : isLPDDR  ? 0.15
-               : isDDR5   ? 0.25
-               : isDDR3   ? 0.5
-               : 0.375; // DDR4 default
+  const isDDR5 = /DDR5/.test(memType);
+  const isDDR3 = /DDR3/.test(memType);
+  const wPerGB = isServer ? 0.6 : isLPDDR ? 0.15 : isDDR5 ? 0.25 : isDDR3 ? 0.5 : 0.375; // DDR4 default
   const memCapW = isServer ? Infinity : 40;
   const memPowerW = Math.min(memCapW, Math.max(0, Math.round((Number(hardware.memTotalGB) || 0) * wPerGB)));
 
@@ -4331,25 +4719,37 @@ export default function Miner({
     let gpuRegexSum = 0;
     for (const gpuModel of allGpuModels) {
       for (const entry of gpuPowerTable) {
-        if (entry.regex.test(gpuModel)) { gpuRegexSum += entry.power; break; }
+        if (entry.regex.test(gpuModel)) {
+          gpuRegexSum += entry.power;
+          break;
+        }
       }
     }
-    if (gpuRegexSum > 0) { gpuTDP = gpuRegexSum; if (!matched) matched = true; }
+    if (gpuRegexSum > 0) {
+      gpuTDP = gpuRegexSum;
+      if (!matched) matched = true;
+    }
   }
 
   if (matched) {
-    if (hardware.deviceType === "Desktop" || hardware.deviceType === "PC" || hardware.deviceType === "Server" || hardware.deviceType === "ASIC" || hardware.deviceType === "Mac") {
+    if (
+      hardware.deviceType === 'Desktop' ||
+      hardware.deviceType === 'PC' ||
+      hardware.deviceType === 'Server' ||
+      hardware.deviceType === 'ASIC' ||
+      hardware.deviceType === 'Mac'
+    ) {
       if (cpuTDP !== null && gpuTDP !== null) powerW = cpuTDP + gpuTDP;
       else if (cpuTDP !== null) powerW = cpuTDP;
       else if (gpuTDP !== null) powerW = gpuTDP;
       powerW += memPowerW;
-    } else if (hardware.deviceType === "Laptop") {
+    } else if (hardware.deviceType === 'Laptop') {
       // Laptops mine CPU-only (allowGpuWorkloads = false), so only CPU TDP counts.
       // iGPU power is already inside the CPU TDP envelope — do NOT add GPU TDP.
       // Base = cpuTDP * 0.60 (40% conservative buffer; benchmark raises it toward 100%).
       if (cpuTDP !== null) {
         totalHardwareTDPRef.current = cpuTDP; // ref used by runBenchmark for cap ceiling
-        powerW = Math.round(cpuTDP * 0.60);
+        powerW = Math.round(cpuTDP * 0.6);
       }
       powerW += Math.min(memPowerW, 5); // modest memory contribution for laptops
     }
@@ -4357,46 +4757,65 @@ export default function Miner({
 
   // 2. Try device type and family regex if not matched — iterate all GPUs for sum
   if (!matched) {
-    if (hardware.deviceType === "Laptop") {
+    if (hardware.deviceType === 'Laptop') {
       for (const entry of laptopModelTable) {
         if (hardware.manufacturer && entry.regex.test(hardware.manufacturer)) {
-          powerW = entry.power; matched = true; break;
+          powerW = entry.power;
+          matched = true;
+          break;
         }
         if (hardware.version && entry.regex.test(hardware.version)) {
-          powerW = entry.power; matched = true; break;
+          powerW = entry.power;
+          matched = true;
+          break;
         }
         if (hardware.cpu && entry.regex.test(hardware.cpu)) {
-          powerW = entry.power; matched = true; break;
+          powerW = entry.power;
+          matched = true;
+          break;
         }
       }
       if (!matched) powerW = 50;
-    } else if (hardware.deviceType === "Desktop" || hardware.deviceType === "PC") {
+    } else if (hardware.deviceType === 'Desktop' || hardware.deviceType === 'PC') {
       // Sum regex TDP estimates across ALL GPUs
       let gpuRegexSum = 0;
       for (const gpuModel of allGpuModels) {
         for (const entry of gpuPowerTable) {
-          if (entry.regex.test(gpuModel)) { gpuRegexSum += entry.power; break; }
+          if (entry.regex.test(gpuModel)) {
+            gpuRegexSum += entry.power;
+            break;
+          }
         }
       }
-      if (gpuRegexSum > 0) { powerW = gpuRegexSum; matched = true; }
+      if (gpuRegexSum > 0) {
+        powerW = gpuRegexSum;
+        matched = true;
+      }
       if (!matched && hardware.cpu) {
         for (const entry of cpuPowerTable) {
-          if (entry.regex.test(hardware.cpu)) { powerW = entry.power * coreValidatedSocketCount; matched = true; break; }
+          if (entry.regex.test(hardware.cpu)) {
+            powerW = entry.power * coreValidatedSocketCount;
+            matched = true;
+            break;
+          }
         }
       }
       if (!matched) powerW = 120;
       // Add CPU regex estimate when a GPU sum was used as base
       if (matched && gpuRegexSum > 0 && hardware.cpu) {
         for (const entry of cpuPowerTable) {
-          if (entry.regex.test(hardware.cpu)) { powerW += (entry.power * coreValidatedSocketCount); break; }
+          if (entry.regex.test(hardware.cpu)) {
+            powerW += entry.power * coreValidatedSocketCount;
+            break;
+          }
         }
       }
       powerW += memPowerW;
-    } else if (hardware.deviceType === "Server") {
+    } else if (hardware.deviceType === 'Server') {
       powerW = Math.max(cpuTDP || 0, 250) + memPowerW;
-    } else if (hardware.deviceType === "ASIC") {
+    } else if (hardware.deviceType === 'ASIC') {
       powerW = laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 3500;
-    } else if (hardware.deviceType === "Mac") {
+    } else if (hardware.deviceType === 'Mac') {
       powerW = laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 35;
     }
   }
@@ -4420,19 +4839,22 @@ export default function Miner({
     } else {
       // 1. Known manufacturer / model family
       for (const entry of laptopModelTable) {
-        if ((hardware.manufacturer && entry.regex.test(hardware.manufacturer)) ||
-            (hardware.version   && entry.regex.test(hardware.version))         ||
-            (hardware.cpu       && entry.regex.test(hardware.cpu))) {
-          unitTDP = entry.power; break;
+        if (
+          (hardware.manufacturer && entry.regex.test(hardware.manufacturer)) ||
+          (hardware.version && entry.regex.test(hardware.version)) ||
+          (hardware.cpu && entry.regex.test(hardware.cpu))
+        ) {
+          unitTDP = entry.power;
+          break;
         }
       }
       // 2. CPU generation / tier-based system TDP (whole-unit rough estimate)
       if (unitTDP === null && hardware.cpu) {
-        if      (/i9|Ryzen 9|Ultra 9|HX/i.test(hardware.cpu)) unitTDP = 80;
-        else if (/i7|Ryzen 7|Ultra 7/i.test(hardware.cpu))    unitTDP = 65;
-        else if (/i5|Ryzen 5|Ultra 5/i.test(hardware.cpu))    unitTDP = 55;
-        else if (/i3|Ryzen 3/i.test(hardware.cpu))            unitTDP = 45;
-        else if (/M[1-4]/i.test(hardware.cpu))                unitTDP = 30;
+        if (/i9|Ryzen 9|Ultra 9|HX/i.test(hardware.cpu)) unitTDP = 80;
+        else if (/i7|Ryzen 7|Ultra 7/i.test(hardware.cpu)) unitTDP = 65;
+        else if (/i5|Ryzen 5|Ultra 5/i.test(hardware.cpu)) unitTDP = 55;
+        else if (/i3|Ryzen 3/i.test(hardware.cpu)) unitTDP = 45;
+        else if (/M[1-4]/i.test(hardware.cpu)) unitTDP = 30;
       }
       if (!unitTDP) unitTDP = 45; // safe fallback for completely unknown laptops
     }
@@ -4449,15 +4871,17 @@ export default function Miner({
       unitTDP = laptopLivePowerW;
     } else {
       for (const entry of miniPcModelTable) {
-        if ((hardware.manufacturer && entry.regex.test(hardware.manufacturer)) ||
-            (hardware.version && entry.regex.test(hardware.version)) ||
-            (hardware.cpu && entry.regex.test(hardware.cpu))) {
+        if (
+          (hardware.manufacturer && entry.regex.test(hardware.manufacturer)) ||
+          (hardware.version && entry.regex.test(hardware.version)) ||
+          (hardware.cpu && entry.regex.test(hardware.cpu))
+        ) {
           unitTDP = entry.power;
           break;
         }
       }
       if (unitTDP === null && hardware.cpu) {
-        if      (/i7|Ryzen 7|Ultra 7/i.test(hardware.cpu)) unitTDP = 50;
+        if (/i7|Ryzen 7|Ultra 7/i.test(hardware.cpu)) unitTDP = 50;
         else if (/i5|Ryzen 5|Ultra 5/i.test(hardware.cpu)) unitTDP = 42;
         else if (/i3|Ryzen 3|Celeron|Pentium/i.test(hardware.cpu)) unitTDP = 32;
       }
@@ -4481,7 +4905,7 @@ export default function Miner({
   // the trust-adjusted unit TDP ceiling, not a potentially lower early-benchmark reading.
   // Each TDP component is scaled by its own calibration factor (CPU speed ratio, memory bandwidth
   // ratio, and GPU ALU score ratio).  Blend formula: 0.5 + 0.5×ratio, clamped 0.20–1.20.
-  const trustFactor = Math.min(1.0, 0.60 + Math.max(0, (trustScore - 50) / 50) * 0.40);
+  const trustFactor = Math.min(1.0, 0.6 + Math.max(0, (trustScore - 50) / 50) * 0.4);
   // Calibrated component breakdown (used for both unitFullPowerW and display).
   const calibratedCpuTDP = (cpuTDP !== null ? cpuTDP : 0) * benchmarkOpsCalibration;
   const calibratedGpuTDP = (gpuTDP !== null ? gpuTDP : 0) * benchmarkGpuCalibration;
@@ -4527,22 +4951,27 @@ export default function Miner({
   const normalizedSourceName = 'local hardware profile model';
 
   const WHOLE_DEVICE_LIVE_TYPES = ['Laptop', 'Mac', 'ASIC'];
-  const wholeDeviceLiveActive = (WHOLE_DEVICE_LIVE_TYPES.includes(hardware.deviceType) || isWholeDeviceMiniPcModel) && laptopLivePowerW !== null && laptopLivePowerW > 0;
-  const pcOnlineActive = !WHOLE_DEVICE_LIVE_TYPES.includes(hardware.deviceType) && !isWholeDeviceMiniPcModel && pcOnlineTdpUsed;
-  const powerSourceAccent = (wholeDeviceLiveActive || pcOnlineActive) ? '#4ade80' : '#4a7a4a';
-  const powerSourceLabel = Number(benchPower) > 0 && basePowerW === Number(benchPower)
-    ? 'benchmark fallback estimate'
-    : wholeDeviceLiveActive && benchCapActive
-      ? 'live (online, benchmark-capped)'
-      : wholeDeviceLiveActive
-        ? 'live (online)'
-        : pcOnlineActive && benchCapActive
-          ? 'live (online, benchmark-capped)'
-          : pcOnlineActive
-            ? 'live (online)'
-            : benchCapActive
-              ? 'hardware profile (benchmark-capped)'
-              : 'hardware profile estimate';
+  const wholeDeviceLiveActive =
+    (WHOLE_DEVICE_LIVE_TYPES.includes(hardware.deviceType) || isWholeDeviceMiniPcModel) &&
+    laptopLivePowerW !== null &&
+    laptopLivePowerW > 0;
+  const pcOnlineActive =
+    !WHOLE_DEVICE_LIVE_TYPES.includes(hardware.deviceType) && !isWholeDeviceMiniPcModel && pcOnlineTdpUsed;
+  const powerSourceAccent = wholeDeviceLiveActive || pcOnlineActive ? '#4ade80' : '#4a7a4a';
+  const powerSourceLabel =
+    Number(benchPower) > 0 && basePowerW === Number(benchPower)
+      ? 'benchmark fallback estimate'
+      : wholeDeviceLiveActive && benchCapActive
+        ? 'live (online, benchmark-capped)'
+        : wholeDeviceLiveActive
+          ? 'live (online)'
+          : pcOnlineActive && benchCapActive
+            ? 'live (online, benchmark-capped)'
+            : pcOnlineActive
+              ? 'live (online)'
+              : benchCapActive
+                ? 'hardware profile (benchmark-capped)'
+                : 'hardware profile estimate';
   const hardwareCardPowerCalcBreakdown = (() => {
     const dt = hardware.deviceType;
     const isLaptop = dt === 'Laptop';
@@ -4550,9 +4979,10 @@ export default function Miner({
     const isASIC = dt === 'ASIC';
     const isMac = dt === 'Mac';
     if (isLaptop || isASIC || isMac || isWholeDeviceMiniPcModel) {
-      const unitW = (wholeDeviceLiveActive || isASIC || isMac || isWholeDeviceMiniPcModel)
-        ? Math.round(laptopLivePowerW || hwProfileRaw || 0)
-        : Math.round(hwProfileRaw || 0);
+      const unitW =
+        wholeDeviceLiveActive || isASIC || isMac || isWholeDeviceMiniPcModel
+          ? Math.round(laptopLivePowerW || hwProfileRaw || 0)
+          : Math.round(hwProfileRaw || 0);
       return `unit: ${unitW} W`;
     }
     if (isPC) {
@@ -4596,7 +5026,7 @@ export default function Miner({
     if (mining) return;
     const sample = Math.max(0, Number(totalPowerUsedW) || 0);
     if (sample <= 0) return;
-    setBaselinePowerW((prev) => (prev > 0 ? (prev * 0.9 + sample * 0.1) : sample));
+    setBaselinePowerW((prev) => (prev > 0 ? prev * 0.9 + sample * 0.1 : sample));
   }, [mining, totalPowerUsedW]);
   const totalTiers = TOTAL_TIERS;
   const totalCoinSupply = COINS_PER_TIER * totalTiers;
@@ -4636,7 +5066,9 @@ export default function Miner({
     const t = setTimeout(() => {
       const w = hwCardRef.current && hwCardRef.current.offsetWidth;
       if (w > 0) {
-        try { localStorage.setItem(HARDWARE_CARD_WIDTH_KEY, String(w)); } catch (_) {}
+        try {
+          localStorage.setItem(HARDWARE_CARD_WIDTH_KEY, String(w));
+        } catch (_) {}
         setSavedHwCardWidth(w);
       }
     }, 300);
@@ -4710,11 +5142,11 @@ export default function Miner({
       const triggerProbability = Math.min(0.9, suspicionScore * 0.15);
       if (Math.random() < triggerProbability) {
         lastSuspiciousBenchmarkMsRef.current = nowMs;
-        setLog(log => [
+        setLog((log) => [
           {
             time: now(),
             msg: `Suspicious telemetry trigger (score=${suspicionScore}, p=${(triggerProbability * 100).toFixed(0)}%, reasons=${reasons.join('|')})`,
-            type: 'warn'
+            type: 'warn',
           },
           ...log,
         ]);
@@ -4729,9 +5161,18 @@ export default function Miner({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [benchmarkState.issues, benchmarkState.lastJitterPct, benchmarkState.lastTrustDelta, effectiveLoadPercent, isHardwareOnHold, mining, runBenchmark, setLog]);
+  }, [
+    benchmarkState.issues,
+    benchmarkState.lastJitterPct,
+    benchmarkState.lastTrustDelta,
+    effectiveLoadPercent,
+    isHardwareOnHold,
+    mining,
+    runBenchmark,
+    setLog,
+  ]);
 
-  const coinsPerHour = tierEnergyPerCoinWh > 0 ? (powerW / tierEnergyPerCoinWh) : 0;
+  const coinsPerHour = tierEnergyPerCoinWh > 0 ? powerW / tierEnergyPerCoinWh : 0;
   const displayUnmatured = Math.max(0, nodeUnmatured);
   const displayMatured = Math.max(0, nodeMatured);
   const coinsPerDay = coinsPerHour * 24;
@@ -4747,7 +5188,7 @@ export default function Miner({
     return `${fmtNum(coinsPerYear, 6)} coins/year`;
   })();
 
-  const timePerCoinHours = coinsPerHour > 0 ? (1 / coinsPerHour) : Infinity;
+  const timePerCoinHours = coinsPerHour > 0 ? 1 / coinsPerHour : Infinity;
   const timePerCoinLabel = (() => {
     if (!Number.isFinite(timePerCoinHours)) return 'infinite (no mining power estimate yet)';
     if (timePerCoinHours < 24) return `${fmtNum(timePerCoinHours, 2)} hours`;
@@ -4761,9 +5202,10 @@ export default function Miner({
     const wasMining = prevMiningStateRef.current;
     prevMiningStateRef.current = mining;
 
-    const targetAddress = (typeof miningAddress === 'string' && miningAddress.trim())
-      ? miningAddress.trim()
-      : 'auto (primary wallet address)';
+    const targetAddress =
+      typeof miningAddress === 'string' && miningAddress.trim()
+        ? miningAddress.trim()
+        : 'auto (primary wallet address)';
     const energyPerBlockWh = tierEnergyPerCoinWh * tierRewardCoins;
 
     if (!wasMining && mining) {
@@ -4772,18 +5214,21 @@ export default function Miner({
         let roundWhStr = '';
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-            const bal = await window.wattcoinHardware.invoke('wattcoin-ledger-get-balances', targetAddress).catch(() => null);
-            const roundWh = bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
+            const bal = await window.wattcoinHardware
+              .invoke('wattcoin-ledger-get-balances', targetAddress)
+              .catch(() => null);
+            const roundWh =
+              bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (round so far: ${fmtEnergy(roundWh)})`;
           }
         } catch (_) {}
-        setLog(log => [
+        setLog((log) => [
           {
             time: now(),
             msg: `Mining started (tier ${currentTier}, target ${fmtEnergy(energyPerBlockWh)} per block, address=${targetAddress})${roundWhStr}`,
-            type: 'info'
+            type: 'info',
           },
-          ...log
+          ...log,
         ]);
       })();
     } else if (wasMining && !mining) {
@@ -4792,18 +5237,21 @@ export default function Miner({
         let roundWhStr = '';
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-            const bal = await window.wattcoinHardware.invoke('wattcoin-ledger-get-balances', targetAddress).catch(() => null);
-            const roundWh = bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
+            const bal = await window.wattcoinHardware
+              .invoke('wattcoin-ledger-get-balances', targetAddress)
+              .catch(() => null);
+            const roundWh =
+              bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (contributed ${fmtEnergy(roundWh)} this round)`;
           }
         } catch (_) {}
-        setLog(log => [
+        setLog((log) => [
           {
             time: now(),
             msg: `Mining stopped${roundWhStr}`,
-            type: 'info'
+            type: 'info',
           },
-          ...log
+          ...log,
         ]);
       })();
     }
@@ -4814,7 +5262,7 @@ export default function Miner({
     if (!mining) {
       energyBudgetWhRef.current = 0;
       lastRoundAttemptRef.current = { id: 0, atMs: 0 };
-      setRealMineStatus("Mining stopped");
+      setRealMineStatus('Mining stopped');
       return;
     }
 
@@ -4836,14 +5284,16 @@ export default function Miner({
 
       const effectivePowerW = Math.max(0, Number(powerW) || 0);
       if (effectivePowerW <= 0 || energyPerBlockWh <= 0) {
-        setRealMineStatus("Waiting for power estimate...");
+        setRealMineStatus('Waiting for power estimate...');
         timer = setTimeout(tick, tickMs);
         return;
       }
 
       try {
         if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-          const roundSummary = await window.wattcoinHardware.invoke('wattcoin-ledger-get-round-summary').catch(() => null);
+          const roundSummary = await window.wattcoinHardware
+            .invoke('wattcoin-ledger-get-round-summary')
+            .catch(() => null);
           if (roundSummary && roundSummary.ok) {
             const roundId = Math.max(0, Number(roundSummary.roundId) || 0);
             const sharedTotalWh = Math.max(0, Number(roundSummary.totalWh) || 0);
@@ -4859,8 +5309,8 @@ export default function Miner({
               return;
             }
 
-            if (lastAttempt.id === roundId && (nowAttemptMs - (lastAttempt.atMs || 0)) < 5000) {
-              setRealMineStatus("Shared round threshold reached, awaiting block...");
+            if (lastAttempt.id === roundId && nowAttemptMs - (lastAttempt.atMs || 0) < 5000) {
+              setRealMineStatus('Shared round threshold reached, awaiting block...');
               timer = setTimeout(tick, tickMs);
               return;
             }
@@ -4880,7 +5330,7 @@ export default function Miner({
 
       let blocksToMine = Math.floor(energyBudgetWhRef.current / energyPerBlockWh);
       if (blocksToMine <= 0) {
-        setRealMineStatus("Mining running...");
+        setRealMineStatus('Mining running...');
         timer = setTimeout(tick, tickMs);
         return;
       }
@@ -4889,14 +5339,14 @@ export default function Miner({
       for (let i = 0; i < blocksToMine && !cancelled; i++) {
         await mineOneRealBlock(energyPerBlockWh);
       }
-      energyBudgetWhRef.current = Math.max(0, energyBudgetWhRef.current - (blocksToMine * energyPerBlockWh));
+      energyBudgetWhRef.current = Math.max(0, energyBudgetWhRef.current - blocksToMine * energyPerBlockWh);
 
       if (!cancelled) {
         timer = setTimeout(tick, tickMs);
       }
     };
 
-    setRealMineStatus("Mining started...");
+    setRealMineStatus('Mining started...');
     tick();
 
     return () => {
@@ -4927,17 +5377,30 @@ export default function Miner({
       const vSrc = `#version 300 es\n        in vec2 p;\n        void main() { gl_Position = vec4(p, 0.0, 1.0); }\n      `;
       // Heavy MAD loop — same workload class as runWebGLBenchmark.
       const fSrc = `#version 300 es\n        precision highp float;\n        uniform float u;\n        out vec4 fragColor;\n        void main() {\n          vec4 v = vec4(gl_FragCoord.xy / 2048.0, u, 1.0 - u);\n          for (int i = 0; i < 256; i++) {\n            v.x = v.x * v.y + v.z * 0.00013;\n            v.y = v.y * v.z + v.w * 0.00017;\n            v.z = v.z * v.w + v.x * 0.00019;\n            v.w = v.w * v.x + v.y * 0.00023;\n          }\n          fragColor = v;\n        }\n      `;
-      const vs = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(vs, vSrc); gl.compileShader(vs);
-      const fs = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(fs, fSrc); gl.compileShader(fs);
-      const prog = gl.createProgram(); gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog); gl.useProgram(prog);
-      const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-      const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-      const pLoc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(pLoc); gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
+      const vs = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vs, vSrc);
+      gl.compileShader(vs);
+      const fs = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fs, fSrc);
+      gl.compileShader(fs);
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      gl.useProgram(prog);
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      const pLoc = gl.getAttribLocation(prog, 'p');
+      gl.enableVertexAttribArray(pLoc);
+      gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
       const seedLoc = gl.getUniformLocation(prog, 'u');
       // Calibrate GPU frame time. WebGL2 readPixels blocks until GPU pipeline drains.
       const syncBuf = new Uint8Array(4);
-      for (let i = 0; i < 3; i++) { // warmup: JIT + shader compile
+      for (let i = 0; i < 3; i++) {
+        // warmup: JIT + shader compile
         gl.uniform1f(seedLoc, i * 0.001);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncBuf);
@@ -4949,8 +5412,11 @@ export default function Miner({
       }
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncBuf);
       const measuredFrameMs = Math.max(0.5, (performance.now() - tCalib) / 5);
-      state.gl = gl; state.prog = prog; state.seedLoc = seedLoc;
-      state.syncBuf = syncBuf; state.measuredFrameMs = measuredFrameMs;
+      state.gl = gl;
+      state.prog = prog;
+      state.seedLoc = seedLoc;
+      state.syncBuf = syncBuf;
+      state.measuredFrameMs = measuredFrameMs;
       state.initialized = true;
     } catch (_) {
       // WebGL unavailable — GPU load won't run, no blocking error.
@@ -4965,13 +5431,19 @@ export default function Miner({
   // so GPU busy-time / cycle-time ~= loadFraction regardless of the GPU's raw render speed.
   React.useEffect(() => {
     if (!allowGpuWorkloads) {
-      if (gpuLoadRafRef.current) { clearTimeout(gpuLoadRafRef.current); gpuLoadRafRef.current = null; }
+      if (gpuLoadRafRef.current) {
+        clearTimeout(gpuLoadRafRef.current);
+        gpuLoadRafRef.current = null;
+      }
       return;
     }
     // Intentionally NOT gated on isActive -- GPU mining continues when other app tabs are open.
     const gpuLoadActive = mining || benchmarkState.running;
     if (!gpuLoadActive || isHardwareOnHold || loadPercent <= 0) {
-      if (gpuLoadRafRef.current) { clearTimeout(gpuLoadRafRef.current); gpuLoadRafRef.current = null; }
+      if (gpuLoadRafRef.current) {
+        clearTimeout(gpuLoadRafRef.current);
+        gpuLoadRafRef.current = null;
+      }
       return;
     }
     const { gl, seedLoc, syncBuf, measuredFrameMs, initialized } = gpuLoadGlStateRef.current;
@@ -4992,7 +5464,7 @@ export default function Miner({
     //
     // Normal path (idleMs >= 4 ms): draw + flush (non-blocking), calib readPixels every 20 ticks.
     // Fast-GPU path (idleMs < 4 ms): render busyFrames per tick, sleep 0 (OS floor ~4 ms).
-    const TIMER_FLOOR_MS  = 4;    // Windows minimum setTimeout resolution
+    const TIMER_FLOOR_MS = 4; // Windows minimum setTimeout resolution
     const NORMAL_CALIB_TICKS = 20; // readPixels sync once every N normal-path ticks
     // Seed from calibrated value; updated per-frame by EMA so boost/throttle shifts track.
     let currentRenderMs = Math.max(0.1, measuredFrameMs || 1);
@@ -5007,7 +5479,7 @@ export default function Miner({
     // Old formula was loadPercent / MAX_HARDWARE_LOAD_PERCENT (e.g. 60/85 = 70.6%) which
     // over-drove the GPU by ~10 pp and pinned it at 100% when the slider was at max.
     const loadFraction = Math.max(0.01, Math.min(1, effectiveLoadPercent / 100));
-    let fastCalibTick   = 0; // counts ticks since last fast-path calibration pulse
+    let fastCalibTick = 0; // counts ticks since last fast-path calibration pulse
     let normalCalibTick = 0; // counts ticks since last normal-path calibration pulse
 
     // -------------------------------------------------------------------------
@@ -5018,16 +5490,20 @@ export default function Miner({
     // are all automatically corrected within ~6 cycles (~few hundred ms).
     // -------------------------------------------------------------------------
     const GPU_WINDOW = 16;
-    const gpuBurnBuf  = new Float64Array(GPU_WINDOW);
+    const gpuBurnBuf = new Float64Array(GPU_WINDOW);
     const gpuTotalBuf = new Float64Array(GPU_WINDOW);
-    let gpuWIdx  = 0;
+    let gpuWIdx = 0;
     let gpuWFull = false;
 
     function gpuFeedbackIdle(nominalIdle) {
       const n = gpuWFull ? GPU_WINDOW : gpuWIdx;
       if (n < 4) return nominalIdle;
-      let sumBurn = 0, sumTotal = 0;
-      for (let i = 0; i < n; i++) { sumBurn += gpuBurnBuf[i]; sumTotal += gpuTotalBuf[i]; }
+      let sumBurn = 0,
+        sumTotal = 0;
+      for (let i = 0; i < n; i++) {
+        sumBurn += gpuBurnBuf[i];
+        sumTotal += gpuTotalBuf[i];
+      }
       const measuredDuty = sumBurn / sumTotal;
       const error = loadFraction - measuredDuty; // positive = under-shooting
       const avgCycle = sumTotal / n;
@@ -5035,7 +5511,7 @@ export default function Miner({
     }
 
     function gpuRecordCycle(burnMs, totalMs) {
-      gpuBurnBuf[gpuWIdx]  = burnMs;
+      gpuBurnBuf[gpuWIdx] = burnMs;
       gpuTotalBuf[gpuWIdx] = totalMs;
       gpuWIdx = (gpuWIdx + 1) % GPU_WINDOW;
       if (gpuWIdx === 0) gpuWFull = true;
@@ -5107,8 +5583,12 @@ export default function Miner({
         const n = gpuWFull ? GPU_WINDOW : gpuWIdx;
         let dutyScale = 1;
         if (n >= 4) {
-          let sumBurn = 0, sumTotal = 0;
-          for (let i = 0; i < n; i++) { sumBurn += gpuBurnBuf[i]; sumTotal += gpuTotalBuf[i]; }
+          let sumBurn = 0,
+            sumTotal = 0;
+          for (let i = 0; i < n; i++) {
+            sumBurn += gpuBurnBuf[i];
+            sumTotal += gpuTotalBuf[i];
+          }
           const measuredDuty = sumBurn / sumTotal;
           // Scale busyFrames proportionally to correct measured vs target duty.
           // Clamp to [0.25, 4] to avoid extreme oscillation on first few cycles.
@@ -5119,7 +5599,7 @@ export default function Miner({
         // required busyTime = TIMER_FLOOR_MS × f / (1 - f) only holds for the BLOCKING normal
         // path.  In the async path the GPU works DURING the sleep, so the total cycle ≈ sleepMs
         // and the required busyTime = TIMER_FLOOR_MS × f  (no (1-f) denominator).
-        const nominalFrames = TIMER_FLOOR_MS * loadFraction / currentRenderMs;
+        const nominalFrames = (TIMER_FLOOR_MS * loadFraction) / currentRenderMs;
         const busyFrames = Math.min(1000, Math.max(1, Math.round(nominalFrames * dutyScale)));
         const seed0 = performance.now() * 0.001;
         fastCalibTick++;
@@ -5164,7 +5644,10 @@ export default function Miner({
 
     return () => {
       cancelled = true;
-      if (gpuLoadRafRef.current) { clearTimeout(gpuLoadRafRef.current); gpuLoadRafRef.current = null; }
+      if (gpuLoadRafRef.current) {
+        clearTimeout(gpuLoadRafRef.current);
+        gpuLoadRafRef.current = null;
+      }
       gpuMeasuredDutyRef.current = 0;
     };
   }, [allowGpuWorkloads, mining, benchmarkState.running, loadPercent, effectiveLoadPercent, isHardwareOnHold]);
@@ -5184,7 +5667,9 @@ export default function Miner({
       setHoldSecondsLeft(remaining);
       if (remaining <= 0) {
         setHardwareHoldUntilMs(0);
-        try { localStorage.removeItem(HW_HOLD_STORAGE_KEY); } catch (_) {}
+        try {
+          localStorage.removeItem(HW_HOLD_STORAGE_KEY);
+        } catch (_) {}
       }
     };
     tick();
@@ -5210,11 +5695,11 @@ export default function Miner({
         // Best effort.
       }
       if (!cancelled) {
-        setLog(log => [
+        setLog((log) => [
           {
             time: now(),
             msg: 'Mining auto-stopped because hardware is currently on hold.',
-            type: 'warn'
+            type: 'warn',
           },
           ...log,
         ]);
@@ -5253,7 +5738,10 @@ export default function Miner({
     };
     fetch();
     const id = setInterval(fetch, 10000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [isActive]);
 
   // Poll wallet/chain readiness every 10 seconds while the dashboard is active.
@@ -5270,7 +5758,10 @@ export default function Miner({
     };
     fetchReadiness();
     const id = setInterval(fetchReadiness, 10000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [isActive]);
 
   React.useEffect(() => {
@@ -5288,10 +5779,13 @@ export default function Miner({
     };
     fetchRoundSummary();
     const id = setInterval(fetchRoundSummary, 5000);
-    return () => { cancelled = true; clearInterval(id); };
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [isActive]);
 
-  const hasConfiguredOrBundledPeerTargets = (peerDiscoveryInfo.configuredPeers + peerDiscoveryInfo.seedPeers) > 0;
+  const hasConfiguredOrBundledPeerTargets = peerDiscoveryInfo.configuredPeers + peerDiscoveryInfo.seedPeers > 0;
   const hasAnyKnownPeerTargets = hasConfiguredOrBundledPeerTargets || peerDiscoveryInfo.discoveredPeers > 0;
   const peerCountZeroLabel = !hasConfiguredOrBundledPeerTargets
     ? '0 • no bundled public seeds configured'
@@ -5303,37 +5797,77 @@ export default function Miner({
     : !hasAnyKnownPeerTargets
       ? `Block height ${chainReadiness.blocks || 0} • Peers 0 • Looking for peers...`
       : `Block height ${chainReadiness.blocks || 0} • Peers 0 • Known peers unreachable`;
-  const lastSyncLabel = lastSyncInfo.trigger
-    ? lastSyncInfo.trigger.replace(/^event:/, '').replace(/,/g, ', ')
-    : '';
+  const lastSyncLabel = lastSyncInfo.trigger ? lastSyncInfo.trigger.replace(/^event:/, '').replace(/,/g, ', ') : '';
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0, width: "100%", maxWidth: 1280 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, width: '100%', maxWidth: 1280 }}>
       {isHardwareOnHold && (
-        <div style={{ background: "#7f1d1d", border: "1px solid #ef4444", borderRadius: 8, padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, color: "#fecaca", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+        <div
+          style={{
+            background: '#7f1d1d',
+            border: '1px solid #ef4444',
+            borderRadius: 8,
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            color: '#fecaca',
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
           <span style={{ fontSize: 16 }}>⚠</span>
           <span>
-            Hardware on hold — consecutive benchmark drift detected. Mining and energy accounting paused.{" "}
-            Resumes in {Math.floor(holdSecondsLeft / 60)}:{String(holdSecondsLeft % 60).padStart(2, '0')}
+            Hardware on hold — consecutive benchmark drift detected. Mining and energy accounting paused. Resumes in{' '}
+            {Math.floor(holdSecondsLeft / 60)}:{String(holdSecondsLeft % 60).padStart(2, '0')}
           </span>
         </div>
       )}
-      <div style={{ display: "flex", flexDirection: "row", gap: 32, alignItems: "stretch", width: "100%" }}>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'stretch', width: '100%' }}>
         {/* Left column: Hardware recognition */}
-        <div ref={hwCardRef} style={{ flex: '0 0 auto', width: savedHwCardWidth ? `${savedHwCardWidth}px` : 'max-content', minWidth: `${HARDWARE_COLUMN_WIDTH_PX}px`, maxWidth: '380px', boxSizing: "border-box", background: "#0d1a0d", border: "1px solid #1e3a1e", borderRadius: 12, padding: "32px 24px", minHeight: `${HARDWARE_CARD_HEIGHT_PX}px`, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 15, color: "#4ade80", marginBottom: 12 }}>Hardware Recognition</div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}><b>Device Type:</b> {hardware.deviceType || "Unknown"}</div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}><b>Manufacturer:</b> {hardware.manufacturer || "Unknown"}</div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}><b>Version:</b> {hardware.version || "Unknown"}</div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}><b>CPU:</b> {hardware.cpu || "Unknown"}</div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}>
+        <div
+          ref={hwCardRef}
+          style={{
+            flex: '0 0 auto',
+            width: savedHwCardWidth ? `${savedHwCardWidth}px` : 'max-content',
+            minWidth: `${HARDWARE_COLUMN_WIDTH_PX}px`,
+            maxWidth: '380px',
+            boxSizing: 'border-box',
+            background: '#0d1a0d',
+            border: '1px solid #1e3a1e',
+            borderRadius: 12,
+            padding: '32px 24px',
+            minHeight: `${HARDWARE_CARD_HEIGHT_PX}px`,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+          }}
+        >
+          <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 15, color: '#4ade80', marginBottom: 12 }}>
+            Hardware Recognition
+          </div>
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+            <b>Device Type:</b> {hardware.deviceType || 'Unknown'}
+          </div>
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+            <b>Manufacturer:</b> {hardware.manufacturer || 'Unknown'}
+          </div>
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+            <b>Version:</b> {hardware.version || 'Unknown'}
+          </div>
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+            <b>CPU:</b> {hardware.cpu || 'Unknown'}
+          </div>
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
             <b>GPU{allGpuModels.length > 1 ? `s (${allGpuModels.length})` : ''}:</b>{' '}
             {allGpuModels.length === 0
               ? 'Unknown'
               : (() => {
-                  const details = Array.isArray(hardware.gpuDetailsList) && hardware.gpuDetailsList.length > 0
-                    ? hardware.gpuDetailsList
-                    : allGpuModels.map(m => ({ model: m, vramGb: 0, memType: '' }));
+                  const details =
+                    Array.isArray(hardware.gpuDetailsList) && hardware.gpuDetailsList.length > 0
+                      ? hardware.gpuDetailsList
+                      : allGpuModels.map((m) => ({ model: m, vramGb: 0, memType: '' }));
                   const fmt = (d) => {
                     let s = d.model;
                     let vramGb = d.vramGb;
@@ -5350,56 +5884,140 @@ export default function Miner({
                   };
                   return details.length === 1
                     ? fmt(details[0])
-                    : details.map((d, i) => <span key={i} style={{ display: 'block', paddingLeft: 8 }}>{i + 1}. {fmt(d)}</span>);
+                    : details.map((d, i) => (
+                        <span key={i} style={{ display: 'block', paddingLeft: 8 }}>
+                          {i + 1}. {fmt(d)}
+                        </span>
+                      ));
                 })()}
           </div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}><b>Memory:</b> {hardware.memory || "Unknown"}</div>
-          <div style={{ color: "#e8f5e8", fontSize: 15, marginBottom: 8 }}><b>Operating System:</b> {hardware.osName || "Unknown"}</div>
-          <div style={{ color: "#4ade80", fontSize: 13, marginTop: 8, wordBreak: 'break-all' }}>
-            <b>Hardware info:</b> {hardware.source || "Unknown"}
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+            <b>Memory:</b> {hardware.memory || 'Unknown'}
           </div>
-          <div style={{ color: powerSourceAccent, fontSize: 13, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={powerSourceLabel}>
+          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+            <b>Operating System:</b> {hardware.osName || 'Unknown'}
+          </div>
+          <div style={{ color: '#4ade80', fontSize: 13, marginTop: 8, wordBreak: 'break-all' }}>
+            <b>Hardware info:</b> {hardware.source || 'Unknown'}
+          </div>
+          <div
+            style={{
+              color: powerSourceAccent,
+              fontSize: 13,
+              marginTop: 4,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              width: '100%',
+            }}
+            title={powerSourceLabel}
+          >
             <b>Power estimate:</b> {powerSourceLabel}
           </div>
-          <div style={{ color: "#6aaa6a", fontSize: 13, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }} title={hardwareCardPowerCalcBreakdown}>
+          <div
+            style={{
+              color: '#6aaa6a',
+              fontSize: 13,
+              marginTop: 2,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              width: '100%',
+            }}
+            title={hardwareCardPowerCalcBreakdown}
+          >
             <b>Power calculation:</b> {hardwareCardPowerCalcBreakdown}
           </div>
-          <div style={{ marginTop: "auto", width: "100%", borderTop: "1px solid #1e3a1e", paddingTop: 10 }}>
-            <div style={{ color: benchmarkState.running || startupBenchmarkPending ? "#facc15" : "#4ade80", fontSize: 12 }}>
-              <b>Benchmark score:</b> {benchmarkState.running || startupBenchmarkPending ? "running..." : (benchmarkState.lastScore === null ? "pending" : `${benchmarkState.lastScore}/100`)}
+          <div style={{ marginTop: 'auto', width: '100%', borderTop: '1px solid #1e3a1e', paddingTop: 10 }}>
+            <div
+              style={{ color: benchmarkState.running || startupBenchmarkPending ? '#facc15' : '#4ade80', fontSize: 12 }}
+            >
+              <b>Benchmark score:</b>{' '}
+              {benchmarkState.running || startupBenchmarkPending
+                ? 'running...'
+                : benchmarkState.lastScore === null
+                  ? 'pending'
+                  : `${benchmarkState.lastScore}/100`}
             </div>
-            {!benchmarkState.running && !startupBenchmarkPending && benchmarkState.lastScore !== null &&
-              (benchmarkState.lastAvgCpuPct !== null || benchmarkState.lastAvgMemPct !== null || benchmarkState.lastAvgGpuPct !== null) && (
-              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
-                avg{[
-                  benchmarkState.lastAvgCpuPct !== null && (() => {
-                    const v = benchmarkState.lastAvgCpuPct;
-                    const c = Math.abs(v) <= 10 ? "#a7ffb0" : Math.abs(v) <= 25 ? "#facc15" : v > 0 ? "#4ade80" : "#f87171";
-                    return <span key="cpu" style={{ color: c, marginLeft: 4 }}>CPU {v > 0 ? `+${v}` : v}%</span>;
-                  })(),
-                  benchmarkState.lastAvgMemPct !== null && (() => {
-                    const v = benchmarkState.lastAvgMemPct;
-                    const c = Math.abs(v) <= 10 ? "#a7ffb0" : Math.abs(v) <= 25 ? "#facc15" : v > 0 ? "#4ade80" : "#f87171";
-                    return <span key="mem" style={{ color: c, marginLeft: 4 }}>Mem {v > 0 ? `+${v}` : v}%</span>;
-                  })(),
-                  benchmarkState.lastAvgGpuPct !== null && (() => {
-                    const v = benchmarkState.lastAvgGpuPct;
-                    const c = Math.abs(v) <= 10 ? "#a7ffb0" : Math.abs(v) <= 25 ? "#facc15" : v > 0 ? "#4ade80" : "#f87171";
-                    return <span key="gpu" style={{ color: c, marginLeft: 4 }}>GPU {v > 0 ? `+${v}` : v}%</span>;
-                  })(),
-                ].filter(Boolean)}
-              </div>
-            )}
+            {!benchmarkState.running &&
+              !startupBenchmarkPending &&
+              benchmarkState.lastScore !== null &&
+              (benchmarkState.lastAvgCpuPct !== null ||
+                benchmarkState.lastAvgMemPct !== null ||
+                benchmarkState.lastAvgGpuPct !== null) && (
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                  avg
+                  {[
+                    benchmarkState.lastAvgCpuPct !== null &&
+                      (() => {
+                        const v = benchmarkState.lastAvgCpuPct;
+                        const c =
+                          Math.abs(v) <= 10 ? '#a7ffb0' : Math.abs(v) <= 25 ? '#facc15' : v > 0 ? '#4ade80' : '#f87171';
+                        return (
+                          <span key="cpu" style={{ color: c, marginLeft: 4 }}>
+                            CPU {v > 0 ? `+${v}` : v}%
+                          </span>
+                        );
+                      })(),
+                    benchmarkState.lastAvgMemPct !== null &&
+                      (() => {
+                        const v = benchmarkState.lastAvgMemPct;
+                        const c =
+                          Math.abs(v) <= 10 ? '#a7ffb0' : Math.abs(v) <= 25 ? '#facc15' : v > 0 ? '#4ade80' : '#f87171';
+                        return (
+                          <span key="mem" style={{ color: c, marginLeft: 4 }}>
+                            Mem {v > 0 ? `+${v}` : v}%
+                          </span>
+                        );
+                      })(),
+                    benchmarkState.lastAvgGpuPct !== null &&
+                      (() => {
+                        const v = benchmarkState.lastAvgGpuPct;
+                        const c =
+                          Math.abs(v) <= 10 ? '#a7ffb0' : Math.abs(v) <= 25 ? '#facc15' : v > 0 ? '#4ade80' : '#f87171';
+                        return (
+                          <span key="gpu" style={{ color: c, marginLeft: 4 }}>
+                            GPU {v > 0 ? `+${v}` : v}%
+                          </span>
+                        );
+                      })(),
+                  ].filter(Boolean)}
+                </div>
+              )}
             {!benchmarkState.running && !startupBenchmarkPending && benchmarkState.lastScore !== null && (
-              <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                 {benchmarkState.lastTrustDelta !== null && (
-                  <div style={{ fontSize: 11, color: benchmarkState.lastTrustDelta > 0 ? "#4ade80" : benchmarkState.lastTrustDelta < 0 ? "#f87171" : "#a7ffb0" }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color:
+                        benchmarkState.lastTrustDelta > 0
+                          ? '#4ade80'
+                          : benchmarkState.lastTrustDelta < 0
+                            ? '#f87171'
+                            : '#a7ffb0',
+                    }}
+                  >
                     <b>Trust:</b>{' '}
-                    {benchmarkState.lastTrustDelta > 0 ? `+${benchmarkState.lastTrustDelta}` : benchmarkState.lastTrustDelta < 0 ? `${benchmarkState.lastTrustDelta}` : 'no change'}
+                    {benchmarkState.lastTrustDelta > 0
+                      ? `+${benchmarkState.lastTrustDelta}`
+                      : benchmarkState.lastTrustDelta < 0
+                        ? `${benchmarkState.lastTrustDelta}`
+                        : 'no change'}
                   </div>
                 )}
                 {benchmarkState.lastJitterPct !== null && (
-                  <div style={{ fontSize: 11, color: benchmarkState.lastJitterPct <= 10 ? "#4ade80" : benchmarkState.lastJitterPct <= 20 ? "#facc15" : "#f97316" }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color:
+                        benchmarkState.lastJitterPct <= 10
+                          ? '#4ade80'
+                          : benchmarkState.lastJitterPct <= 20
+                            ? '#facc15'
+                            : '#f97316',
+                    }}
+                  >
                     <b>Jitter:</b> {benchmarkState.lastJitterPct.toFixed(1)}%
                   </div>
                 )}
@@ -5410,92 +6028,278 @@ export default function Miner({
               modern discrete GPUs register measurable utilisation */}
           <canvas
             ref={gpuLoadCanvasRef}
-            width={2048} height={2048}
+            width={2048}
+            height={2048}
             style={{ position: 'fixed', left: '-9999px', top: '-9999px', width: 1, height: 1, pointerEvents: 'none' }}
             aria-hidden="true"
           />
         </div>
 
         {/* Right top area: mining status + metric cards */}
-        <div style={{ flex: '2 1 0', minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: "#0d1a0d", border: "1px solid #1e3a1e", borderRadius: 12, padding: "16px 18px", height: `${STATUS_CARD_HEIGHT_PX}px`, boxSizing: "border-box", overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4ade80", letterSpacing: "0.1em", textTransform: "uppercase" }}>Mining Status</div>
+        <div style={{ flex: '2 1 0', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div
+            style={{
+              background: '#0d1a0d',
+              border: '1px solid #1e3a1e',
+              borderRadius: 12,
+              padding: '16px 18px',
+              height: `${STATUS_CARD_HEIGHT_PX}px`,
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 10,
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 11,
+                    color: '#4ade80',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Mining Status
+                </div>
                 {electricityPrice !== null && (
-                  <div title={electricityPriceSource === 'live' ? 'Live global average — globalpetrolprices.com' : electricityPriceSource === 'cache' ? 'Cached (updates every 24 h)' : 'Estimated global average (live fetch unavailable)'}
-                    style={{ display: "flex", alignItems: "center", gap: 4, background: "#0a1f0a", border: "1px solid #1e3a1e", borderRadius: 6, padding: "2px 7px", cursor: "default" }}>
-                    <span style={{ fontSize: 10, color: electricityPriceSource === 'live' ? "#4ade80" : "#6b9b6b" }}>⚡</span>
-                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#a7ffb0", letterSpacing: "0.03em" }}>
-                      ${electricityPrice.toFixed(3)}<span style={{ color: "#4a6a4a" }}>/kWh</span>
+                  <div
+                    title={
+                      electricityPriceSource === 'live'
+                        ? 'Live global average — globalpetrolprices.com'
+                        : electricityPriceSource === 'cache'
+                          ? 'Cached (updates every 24 h)'
+                          : 'Estimated global average (live fetch unavailable)'
+                    }
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: '#0a1f0a',
+                      border: '1px solid #1e3a1e',
+                      borderRadius: 6,
+                      padding: '2px 7px',
+                      cursor: 'default',
+                    }}
+                  >
+                    <span style={{ fontSize: 10, color: electricityPriceSource === 'live' ? '#4ade80' : '#6b9b6b' }}>
+                      ⚡
                     </span>
-                    <span style={{ fontSize: 8, color: electricityPriceSource === 'live' ? "#4ade80" : "#4a6a4a", marginLeft: 1 }}>
+                    <span
+                      style={{
+                        fontFamily: "'DM Mono', monospace",
+                        fontSize: 10,
+                        color: '#a7ffb0',
+                        letterSpacing: '0.03em',
+                      }}
+                    >
+                      ${electricityPrice.toFixed(3)}
+                      <span style={{ color: '#4a6a4a' }}>/kWh</span>
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 8,
+                        color: electricityPriceSource === 'live' ? '#4ade80' : '#4a6a4a',
+                        marginLeft: 1,
+                      }}
+                    >
                       {electricityPriceSource === 'live' ? '●' : '○'}
                     </span>
                   </div>
                 )}
-                {electricityPrice !== null && (() => {
-                  const wtcCostUsd = electricityPrice * energyForTier(statusTier) / 1000;
-                  const fmt = wtcCostUsd >= 1000 ? `$${(wtcCostUsd/1000).toFixed(2)}k` :
-                              wtcCostUsd >= 1 ? `$${wtcCostUsd.toFixed(2)}` :
-                              wtcCostUsd >= 0.001 ? `$${wtcCostUsd.toFixed(4)}` :
-                              `$${wtcCostUsd.toExponential(2)}`;
-                  return (
-                    <div title={`Mining cost per WTC at current electricity price and Tier ${statusTier} energy requirement (${energyForTier(statusTier).toLocaleString()} Wh/coin × $${electricityPrice.toFixed(3)}/kWh)`}
-                      style={{ display: "flex", alignItems: "center", gap: 4, background: "#0a1f0a", border: "1px solid #1e3a1e", borderRadius: 6, padding: "2px 7px", cursor: "default" }}>
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#4ade80", letterSpacing: "0.05em", fontWeight: 600 }}>WTC</span>
-                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#a7ffb0", letterSpacing: "0.03em" }}>{fmt}</span>
-                    </div>
-                  );
-                })()}
+                {electricityPrice !== null &&
+                  (() => {
+                    const wtcCostUsd = (electricityPrice * energyForTier(statusTier)) / 1000;
+                    const fmt =
+                      wtcCostUsd >= 1000
+                        ? `$${(wtcCostUsd / 1000).toFixed(2)}k`
+                        : wtcCostUsd >= 1
+                          ? `$${wtcCostUsd.toFixed(2)}`
+                          : wtcCostUsd >= 0.001
+                            ? `$${wtcCostUsd.toFixed(4)}`
+                            : `$${wtcCostUsd.toExponential(2)}`;
+                    return (
+                      <div
+                        title={`Mining cost per WTC at current electricity price and Tier ${statusTier} energy requirement (${energyForTier(statusTier).toLocaleString()} Wh/coin × $${electricityPrice.toFixed(3)}/kWh)`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          background: '#0a1f0a',
+                          border: '1px solid #1e3a1e',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          cursor: 'default',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "'DM Mono', monospace",
+                            fontSize: 10,
+                            color: '#4ade80',
+                            letterSpacing: '0.05em',
+                            fontWeight: 600,
+                          }}
+                        >
+                          WTC
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "'DM Mono', monospace",
+                            fontSize: 10,
+                            color: '#a7ffb0',
+                            letterSpacing: '0.03em',
+                          }}
+                        >
+                          {fmt}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 <div
                   title="Total pooled energy contributed by all miners in the current shared round."
-                  style={{ display: "flex", alignItems: "center", gap: 4, background: "#0a1f0a", border: "1px solid #1e3a1e", borderRadius: 6, padding: "2px 7px", cursor: "default" }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    background: '#0a1f0a',
+                    border: '1px solid #1e3a1e',
+                    borderRadius: 6,
+                    padding: '2px 7px',
+                    cursor: 'default',
+                  }}
                 >
-                  <span style={{ fontSize: 10, color: "#4ade80" }}>Σ</span>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#a7ffb0", letterSpacing: "0.03em" }}>
+                  <span style={{ fontSize: 10, color: '#4ade80' }}>Σ</span>
+                  <span
+                    style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 10,
+                      color: '#a7ffb0',
+                      letterSpacing: '0.03em',
+                    }}
+                  >
                     {fmtEnergy(sharedRoundTotalWh, sharedRoundTotalWh >= 1000 ? 2 : 0)}
                   </span>
-                  <span style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#4a6a4a", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  <span
+                    style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 9,
+                      color: '#4a6a4a',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     round
                   </span>
                 </div>
               </div>
-              <div style={{ fontSize: 12, color: "#a7ffb0" }}>{`Tier ${statusTier} active · ${fmtEnergy(energyForTier(statusTier), 0)}/coin`}</div>
+              <div
+                style={{ fontSize: 12, color: '#a7ffb0' }}
+              >{`Tier ${statusTier} active · ${fmtEnergy(energyForTier(statusTier), 0)}/coin`}</div>
             </div>
-            <div style={{ height: 10, width: "100%", borderRadius: 999, background: "#122612", overflow: "hidden", border: "1px solid #1e3a1e" }}>
-              <div style={{ height: "100%", width: `${minedPct}%`, background: "linear-gradient(90deg, #4ade80, #22c55e)", transition: "width 0.25s linear" }} />
+            <div
+              style={{
+                height: 10,
+                width: '100%',
+                borderRadius: 999,
+                background: '#122612',
+                overflow: 'hidden',
+                border: '1px solid #1e3a1e',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${minedPct}%`,
+                  background: 'linear-gradient(90deg, #4ade80, #22c55e)',
+                  transition: 'width 0.25s linear',
+                }}
+              />
             </div>
-            <div style={{ marginTop: 8, display: "flex", flex: 1, gap: 0 }}>
+            <div style={{ marginTop: 8, display: 'flex', flex: 1, gap: 0 }}>
               {/* Left half: mined progress + mining address + peers */}
-              <div style={{ flex: 1, paddingRight: 14, borderRight: "1px solid #1e3a1e", display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
-                <div style={{ fontSize: 12, color: "#4a6a4a" }}>
+              <div
+                style={{
+                  flex: 1,
+                  paddingRight: 14,
+                  borderRight: '1px solid #1e3a1e',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <div style={{ fontSize: 12, color: '#4a6a4a' }}>
                   {`${fmtNum(chainEmittedCoins, 4)} WTC / ${fmtNum(totalCoinSupply)} WTC node mined (${minedPct.toFixed(4)}%)`}
                 </div>
-                <div style={{ fontSize: 12, color: "#a7ffb0", wordBreak: "break-all" }}>
-                  <b>Mining Address:</b> {miningAddress || "Loading..."}
+                <div style={{ fontSize: 12, color: '#a7ffb0', wordBreak: 'break-all' }}>
+                  <b>Mining Address:</b> {miningAddress || 'Loading...'}
                 </div>
-                <div style={{ fontSize: 12, color: peerCountSource === 'standalone' ? "#4a6a4a" : peerCount === null ? "#4a6a4a" : peerCount === 0 ? "#f87171" : "#a7ffb0" }}>
-                  {peerCountSource === 'standalone'
-                    ? <><b>Peers online:</b> — standalone mode <span style={{ color: "#4a6a4a" }}>•</span> <b>Peers connected:</b> —</>
-                    : peerCount === null
-                      ? <><b>Peers online:</b> — waiting... <span style={{ color: "#4a6a4a" }}>•</span> <b>Peers connected:</b> —</>
-                      : peerCount === 0
-                        ? <><b>Peers online:</b> {peerCountZeroLabel} <span style={{ color: "#4a6a4a" }}>•</span> <b>Peers connected:</b> {connectedPeerCount}</>
-                        : <><b>Peers online:</b> {peerCount} <span style={{ color: "#4a6a4a" }}>•</span> <b>Peers connected:</b> {connectedPeerCount}</>}
+                <div
+                  style={{
+                    fontSize: 12,
+                    color:
+                      peerCountSource === 'standalone'
+                        ? '#4a6a4a'
+                        : peerCount === null
+                          ? '#4a6a4a'
+                          : peerCount === 0
+                            ? '#f87171'
+                            : '#a7ffb0',
+                  }}
+                >
+                  {peerCountSource === 'standalone' ? (
+                    <>
+                      <b>Peers online:</b> — standalone mode <span style={{ color: '#4a6a4a' }}>•</span>{' '}
+                      <b>Peers connected:</b> —
+                    </>
+                  ) : peerCount === null ? (
+                    <>
+                      <b>Peers online:</b> — waiting... <span style={{ color: '#4a6a4a' }}>•</span>{' '}
+                      <b>Peers connected:</b> —
+                    </>
+                  ) : peerCount === 0 ? (
+                    <>
+                      <b>Peers online:</b> {peerCountZeroLabel} <span style={{ color: '#4a6a4a' }}>•</span>{' '}
+                      <b>Peers connected:</b> {connectedPeerCount}
+                    </>
+                  ) : (
+                    <>
+                      <b>Peers online:</b> {peerCount} <span style={{ color: '#4a6a4a' }}>•</span>{' '}
+                      <b>Peers connected:</b> {connectedPeerCount}
+                    </>
+                  )}
                 </div>
-                <div style={{ fontSize: 11, color: chainReadiness.spendReady ? '#4ade80' : chainReadiness.connections === 0 ? '#f87171' : '#fbbf24' }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: chainReadiness.spendReady
+                      ? '#4ade80'
+                      : chainReadiness.connections === 0
+                        ? '#f87171'
+                        : '#fbbf24',
+                  }}
+                >
                   {chainReadiness.spendReady
                     ? 'Wallet Ready'
-                    : (chainReadiness.connections === 0
+                    : chainReadiness.connections === 0
                       ? 'Connecting to Network'
-                      : (chainReadiness.reachableButNotAhead ? 'Peers Reachable, No Higher Chain' : 'Wallet Syncing'))}
+                      : chainReadiness.reachableButNotAhead
+                        ? 'Peers Reachable, No Higher Chain'
+                        : 'Wallet Syncing'}
                   {' • '}
                   {chainReadiness.connections === 0
                     ? readinessZeroLabel
-                    : (chainReadiness.reachableButNotAhead
+                    : chainReadiness.reachableButNotAhead
                       ? `Local height ${chainReadiness.localBlocks || 0} • Reachable peers ${chainReadiness.connections} • No higher sync source yet`
-                      : `Block height ${chainReadiness.blocks || 0} • Peers ${chainReadiness.connections}`)}
+                      : `Block height ${chainReadiness.blocks || 0} • Peers ${chainReadiness.connections}`}
                 </div>
                 {!chainReadiness.spendReady && chainReadiness.syncBlockedReason && (
                   <div style={{ fontSize: 11, color: '#f87171' }}>
@@ -5504,56 +6308,235 @@ export default function Miner({
                 )}
                 {lastSyncLabel && (
                   <div style={{ fontSize: 11, color: lastSyncInfo.ok ? '#4ade80' : '#fbbf24' }}>
-                    <b>Last sync:</b> {lastSyncInfo.ok ? 'synced via ' : 'triggered by '}{lastSyncLabel}
+                    <b>Last sync:</b> {lastSyncInfo.ok ? 'synced via ' : 'triggered by '}
+                    {lastSyncLabel}
                   </div>
                 )}
               </div>
               {/* Right: trust meter */}
-              <div style={{ flex: 1, paddingLeft: 14, display: "flex", flexDirection: "column", justifyContent: "center", gap: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 10, color: "#4ade80", letterSpacing: "0.1em", textTransform: "uppercase" }}>Trust Score</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: trustScore >= 70 ? "#4ade80" : trustScore >= 30 ? "#facc15" : "#f87171" }}>{trustScore}/100</div>
+              <div
+                style={{
+                  flex: 1,
+                  paddingLeft: 14,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 10,
+                      color: '#4ade80',
+                      letterSpacing: '0.1em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Trust Score
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: trustScore >= 70 ? '#4ade80' : trustScore >= 30 ? '#facc15' : '#f87171',
+                    }}
+                  >
+                    {trustScore}/100
+                  </div>
                 </div>
-                <div style={{ height: 8, width: "100%", borderRadius: 999, background: "#122612", overflow: "hidden", border: "1px solid #1e3a1e" }}>
-                  <div style={{ height: "100%", width: `${trustScore}%`, background: trustScore >= 70 ? "linear-gradient(90deg, #4ade80, #22c55e)" : trustScore >= 30 ? "linear-gradient(90deg, #facc15, #eab308)" : "linear-gradient(90deg, #f87171, #ef4444)", transition: "width 0.5s ease" }} />
+                <div
+                  style={{
+                    height: 8,
+                    width: '100%',
+                    borderRadius: 999,
+                    background: '#122612',
+                    overflow: 'hidden',
+                    border: '1px solid #1e3a1e',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${trustScore}%`,
+                      background:
+                        trustScore >= 70
+                          ? 'linear-gradient(90deg, #4ade80, #22c55e)'
+                          : trustScore >= 30
+                            ? 'linear-gradient(90deg, #facc15, #eab308)'
+                            : 'linear-gradient(90deg, #f87171, #ef4444)',
+                      transition: 'width 0.5s ease',
+                    }}
+                  />
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "row", gap: 16, width: "100%", alignItems: "stretch" }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div style={{ background: "#0d1a0d", border: "1px solid #1e3a1e", borderRadius: 12, padding: "20px 24px", height: `${METRIC_CARD_HEIGHT_PX}px`, boxSizing: "border-box", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4ade80", letterSpacing: "0.1em", marginBottom: 8, textTransform: "uppercase" }}>Power Used</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ color: "#a7ffb0", fontSize: 12 }}>Max hardware power</div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 700, color: "#e8f5e8", lineHeight: 1.1 }}>{fmtNum(unitFullPowerW, 2)} W</div>
-                  <div style={{ fontSize: 11, color: trustScore >= 75 ? "#4ade80" : trustScore >= 50 ? "#facc15" : "#f87171", marginTop: -4 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 16, width: '100%', alignItems: 'stretch' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div
+                style={{
+                  background: '#0d1a0d',
+                  border: '1px solid #1e3a1e',
+                  borderRadius: 12,
+                  padding: '20px 24px',
+                  height: `${METRIC_CARD_HEIGHT_PX}px`,
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 11,
+                    color: '#4ade80',
+                    letterSpacing: '0.1em',
+                    marginBottom: 8,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Power Used
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ color: '#a7ffb0', fontSize: 12 }}>Max hardware power</div>
+                  <div
+                    style={{
+                      fontFamily: "'Playfair Display', serif",
+                      fontSize: 24,
+                      fontWeight: 700,
+                      color: '#e8f5e8',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {fmtNum(unitFullPowerW, 2)} W
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: trustScore >= 75 ? '#4ade80' : trustScore >= 50 ? '#facc15' : '#f87171',
+                      marginTop: -4,
+                    }}
+                  >
                     {`Trust cap: ${Math.round(trustFactor * 100)}% → ${fmtNum(basePowerW, 0)} W  (trust ${trustScore}/100)`}
                   </div>
-                  <div style={{ color: "#a7ffb0", fontSize: 12 }}>Mining power</div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 700, color: "#e8f5e8", lineHeight: 1.1 }}>{fmtNum(totalPowerUsedW, 2)} W</div>
+                  <div style={{ color: '#a7ffb0', fontSize: 12 }}>Mining power</div>
+                  <div
+                    style={{
+                      fontFamily: "'Playfair Display', serif",
+                      fontSize: 24,
+                      fontWeight: 700,
+                      color: '#e8f5e8',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {fmtNum(totalPowerUsedW, 2)} W
+                  </div>
                 </div>
-                <div style={{ marginTop: 10, borderTop: "1px solid #1e3a1e", paddingTop: 8 }}>
-                  <div style={{ fontSize: 12, color: "#a7ffb0", marginTop: 4 }}>{`Base power ${fmtNum(basePowerW, 1)} W -> active mining power ${fmtNum(powerW, 1)} W`}</div>
-                  <div style={{ fontSize: 11, color: powerSourceAccent, marginTop: 4 }}>{`Source: ${powerSourceLabel}`}</div>
+                <div style={{ marginTop: 10, borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
+                  <div
+                    style={{ fontSize: 12, color: '#a7ffb0', marginTop: 4 }}
+                  >{`Base power ${fmtNum(basePowerW, 1)} W -> active mining power ${fmtNum(powerW, 1)} W`}</div>
+                  <div
+                    style={{ fontSize: 11, color: powerSourceAccent, marginTop: 4 }}
+                  >{`Source: ${powerSourceLabel}`}</div>
                 </div>
               </div>
             </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, height: `${METRIC_CARD_HEIGHT_PX}px`, boxSizing: "border-box" }}>
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                height: `${METRIC_CARD_HEIGHT_PX}px`,
+                boxSizing: 'border-box',
+              }}
+            >
               {/* Energy Used — compact, auto height */}
-              <div style={{ background: "#0d1a0d", border: "1px solid #1e3a1e", borderRadius: 12, padding: "14px 20px", flex: "0 0 auto", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4ade80", letterSpacing: "0.1em", marginBottom: 6, textTransform: "uppercase" }}>Energy Used</div>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 700, color: "#e8f5e8", lineHeight: 1.1 }}>{fmtEnergy(energy, 2)}</div>
-                <div style={{ fontSize: 11, color: "#4a6a4a", marginTop: 5 }}>{energy >= 1e3 ? `${fmtNum(energy, 0)} Wh total (${fmtEnergy(energy, 3)})` : 'power × time integrated — upgrades to kWh at 1,000 Wh'}</div>
+              <div
+                style={{
+                  background: '#0d1a0d',
+                  border: '1px solid #1e3a1e',
+                  borderRadius: 12,
+                  padding: '14px 20px',
+                  flex: '0 0 auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "'DM Mono', monospace",
+                    fontSize: 11,
+                    color: '#4ade80',
+                    letterSpacing: '0.1em',
+                    marginBottom: 6,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Energy Used
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: 26,
+                    fontWeight: 700,
+                    color: '#e8f5e8',
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {fmtEnergy(energy, 2)}
+                </div>
+                <div style={{ fontSize: 11, color: '#4a6a4a', marginTop: 5 }}>
+                  {energy >= 1e3
+                    ? `${fmtNum(energy, 0)} Wh total (${fmtEnergy(energy, 3)})`
+                    : 'power × time integrated — upgrades to kWh at 1,000 Wh'}
+                </div>
               </div>
               {/* Hardware Load — fills remaining height */}
-              <div style={{ background: "#0d1a0d", border: "1px solid #1e3a1e", borderRadius: 12, padding: "14px 20px", flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4ade80", letterSpacing: "0.1em", textTransform: "uppercase" }}>Hardware Load</div>
-                  <div style={{ color: "#e8f5e8", fontSize: 15, fontWeight: 700 }}>
+              <div
+                style={{
+                  background: '#0d1a0d',
+                  border: '1px solid #1e3a1e',
+                  borderRadius: 12,
+                  padding: '14px 20px',
+                  flex: 1,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 11,
+                      color: '#4ade80',
+                      letterSpacing: '0.1em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Hardware Load
+                  </div>
+                  <div style={{ color: '#e8f5e8', fontSize: 15, fontWeight: 700 }}>
                     {effectiveLoadPercent}%
-                    <span style={{ fontSize: 11, color: '#fbbf24', marginLeft: 6 }}>(trust cap: {Math.round(trustFactor * 100)}%)</span>
+                    <span style={{ fontSize: 11, color: '#fbbf24', marginLeft: 6 }}>
+                      (trust cap: {Math.round(trustFactor * 100)}%)
+                    </span>
                   </div>
                 </div>
                 <input
@@ -5589,37 +6572,89 @@ export default function Miner({
                     lastSliderCommitAtMsRef.current = nowMs;
                     setSliderAdjustNonce((n) => n + 1);
                   }}
-                  style={{ width: "100%", accentColor: "#4ade80", cursor: "pointer" }}
+                  style={{ width: '100%', accentColor: '#4ade80', cursor: 'pointer' }}
                 />
-                <div style={{ fontSize: 11, color: "#4a6a4a", marginTop: 6 }}>{`Applies ${effectiveLoadPercent}% of hardware power. Trust cap: ${Math.round(trustFactor * 100)}%.`}</div>
-                <div style={{ fontSize: 11, color: "#4a6a4a", marginTop: 3 }}>{`Est. time for 1 coin: ${timePerCoinLabel}`}</div>
+                <div
+                  style={{ fontSize: 11, color: '#4a6a4a', marginTop: 6 }}
+                >{`Applies ${effectiveLoadPercent}% of hardware power. Trust cap: ${Math.round(trustFactor * 100)}%.`}</div>
+                <div
+                  style={{ fontSize: 11, color: '#4a6a4a', marginTop: 3 }}
+                >{`Est. time for 1 coin: ${timePerCoinLabel}`}</div>
               </div>
             </div>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div style={{ background: "#0d1a0d", border: "1px solid #1e3a1e", borderRadius: 12, padding: "20px 24px", height: `${METRIC_CARD_HEIGHT_PX}px`, boxSizing: "border-box", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div
+                style={{
+                  background: '#0d1a0d',
+                  border: '1px solid #1e3a1e',
+                  borderRadius: 12,
+                  padding: '20px 24px',
+                  height: `${METRIC_CARD_HEIGHT_PX}px`,
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                }}
+              >
                 <div>
-                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: "#4ade80", letterSpacing: "0.1em", marginBottom: 8, textTransform: "uppercase" }}>Coins Mined</div>
-                  <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, fontWeight: 700, color: "#e8f5e8", lineHeight: 1.1 }}>{`${fmtNum(nodeTotal, 2)} WTC`}</div>
-                  <div style={{ fontSize: 12, color: "#4a6a4a", marginTop: 6 }}>{`Tier ${currentTier} · ${fmtEnergy(tierEnergyPerCoinWh, 0)}/coin · ${fmtNum(rewardForTier(currentTier), 2)} WTC/block`}</div>
-                  <div style={{ fontSize: 12, color: "#4a6a4a", marginTop: 3 }}>{`${fmtNum(nodeTotal % COINS_PER_TIER, 2)} / ${fmtNum(COINS_PER_TIER)} coins this tier · ${fmtNum(totalCoinSupply)} WTC total supply`}</div>
+                  <div
+                    style={{
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 11,
+                      color: '#4ade80',
+                      letterSpacing: '0.1em',
+                      marginBottom: 8,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    Coins Mined
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "'Playfair Display', serif",
+                      fontSize: 28,
+                      fontWeight: 700,
+                      color: '#e8f5e8',
+                      lineHeight: 1.1,
+                    }}
+                  >{`${fmtNum(nodeTotal, 2)} WTC`}</div>
+                  <div
+                    style={{ fontSize: 12, color: '#4a6a4a', marginTop: 6 }}
+                  >{`Tier ${currentTier} · ${fmtEnergy(tierEnergyPerCoinWh, 0)}/coin · ${fmtNum(rewardForTier(currentTier), 2)} WTC/block`}</div>
+                  <div
+                    style={{ fontSize: 12, color: '#4a6a4a', marginTop: 3 }}
+                  >{`${fmtNum(nodeTotal % COINS_PER_TIER, 2)} / ${fmtNum(COINS_PER_TIER)} coins this tier · ${fmtNum(totalCoinSupply)} WTC total supply`}</div>
                 </div>
-                <div style={{ marginTop: 10, borderTop: "1px solid #1e3a1e", paddingTop: 8 }}>
-                  <div style={{ fontSize: 12, color: "#a7ffb0", marginTop: 6 }}>{`Matured: ${fmtNum(displayMatured, 2)} WTC | Unmatured: ${fmtNum(displayUnmatured, 2)} WTC`}</div>
-                  <div style={{ fontSize: 12, color: "#4a6a4a", marginTop: 4 }}>{`App energy estimate: ${fmtNum(appEstimatedCoins, 2)} WTC`}</div>
-                  <div style={{ fontSize: 12, color: "#a7ffb0", marginTop: 4 }}>{`Estimated mining rate: ${coinsRateLabel}`}</div>
+                <div style={{ marginTop: 10, borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
+                  <div
+                    style={{ fontSize: 12, color: '#a7ffb0', marginTop: 6 }}
+                  >{`Matured: ${fmtNum(displayMatured, 2)} WTC | Unmatured: ${fmtNum(displayUnmatured, 2)} WTC`}</div>
+                  <div
+                    style={{ fontSize: 12, color: '#4a6a4a', marginTop: 4 }}
+                  >{`App energy estimate: ${fmtNum(appEstimatedCoins, 2)} WTC`}</div>
+                  <div
+                    style={{ fontSize: 12, color: '#a7ffb0', marginTop: 4 }}
+                  >{`Estimated mining rate: ${coinsRateLabel}`}</div>
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
 
       {/* Controls row — buttons only, left spacer keeps alignment with metric columns */}
-      <div style={{ display: "flex", flexDirection: "row", gap: 32, width: "100%", marginTop: 16 }}>
-        <div style={{ flex: '0 0 auto', width: savedHwCardWidth ? `${savedHwCardWidth}px` : 'max-content', minWidth: `${HARDWARE_COLUMN_WIDTH_PX}px`, maxWidth: '380px' }} />
-        <div style={{ flex: 1.6, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ display: "flex", flexDirection: "row", gap: 16, width: "100%", alignItems: "stretch" }}>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 32, width: '100%', marginTop: 16 }}>
+        <div
+          style={{
+            flex: '0 0 auto',
+            width: savedHwCardWidth ? `${savedHwCardWidth}px` : 'max-content',
+            minWidth: `${HARDWARE_COLUMN_WIDTH_PX}px`,
+            maxWidth: '380px',
+          }}
+        />
+        <div style={{ flex: 1.6, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 16, width: '100%', alignItems: 'stretch' }}>
             <div style={{ flex: 1 }} />
             <div style={{ flex: 1 }}>
               <button
@@ -5627,26 +6662,48 @@ export default function Miner({
                   console.log('[MinerSimulator] Start Mining button clicked, setting mining to true');
                   setMining(true);
                 }}
-                disabled={mining || !hardwareRecognitionFinished || benchmarkState.running || startupBenchmarkPending || isHardwareOnHold}
+                disabled={
+                  mining ||
+                  !hardwareRecognitionFinished ||
+                  benchmarkState.running ||
+                  startupBenchmarkPending ||
+                  isHardwareOnHold
+                }
                 style={{
-                  width: "100%",
-                  background: (mining || !hardwareRecognitionFinished || benchmarkState.running || startupBenchmarkPending || isHardwareOnHold) ? "#7aa88a" : "#4ade80",
-                  color: "#0d1a0d",
-                  border: "none",
+                  width: '100%',
+                  background:
+                    mining ||
+                    !hardwareRecognitionFinished ||
+                    benchmarkState.running ||
+                    startupBenchmarkPending ||
+                    isHardwareOnHold
+                      ? '#7aa88a'
+                      : '#4ade80',
+                  color: '#0d1a0d',
+                  border: 'none',
                   borderRadius: 8,
-                  padding: "12px 32px",
+                  padding: '12px 32px',
                   fontWeight: 700,
                   fontSize: 20,
-                  cursor: (mining || !hardwareRecognitionFinished || benchmarkState.running || startupBenchmarkPending || isHardwareOnHold) ? "not-allowed" : "pointer"
+                  cursor:
+                    mining ||
+                    !hardwareRecognitionFinished ||
+                    benchmarkState.running ||
+                    startupBenchmarkPending ||
+                    isHardwareOnHold
+                      ? 'not-allowed'
+                      : 'pointer',
                 }}
               >
                 {isHardwareOnHold
                   ? `On hold (${Math.floor(holdSecondsLeft / 60)}:${String(holdSecondsLeft % 60).padStart(2, '0')})`
                   : mining
-                    ? "Mining active"
+                    ? 'Mining active'
                     : benchmarkState.running || startupBenchmarkPending
-                      ? "Benchmarking..."
-                      : (hardwareRecognitionFinished ? "Start mining" : "Detecting hardware...")}
+                      ? 'Benchmarking...'
+                      : hardwareRecognitionFinished
+                        ? 'Start mining'
+                        : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>
@@ -5665,15 +6722,15 @@ export default function Miner({
                 }}
                 disabled={!mining}
                 style={{
-                  width: "100%",
-                  background: !mining ? "#8a7a7a" : "#ef4444",
-                  color: "#ffffff",
-                  border: "none",
+                  width: '100%',
+                  background: !mining ? '#8a7a7a' : '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
                   borderRadius: 8,
-                  padding: "12px 32px",
+                  padding: '12px 32px',
                   fontWeight: 700,
                   fontSize: 20,
-                  cursor: !mining ? "not-allowed" : "pointer"
+                  cursor: !mining ? 'not-allowed' : 'pointer',
                 }}
               >
                 Stop
@@ -5682,11 +6739,12 @@ export default function Miner({
           </div>
 
           {coins >= totalCoinSupply && (
-            <div style={{ color: "#4ade80", fontFamily: "'DM Mono', monospace", marginTop: 4 }}>Total supply cap reached (21M).</div>
+            <div style={{ color: '#4ade80', fontFamily: "'DM Mono', monospace", marginTop: 4 }}>
+              Total supply cap reached (21M).
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 }
-

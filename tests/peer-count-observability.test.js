@@ -2,10 +2,7 @@
 
 const assert = require('assert');
 
-const {
-  countLiveReverseTunnelPeers,
-  summarizeDisplayedPeerCounts,
-} = require('../peer-count-observability');
+const { countLiveReverseTunnelPeers, summarizeDisplayedPeerCounts } = require('../peer-count-observability');
 
 function testIgnoresCoordinatorAndOnlyCountsLiveInboundTunnelPeers() {
   const nowMs = 1_000_000;
@@ -54,20 +51,23 @@ function testIgnoresCoordinatorAndOnlyCountsLiveInboundTunnelPeers() {
 }
 
 function testDisplayedPeerCountsDoNotIncludeLocalNode() {
-  assert.deepStrictEqual(
-    summarizeDisplayedPeerCounts({ healthyDistinct: 0, reverseTunnelDistinct: 0 }),
-    { activeCount: 0, onlineCount: 0, tunnelCount: 0 },
-  );
+  assert.deepStrictEqual(summarizeDisplayedPeerCounts({ healthyDistinct: 0, reverseTunnelDistinct: 0 }), {
+    activeCount: 0,
+    onlineCount: 0,
+    tunnelCount: 0,
+  });
 
-  assert.deepStrictEqual(
-    summarizeDisplayedPeerCounts({ healthyDistinct: 1, reverseTunnelDistinct: 0 }),
-    { activeCount: 1, onlineCount: 1, tunnelCount: 0 },
-  );
+  assert.deepStrictEqual(summarizeDisplayedPeerCounts({ healthyDistinct: 1, reverseTunnelDistinct: 0 }), {
+    activeCount: 1,
+    onlineCount: 1,
+    tunnelCount: 0,
+  });
 
-  assert.deepStrictEqual(
-    summarizeDisplayedPeerCounts({ healthyDistinct: 0, reverseTunnelDistinct: 2 }),
-    { activeCount: 0, onlineCount: 2, tunnelCount: 2 },
-  );
+  assert.deepStrictEqual(summarizeDisplayedPeerCounts({ healthyDistinct: 0, reverseTunnelDistinct: 2 }), {
+    activeCount: 0,
+    onlineCount: 2,
+    tunnelCount: 2,
+  });
 }
 
 function run() {

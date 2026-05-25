@@ -1,5 +1,4 @@
-﻿
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
 // Keep the GPU compositor active even when the window is minimized or occluded.
 // backgroundThrottling:false (set on the BrowserWindow) stops JS timer throttling but
 // Chromium's GPU process still pauses WebGL rasterisation for invisible windows.
@@ -22,19 +21,47 @@ const os = require('os');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const crypto = require('crypto');
-const { getBenchmarkCapabilities, runBackendBenchmark, setProbeHardwareSpec, getPendingProbe, submitProbeResult, getProbeHistory, getAttestHistory, issuePeerProbe, submitPeerProbeResult, getPeerProbeHistory, verifyCpuSpeedProof, verifyMemProof, computeGpuProbeExpectedHash, setCoordinatorIdentityKey, PROBE_INTERVAL_MS, getLocalProbeChain } = require('./backend-benchmark');
+const {
+  getBenchmarkCapabilities,
+  runBackendBenchmark,
+  setProbeHardwareSpec,
+  getPendingProbe,
+  submitProbeResult,
+  getProbeHistory,
+  getAttestHistory,
+  issuePeerProbe,
+  submitPeerProbeResult,
+  getPeerProbeHistory,
+  verifyCpuSpeedProof,
+  verifyMemProof,
+  computeGpuProbeExpectedHash,
+  setCoordinatorIdentityKey,
+  PROBE_INTERVAL_MS,
+  getLocalProbeChain,
+} = require('./backend-benchmark');
 const { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps } = require('./hardware-tables.cjs');
-const { setHardwareLoadPercent, stopHardwareLoad, getHardwareLoadState, configurePhysicalCores } = require('./hardware-load-controller');
+const {
+  setHardwareLoadPercent,
+  stopHardwareLoad,
+  getHardwareLoadState,
+  configurePhysicalCores,
+} = require('./hardware-load-controller');
 const si = require('systeminformation');
 const { createRoundLedger } = require('./round-ledger');
 const { buildOpsHealthResponse, checkLedgerNetworkAuth } = require('./ops-health');
 const { createRemoteSeedManifestManager } = require('./remote-seed-manifest');
 const { maybeRegisterReachableRequester: maybeRegisterReachableRequesterHelper } = require('./requester-registration');
-function getDataDir() { return path.join(os.homedir(), 'WattcoinMinerUserData'); }
-function getActiveNetwork() { return 'wtc-mainnet'; }
+function getDataDir() {
+  return path.join(os.homedir(), 'WattcoinMinerUserData');
+}
+function getActiveNetwork() {
+  return 'wtc-mainnet';
+}
 function refreshCoordinatorIdentityKey() {
   try {
-    const address = String(wtcNode && typeof wtcNode.getPrimaryAddress === 'function' ? wtcNode.getPrimaryAddress() : '').trim();
+    const address = String(
+      wtcNode && typeof wtcNode.getPrimaryAddress === 'function' ? wtcNode.getPrimaryAddress() : '',
+    ).trim();
     if (address) {
       walletAddressCache = { address, at: Date.now() };
       setCoordinatorIdentityKey(address);
@@ -68,13 +95,19 @@ const { countLiveReverseTunnelPeers, summarizeDisplayedPeerCounts } = require('.
 const { buildPeerDiscoverySnapshot } = require('./peer-discovery-observability');
 const { filterAdvertisedPeerUrls, obfuscatePeerUrl, resolvePeerPrivacySecret } = require('./peer-privacy');
 const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./peer-self-filter');
-const { getLocalSubnetProbeCandidates, selectDiscoveryPeerUrl, selectPreferredPeerUrl, sortPeerUrlsByPreference, checkHasKnownPrivateLanPeer } = require('./local-subnet-discovery');
+const {
+  getLocalSubnetProbeCandidates,
+  selectDiscoveryPeerUrl,
+  selectPreferredPeerUrl,
+  sortPeerUrlsByPreference,
+  checkHasKnownPrivateLanPeer,
+} = require('./local-subnet-discovery');
 const {
   normalizeProbeReceipt,
   getProbeReceiptSigningPayload,
   attachProbeReceiptSignature,
 } = require('./probe-attestation');
-const saleQueue    = require('./wtc-sale-queue');
+const saleQueue = require('./wtc-sale-queue');
 const stakingQueue = require('./wtc-staking-queue');
 const { isValidAddress: isValidWtcAddress, verifyWalletMessagePureJS } = require('./wtc-address');
 const { rewardForHeight } = require('./wtc-chain');
@@ -114,8 +147,8 @@ const ENDPOINT_RATE_LIMITS = {
   // prevent a compromised renderer from flooding the personal-mean sample buffer.
   'wattcoin-report-gpu-calibration': { windowMs: 10 * 60_000, max: 10, lockMs: 10 * 60_000 },
   // Probe endpoints are unauthenticated (peer tokens differ per machine) so rate-limit by IP.
-  'peer-probe-issue':  { windowMs: 60_000, max: 60,  lockMs: 5 * 60_000 },  // max 1/s per peer
-  'peer-probe-submit': { windowMs: 60_000, max: 60,  lockMs: 5 * 60_000 },
+  'peer-probe-issue': { windowMs: 60_000, max: 60, lockMs: 5 * 60_000 }, // max 1/s per peer
+  'peer-probe-submit': { windowMs: 60_000, max: 60, lockMs: 5 * 60_000 },
 };
 
 const endpointRateState = new Map();
@@ -151,7 +184,9 @@ function saveRateLock(key, lockedUntil) {
     let existing = {};
     try {
       existing = JSON.parse(fs.readFileSync(filePath, 'utf8')) || {};
-    } catch (_) { /* file absent is fine */ }
+    } catch (_) {
+      /* file absent is fine */
+    }
     // Prune expired entries while saving.
     const nowMs = Date.now();
     const fresh = {};
@@ -161,7 +196,9 @@ function saveRateLock(key, lockedUntil) {
     if (lockedUntil > nowMs) fresh[key] = lockedUntil;
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(fresh), 'utf8');
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 }
 
 // ── Hardware-authority state ─────────────────────────────────────────────────────
@@ -175,13 +212,13 @@ function saveRateLock(key, lockedUntil) {
 const TRUST_RESET_EPOCH = '2026-04-23-v1';
 
 let hwAuthority = {
-  trustScore:                 50,
-  hwHoldUntilMs:              0,
-  benchmarkOpsCalibration:    1.0,
-  benchmarkMemCalibration:    1.0,
-  benchmarkGpuCalibration:    1.0,
+  trustScore: 50,
+  hwHoldUntilMs: 0,
+  benchmarkOpsCalibration: 1.0,
+  benchmarkMemCalibration: 1.0,
+  benchmarkGpuCalibration: 1.0,
   consecutiveCleanBenchmarks: 0,
-  peerProbeVerifiedForRound:  false,  // set by wattcoin-submit-peer-probe-result; reset by settle
+  peerProbeVerifiedForRound: false, // set by wattcoin-submit-peer-probe-result; reset by settle
   // Commitment stored at mine time; verified at settle time to prevent swapping
   // a fake contribution in between mine and settle.
   pendingProofCommitment: '',
@@ -217,9 +254,10 @@ let hwAuthStateIsNew = false;
 
 function computeHwAuthSig(data) {
   // attestationState is always fully loaded (app.whenReady) before this is called.
-  return crypto.createHmac('sha256', Buffer.from(attestationState.secret, 'utf8'))
-               .update(JSON.stringify(data))
-               .digest('hex');
+  return crypto
+    .createHmac('sha256', Buffer.from(attestationState.secret, 'utf8'))
+    .update(JSON.stringify(data))
+    .digest('hex');
 }
 
 function loadHwAuthState() {
@@ -243,18 +281,19 @@ function loadHwAuthState() {
     // discard the stored trust score and reset to 50 (neutral) for this user.
     if (data.trustResetEpoch !== TRUST_RESET_EPOCH) {
       console.log('[hwAuth] Trust reset epoch changed - resetting trust score to 50.');
-      hwAuthority.trustScore    = 50;
+      hwAuthority.trustScore = 50;
       hwAuthority.hwHoldUntilMs = 0;
       saveHwAuthState();
       return;
     }
-    if (typeof data.trustScore               === 'number') hwAuthority.trustScore               = Math.max(0, Math.min(100, data.trustScore));
-    if (typeof data.hwHoldUntilMs            === 'number') hwAuthority.hwHoldUntilMs            = data.hwHoldUntilMs;
-    if (typeof data.lastHwResetAtMs          === 'number') hwAuthority.lastHwResetAtMs          = data.lastHwResetAtMs;
-    if (typeof data.lastSearchCacheClearAtMs === 'number') hwAuthority.lastSearchCacheClearAtMs = data.lastSearchCacheClearAtMs;
+    if (typeof data.trustScore === 'number') hwAuthority.trustScore = Math.max(0, Math.min(100, data.trustScore));
+    if (typeof data.hwHoldUntilMs === 'number') hwAuthority.hwHoldUntilMs = data.hwHoldUntilMs;
+    if (typeof data.lastHwResetAtMs === 'number') hwAuthority.lastHwResetAtMs = data.lastHwResetAtMs;
+    if (typeof data.lastSearchCacheClearAtMs === 'number')
+      hwAuthority.lastSearchCacheClearAtMs = data.lastSearchCacheClearAtMs;
     // If a 24-hour hold has naturally expired, restore trust to 25 (probationary restart).
     if (hwAuthority.hwHoldUntilMs > 0 && hwAuthority.hwHoldUntilMs <= Date.now() && hwAuthority.trustScore === 0) {
-      hwAuthority.trustScore    = 25;
+      hwAuthority.trustScore = 25;
       hwAuthority.hwHoldUntilMs = 0;
     }
   } catch (_) {
@@ -269,15 +308,14 @@ function loadHwAuthState() {
         if (fs.existsSync(atPath)) {
           const atParsed = JSON.parse(fs.readFileSync(atPath, 'utf8'));
           if (typeof atParsed.encryptedTrustBackup === 'string') {
-            const backupJson = safeStorage.decryptString(
-              Buffer.from(atParsed.encryptedTrustBackup, 'base64')
-            );
+            const backupJson = safeStorage.decryptString(Buffer.from(atParsed.encryptedTrustBackup, 'base64'));
             const backup = JSON.parse(backupJson);
             if (typeof backup.trustScore === 'number') {
-              hwAuthority.trustScore    = Math.max(0, Math.min(100, backup.trustScore));
+              hwAuthority.trustScore = Math.max(0, Math.min(100, backup.trustScore));
               hwAuthority.hwHoldUntilMs = typeof backup.hwHoldUntilMs === 'number' ? backup.hwHoldUntilMs : 0;
-              if (typeof backup.lastHwResetAtMs          === 'number') hwAuthority.lastHwResetAtMs          = backup.lastHwResetAtMs;
-              if (typeof backup.lastSearchCacheClearAtMs === 'number') hwAuthority.lastSearchCacheClearAtMs = backup.lastSearchCacheClearAtMs;
+              if (typeof backup.lastHwResetAtMs === 'number') hwAuthority.lastHwResetAtMs = backup.lastHwResetAtMs;
+              if (typeof backup.lastSearchCacheClearAtMs === 'number')
+                hwAuthority.lastSearchCacheClearAtMs = backup.lastSearchCacheClearAtMs;
               // Recreate the signed file so subsequent launches load normally.
               saveHwAuthState();
               console.log('[hwAuth] Trust state recovered from encrypted attestation backup.');
@@ -299,33 +337,35 @@ function saveHwAuthState() {
     const p = getHwAuthStatePath();
     fs.mkdirSync(path.dirname(p), { recursive: true });
     const data = {
-      trustScore:               hwAuthority.trustScore,
-      hwHoldUntilMs:            hwAuthority.hwHoldUntilMs,
-      lastHwResetAtMs:          hwAuthority.lastHwResetAtMs,
+      trustScore: hwAuthority.trustScore,
+      hwHoldUntilMs: hwAuthority.hwHoldUntilMs,
+      lastHwResetAtMs: hwAuthority.lastHwResetAtMs,
       lastSearchCacheClearAtMs: hwAuthority.lastSearchCacheClearAtMs,
-      trustResetEpoch:          TRUST_RESET_EPOCH,
+      trustResetEpoch: TRUST_RESET_EPOCH,
     };
     fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 
   // Write a DPAPI-encrypted backup of trust state into attestation-state.json so
   // that deleting hw-auth-state.json cannot be used to reset or clear trust / hw-hold.
   if (safeStorage && safeStorage.isEncryptionAvailable()) {
     try {
       const backupJson = JSON.stringify({
-        trustScore:               hwAuthority.trustScore,
-        hwHoldUntilMs:            hwAuthority.hwHoldUntilMs,
-        lastHwResetAtMs:          hwAuthority.lastHwResetAtMs,
+        trustScore: hwAuthority.trustScore,
+        hwHoldUntilMs: hwAuthority.hwHoldUntilMs,
+        lastHwResetAtMs: hwAuthority.lastHwResetAtMs,
         lastSearchCacheClearAtMs: hwAuthority.lastSearchCacheClearAtMs,
       });
       const encrypted = safeStorage.encryptString(backupJson).toString('base64');
       const atPath = getAttestationDbFilePath();
-      const atRaw = fs.existsSync(atPath)
-        ? JSON.parse(fs.readFileSync(atPath, 'utf8'))
-        : {};
+      const atRaw = fs.existsSync(atPath) ? JSON.parse(fs.readFileSync(atPath, 'utf8')) : {};
       atRaw.encryptedTrustBackup = encrypted;
       fs.writeFileSync(atPath, JSON.stringify(atRaw, null, 2), 'utf8');
-    } catch (_) { /* non-fatal */ }
+    } catch (_) {
+      /* non-fatal */
+    }
   }
 }
 
@@ -346,7 +386,7 @@ function isUnusableGpuIdentity(value) {
 
 async function resolveOsHardwareIdentity() {
   if (osHardwareIdentity) return osHardwareIdentity;
-  const cpuModel = (os.cpus()[0] && os.cpus()[0].model || '').trim();
+  const cpuModel = ((os.cpus()[0] && os.cpus()[0].model) || '').trim();
 
   // GPU: Electron's app.getGPUInfo('basic') returns renderer-independent GPU data.
   let gpuModels = [];
@@ -354,7 +394,7 @@ async function resolveOsHardwareIdentity() {
     const gpuInfo = await app.getGPUInfo('basic');
     if (gpuInfo && Array.isArray(gpuInfo.gpuDevice)) {
       gpuModels = gpuInfo.gpuDevice
-        .map(d => {
+        .map((d) => {
           const vendor = String(d.vendorString || d.driverVendor || d.vendor || '').trim();
           const model = String(d.deviceString || d.deviceName || d.name || '').trim();
           const named = `${vendor} ${model}`.replace(/\s+/g, ' ').trim();
@@ -362,21 +402,23 @@ async function resolveOsHardwareIdentity() {
           const fallbackId = String(d.deviceId || d.vendorId || '').trim();
           return fallbackId;
         })
-        .map(s => String(s || '').trim())
+        .map((s) => String(s || '').trim())
         .filter(Boolean);
     }
-  } catch (_) { /* GPU info unavailable — we'll skip GPU verification */ }
+  } catch (_) {
+    /* GPU info unavailable — we'll skip GPU verification */
+  }
 
   // If Electron GPU info didn't return useful model names, try systeminformation.
-  if (!gpuModels.length || gpuModels.every(g => isUnusableGpuIdentity(g))) {
+  if (!gpuModels.length || gpuModels.every((g) => isUnusableGpuIdentity(g))) {
     try {
       const graphics = await si.graphics();
       if (graphics && Array.isArray(graphics.controllers)) {
-        gpuModels = graphics.controllers
-          .map(c => (c.model || c.name || '').trim())
-          .filter(Boolean);
+        gpuModels = graphics.controllers.map((c) => (c.model || c.name || '').trim()).filter(Boolean);
       }
-    } catch (_) { /* non-fatal */ }
+    } catch (_) {
+      /* non-fatal */
+    }
   }
 
   // Chassis / device-type detection via systeminformation (main-process only).
@@ -384,17 +426,21 @@ async function resolveOsHardwareIdentity() {
   let deviceType = 'PC';
   try {
     const chassis = await si.chassis();
-    chassisType = String(chassis && chassis.type || '').trim();
+    chassisType = String((chassis && chassis.type) || '').trim();
     if (/notebook|laptop|portable/i.test(chassisType)) deviceType = 'Laptop';
     else if (/server/i.test(chassisType)) deviceType = 'Server';
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 
   // Additional laptop detection: battery presence is a strong signal.
   if (deviceType === 'PC') {
     try {
       const battery = await si.battery();
       if (battery && battery.hasBattery) deviceType = 'Laptop';
-    } catch (_) { /* non-fatal */ }
+    } catch (_) {
+      /* non-fatal */
+    }
   }
 
   // ── VM detection (multi-signal) ──────────────────────────────────────────
@@ -410,14 +456,16 @@ async function resolveOsHardwareIdentity() {
       vmType = String(sysInfo.virtual);
     }
     // Secondary: manufacturer / model strings that indicate virtualisation.
-    const mfr   = String(sysInfo && sysInfo.manufacturer || '').toLowerCase();
-    const model  = String(sysInfo && sysInfo.model || '').toLowerCase();
+    const mfr = String((sysInfo && sysInfo.manufacturer) || '').toLowerCase();
+    const model = String((sysInfo && sysInfo.model) || '').toLowerCase();
     const vmHints = /virtualbox|vmware|qemu|kvm|xen|hyper-v|parallels|bhyve|bochs|innotek|virtual machine/i;
     if (vmHints.test(mfr) || vmHints.test(model)) {
       isVM = true;
       if (!vmType) vmType = mfr || model;
     }
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 
   // Tertiary: CPU model string hints (some hypervisors leave traces).
   if (!isVM) {
@@ -431,14 +479,16 @@ async function resolveOsHardwareIdentity() {
   // Quaternary: GPU model hints — virtual display adapters.
   if (!isVM && gpuModels.length > 0) {
     const vmGpuHints = /virtualbox|vmware|microsoft basic|hyper-v|qxl|virtio|red hat|bochs/i;
-    if (gpuModels.some(g => vmGpuHints.test(g))) {
+    if (gpuModels.some((g) => vmGpuHints.test(g))) {
       isVM = true;
       vmType = 'virtual-gpu';
     }
   }
 
   osHardwareIdentity = { cpuModel, gpuModels, chassisType, deviceType, isVM, vmType };
-  console.log(`[HW-Identity] OS-level: cpu="${cpuModel}", gpus=[${gpuModels.join(', ')}], chassis="${chassisType}", type="${deviceType}", vm=${isVM}${isVM ? ' (' + vmType + ')' : ''}`);
+  console.log(
+    `[HW-Identity] OS-level: cpu="${cpuModel}", gpus=[${gpuModels.join(', ')}], chassis="${chassisType}", type="${deviceType}", vm=${isVM}${isVM ? ' (' + vmType + ')' : ''}`,
+  );
   return osHardwareIdentity;
 }
 
@@ -456,17 +506,18 @@ function normalizeWattageText(text) {
 function parseBestWattage(text) {
   const normalized = normalizeWattageText(text);
   const re = /\b(\d{1,3}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/g;
-  let best = null, bestScore = -Infinity;
+  let best = null,
+    bestScore = -Infinity;
   let m;
   while ((m = re.exec(normalized)) !== null) {
     const w = parseFloat(m[1]);
     const ctx = normalized.substring(Math.max(0, m.index - 80), m.index + m[0].length + 80).toLowerCase();
     let score = 0;
-    if (/\btdp\b/.test(ctx))                  score += 3;
+    if (/\btdp\b/.test(ctx)) score += 3;
     if (/consumption|under load|max.{0,10}power|full load|power draw|stress/i.test(ctx)) score += 2;
-    if (/rated|maximum|peak/i.test(ctx))       score += 1;
+    if (/rated|maximum|peak/i.test(ctx)) score += 1;
     if (/adapter|charger|power supply|ac adapter|psu/i.test(ctx)) score -= 3;
-    if (/idle|sleep|standby/i.test(ctx))       score -= 2;
+    if (/idle|sleep|standby/i.test(ctx)) score -= 2;
     if (score > bestScore || (score === bestScore && best === null)) {
       best = Math.round(w);
       bestScore = score;
@@ -484,43 +535,57 @@ const _mainTdpCache = new Map(); // model → { tdpW, ts }
 const _MAIN_TDP_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 function fetchTdpFromBrave(modelString) {
-  const clean = modelString.replace(/\(R\)|\(TM\)/g, '').replace(/\s+/g, ' ').trim();
+  const clean = modelString
+    .replace(/\(R\)|\(TM\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!clean) return Promise.resolve(null);
 
   // Check cache.
   const cached = _mainTdpCache.get(clean);
-  if (cached && (Date.now() - cached.ts < _MAIN_TDP_CACHE_TTL_MS)) return Promise.resolve(cached.tdpW);
+  if (cached && Date.now() - cached.ts < _MAIN_TDP_CACHE_TTL_MS) return Promise.resolve(cached.tdpW);
 
   return new Promise((resolve) => {
     try {
       const proxyUrl = new URL(BRAVE_TDP_PROXY_URL);
       proxyUrl.searchParams.set('gpu', clean);
-      const req = https.request(proxyUrl, {
-        method: 'GET',
-        timeout: 15000,
-        agent: false,
-        headers: {
-          'User-Agent': 'wattcoin-miner/1.0 (power-lookup)',
-          'Accept': 'application/json',
+      const req = https.request(
+        proxyUrl,
+        {
+          method: 'GET',
+          timeout: 15000,
+          agent: false,
+          headers: {
+            'User-Agent': 'wattcoin-miner/1.0 (power-lookup)',
+            Accept: 'application/json',
+          },
         },
-      }, (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => {
-          try {
-            const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-            const answer = data && data.ok && data.answer ? data.answer : null;
-            const tdpW = answer ? parseBestWattage(answer) : null;
-            if (tdpW !== null) _mainTdpCache.set(clean, { tdpW, ts: Date.now() });
-            resolve(tdpW);
-          } catch (_) { resolve(null); }
-        });
-        res.on('error', () => resolve(null));
-      });
+        (res) => {
+          const chunks = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            try {
+              const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+              const answer = data && data.ok && data.answer ? data.answer : null;
+              const tdpW = answer ? parseBestWattage(answer) : null;
+              if (tdpW !== null) _mainTdpCache.set(clean, { tdpW, ts: Date.now() });
+              resolve(tdpW);
+            } catch (_) {
+              resolve(null);
+            }
+          });
+          res.on('error', () => resolve(null));
+        },
+      );
       req.on('error', () => resolve(null));
-      req.on('timeout', () => { req.destroy(); resolve(null); });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(null);
+      });
       req.end();
-    } catch (_) { resolve(null); }
+    } catch (_) {
+      resolve(null);
+    }
   });
 }
 
@@ -529,22 +594,21 @@ function fetchTdpFromBrave(modelString) {
 // uses case-insensitive includes in both directions (OS strings may be shorter
 // or longer than renderer strings).
 function hardwareModelsMatch(osModel, declaredModel) {
-  const normalize = s => String(s || '')
-    .normalize('NFKC')
-    // Handle common mojibake variants of trademark symbols from mixed encodings.
-    .replace(/Γäó|â„¢|™/g, ' ')
-    // Handle collapsed trademark text forms (e.g. CoreTM).
-    .replace(/([a-z])tm\b/gi, '$1')
-    .replace(/\b(tm|trademark|registered)\b/gi, ' ')
-    .replace(/\(R\)|\(TM\)/gi, '')
-    .replace(/@.*$/i, '')
-    .replace(/[^\x20-\x7E]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-  const strip = s => s
-    .replace(/\s+/g, ' ')
-    .trim();
+  const normalize = (s) =>
+    String(s || '')
+      .normalize('NFKC')
+      // Handle common mojibake variants of trademark symbols from mixed encodings.
+      .replace(/Γäó|â„¢|™/g, ' ')
+      // Handle collapsed trademark text forms (e.g. CoreTM).
+      .replace(/([a-z])tm\b/gi, '$1')
+      .replace(/\b(tm|trademark|registered)\b/gi, ' ')
+      .replace(/\(R\)|\(TM\)/gi, '')
+      .replace(/@.*$/i, '')
+      .replace(/[^\x20-\x7E]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  const strip = (s) => s.replace(/\s+/g, ' ').trim();
   const a = normalize(strip(osModel));
   const b = normalize(strip(declaredModel));
   if (!a || !b) return false;
@@ -553,9 +617,9 @@ function hardwareModelsMatch(osModel, declaredModel) {
   // CPU/GPU model token fallback: if both contain the same key model token
   // (e.g. i5-3320m, rtx-4090), treat as equivalent despite vendor/prefix noise.
   const tokenRe = /\b(?:[a-z]+-)?[a-z]?\d[\w-]{2,}\b/gi;
-  const aTokens = new Set((a.match(tokenRe) || []).map(t => t.toLowerCase()));
-  const bTokens = (b.match(tokenRe) || []).map(t => t.toLowerCase());
-  return bTokens.some(t => aTokens.has(t));
+  const aTokens = new Set((a.match(tokenRe) || []).map((t) => t.toLowerCase()));
+  const bTokens = (b.match(tokenRe) || []).map((t) => t.toLowerCase());
+  return bTokens.some((t) => aTokens.has(t));
 }
 
 // ── Hardware fingerprint & per-wallet benchmark history ──────────────────────
@@ -568,10 +632,10 @@ function hardwareModelsMatch(osModel, declaredModel) {
 // wallet address.  Once HISTORY_ENROLL_COUNT samples are collected, the personal
 // mean replaces the generic hardware-table reference for calibration, giving each
 // machine tighter and more accurate per-session tolerances.
-const HW_FINGERPRINT_FILE_NAME    = 'hw-fingerprint.json';
+const HW_FINGERPRINT_FILE_NAME = 'hw-fingerprint.json';
 const BENCHMARK_HISTORY_FILE_NAME = 'benchmark-history.json';
-const HISTORY_ENROLL_COUNT = 8;   // samples before personal mean starts blending in
-const HISTORY_MAX_SAMPLES  = 20;  // rolling window size
+const HISTORY_ENROLL_COUNT = 8; // samples before personal mean starts blending in
+const HISTORY_MAX_SAMPLES = 20; // rolling window size
 
 function getHwFingerprintPath() {
   return path.join(app.getPath('userData'), HW_FINGERPRINT_FILE_NAME);
@@ -583,7 +647,7 @@ function getBenchmarkHistoryPath() {
 
 function loadHwFingerprint() {
   try {
-    const raw    = fs.readFileSync(getHwFingerprintPath(), 'utf8');
+    const raw = fs.readFileSync(getHwFingerprintPath(), 'utf8');
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
     const { sig, ...data } = parsed;
@@ -605,11 +669,15 @@ function saveHwFingerprint(data) {
     const p = getHwFingerprintPath();
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 }
 
 function clearHwFingerprint() {
-  try { fs.unlinkSync(getHwFingerprintPath()); } catch (_) {}
+  try {
+    fs.unlinkSync(getHwFingerprintPath());
+  } catch (_) {}
 }
 
 function normalizeGpuFingerprintValue(gpuModels) {
@@ -622,8 +690,8 @@ function normalizeGpuFingerprintValue(gpuModels) {
 
 function formatHardwareChangeList(previousDescriptor, nextDescriptor) {
   const changes = [];
-  const previousCpu = String(previousDescriptor && previousDescriptor.cpuModel || '').trim();
-  const nextCpu = String(nextDescriptor && nextDescriptor.cpuModel || '').trim();
+  const previousCpu = String((previousDescriptor && previousDescriptor.cpuModel) || '').trim();
+  const nextCpu = String((nextDescriptor && nextDescriptor.cpuModel) || '').trim();
   if (previousCpu !== nextCpu) {
     changes.push(`CPU: ${previousCpu || 'unknown'} -> ${nextCpu || 'unknown'}`);
   }
@@ -634,20 +702,20 @@ function formatHardwareChangeList(previousDescriptor, nextDescriptor) {
     changes.push(`GPU: ${previousGpu.join(', ') || 'unknown'} -> ${nextGpu.join(', ') || 'unknown'}`);
   }
 
-  const previousMemType = String(previousDescriptor && previousDescriptor.memType || '').trim();
-  const nextMemType = String(nextDescriptor && nextDescriptor.memType || '').trim();
+  const previousMemType = String((previousDescriptor && previousDescriptor.memType) || '').trim();
+  const nextMemType = String((nextDescriptor && nextDescriptor.memType) || '').trim();
   if (previousMemType !== nextMemType) {
     changes.push(`Memory type: ${previousMemType || 'unknown'} -> ${nextMemType || 'unknown'}`);
   }
 
-  const previousMemSpeed = Number(previousDescriptor && previousDescriptor.memSpeedMhz || 0);
-  const nextMemSpeed = Number(nextDescriptor && nextDescriptor.memSpeedMhz || 0);
+  const previousMemSpeed = Number((previousDescriptor && previousDescriptor.memSpeedMhz) || 0);
+  const nextMemSpeed = Number((nextDescriptor && nextDescriptor.memSpeedMhz) || 0);
   if (previousMemSpeed !== nextMemSpeed) {
     changes.push(`Memory speed: ${previousMemSpeed || 0} MHz -> ${nextMemSpeed || 0} MHz`);
   }
 
-  const previousMemSticks = Number(previousDescriptor && previousDescriptor.memSticks || 0);
-  const nextMemSticks = Number(nextDescriptor && nextDescriptor.memSticks || 0);
+  const previousMemSticks = Number((previousDescriptor && previousDescriptor.memSticks) || 0);
+  const nextMemSticks = Number((nextDescriptor && nextDescriptor.memSticks) || 0);
   if (previousMemSticks !== nextMemSticks) {
     changes.push(`Memory modules: ${previousMemSticks || 0} -> ${nextMemSticks || 0}`);
   }
@@ -658,7 +726,7 @@ function formatHardwareChangeList(previousDescriptor, nextDescriptor) {
 function loadBenchmarkHistory() {
   const empty = { cpuSamples: [], memSamples: [], gpuSamples: [], jitterSamples: [] };
   try {
-    const raw    = fs.readFileSync(getBenchmarkHistoryPath(), 'utf8');
+    const raw = fs.readFileSync(getBenchmarkHistoryPath(), 'utf8');
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return empty;
     const { sig, ...data } = parsed;
@@ -670,10 +738,12 @@ function loadBenchmarkHistory() {
       }
     }
     return {
-      cpuSamples:    Array.isArray(data.cpuSamples)    ? data.cpuSamples.map(Number).filter(v => isFinite(v) && v > 0)  : [],
-      memSamples:    Array.isArray(data.memSamples)    ? data.memSamples.map(Number).filter(v => isFinite(v) && v > 0)  : [],
-      gpuSamples:    Array.isArray(data.gpuSamples)    ? data.gpuSamples.map(Number).filter(v => isFinite(v) && v > 0)  : [],
-      jitterSamples: Array.isArray(data.jitterSamples) ? data.jitterSamples.map(Number).filter(v => isFinite(v) && v >= 0) : [],
+      cpuSamples: Array.isArray(data.cpuSamples) ? data.cpuSamples.map(Number).filter((v) => isFinite(v) && v > 0) : [],
+      memSamples: Array.isArray(data.memSamples) ? data.memSamples.map(Number).filter((v) => isFinite(v) && v > 0) : [],
+      gpuSamples: Array.isArray(data.gpuSamples) ? data.gpuSamples.map(Number).filter((v) => isFinite(v) && v > 0) : [],
+      jitterSamples: Array.isArray(data.jitterSamples)
+        ? data.jitterSamples.map(Number).filter((v) => isFinite(v) && v >= 0)
+        : [],
     };
   } catch (_) {
     return empty;
@@ -682,20 +752,24 @@ function loadBenchmarkHistory() {
 
 function saveBenchmarkHistory(history) {
   try {
-    const p    = getBenchmarkHistoryPath();
+    const p = getBenchmarkHistoryPath();
     const data = {
-      cpuSamples:    history.cpuSamples,
-      memSamples:    history.memSamples,
-      gpuSamples:    history.gpuSamples,
+      cpuSamples: history.cpuSamples,
+      memSamples: history.memSamples,
+      gpuSamples: history.gpuSamples,
       jitterSamples: history.jitterSamples,
     };
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 }
 
 function clearBenchmarkHistory() {
-  try { fs.unlinkSync(getBenchmarkHistoryPath()); } catch (_) {}
+  try {
+    fs.unlinkSync(getBenchmarkHistoryPath());
+  } catch (_) {}
 }
 
 // Append a new sample to a rolling window, rejecting clear outliers.
@@ -704,14 +778,12 @@ function clearBenchmarkHistory() {
 function appendBenchmarkSample(samples, newValue) {
   if (samples.length >= 4) {
     const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-    if (newValue > mean * 2.5 || newValue < mean * 0.40) {
+    if (newValue > mean * 2.5 || newValue < mean * 0.4) {
       return samples; // outlier — reject without adding
     }
   }
   const updated = [...samples, newValue];
-  return updated.length > HISTORY_MAX_SAMPLES
-    ? updated.slice(updated.length - HISTORY_MAX_SAMPLES)
-    : updated;
+  return updated.length > HISTORY_MAX_SAMPLES ? updated.slice(updated.length - HISTORY_MAX_SAMPLES) : updated;
 }
 
 // Return a blended reference: before enrollment the hardware-table value dominates;
@@ -719,10 +791,8 @@ function appendBenchmarkSample(samples, newValue) {
 function getPersonalReference(samples, tableValue) {
   if (samples.length < HISTORY_ENROLL_COUNT || samples.length === 0) return tableValue;
   const personalMean = samples.reduce((a, b) => a + b, 0) / samples.length;
-  const blendFactor  = Math.min(1.0, samples.length / HISTORY_MAX_SAMPLES);
-  return tableValue > 0
-    ? tableValue * (1 - blendFactor) + personalMean * blendFactor
-    : personalMean;
+  const blendFactor = Math.min(1.0, samples.length / HISTORY_MAX_SAMPLES);
+  return tableValue > 0 ? tableValue * (1 - blendFactor) + personalMean * blendFactor : personalMean;
 }
 
 let startupTraceEnabled = false;
@@ -756,7 +826,9 @@ function writeStartupTrace(event, details = {}) {
       if (stat.size >= STARTUP_TRACE_MAX_BYTES) {
         fs.writeFileSync(filePath, '', 'utf8');
       }
-    } catch (_) { /* file not yet created — fine */ }
+    } catch (_) {
+      /* file not yet created — fine */
+    }
     const line = JSON.stringify({
       ts: new Date().toISOString(),
       event,
@@ -787,12 +859,21 @@ function getCliCommandName(args = []) {
   return '';
 }
 
-const roundLedger = createRoundLedger({ baseDir: getWalletDataDir(), signingSecret: () => { try { return attestationState && attestationState.secret; } catch (_) { return null; } } });
+const roundLedger = createRoundLedger({
+  baseDir: getWalletDataDir(),
+  signingSecret: () => {
+    try {
+      return attestationState && attestationState.secret;
+    } catch (_) {
+      return null;
+    }
+  },
+});
 const LEDGER_NETWORK_BODY_MAX_BYTES = 64 * 1024;
 const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
 let ledgerNetworkServer = null;
-let wtcNode = null;  // WTC native chain node (initialized in app.whenReady)
-let mineBlockBusy = false;   // prevents concurrent mineBlock calls (IPC + flush loop)
+let wtcNode = null; // WTC native chain node (initialized in app.whenReady)
+let mineBlockBusy = false; // prevents concurrent mineBlock calls (IPC + flush loop)
 let bundledSeedPeersCache = null;
 let remoteSeedPeerRefreshTimer = null;
 
@@ -804,8 +885,8 @@ let remoteSeedPeerRefreshTimer = null;
 // Legacy `ledgerPeers` entries are treated as bootstrap seed peers, not as
 // a separate static active-peer bucket.
 const PEER_DISCOVERY_PORT = 39311;
-const PEER_DISCOVERY_MCAST = '239.0.52.67';  // administratively-scoped multicast, LAN-only
-const PEER_BEACON_INTERVAL_MS = 120_000;      // 2 min — low-rate discovery
+const PEER_DISCOVERY_MCAST = '239.0.52.67'; // administratively-scoped multicast, LAN-only
+const PEER_BEACON_INTERVAL_MS = 120_000; // 2 min — low-rate discovery
 const PEER_STALE_THRESHOLD_MS = 5 * 60_000; // 5 min without beacon â†’ evict
 const PEER_EXCHANGE_TARGET_LIMIT = 4;
 const PEER_REACHABILITY_RETRY_MS = 2 * 60_000;
@@ -829,19 +910,15 @@ const AUTO_PUBLIC_IP_REFRESH_INTERVAL_MS = 60_000;
 const REMOTE_SEED_MANIFEST_REFRESH_INTERVAL_MS = 5 * 60_000;
 const REMOTE_SEED_MANIFEST_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_REMOTE_SEED_MANIFEST_URLS = [];
-const AUTO_PUBLIC_IP_SERVICES = [
-  'https://api.ipify.org',
-  'https://ifconfig.me/ip',
-  'https://ident.me',
-];
+const AUTO_PUBLIC_IP_SERVICES = ['https://api.ipify.org', 'https://ifconfig.me/ip', 'https://ident.me'];
 const DEPRECATED_PEER_ENDPOINTS = [
   { hostParts: ['91', '95', '15', '55'], port: 39310 },
   { hostParts: ['62', '65', '200', '145'], port: 39310 },
 ];
 const DEPRECATED_PEER_URLS = new Set(
-  DEPRECATED_PEER_ENDPOINTS
-    .map(({ hostParts, port }) => normalizePeerUrl(`http://${(hostParts || []).join('.')}:${port}`))
-    .filter(Boolean)
+  DEPRECATED_PEER_ENDPOINTS.map(({ hostParts, port }) =>
+    normalizePeerUrl(`http://${(hostParts || []).join('.')}:${port}`),
+  ).filter(Boolean),
 );
 const DISCOVERED_SEED_PEER_CACHE_FILE_NAME = 'discovered-seed-peer-cache.json';
 let peerDiscoverySocket = null;
@@ -911,9 +988,7 @@ function normalizePeerUrl(candidate) {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
     const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80));
     if (!Number.isInteger(port) || port <= 1023) return '';
-    const pathname = parsed.pathname && parsed.pathname !== '/'
-      ? parsed.pathname.replace(/\/+$/, '')
-      : '';
+    const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/+$/, '') : '';
     return `${parsed.protocol}//${parsed.hostname}:${port}${pathname}`;
   } catch (_) {
     return '';
@@ -954,10 +1029,9 @@ function isPrivateIpv4(host) {
 function isPrivateIpv6(host) {
   const normalized = normalizeIpLiteral(host).toLowerCase();
   if (net.isIP(normalized) !== 6) return false;
-  return normalized === '::1'
-    || normalized.startsWith('fc')
-    || normalized.startsWith('fd')
-    || normalized.startsWith('fe80:');
+  return (
+    normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:')
+  );
 }
 
 function isPublicPeerHost(host) {
@@ -984,30 +1058,34 @@ function formatPeerHostForUrl(host) {
 function requestExternalResponse(url, timeoutMs = AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const req = https.get(url, {
-      timeout: timeoutMs,
-      headers: {
-        'User-Agent': 'wattcoin-miner/1.0 (public-ip-detect)',
-        'Accept': 'text/plain',
+    const req = https.get(
+      url,
+      {
+        timeout: timeoutMs,
+        headers: {
+          'User-Agent': 'wattcoin-miner/1.0 (public-ip-detect)',
+          Accept: 'text/plain',
+        },
       },
-    }, (res) => {
-      const chunks = [];
-      res.on('data', (chunk) => chunks.push(chunk));
-      res.on('end', () => {
-        if (settled) return;
-        settled = true;
-        resolve({
-          statusCode: Number(res.statusCode) || 0,
-          contentType: String((res.headers && res.headers['content-type']) || '').trim(),
-          body: Buffer.concat(chunks).toString('utf8').trim(),
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          if (settled) return;
+          settled = true;
+          resolve({
+            statusCode: Number(res.statusCode) || 0,
+            contentType: String((res.headers && res.headers['content-type']) || '').trim(),
+            body: Buffer.concat(chunks).toString('utf8').trim(),
+          });
         });
-      });
-      res.on('error', (err) => {
-        if (settled) return;
-        settled = true;
-        reject(err);
-      });
-    });
+        res.on('error', (err) => {
+          if (settled) return;
+          settled = true;
+          reject(err);
+        });
+      },
+    );
     req.on('timeout', () => {
       if (settled) return;
       settled = true;
@@ -1208,7 +1286,9 @@ function isLocallyServedReverseTunnelPeerUrl(candidate, settings = getLedgerNetw
     const parsed = new URL(normalized);
     const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80));
     if (port !== Number(settings && settings.listenPort)) return false;
-    const segments = String(parsed.pathname || '').split('/').filter(Boolean);
+    const segments = String(parsed.pathname || '')
+      .split('/')
+      .filter(Boolean);
     const tunnelId = segments.length >= 4 ? String(segments[3] || '').trim() : '';
     if (!tunnelId) return false;
     const session = reverseTunnelSessions.get(tunnelId);
@@ -1273,12 +1353,14 @@ function extractReachablePeerCandidates(req, settings = getLedgerNetworkSettings
     .split(',')
     .map((entry) => normalizePeerUrl(entry))
     .filter(Boolean);
-  const declaredPort = Math.max(1, Number(req.headers['x-wtc-peer-port']) || Number(settings && settings.listenPort) || 0);
+  const declaredPort = Math.max(
+    1,
+    Number(req.headers['x-wtc-peer-port']) || Number(settings && settings.listenPort) || 0,
+  );
   const inferredSocketUrl = buildPeerUrlFromSocket(req.socket && req.socket.remoteAddress, declaredPort);
-  return sortPeerUrlsByPreference([
-    ...announcedUrls,
-    inferredSocketUrl,
-  ].filter((candidate) => candidate && !isSelfPeerUrl(candidate)));
+  return sortPeerUrlsByPreference(
+    [...announcedUrls, inferredSocketUrl].filter((candidate) => candidate && !isSelfPeerUrl(candidate)),
+  );
 }
 
 function shouldAttemptPeerReachability(candidate, nowMs = Date.now()) {
@@ -1286,8 +1368,8 @@ function shouldAttemptPeerReachability(candidate, nowMs = Date.now()) {
   if (!normalized || isPeerUrlBanned(normalized) || isSelfPeerUrl(normalized)) return false;
   const cached = peerReachabilityCache.get(normalized);
   if (!cached) return true;
-  if (cached.ok && (nowMs - Number(cached.lastSuccessAtMs || 0)) < PEER_REACHABILITY_SUCCESS_TTL_MS) return false;
-  return (nowMs - Number(cached.lastAttemptAtMs || 0)) >= PEER_REACHABILITY_RETRY_MS;
+  if (cached.ok && nowMs - Number(cached.lastSuccessAtMs || 0) < PEER_REACHABILITY_SUCCESS_TTL_MS) return false;
+  return nowMs - Number(cached.lastAttemptAtMs || 0) >= PEER_REACHABILITY_RETRY_MS;
 }
 
 function scheduleDiscoveredSeedPeerCacheSave() {
@@ -1299,7 +1381,7 @@ function scheduleDiscoveredSeedPeerCacheSave() {
       const now = Date.now();
       const peers = [];
       for (const [url, info] of discoveredPeers.entries()) {
-        if (!info || (now - Number(info.lastSeenMs || 0)) > PEER_STALE_THRESHOLD_MS) continue;
+        if (!info || now - Number(info.lastSeenMs || 0) > PEER_STALE_THRESHOLD_MS) continue;
         peers.push({
           url,
           lastSeenMs: Number(info.lastSeenMs) || now,
@@ -1314,9 +1396,13 @@ function scheduleDiscoveredSeedPeerCacheSave() {
   }, 250);
 }
 
-function rememberDiscoveredPeer(peerUrl, { source = 'peer-exchange', seenAtMs = Date.now(), quiet = false, peerIdentity = '' } = {}) {
+function rememberDiscoveredPeer(
+  peerUrl,
+  { source = 'peer-exchange', seenAtMs = Date.now(), quiet = false, peerIdentity = '' } = {},
+) {
   const normalized = normalizePeerUrl(peerUrl);
-  if (!normalized || isDeprecatedPeerUrl(normalized) || isSelfPeerUrl(normalized) || isPeerUrlBanned(normalized)) return false;
+  if (!normalized || isDeprecatedPeerUrl(normalized) || isSelfPeerUrl(normalized) || isPeerUrlBanned(normalized))
+    return false;
 
   const existing = discoveredPeers.get(normalized);
   const effectiveSource = String(source || (existing && existing.source) || 'peer-exchange');
@@ -1334,13 +1420,14 @@ function rememberDiscoveredPeer(peerUrl, { source = 'peer-exchange', seenAtMs = 
     sources: Array.from(sources).sort(),
   };
   const isNew = !existing;
-  const changed = isNew
-    || next.lastSeenMs !== existing.lastSeenMs
-    || next.source !== existing.source
-    || String(next.peerIdentity || '') !== String(existing && existing.peerIdentity || '')
-    || Boolean(next.seenThisSession) !== Boolean(existing && existing.seenThisSession)
-    || Boolean(next.restoredFromCache) !== Boolean(existing && existing.restoredFromCache)
-    || JSON.stringify(next.sources) !== JSON.stringify(existing.sources || []);
+  const changed =
+    isNew ||
+    next.lastSeenMs !== existing.lastSeenMs ||
+    next.source !== existing.source ||
+    String(next.peerIdentity || '') !== String((existing && existing.peerIdentity) || '') ||
+    Boolean(next.seenThisSession) !== Boolean(existing && existing.seenThisSession) ||
+    Boolean(next.restoredFromCache) !== Boolean(existing && existing.restoredFromCache) ||
+    JSON.stringify(next.sources) !== JSON.stringify(existing.sources || []);
 
   discoveredPeers.set(normalized, next);
   if (isNew && !quiet) {
@@ -1376,7 +1463,7 @@ function forgetDiscoveredPeersByIdentity(peerIdentity, { keepUrl = '' } = {}) {
   const normalizedKeepUrl = normalizePeerUrl(keepUrl);
   let removed = 0;
   for (const [peerUrl, info] of discoveredPeers.entries()) {
-    if (String(info && info.peerIdentity || '').trim() !== normalizedIdentity) continue;
+    if (String((info && info.peerIdentity) || '').trim() !== normalizedIdentity) continue;
     if (normalizedKeepUrl && peerUrl === normalizedKeepUrl) continue;
     discoveredPeers.delete(peerUrl);
     removed += 1;
@@ -1399,7 +1486,9 @@ function isReverseTunnelPeerUrl(peerUrl) {
 function extractTunnelIdFromUrl(peerUrl) {
   try {
     const parsed = new URL(peerUrl);
-    const segments = String(parsed.pathname || '').split('/').filter(Boolean);
+    const segments = String(parsed.pathname || '')
+      .split('/')
+      .filter(Boolean);
     // URL pattern: /api/v1/tunnel/<tunnelId>
     return segments.length >= 4 ? decodeURIComponent(segments[3]) : '';
   } catch (_) {
@@ -1421,7 +1510,7 @@ function getLocalTunnelPeerLiveness(peerUrl) {
     session &&
     session.socket &&
     session.socket.readyState === WebSocket.OPEN &&
-    (Date.now() - Number(session.lastSeenAtMs || 0)) <= REVERSE_TUNNEL_LIVE_THRESHOLD_MS
+    Date.now() - Number(session.lastSeenAtMs || 0) <= REVERSE_TUNNEL_LIVE_THRESHOLD_MS
   ) {
     return { live: true, peerIdentity: String(session.peerIdentity || '').trim() };
   }
@@ -1458,7 +1547,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings()) 
         source: 'peer-probe-select',
       });
       if (!tip || !tip.ok) return;
-      const peerIdentity = String(tip && tip.peerIdentity || '').trim();
+      const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) return;
       const peerKey = getPeerIdentityKey(peerUrl, tip);
       if (distinctPeerKeys.has(peerKey)) return;
@@ -1480,7 +1569,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings()) 
 function pruneDiscoveredPeers(nowMs = Date.now()) {
   let changed = false;
   for (const [url, info] of discoveredPeers.entries()) {
-    if (!info || (nowMs - Number(info.lastSeenMs || 0)) > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(url)) {
+    if (!info || nowMs - Number(info.lastSeenMs || 0) > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(url)) {
       discoveredPeers.delete(url);
       changed = true;
     }
@@ -1499,17 +1588,27 @@ function loadDiscoveredSeedPeerCache() {
     let restored = 0;
     for (const entry of entries) {
       const lastSeenMs = Number(entry && entry.lastSeenMs) || 0;
-      if (lastSeenMs <= 0 || (now - lastSeenMs) > PEER_STALE_THRESHOLD_MS) continue;
+      if (lastSeenMs <= 0 || now - lastSeenMs > PEER_STALE_THRESHOLD_MS) continue;
       if (Array.isArray(entry && entry.sources) && entry.sources.length > 0) {
         for (const source of entry.sources) {
-          const wasNew = rememberDiscoveredPeer(entry && entry.url, { source: 'seed-cache', seenAtMs: lastSeenMs, quiet: true, peerIdentity: String(entry && entry.peerIdentity || '').trim() });
+          const wasNew = rememberDiscoveredPeer(entry && entry.url, {
+            source: 'seed-cache',
+            seenAtMs: lastSeenMs,
+            quiet: true,
+            peerIdentity: String((entry && entry.peerIdentity) || '').trim(),
+          });
           const normalized = normalizePeerUrl(entry && entry.url);
           if (normalized && discoveredPeers.has(normalized)) {
             const current = discoveredPeers.get(normalized);
             discoveredPeers.set(normalized, {
               ...current,
               source: String(source || (current && current.source) || 'seed-cache'),
-              sources: Array.from(new Set([...(Array.isArray(current && current.sources) ? current.sources : []), String(source || 'seed-cache')])).sort(),
+              sources: Array.from(
+                new Set([
+                  ...(Array.isArray(current && current.sources) ? current.sources : []),
+                  String(source || 'seed-cache'),
+                ]),
+              ).sort(),
               restoredFromCache: true,
               seenThisSession: Boolean(current && current.seenThisSession),
             });
@@ -1518,12 +1617,14 @@ function loadDiscoveredSeedPeerCache() {
             restored += 1;
           }
         }
-      } else if (rememberDiscoveredPeer(entry && entry.url, {
-        source: 'seed-cache',
-        seenAtMs: lastSeenMs,
-        quiet: true,
-        peerIdentity: String(entry && entry.peerIdentity || '').trim(),
-      })) {
+      } else if (
+        rememberDiscoveredPeer(entry && entry.url, {
+          source: 'seed-cache',
+          seenAtMs: lastSeenMs,
+          quiet: true,
+          peerIdentity: String((entry && entry.peerIdentity) || '').trim(),
+        })
+      ) {
         restored += 1;
         const normalized = normalizePeerUrl(entry && entry.url);
         if (normalized && discoveredPeers.has(normalized)) {
@@ -1550,12 +1651,8 @@ function buildAdvertisedPeerList(settings) {
   const localPeerIdentity = getLocalPeerIdentity();
   const addPeer = (peerUrl, source, lastSeenMs = Date.now(), { allowSelf = false, peerIdentity = '' } = {}) => {
     const normalized = normalizePeerUrl(peerUrl);
-    if (
-      !normalized
-      || seen.has(normalized)
-      || (!allowSelf && isSelfPeerUrl(normalized))
-      || isPeerUrlBanned(normalized)
-    ) return;
+    if (!normalized || seen.has(normalized) || (!allowSelf && isSelfPeerUrl(normalized)) || isPeerUrlBanned(normalized))
+      return;
     seen.add(normalized);
     const normalizedIdentity = String(peerIdentity || '').trim();
     peers.push({
@@ -1573,7 +1670,7 @@ function buildAdvertisedPeerList(settings) {
   for (const peerUrl of (settings && settings.seedPeers) || []) addPeer(peerUrl, 'seed');
   for (const [peerUrl, info] of discoveredPeers.entries()) {
     addPeer(peerUrl, (info && info.source) || 'peer-exchange', (info && info.lastSeenMs) || Date.now(), {
-      peerIdentity: String(info && info.peerIdentity || '').trim(),
+      peerIdentity: String((info && info.peerIdentity) || '').trim(),
     });
   }
   return peers.slice(0, 64);
@@ -1587,7 +1684,8 @@ function getLedgerListenUrls(settings) {
 
   const { networkInterfaces } = require('os');
   const ifaces = networkInterfaces();
-  const addresses = Object.values(ifaces).flat()
+  const addresses = Object.values(ifaces)
+    .flat()
     .filter((info) => info && info.family === 'IPv4' && !info.internal)
     .map((info) => `http://${info.address}:${settings.listenPort}`);
 
@@ -1630,9 +1728,7 @@ async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') 
       suppressPeerDiscovery: true,
       source,
     });
-    const localHeight = wtcNode && typeof wtcNode.getHeight === 'function'
-      ? Number(wtcNode.getHeight())
-      : Number.NaN;
+    const localHeight = wtcNode && typeof wtcNode.getHeight === 'function' ? Number(wtcNode.getHeight()) : Number.NaN;
     const remoteHeight = Number(tip && tip.height);
     peerReachabilityCache.set(normalized, {
       lastAttemptAtMs: nowMs,
@@ -1675,11 +1771,12 @@ function rememberObservedRequester(req, settings, source = 'peer-presence') {
   let preferredPeerUrl = '';
   for (const candidate of candidates) {
     preferredPeerUrl = selectPreferredPeerUrl(preferredPeerUrl, candidate);
-    observed = rememberDiscoveredPeer(candidate, {
-      source,
-      quiet: true,
-      peerIdentity,
-    }) || observed;
+    observed =
+      rememberDiscoveredPeer(candidate, {
+        source,
+        quiet: true,
+        peerIdentity,
+      }) || observed;
   }
   if (peerIdentity && preferredPeerUrl) {
     forgetDiscoveredPeersByIdentity(peerIdentity, { keepUrl: preferredPeerUrl });
@@ -1708,9 +1805,7 @@ function readRequestBodyBuffer(req, maxBytes = LEDGER_NETWORK_BODY_MAX_BYTES) {
 function buildReverseTunnelPublicUrl(baseUrl, tunnelId) {
   try {
     const base = new URL(baseUrl);
-    const prefix = base.pathname && base.pathname !== '/'
-      ? base.pathname.replace(/\/+$/, '')
-      : '';
+    const prefix = base.pathname && base.pathname !== '/' ? base.pathname.replace(/\/+$/, '') : '';
     return normalizePeerUrl(`${base.origin}${prefix}/api/v1/tunnel/${encodeURIComponent(tunnelId)}`);
   } catch (_) {
     return '';
@@ -1728,7 +1823,7 @@ function getReverseTunnelCoordinatorBaseUrl(req, settings = getLedgerNetworkSett
     }
   });
   if (publicAdvertisedUrl) return publicAdvertisedUrl;
-  const host = String(req && req.headers && req.headers.host || '').trim();
+  const host = String((req && req.headers && req.headers.host) || '').trim();
   if (!host) return '';
   return normalizePeerUrl(`http://${host}`);
 }
@@ -1803,8 +1898,12 @@ function destroyReverseTunnelSession(session, reason = 'closed') {
     scheduleWtcPeerSync(`managed-reverse-tunnel-${reason}`, 150);
   }
   failReverseTunnelPendingRequestsForSession(session, `Reverse tunnel ${reason}.`);
-  try { clearInterval(session.pingTimer); } catch (_) {}
-  try { session.socket.close(); } catch (_) {}
+  try {
+    clearInterval(session.pingTimer);
+  } catch (_) {}
+  try {
+    session.socket.close();
+  } catch (_) {}
 }
 
 function getReverseTunnelPeerIdentity(req) {
@@ -1819,17 +1918,17 @@ function isReverseTunnelForwardedRequest(req) {
 }
 
 function handleReverseTunnelResponseMessage(session, message) {
-  const requestId = String(message && message.requestId || '').trim();
+  const requestId = String((message && message.requestId) || '').trim();
   const pending = reverseTunnelPendingResponses.get(requestId);
   if (!pending || pending.tunnelId !== session.tunnelId) return;
   cleanupReverseTunnelPendingRequest(requestId);
   const statusCode = Math.max(100, Number(message && message.statusCode) || 500);
-  const headers = message && typeof message.headers === 'object' && message.headers
-    ? message.headers
-    : { 'content-type': 'application/json; charset=utf-8' };
-  const bodyBuffer = message && message.bodyBase64
-    ? Buffer.from(String(message.bodyBase64), 'base64')
-    : Buffer.alloc(0);
+  const headers =
+    message && typeof message.headers === 'object' && message.headers
+      ? message.headers
+      : { 'content-type': 'application/json; charset=utf-8' };
+  const bodyBuffer =
+    message && message.bodyBase64 ? Buffer.from(String(message.bodyBase64), 'base64') : Buffer.alloc(0);
   pending.res.writeHead(statusCode, headers);
   pending.res.end(bodyBuffer);
 }
@@ -1870,7 +1969,10 @@ function handleReverseTunnelSocketMessage(session, rawMessage) {
 }
 
 async function handleReverseTunnelHttpRequest(req, res, settings) {
-  const segments = String(req.url || '').split('?')[0].split('/').filter(Boolean);
+  const segments = String(req.url || '')
+    .split('?')[0]
+    .split('/')
+    .filter(Boolean);
   const tunnelId = segments[3] ? decodeURIComponent(segments[3]) : '';
   const session = reverseTunnelSessions.get(tunnelId);
   if (!session || session.socket.readyState !== WebSocket.OPEN) {
@@ -1909,14 +2011,16 @@ async function handleReverseTunnelHttpRequest(req, res, settings) {
       }
     }, REVERSE_TUNNEL_REQUEST_TIMEOUT_MS),
   });
-  session.socket.send(JSON.stringify({
-    type: 'http-request',
-    requestId,
-    method: String(req.method || 'GET').toUpperCase(),
-    path: proxiedPath,
-    headers: forwardedHeaders,
-    bodyBase64: bodyBuffer.toString('base64'),
-  }));
+  session.socket.send(
+    JSON.stringify({
+      type: 'http-request',
+      requestId,
+      method: String(req.method || 'GET').toUpperCase(),
+      path: proxiedPath,
+      headers: forwardedHeaders,
+      bodyBase64: bodyBuffer.toString('base64'),
+    }),
+  );
   return true;
 }
 
@@ -1932,7 +2036,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
     const localPeerIdentity = getLocalPeerIdentity();
     if (peerIdentity && localPeerIdentity && peerIdentity === localPeerIdentity) {
       console.log(`[ReverseTunnel] Rejecting self-connecting tunnel from ${peerIdentity}`);
-      try { socket.close(); } catch (_) {}
+      try {
+        socket.close();
+      } catch (_) {}
       return;
     }
     if (peerIdentity) {
@@ -1951,7 +2057,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
       lastSeenAtMs: Date.now(),
       pingTimer: setInterval(() => {
         if (socket.readyState !== WebSocket.OPEN) return;
-        try { socket.send(JSON.stringify({ type: 'ping', nowMs: Date.now() })); } catch (_) {}
+        try {
+          socket.send(JSON.stringify({ type: 'ping', nowMs: Date.now() }));
+        } catch (_) {}
       }, REVERSE_TUNNEL_PING_INTERVAL_MS),
     };
     reverseTunnelSessions.set(tunnelId, session);
@@ -1983,7 +2091,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
       }
       const compat = verifyChainPeerCompatibility(req);
       if (!compat.ok) {
-        console.warn(`[ReverseTunnel] Rejected upgrade from ${req.socket && req.socket.remoteAddress || 'unknown'}: ${compat.reason}`);
+        console.warn(
+          `[ReverseTunnel] Rejected upgrade from ${(req.socket && req.socket.remoteAddress) || 'unknown'}: ${compat.reason}`,
+        );
         socket.destroy();
         return;
       }
@@ -1991,7 +2101,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         reverseTunnelWss.emit('connection', ws, req);
       });
     } catch (_) {
-      try { socket.destroy(); } catch (_) {}
+      try {
+        socket.destroy();
+      } catch (_) {}
     }
   });
 }
@@ -2005,7 +2117,9 @@ function stopReverseTunnelCoordinator() {
     cleanupReverseTunnelPendingRequest(requestId);
   }
   if (reverseTunnelWss) {
-    try { reverseTunnelWss.close(); } catch (_) {}
+    try {
+      reverseTunnelWss.close();
+    } catch (_) {}
     reverseTunnelWss = null;
   }
 }
@@ -2027,7 +2141,9 @@ function stopManagedReverseTunnelClient() {
     reverseTunnelClientState.pingTimer = null;
   }
   if (reverseTunnelClientState.socket) {
-    try { reverseTunnelClientState.socket.close(); } catch (_) {}
+    try {
+      reverseTunnelClientState.socket.close();
+    } catch (_) {}
     reverseTunnelClientState.socket = null;
   }
 }
@@ -2042,16 +2158,14 @@ function scheduleManagedReverseTunnelReconnect() {
   }, delayMs);
   reverseTunnelClientState.reconnectDelayMs = Math.min(
     REVERSE_TUNNEL_RECONNECT_MAX_MS,
-    Math.max(REVERSE_TUNNEL_RECONNECT_BASE_MS, delayMs * 2)
+    Math.max(REVERSE_TUNNEL_RECONNECT_BASE_MS, delayMs * 2),
   );
 }
 
 function buildReverseTunnelConnectUrl(coordinatorUrl) {
   try {
     const base = new URL(coordinatorUrl);
-    const prefix = base.pathname && base.pathname !== '/'
-      ? base.pathname.replace(/\/+$/, '')
-      : '';
+    const prefix = base.pathname && base.pathname !== '/' ? base.pathname.replace(/\/+$/, '') : '';
     return `${base.origin}${prefix}/api/v1/tunnel/connect`;
   } catch (_) {
     return '';
@@ -2071,12 +2185,11 @@ function sanitizeForwardedTunnelHeaders(headers = {}) {
 
 async function forwardReverseTunnelRequestToLocalNode(socket, message) {
   const settings = getLedgerNetworkSettings();
-  const targetPath = String(message && message.path || '/').trim() || '/';
-  const method = String(message && message.method || 'GET').toUpperCase();
-  const requestId = String(message && message.requestId || '').trim();
-  const bodyBuffer = message && message.bodyBase64
-    ? Buffer.from(String(message.bodyBase64), 'base64')
-    : Buffer.alloc(0);
+  const targetPath = String((message && message.path) || '/').trim() || '/';
+  const method = String((message && message.method) || 'GET').toUpperCase();
+  const requestId = String((message && message.requestId) || '').trim();
+  const bodyBuffer =
+    message && message.bodyBase64 ? Buffer.from(String(message.bodyBase64), 'base64') : Buffer.alloc(0);
   const forwardedHeaders = sanitizeForwardedTunnelHeaders(message && message.headers);
   const protocolInfo = getPeerProtocolInfo();
   const requestOptions = {
@@ -2090,7 +2203,9 @@ async function forwardReverseTunnelRequestToLocalNode(socket, message) {
       'Content-Length': Buffer.byteLength(bodyBuffer),
       'x-wtc-network-id': forwardedHeaders['x-wtc-network-id'] || protocolInfo.networkId,
       'x-wtc-protocol-version': forwardedHeaders['x-wtc-protocol-version'] || String(protocolInfo.protocolVersion),
-      ...(protocolInfo.genesisHash && !forwardedHeaders['x-wtc-genesis-hash'] ? { 'x-wtc-genesis-hash': protocolInfo.genesisHash } : {}),
+      ...(protocolInfo.genesisHash && !forwardedHeaders['x-wtc-genesis-hash']
+        ? { 'x-wtc-genesis-hash': protocolInfo.genesisHash }
+        : {}),
     },
   };
   const responsePayload = await new Promise((resolve) => {
@@ -2110,7 +2225,14 @@ async function forwardReverseTunnelRequestToLocalNode(socket, message) {
       resolve({
         statusCode: 502,
         headers: { 'content-type': 'application/json; charset=utf-8' },
-        bodyBase64: Buffer.from(JSON.stringify({ ok: false, code: 'REVERSE_TUNNEL_LOCAL_ERROR', message: error && error.message ? error.message : 'Local reverse tunnel request failed.' }), 'utf8').toString('base64'),
+        bodyBase64: Buffer.from(
+          JSON.stringify({
+            ok: false,
+            code: 'REVERSE_TUNNEL_LOCAL_ERROR',
+            message: error && error.message ? error.message : 'Local reverse tunnel request failed.',
+          }),
+          'utf8',
+        ).toString('base64'),
       });
     });
     request.write(bodyBuffer);
@@ -2131,7 +2253,9 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
   if (!message || typeof message !== 'object') return;
   reverseTunnelClientState.lastSeenAtMs = Date.now();
   if (message.type === 'ping') {
-    try { socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() })); } catch (_) {}
+    try {
+      socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
+    } catch (_) {}
     return;
   }
   if (message.type === 'tunnel-ready') {
@@ -2149,7 +2273,9 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
       publicUrl: obfuscatePublicPeerUrl(reverseTunnelClientState.publicUrl),
       coordinatorUrl: obfuscatePublicPeerUrl(reverseTunnelClientState.coordinatorUrl),
     });
-    console.log(`[ReverseTunnel] Reachable via ${obfuscatePublicPeerUrl(reverseTunnelClientState.publicUrl) || 'managed tunnel'}; awaiting a higher compatible peer chain before sync import.`);
+    console.log(
+      `[ReverseTunnel] Reachable via ${obfuscatePublicPeerUrl(reverseTunnelClientState.publicUrl) || 'managed tunnel'}; awaiting a higher compatible peer chain before sync import.`,
+    );
     scheduleWtcPeerSync('managed-reverse-tunnel-ready', 150);
     return;
   }
@@ -2209,7 +2335,9 @@ function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerN
     });
     reverseTunnelClientState.pingTimer = setInterval(() => {
       if (socket.readyState !== WebSocket.OPEN) return;
-      try { socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() })); } catch (_) {}
+      try {
+        socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
+      } catch (_) {}
     }, REVERSE_TUNNEL_PING_INTERVAL_MS);
   });
   socket.on('message', (message) => handleManagedReverseTunnelMessage(socket, message));
@@ -2334,7 +2462,7 @@ async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
       const preferredPeerUrlsByIdentity = new Map();
       for (const entry of advertised) {
         const candidate = typeof entry === 'string' ? entry : String(entry && entry.url ? entry.url : '');
-        const peerIdentity = typeof entry === 'string' ? '' : String(entry && entry.peerIdentity || '').trim();
+        const peerIdentity = typeof entry === 'string' ? '' : String((entry && entry.peerIdentity) || '').trim();
         rememberDiscoveredPeer(candidate, { source: 'peer-directory', quiet: true, peerIdentity });
         if (peerIdentity) {
           const preferredPeerUrl = preferredPeerUrlsByIdentity.get(peerIdentity) || '';
@@ -2400,7 +2528,9 @@ const POLICY_OPRETURN_PREFIX = 'WTCP1:';
 const LOCAL_HARDWARE_PROFILE_DB = [
   {
     id: 'desktop-high',
-    match: (descriptor) => /4090|4080|3090|3080|7900|6900|6800/i.test(descriptor.gpu) || /i9|ryzen\s*9|threadripper|epyc|xeon/i.test(descriptor.cpu),
+    match: (descriptor) =>
+      /4090|4080|3090|3080|7900|6900|6800/i.test(descriptor.gpu) ||
+      /i9|ryzen\s*9|threadripper|epyc|xeon/i.test(descriptor.cpu),
     conservativeCapW: 130,
     maxCapW: 520,
     stepW: 35,
@@ -2489,7 +2619,9 @@ function saveConsumedProofs() {
     // detection) is caught on the next load.
     const sig = computeHwAuthSig(obj);
     fs.writeFileSync(filePath, JSON.stringify({ ...obj, _sig: sig }), 'utf8');
-  } catch (_) { /* non-fatal */ }
+  } catch (_) {
+    /* non-fatal */
+  }
 }
 let remoteProfileFeed = {
   profiles: null,
@@ -2516,9 +2648,9 @@ function loadPolicyAnchorState() {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
       policyAnchorState = {
-        latestAnchor:       parsed.latestAnchor || null,
-        lastScannedHeight:  Number(parsed.lastScannedHeight) || -1,
-        scannedAtMs:        Number(parsed.scannedAtMs) || 0,
+        latestAnchor: parsed.latestAnchor || null,
+        lastScannedHeight: Number(parsed.lastScannedHeight) || -1,
+        scannedAtMs: Number(parsed.scannedAtMs) || 0,
       };
     }
   } catch (_) {}
@@ -2654,24 +2786,26 @@ function fetchTextWithTimeout(url, timeoutMs = 5000) {
 // Security: only the three whitelisted domains below are accepted; responses are
 // capped at 5 MB; only https is allowed.
 ipcMain.handle('wattcoin-fetch-url', (_event, payload) => {
-  const ALLOWED_HOSTNAMES = new Set([
-    'api.search.brave.com',
-  ]);
+  const ALLOWED_HOSTNAMES = new Set(['api.search.brave.com']);
   // Only these header names may be forwarded from the renderer to an external host.
   // Prevents a compromised renderer from injecting Host, Authorization, Cookie, etc.
   const ALLOWED_HEADER_NAMES = new Set(['accept', 'x-subscription-token', 'content-type']);
-  const rawUrl   = String(payload && payload.url || '');
+  const rawUrl = String((payload && payload.url) || '');
   const timeoutMs = Math.min(30_000, Math.max(1000, Number(payload && payload.timeoutMs) || 10_000));
-  const rawHeaders = (payload && typeof payload.headers === 'object') ? payload.headers : {};
+  const rawHeaders = payload && typeof payload.headers === 'object' ? payload.headers : {};
   const customHeaders = {};
   for (const [k, v] of Object.entries(rawHeaders)) {
     if (ALLOWED_HEADER_NAMES.has(k.toLowerCase())) customHeaders[k] = String(v);
   }
-  const method = (payload && payload.method === 'POST') ? 'POST' : 'GET';
-  const rawBody = (method === 'POST' && payload && typeof payload.body === 'string') ? payload.body : null;
+  const method = payload && payload.method === 'POST' ? 'POST' : 'GET';
+  const rawBody = method === 'POST' && payload && typeof payload.body === 'string' ? payload.body : null;
 
   let parsedUrl;
-  try { parsedUrl = new URL(rawUrl); } catch (_) { return { ok: false, error: 'invalid url' }; }
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch (_) {
+    return { ok: false, error: 'invalid url' };
+  }
   if (parsedUrl.protocol !== 'https:') return { ok: false, error: 'only https allowed' };
   if (!ALLOWED_HOSTNAMES.has(parsedUrl.hostname)) {
     return { ok: false, error: `domain not allowed: ${parsedUrl.hostname}` };
@@ -2696,7 +2830,10 @@ ipcMain.handle('wattcoin-fetch-url', (_event, payload) => {
         const MAX_BYTES = 5 * 1024 * 1024; // 5 MB cap
         res.on('data', (chunk) => {
           totalBytes += chunk.length;
-          if (totalBytes > MAX_BYTES) { req.destroy(new Error('response too large')); return; }
+          if (totalBytes > MAX_BYTES) {
+            req.destroy(new Error('response too large'));
+            return;
+          }
           chunks.push(chunk);
         });
         res.on('end', () => {
@@ -2709,7 +2846,10 @@ ipcMain.handle('wattcoin-fetch-url', (_event, payload) => {
         });
       });
       req.on('error', (e) => resolve({ ok: false, error: e && e.message ? e.message : 'request error' }));
-      req.on('timeout', () => { req.destroy(); resolve({ ok: false, error: 'timeout' }); });
+      req.on('timeout', () => {
+        req.destroy();
+        resolve({ ok: false, error: 'timeout' });
+      });
       if (rawBody) req.write(rawBody);
       req.end();
     } catch (e) {
@@ -2777,7 +2917,9 @@ async function refreshRemoteProfilesFromPolicyFeed() {
     // Download the policy JSON and its text (we hash the raw text for on-chain verification).
     const policyText = await fetchTextWithTimeout(url, 6000);
     let policyObj;
-    try { policyObj = JSON.parse(policyText); } catch (_) {
+    try {
+      policyObj = JSON.parse(policyText);
+    } catch (_) {
       return { ok: false, code: 'POLICY_FEED_INVALID_JSON' };
     }
 
@@ -2798,7 +2940,9 @@ async function refreshRemoteProfilesFromPolicyFeed() {
     const anchor = await scanChainForPolicyAnchor();
     if (anchor.ok) {
       if (anchor.hash !== downloadedHash) {
-        console.warn(`[PolicyFeed] On-chain hash mismatch! Chain: ${anchor.hash.slice(0,12)}... Downloaded: ${downloadedHash.slice(0,12)}...`);
+        console.warn(
+          `[PolicyFeed] On-chain hash mismatch! Chain: ${anchor.hash.slice(0, 12)}... Downloaded: ${downloadedHash.slice(0, 12)}...`,
+        );
         return { ok: false, code: 'POLICY_FEED_CHAIN_HASH_MISMATCH' };
       }
       console.log(`[PolicyFeed] Policy verified against on-chain anchor (block ${anchor.blockHeight}).`);
@@ -2816,7 +2960,7 @@ async function refreshRemoteProfilesFromPolicyFeed() {
       }
     }
 
-    const expiresAtMs = Math.max(Date.now() + (30 * 60_000), Number(policy.expiresAtMs) || 0);
+    const expiresAtMs = Math.max(Date.now() + 30 * 60_000, Number(policy.expiresAtMs) || 0);
     const normalizedProfiles = policy.profiles.map(normalizeRemoteProfile).filter(Boolean);
     if (normalizedProfiles.length === 0) {
       return { ok: false, code: 'POLICY_FEED_EMPTY' };
@@ -2851,7 +2995,11 @@ function ensurePolicyFeedRefreshLoop() {
 // Operator usage: window.wattcoinHardware.invoke('wattcoin-publish-policy-anchor', jsonText)
 // jsonText = the policy JSON string (same content that will be hosted at the feed URL).
 ipcMain.handle('wattcoin-publish-policy-anchor', async (_event, policyText) => {
-  return { ok: false, code: 'NOT_SUPPORTED', message: 'Policy anchor publishing is not supported on WTC native chain.' };
+  return {
+    ok: false,
+    code: 'NOT_SUPPORTED',
+    message: 'Policy anchor publishing is not supported on WTC native chain.',
+  };
 });
 
 function defaultAttestationState() {
@@ -2866,9 +3014,7 @@ function loadAttestationState() {
   const filePath = getAttestationDbFilePath();
   try {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const parsed = fs.existsSync(filePath)
-      ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
-      : null;
+    const parsed = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : null;
     let secret;
     if (parsed && typeof parsed.encryptedSecret === 'string' && parsed.encryptedSecret.length > 0) {
       // New format: decrypt using the OS secure store (DPAPI on Windows, Keychain on macOS).
@@ -2885,9 +3031,12 @@ function loadAttestationState() {
           try {
             const deviceSecret = getDeviceIdentitySecret();
             if (!deviceSecret || deviceSecret.length < 32) throw new Error('no device secret');
-            const fbKey = crypto.createHash('sha256').update(deviceSecret + ':attestation-fallback').digest();
+            const fbKey = crypto
+              .createHash('sha256')
+              .update(deviceSecret + ':attestation-fallback')
+              .digest();
             const fbBuf = Buffer.from(parsed.fallbackEncryptedSecret, 'base64');
-            const fbIv  = fbBuf.slice(0, 12);
+            const fbIv = fbBuf.slice(0, 12);
             const fbTag = fbBuf.slice(12, 28);
             const fbEnc = fbBuf.slice(28);
             const decipher = crypto.createDecipheriv('aes-256-gcm', fbKey, fbIv);
@@ -2913,7 +3062,7 @@ function loadAttestationState() {
     return {
       version: 1,
       secret,
-      miners: (parsed && parsed.miners && typeof parsed.miners === 'object') ? parsed.miners : {},
+      miners: parsed && parsed.miners && typeof parsed.miners === 'object' ? parsed.miners : {},
     };
   } catch (_) {
     return defaultAttestationState();
@@ -2938,14 +3087,19 @@ function saveAttestationState() {
     try {
       const deviceSecret = getDeviceIdentitySecret();
       if (deviceSecret && deviceSecret.length >= 32) {
-        const fbKey    = crypto.createHash('sha256').update(deviceSecret + ':attestation-fallback').digest();
-        const fbIv     = crypto.randomBytes(12);
-        const cipher   = crypto.createCipheriv('aes-256-gcm', fbKey, fbIv);
-        const fbEnc    = Buffer.concat([cipher.update(attestationState.secret, 'utf8'), cipher.final()]);
-        const fbTag    = cipher.getAuthTag();
+        const fbKey = crypto
+          .createHash('sha256')
+          .update(deviceSecret + ':attestation-fallback')
+          .digest();
+        const fbIv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', fbKey, fbIv);
+        const fbEnc = Buffer.concat([cipher.update(attestationState.secret, 'utf8'), cipher.final()]);
+        const fbTag = cipher.getAuthTag();
         payload.fallbackEncryptedSecret = Buffer.concat([fbIv, fbTag, fbEnc]).toString('base64');
       }
-    } catch (_fb) { /* non-fatal — primary DPAPI path is sufficient */ }
+    } catch (_fb) {
+      /* non-fatal — primary DPAPI path is sufficient */
+    }
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
   } catch (_) {
     // Do not block mining flow on attestation persistence failures.
@@ -2973,7 +3127,11 @@ function shouldAllowGpuWorkloadsForSummary(summary = {}) {
   if (/RTX|GTX|MX\d|Arc\s*(?:A|B)|Quadro|Tesla|Titan|GeForce|Radeon\s*(?:RX|Pro|VII)|FirePro/i.test(descriptor.gpu)) {
     return true;
   }
-  if (/Intel.*(?:HD|UHD|Iris(?!\s*(?:Xe\s*Max|Pro))|Xe(?!\s*Max))|Radeon\(TM\)\s+Graphics|Radeon\s+Graphics|Vega\s*(?:3|5|6|7|8|10|11)|Mali|Adreno/i.test(descriptor.gpu)) {
+  if (
+    /Intel.*(?:HD|UHD|Iris(?!\s*(?:Xe\s*Max|Pro))|Xe(?!\s*Max))|Radeon\(TM\)\s+Graphics|Radeon\s+Graphics|Vega\s*(?:3|5|6|7|8|10|11)|Mali|Adreno/i.test(
+      descriptor.gpu,
+    )
+  ) {
     return false;
   }
   return true;
@@ -2989,7 +3147,10 @@ function cleanupReplayCache() {
   const cutoff = Date.now() - ATTESTATION_REPLAY_WINDOW_MS;
   let changed = false;
   for (const [key, atMs] of consumedBenchmarkProofs.entries()) {
-    if (atMs < cutoff) { consumedBenchmarkProofs.delete(key); changed = true; }
+    if (atMs < cutoff) {
+      consumedBenchmarkProofs.delete(key);
+      changed = true;
+    }
   }
   if (changed) saveConsumedProofs();
 }
@@ -3038,7 +3199,8 @@ function evaluateReattestationNeed(record, profile, options = {}) {
   const nowMs = Date.now();
   const reasons = [];
   const allowSpotCheck = !!(options && options.allowSpotCheck);
-  const requiredBySchedule = (Number(record.nextRequiredAtMs) || 0) > 0 && nowMs >= Number(record.nextRequiredAtMs || 0);
+  const requiredBySchedule =
+    (Number(record.nextRequiredAtMs) || 0) > 0 && nowMs >= Number(record.nextRequiredAtMs || 0);
   const requiredByForcedWindow = (Number(record.forcedReattestUntilMs) || 0) > nowMs;
   const hasAcceptedAttestation = (Number(record.lastAcceptedAtMs) || 0) > 0;
 
@@ -3048,7 +3210,7 @@ function evaluateReattestationNeed(record, profile, options = {}) {
 
   if (allowSpotCheck && hasAcceptedAttestation && !requiredBySchedule && !requiredByForcedWindow) {
     const lastEval = Number(record.lastSpotCheckEvalAtMs) || 0;
-    if ((nowMs - lastEval) >= ATTESTATION_SPOTCHECK_MIN_GAP_MS) {
+    if (nowMs - lastEval >= ATTESTATION_SPOTCHECK_MIN_GAP_MS) {
       record.lastSpotCheckEvalAtMs = nowMs;
       const probability = Math.min(0.5, Math.max(0, Number(profile.spotCheckProbability) || 0.05));
       if (Math.random() < probability) {
@@ -3072,8 +3234,10 @@ function computePolicyForMiner(minerId, summary = {}, options = {}) {
   const allowGpuWorkloads = shouldAllowGpuWorkloadsForSummary(summary);
   const record = getMinerRecord(minerId);
   const level = Math.max(0, Math.min(ATTESTATION_MAX_LEVEL, Number(record.level) || 0));
-  const capW = Math.min(profile.maxCapW, profile.conservativeCapW + (profile.stepW * level));
-  const reattestation = evaluateReattestationNeed(record, profile, { allowSpotCheck: !!(options && options.allowSpotCheck) });
+  const capW = Math.min(profile.maxCapW, profile.conservativeCapW + profile.stepW * level);
+  const reattestation = evaluateReattestationNeed(record, profile, {
+    allowSpotCheck: !!(options && options.allowSpotCheck),
+  });
   return {
     profileId: profile.id,
     profileSource: remoteProfileFeed.source || 'local',
@@ -3081,7 +3245,10 @@ function computePolicyForMiner(minerId, summary = {}, options = {}) {
     maxCapW: profile.maxCapW,
     currentCapW: capW,
     level,
-    nextLevelCapW: Math.min(profile.maxCapW, profile.conservativeCapW + (profile.stepW * Math.min(ATTESTATION_MAX_LEVEL, level + 1))),
+    nextLevelCapW: Math.min(
+      profile.maxCapW,
+      profile.conservativeCapW + profile.stepW * Math.min(ATTESTATION_MAX_LEVEL, level + 1),
+    ),
     requireGpuProof: allowGpuWorkloads && !!profile.requireGpuProof,
     minimums: {
       cpuOpsPerSec: profile.minCpuOpsPerSec,
@@ -3164,7 +3331,6 @@ async function verifyContributionSignature(address, signature, message, expected
   }
   return { ok: false, reason: 'signature verification failed' };
 }
-
 
 function issueBenchmarkChallenge(minerId, hardwareSummary = {}, identityAddress = '') {
   if (!ENABLE_NODE_ATTESTATION) {
@@ -3266,27 +3432,44 @@ async function submitBenchmarkProof(payload = {}) {
   const minerId = normalizeMinerIdentity(payload.minerId);
   const challenge = payload && payload.challenge && typeof payload.challenge === 'object' ? payload.challenge : null;
   const proof = payload && payload.proof && typeof payload.proof === 'object' ? payload.proof : null;
-  const summary = payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object' ? payload.hardwareSummary : {};
+  const summary =
+    payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object' ? payload.hardwareSummary : {};
   const identity = payload && payload.identity && typeof payload.identity === 'object' ? payload.identity : {};
 
   if (!challenge || !proof || !challenge.id) {
-    return rejectAttestation(minerId, summary, 'ATTESTATION_PAYLOAD_INVALID', 'Attestation payload missing challenge or proof.', ['missing challenge/proof payload']);
+    return rejectAttestation(
+      minerId,
+      summary,
+      'ATTESTATION_PAYLOAD_INVALID',
+      'Attestation payload missing challenge or proof.',
+      ['missing challenge/proof payload'],
+    );
   }
 
   const expected = activeAttestationChallenges.get(String(challenge.id));
   if (!expected) {
-    return rejectAttestation(minerId, summary, 'ATTESTATION_CHALLENGE_UNKNOWN', 'Challenge not active or already consumed.', ['challenge unknown or already used']);
+    return rejectAttestation(
+      minerId,
+      summary,
+      'ATTESTATION_CHALLENGE_UNKNOWN',
+      'Challenge not active or already consumed.',
+      ['challenge unknown or already used'],
+    );
   }
 
   if (expected.minerId !== minerId) {
     activeAttestationChallenges.delete(expected.id);
-    return rejectAttestation(minerId, summary, 'ATTESTATION_MINER_MISMATCH', 'Challenge miner identity mismatch.', ['challenge miner mismatch']);
+    return rejectAttestation(minerId, summary, 'ATTESTATION_MINER_MISMATCH', 'Challenge miner identity mismatch.', [
+      'challenge miner mismatch',
+    ]);
   }
 
   const nowMs = Date.now();
   if (expected.expiresAtMs < nowMs) {
     activeAttestationChallenges.delete(expected.id);
-    return rejectAttestation(minerId, summary, 'ATTESTATION_CHALLENGE_EXPIRED', 'Challenge expired.', ['challenge expired']);
+    return rejectAttestation(minerId, summary, 'ATTESTATION_CHALLENGE_EXPIRED', 'Challenge expired.', [
+      'challenge expired',
+    ]);
   }
 
   const signedPayload = {
@@ -3305,13 +3488,21 @@ async function submitBenchmarkProof(payload = {}) {
   const expectedSignature = buildChallengeSignature(signedPayload);
   if (!secureStringEquals(expectedSignature, String(challenge.signature || ''))) {
     activeAttestationChallenges.delete(expected.id);
-    return rejectAttestation(minerId, summary, 'ATTESTATION_SIGNATURE_INVALID', 'Challenge signature verification failed.', ['challenge signature invalid']);
+    return rejectAttestation(
+      minerId,
+      summary,
+      'ATTESTATION_SIGNATURE_INVALID',
+      'Challenge signature verification failed.',
+      ['challenge signature invalid'],
+    );
   }
 
   const challengeSeed = Math.max(0, Math.floor(Number(proof.challengeSeed) || 0));
   if (challengeSeed !== expected.challengeSeed) {
     activeAttestationChallenges.delete(expected.id);
-    return rejectAttestation(minerId, summary, 'ATTESTATION_SEED_MISMATCH', 'Proof challenge seed mismatch.', ['proof challenge seed mismatch']);
+    return rejectAttestation(minerId, summary, 'ATTESTATION_SEED_MISMATCH', 'Proof challenge seed mismatch.', [
+      'proof challenge seed mismatch',
+    ]);
   }
 
   // Reject if the backend benchmark was not run after this challenge was issued.
@@ -3319,13 +3510,17 @@ async function submitBenchmarkProof(payload = {}) {
   // inflated throughput numbers directly.
   if (expected.measuredCpuOpsPerSec == null) {
     activeAttestationChallenges.delete(expected.id);
-    return rejectAttestation(minerId, summary, 'ATTESTATION_PROOF_REJECTED',
+    return rejectAttestation(
+      minerId,
+      summary,
+      'ATTESTATION_PROOF_REJECTED',
       'Backend benchmark was not run before submitting this proof.',
-      ['main-process benchmark missing for this challenge']);
+      ['main-process benchmark missing for this challenge'],
+    );
   }
   // Use main-process-measured values; renderer-supplied values are ignored for gating decisions.
   const cpuOpsPerSec = expected.measuredCpuOpsPerSec;
-  const memoryMBps   = expected.measuredMemoryMBps;
+  const memoryMBps = expected.measuredMemoryMBps;
   const jitterRatio = Math.max(0, Number(proof.jitterRatio) || 0);
   const gpuProofHash = String(proof.gpuProofHash || '').trim();
   const gpuBenchAvailable = !!proof.gpuBenchAvailable;
@@ -3339,21 +3534,20 @@ async function submitBenchmarkProof(payload = {}) {
     failures.push('identity address mismatch against challenge envelope');
   }
 
-  if (cpuOpsPerSec < Number(expected.minimums && expected.minimums.cpuOpsPerSec || 0)) {
+  if (cpuOpsPerSec < Number((expected.minimums && expected.minimums.cpuOpsPerSec) || 0)) {
     failures.push('cpu throughput below node minimum');
   }
-  if (memoryMBps < Number(expected.minimums && expected.minimums.memoryMBps || 0)) {
+  if (memoryMBps < Number((expected.minimums && expected.minimums.memoryMBps) || 0)) {
     failures.push('memory bandwidth below node minimum');
   }
-  if (jitterRatio > Number(expected.minimums && expected.minimums.jitterRatioMax || 0.45)) {
+  if (jitterRatio > Number((expected.minimums && expected.minimums.jitterRatioMax) || 0.45)) {
     // Adapt the threshold to this machine's rolling jitter history: if the device
     // consistently runs at moderate jitter (e.g. 0.25 rolling mean), allow up to
     // 2× that rolling mean before rejecting — so a single noisy run doesn't cause
     // a false failure.  The hard cap of 0.70 prevents a pathologically jittery
     // machine from bypassing the check entirely.
-    const adaptiveMax = hwAuthority.rollingJitterMean > 0
-      ? Math.min(0.70, Math.max(0.45, hwAuthority.rollingJitterMean * 2.0))
-      : 0.45;
+    const adaptiveMax =
+      hwAuthority.rollingJitterMean > 0 ? Math.min(0.7, Math.max(0.45, hwAuthority.rollingJitterMean * 2.0)) : 0.45;
     if (jitterRatio > adaptiveMax) {
       failures.push('benchmark jitter above node maximum');
     }
@@ -3362,14 +3556,16 @@ async function submitBenchmarkProof(payload = {}) {
     failures.push('gpu proof required but missing');
   }
 
-  const replayKey = sha256Hex(JSON.stringify({
-    minerId,
-    challengeId: expected.id,
-    challengeSeed,
-    cpuOpsPerSec: Math.round(cpuOpsPerSec),
-    memoryMBps: Math.round(memoryMBps),
-    gpuProofHash,
-  }));
+  const replayKey = sha256Hex(
+    JSON.stringify({
+      minerId,
+      challengeId: expected.id,
+      challengeSeed,
+      cpuOpsPerSec: Math.round(cpuOpsPerSec),
+      memoryMBps: Math.round(memoryMBps),
+      gpuProofHash,
+    }),
+  );
   if (consumedBenchmarkProofs.has(replayKey)) {
     failures.push('replay detected for benchmark proof');
   }
@@ -3379,7 +3575,13 @@ async function submitBenchmarkProof(payload = {}) {
   saveConsumedProofs();
 
   if (failures.length > 0) {
-    return rejectAttestation(minerId, summary, 'ATTESTATION_PROOF_REJECTED', 'Benchmark proof rejected by node policy.', failures);
+    return rejectAttestation(
+      minerId,
+      summary,
+      'ATTESTATION_PROOF_REJECTED',
+      'Benchmark proof rejected by node policy.',
+      failures,
+    );
   }
 
   const profile = resolveHardwareProfile(summary);
@@ -3469,9 +3671,7 @@ function median(values) {
   if (!Array.isArray(values) || values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 function recordOpsAlert(code, severity, message, details = {}) {
@@ -3615,9 +3815,8 @@ function recordRollbackDepth(depth, details = {}) {
 }
 
 function getPeerIdentityKey(peerUrl, tipResponse) {
-  const peerIdentity = tipResponse && typeof tipResponse.peerIdentity === 'string'
-    ? tipResponse.peerIdentity.trim()
-    : '';
+  const peerIdentity =
+    tipResponse && typeof tipResponse.peerIdentity === 'string' ? tipResponse.peerIdentity.trim() : '';
   if (peerIdentity) return `id:${peerIdentity}`;
   const normalized = normalizePeerUrl(peerUrl);
   return normalized ? `url:${normalized}` : `url:${String(peerUrl || '').trim()}`;
@@ -3628,7 +3827,7 @@ function getDiscoveredPeerPresenceCount(settings = getLedgerNetworkSettings()) {
   const selfAdvertisedUrls = new Set(getConfiguredAdvertisedPeerUrls(settings).map(normalizePeerUrl).filter(Boolean));
   const presenceKeys = new Set();
   for (const [peerUrl, info] of discoveredPeers.entries()) {
-    if (!info || (now - Number(info.lastSeenMs || 0)) > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(peerUrl)) continue;
+    if (!info || now - Number(info.lastSeenMs || 0) > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(peerUrl)) continue;
     if (!info.seenThisSession) continue;
     const peerIdentity = String(info.peerIdentity || '').trim();
     if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) continue;
@@ -3649,12 +3848,15 @@ async function inspectPeerConnectivity(settings = getLedgerNetworkSettings(), { 
   });
 }
 
-async function inspectPeerConnectivityForTargets(peerUrls = [], {
-  source = 'peer-contact',
-  initialBestPeerHeight = Number(wtcNode && typeof wtcNode.getHeight === 'function' ? wtcNode.getHeight() : 0) || 0,
-  concurrency = 0,
-  probeTimeoutMs = 0,
-} = {}) {
+async function inspectPeerConnectivityForTargets(
+  peerUrls = [],
+  {
+    source = 'peer-contact',
+    initialBestPeerHeight = Number(wtcNode && typeof wtcNode.getHeight === 'function' ? wtcNode.getHeight() : 0) || 0,
+    concurrency = 0,
+    probeTimeoutMs = 0,
+  } = {},
+) {
   const peers = Array.from(new Set((peerUrls || []).map(normalizePeerUrl).filter(Boolean)));
   const distinctPeerKeys = new Set();
   const healthyPeerKeys = new Set();
@@ -3667,7 +3869,7 @@ async function inspectPeerConnectivityForTargets(peerUrls = [], {
   const getFallbackPeerKey = (peerUrl) => {
     const normalizedPeerUrl = normalizePeerUrl(peerUrl);
     const discoveredInfo = normalizedPeerUrl ? discoveredPeers.get(normalizedPeerUrl) : null;
-    const peerIdentity = String(discoveredInfo && discoveredInfo.peerIdentity || '').trim();
+    const peerIdentity = String((discoveredInfo && discoveredInfo.peerIdentity) || '').trim();
     if (peerIdentity) return `id:${peerIdentity}`;
     return getPeerIdentityKey(peerUrl, null);
   };
@@ -3686,7 +3888,7 @@ async function inspectPeerConnectivityForTargets(peerUrls = [], {
         session &&
         session.socket &&
         session.socket.readyState === WebSocket.OPEN &&
-        (nowMs - Number(session.lastSeenAtMs || 0)) <= REVERSE_TUNNEL_LIVE_THRESHOLD_MS
+        nowMs - Number(session.lastSeenAtMs || 0) <= REVERSE_TUNNEL_LIVE_THRESHOLD_MS
       ) {
         const identity = String(session.peerIdentity || '').trim();
         if (isPeerIdentitySelfReference(identity, peerUrl)) continue;
@@ -3715,7 +3917,7 @@ async function inspectPeerConnectivityForTargets(peerUrls = [], {
         distinctPeerKeys.add(fallbackKey);
         return;
       }
-      const peerIdentity = String(tip && tip.peerIdentity || '').trim();
+      const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) {
         return;
       }
@@ -3803,11 +4005,7 @@ async function collectOpsSnapshotInner() {
   opsState.syncLagSamples = opsState.syncLagSamples.slice(-500);
 
   const now = Date.now();
-  if (
-    lag > 0 &&
-    healthyPeers > 0 &&
-    now - (Number(opsState.lastSyncAttemptAt) || 0) >= WTC_PEER_SYNC_INTERVAL_MS
-  ) {
+  if (lag > 0 && healthyPeers > 0 && now - (Number(opsState.lastSyncAttemptAt) || 0) >= WTC_PEER_SYNC_INTERVAL_MS) {
     await runWtcPeerSync('ops-fallback');
   }
 
@@ -3986,15 +4184,11 @@ function secureStringEquals(a, b) {
 
 function formatBackupTimestampForFilename(date = new Date()) {
   const pad = (n) => String(n).padStart(2, '0');
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-  ].join('') + '-' + [
-    pad(date.getHours()),
-    pad(date.getMinutes()),
-    pad(date.getSeconds()),
-  ].join('');
+  return (
+    [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('') +
+    '-' +
+    [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join('')
+  );
 }
 
 function encryptBackupPayload(payloadObject, passphrase) {
@@ -4115,9 +4309,8 @@ async function computeWalletSyncState(reason = 'refresh') {
 
   const readiness = await wtcNode.getWalletReadiness();
   const addresses = Array.isArray(wtcNode.getAddresses()) ? wtcNode.getAddresses() : [];
-  const selectedAddress = typeof wtcNode.getPrimaryAddress === 'function'
-    ? String(wtcNode.getPrimaryAddress() || '').trim()
-    : '';
+  const selectedAddress =
+    typeof wtcNode.getPrimaryAddress === 'function' ? String(wtcNode.getPrimaryAddress() || '').trim() : '';
   if (selectedAddress) {
     walletAddressCache = { address: selectedAddress, at: Date.now() };
     setCoordinatorIdentityKey(selectedAddress);
@@ -4129,26 +4322,27 @@ async function computeWalletSyncState(reason = 'refresh') {
     rpcReachable: readiness && readiness.rpcReachable !== false,
     selectedAddress,
     addresses,
-    walletReadiness: readiness && typeof readiness === 'object'
-      ? {
-          ok: readiness.ok !== false,
-          status: readiness.status || 'syncing',
-          message: readiness.message || 'Checking wallet sync status...',
-          spendReady: !!readiness.spendReady,
-          blocks: Math.max(0, Number(readiness.blocks) || 0),
-          headers: Math.max(0, Number(readiness.headers) || 0),
-          connections: Math.max(0, Number(readiness.connections) || 0),
-          verificationProgress: Math.max(0, Math.min(1, Number(readiness.verificationProgress) || 0)),
-          localBlocks: Math.max(-1, Number(readiness.localBlocks) || 0),
-          bestPeerHeight: Math.max(-1, Number(readiness.bestPeerHeight) || 0),
-          lagBlocks: Math.max(0, Number(readiness.lagBlocks) || 0),
-          bestPeer: typeof readiness.bestPeer === 'string' ? readiness.bestPeer : '',
-          scanning: !!readiness.scanning,
-          initialBlockDownload: !!readiness.initialBlockDownload,
-          lastSyncResult: readiness.lastSyncResult || null,
-          syncBlockedReason: typeof readiness.syncBlockedReason === 'string' ? readiness.syncBlockedReason : '',
-        }
-      : walletSyncState.walletReadiness,
+    walletReadiness:
+      readiness && typeof readiness === 'object'
+        ? {
+            ok: readiness.ok !== false,
+            status: readiness.status || 'syncing',
+            message: readiness.message || 'Checking wallet sync status...',
+            spendReady: !!readiness.spendReady,
+            blocks: Math.max(0, Number(readiness.blocks) || 0),
+            headers: Math.max(0, Number(readiness.headers) || 0),
+            connections: Math.max(0, Number(readiness.connections) || 0),
+            verificationProgress: Math.max(0, Math.min(1, Number(readiness.verificationProgress) || 0)),
+            localBlocks: Math.max(-1, Number(readiness.localBlocks) || 0),
+            bestPeerHeight: Math.max(-1, Number(readiness.bestPeerHeight) || 0),
+            lagBlocks: Math.max(0, Number(readiness.lagBlocks) || 0),
+            bestPeer: typeof readiness.bestPeer === 'string' ? readiness.bestPeer : '',
+            scanning: !!readiness.scanning,
+            initialBlockDownload: !!readiness.initialBlockDownload,
+            lastSyncResult: readiness.lastSyncResult || null,
+            syncBlockedReason: typeof readiness.syncBlockedReason === 'string' ? readiness.syncBlockedReason : '',
+          }
+        : walletSyncState.walletReadiness,
     updatedAt: Date.now(),
     reason,
   };
@@ -4257,7 +4451,6 @@ function computeWattcoinFromMinedBlocks(blockCount) {
   return Number(totalCoins.toFixed(8));
 }
 
-
 ipcMain.handle('wattcoin-get-wallet-address', async () => {
   if (!wtcNode) return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up. Please wait...' };
   const address = wtcNode.getPrimaryAddress();
@@ -4286,7 +4479,11 @@ ipcMain.handle('wattcoin-set-primary-address', async (_, targetAddress) => {
     const snapshot = await refreshWalletSyncState('set-primary-address', { force: true });
     return { ok: true, address, snapshot };
   } catch (e) {
-    return { ok: false, code: 'SET_PRIMARY_FAILED', message: e && e.message ? e.message : 'Failed to set primary address.' };
+    return {
+      ok: false,
+      code: 'SET_PRIMARY_FAILED',
+      message: e && e.message ? e.message : 'Failed to set primary address.',
+    };
   }
 });
 
@@ -4306,7 +4503,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         const address = wtcNode.getPrimaryAddress();
         if (address) walletAddressCache = { address, at: Date.now() };
       }
-    } catch (_) { /* bench will still run; proof will be flagged as unverified */ }
+    } catch (_) {
+      /* bench will still run; proof will be flagged as unverified */
+    }
   }
   const benchRequest = { ...(request || {}), walletAddress: walletAddressCache.address || '' };
   let result = await runBackendBenchmark(benchRequest);
@@ -4314,9 +4513,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
   // hardware-specific timing thresholds rather than spec-table estimates.
   if (result && result.ok) {
     setProbeHardwareSpec({
-      measuredCpuOpsPerSec:  result.cpuSpeedOpsPerSec  || 0,
-      measuredMemLatencyNs:  result.memLatencyNs        || 0,
-      allowGpuWorkloads:     !!(request && request.allowGpuWorkloads),
+      measuredCpuOpsPerSec: result.cpuSpeedOpsPerSec || 0,
+      measuredMemLatencyNs: result.memLatencyNs || 0,
+      allowGpuWorkloads: !!(request && request.allowGpuWorkloads),
     });
 
     // ── Pin throughput to pending attestation challenges ──────────────────────
@@ -4327,7 +4526,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       for (const _ch of activeAttestationChallenges.values()) {
         if (_ch.minerId === _minerAddr || _ch.identityAddress === _minerAddr) {
           _ch.measuredCpuOpsPerSec = result.cpuSpeedOpsPerSec || 0;
-          _ch.measuredMemoryMBps   = result.memoryMBps || 0;
+          _ch.measuredMemoryMBps = result.memoryMBps || 0;
         }
       }
     }
@@ -4337,30 +4536,42 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     // expected-value lookup so the renderer cannot manipulate expected ops/s.
     // SECURITY: CPU model is overridden with os.cpus()[0].model (kernel-level)
     // so a patched renderer cannot lie about its CPU to inflate the TDP ceiling.
-    const declaredCpuModel = String(request && request.declaredCpuModel    || '');
-    const osCpuModel       = (os.cpus()[0] && os.cpus()[0].model || '').trim();
+    const declaredCpuModel = String((request && request.declaredCpuModel) || '');
+    const osCpuModel = ((os.cpus()[0] && os.cpus()[0].model) || '').trim();
     const cpuModelMismatch = osCpuModel && declaredCpuModel && !hardwareModelsMatch(osCpuModel, declaredCpuModel);
-    const cpuModel         = osCpuModel || declaredCpuModel; // prefer OS truth
+    const cpuModel = osCpuModel || declaredCpuModel; // prefer OS truth
     if (cpuModelMismatch) {
-      const safeDeclaredCpu = String(declaredCpuModel || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
-      console.warn(`[HW-Verify] CPU model mismatch: renderer="${safeDeclaredCpu}", OS="${osCpuModel}" - using OS model`);
+      const safeDeclaredCpu = String(declaredCpuModel || '')
+        .normalize('NFKC')
+        .replace(/\s+/g, ' ')
+        .trim();
+      console.warn(
+        `[HW-Verify] CPU model mismatch: renderer="${safeDeclaredCpu}", OS="${osCpuModel}" - using OS model`,
+      );
     }
 
     // GPU verification: compare renderer's GPU claim against OS-level GPU list.
     const hwIdentity = await resolveOsHardwareIdentity();
-    const declaredGpuModel = String(request && request.declaredGpuModel || '');
-    const gpuModelMismatch = declaredGpuModel && hwIdentity.gpuModels.length > 0 &&
-      !hwIdentity.gpuModels.some(osGpu => hardwareModelsMatch(osGpu, declaredGpuModel));
+    const declaredGpuModel = String((request && request.declaredGpuModel) || '');
+    const gpuModelMismatch =
+      declaredGpuModel &&
+      hwIdentity.gpuModels.length > 0 &&
+      !hwIdentity.gpuModels.some((osGpu) => hardwareModelsMatch(osGpu, declaredGpuModel));
     if (gpuModelMismatch) {
-      console.warn(`[HW-Verify] GPU model mismatch: renderer="${declaredGpuModel}", OS=[${hwIdentity.gpuModels.join(', ')}]`);
+      console.warn(
+        `[HW-Verify] GPU model mismatch: renderer="${declaredGpuModel}", OS=[${hwIdentity.gpuModels.join(', ')}]`,
+      );
     }
 
     // Device-type verification (desktop vs laptop).
-    const declaredDeviceType = String(request && request.declaredDeviceType || '');
-    const deviceTypeMismatch = declaredDeviceType && hwIdentity.deviceType &&
+    const declaredDeviceType = String((request && request.declaredDeviceType) || '');
+    const deviceTypeMismatch =
+      declaredDeviceType &&
+      hwIdentity.deviceType &&
       declaredDeviceType.toLowerCase() !== hwIdentity.deviceType.toLowerCase() &&
       // Only flag clear contradictions: claiming "PC" when OS says "Laptop".
-      (/^pc$/i.test(declaredDeviceType) && /laptop/i.test(hwIdentity.deviceType));
+      /^pc$/i.test(declaredDeviceType) &&
+      /laptop/i.test(hwIdentity.deviceType);
     if (deviceTypeMismatch) {
       console.warn(`[HW-Verify] Device type mismatch: renderer="${declaredDeviceType}", OS="${hwIdentity.deviceType}"`);
     }
@@ -4372,26 +4583,26 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     let benchmarkConsistencySignal = false;
     let mismatchSignalCount = 0;
 
-    const memType     = String(request && request.declaredMemType     || '');
-    const memSpeedMhz = Number(request && request.declaredMemSpeedMhz || 0);
-    const memSticks   = Number(request && request.declaredMemSticks   || 1);
-    const isBaseline  = !!(request && request.isBaselineBenchmark);
+    const memType = String((request && request.declaredMemType) || '');
+    const memSpeedMhz = Number((request && request.declaredMemSpeedMhz) || 0);
+    const memSticks = Number((request && request.declaredMemSticks) || 1);
+    const isBaseline = !!(request && request.isBaselineBenchmark);
     const measuredCpu = result.cpuSpeedOpsPerSec || 0;
-    const measuredMem = result.memoryMBps        || 0;
+    const measuredMem = result.memoryMBps || 0;
     const expectedCpu = getExpectedCpuSpeedOps(cpuModel);
     const expectedDeclaredCpu = getExpectedCpuSpeedOps(declaredCpuModel);
     const expectedMem = getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks);
 
     // ── Hardware fingerprint: detect machine swap with same wallet ────────────
     const currentWallet = walletAddressCache.address || '';
-    const hwDescriptor  = {
+    const hwDescriptor = {
       cpuModel,
       gpuModels: normalizeGpuFingerprintValue(hwIdentity.gpuModels),
       memType,
       memSpeedMhz,
       memSticks,
     };
-    const storedFp      = loadHwFingerprint();
+    const storedFp = loadHwFingerprint();
     if (storedFp && currentWallet) {
       const changeDetails = formatHardwareChangeList(storedFp, hwDescriptor);
       const fpChanged = changeDetails.length > 0;
@@ -4419,7 +4630,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         saveHwFingerprint({ ...hwDescriptor, walletAddress: currentWallet });
         console.log(
           `[hwFingerprint] Wallet changed on same hardware. ` +
-          `Previous: ${storedFp.walletAddress} -> Current: ${currentWallet}`
+            `Previous: ${storedFp.walletAddress} -> Current: ${currentWallet}`,
         );
       }
       hwAuthority.hwChangedBlocked = false;
@@ -4442,8 +4653,8 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       benchmarkHistory.jitterSamples = appendBenchmarkSample(benchmarkHistory.jitterSamples, measuredJitter);
     }
     if (benchmarkHistory.jitterSamples.length >= 2) {
-      hwAuthority.rollingJitterMean = benchmarkHistory.jitterSamples.reduce((a, b) => a + b, 0)
-        / benchmarkHistory.jitterSamples.length;
+      hwAuthority.rollingJitterMean =
+        benchmarkHistory.jitterSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.jitterSamples.length;
     }
 
     // Use personal mean (blended with table value) as reference once enrolled.
@@ -4451,12 +4662,14 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     // Anti-spoofing floor: once ≥ 4 personal samples exist the reference is always
     // at least the personal mean — a renderer declaring a weaker CPU/mem model to
     // inflate the ratio cannot gain more than the machine actually measured.
-    const personalCpuMean = benchmarkHistory.cpuSamples.length >= 4
-      ? benchmarkHistory.cpuSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.cpuSamples.length
-      : 0;
-    const personalMemMean = benchmarkHistory.memSamples.length >= 4
-      ? benchmarkHistory.memSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.memSamples.length
-      : 0;
+    const personalCpuMean =
+      benchmarkHistory.cpuSamples.length >= 4
+        ? benchmarkHistory.cpuSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.cpuSamples.length
+        : 0;
+    const personalMemMean =
+      benchmarkHistory.memSamples.length >= 4
+        ? benchmarkHistory.memSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.memSamples.length
+        : 0;
     const referenceCpu = Math.max(getPersonalReference(benchmarkHistory.cpuSamples, expectedCpu), personalCpuMean);
     const referenceMem = Math.max(getPersonalReference(benchmarkHistory.memSamples, expectedMem), personalMemMean);
 
@@ -4466,12 +4679,12 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     let cpuDeclaredInconsistent = false;
     if (expectedDeclaredCpu > 0 && measuredCpu > 0) {
       const declaredCpuRatio = measuredCpu / expectedDeclaredCpu;
-      cpuDeclaredInconsistent = declaredCpuRatio < 0.60 || declaredCpuRatio > 1.70;
+      cpuDeclaredInconsistent = declaredCpuRatio < 0.6 || declaredCpuRatio > 1.7;
     }
     let memDeclaredInconsistent = false;
     if (expectedMem > 0 && measuredMem > 0) {
       const declaredMemRatio = measuredMem / expectedMem;
-      memDeclaredInconsistent = declaredMemRatio < 0.50 || declaredMemRatio > 1.90;
+      memDeclaredInconsistent = declaredMemRatio < 0.5 || declaredMemRatio > 1.9;
     }
     benchmarkConsistencySignal = cpuDeclaredInconsistent || memDeclaredInconsistent;
 
@@ -4482,28 +4695,28 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     if (identitySignalCount > 0 && !anyHwMismatch) {
       console.warn(
         `[HW-Verify] Identity mismatch not confirmed (signals=${mismatchSignalCount}): ` +
-        `cpu=${cpuModelMismatch}, gpu=${gpuModelMismatch}, device=${deviceTypeMismatch}, benchmark=${benchmarkConsistencySignal}`
+          `cpu=${cpuModelMismatch}, gpu=${gpuModelMismatch}, device=${deviceTypeMismatch}, benchmark=${benchmarkConsistencySignal}`,
       );
     } else if (anyHwMismatch) {
       console.warn(
         `[HW-Verify] Multi-signal hardware mismatch confirmed (signals=${mismatchSignalCount}): ` +
-        `cpu=${cpuModelMismatch}, gpu=${gpuModelMismatch}, device=${deviceTypeMismatch}, benchmark=${benchmarkConsistencySignal}`
+          `cpu=${cpuModelMismatch}, gpu=${gpuModelMismatch}, device=${deviceTypeMismatch}, benchmark=${benchmarkConsistencySignal}`,
       );
     }
 
     if (referenceCpu > 0 && measuredCpu > 0) {
       const ratio = measuredCpu / referenceCpu;
-      hwAuthority.benchmarkOpsCalibration = Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * ratio));
+      hwAuthority.benchmarkOpsCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
     } else if (referenceCpu === 0) {
       // Unknown CPU and no personal history — conservative fallback.
-      hwAuthority.benchmarkOpsCalibration = Math.min(hwAuthority.benchmarkOpsCalibration, 0.80);
+      hwAuthority.benchmarkOpsCalibration = Math.min(hwAuthority.benchmarkOpsCalibration, 0.8);
     }
     if (referenceMem > 0 && measuredMem > 0) {
       const ratio = measuredMem / referenceMem;
-      hwAuthority.benchmarkMemCalibration = Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * ratio));
+      hwAuthority.benchmarkMemCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
     } else if (referenceMem === 0) {
       // Unknown memory and no personal history — conservative fallback.
-      hwAuthority.benchmarkMemCalibration = Math.min(hwAuthority.benchmarkMemCalibration, 0.80);
+      hwAuthority.benchmarkMemCalibration = Math.min(hwAuthority.benchmarkMemCalibration, 0.8);
     }
 
     saveBenchmarkHistory(benchmarkHistory);
@@ -4521,7 +4734,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     const MAX_DECLARED_UNIT_POWER_W = 600;
     let declaredUnitPowerW = Math.min(
       MAX_DECLARED_UNIT_POWER_W,
-      Math.max(0, Number(request && request.declaredUnitPowerW || 0))
+      Math.max(0, Number((request && request.declaredUnitPowerW) || 0)),
     );
 
     // ── Hardware mismatch: trust penalty + authoritative TDP re-lookup ───────
@@ -4531,8 +4744,10 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     if (anyHwMismatch && !isBaseline) {
       const penaltyBefore = hwAuthority.trustScore;
       hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 20);
-      console.warn(`[HW-Verify] Hardware mismatch penalty: trust ${penaltyBefore} -> ${hwAuthority.trustScore}` +
-        `${cpuModelMismatch ? ' [CPU]' : ''}${gpuModelMismatch ? ' [GPU]' : ''}${deviceTypeMismatch ? ' [DeviceType]' : ''}`);
+      console.warn(
+        `[HW-Verify] Hardware mismatch penalty: trust ${penaltyBefore} -> ${hwAuthority.trustScore}` +
+          `${cpuModelMismatch ? ' [CPU]' : ''}${gpuModelMismatch ? ' [GPU]' : ''}${deviceTypeMismatch ? ' [DeviceType]' : ''}`,
+      );
 
       // Fetch real TDP for the OS-identified components via Brave and clamp.
       // No tolerance margin: mismatch already proves dishonesty — no OC headroom.
@@ -4542,11 +4757,15 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           const realCpuTdp = await fetchTdpFromBrave(osCpuModel);
           if (realCpuTdp !== null) {
             if (declaredUnitPowerW > realCpuTdp) {
-              console.warn(`[HW-Verify] CPU TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realCpuTdp}W -> capped to ${realCpuTdp}W`);
+              console.warn(
+                `[HW-Verify] CPU TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realCpuTdp}W -> capped to ${realCpuTdp}W`,
+              );
               declaredUnitPowerW = realCpuTdp;
             }
           } else {
-            console.warn(`[HW-Verify] Brave TDP lookup failed for CPU "${osCpuModel}" -- using calibration-only fallback`);
+            console.warn(
+              `[HW-Verify] Brave TDP lookup failed for CPU "${osCpuModel}" -- using calibration-only fallback`,
+            );
           }
         }
 
@@ -4556,11 +4775,15 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           const realGpuTdp = await fetchTdpFromBrave(primaryGpu);
           if (realGpuTdp !== null) {
             if (declaredUnitPowerW > realGpuTdp) {
-              console.warn(`[HW-Verify] GPU TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realGpuTdp}W -> capped to ${realGpuTdp}W`);
+              console.warn(
+                `[HW-Verify] GPU TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realGpuTdp}W -> capped to ${realGpuTdp}W`,
+              );
               declaredUnitPowerW = realGpuTdp;
             }
           } else {
-            console.warn(`[HW-Verify] Brave TDP lookup failed for GPU "${primaryGpu}" -- using calibration-only fallback`);
+            console.warn(
+              `[HW-Verify] Brave TDP lookup failed for GPU "${primaryGpu}" -- using calibration-only fallback`,
+            );
           }
         }
 
@@ -4575,7 +4798,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           }
           if (laptopCap === null) laptopCap = 35; // conservative laptop fallback
           if (declaredUnitPowerW > laptopCap) {
-            console.warn(`[HW-Verify] Laptop TDP clamp: declared=${declaredUnitPowerW}W -> capped to ${laptopCap}W (device is laptop${laptopCap !== 130 ? ', Brave lookup' : ', fallback'})`);
+            console.warn(
+              `[HW-Verify] Laptop TDP clamp: declared=${declaredUnitPowerW}W -> capped to ${laptopCap}W (device is laptop${laptopCap !== 130 ? ', Brave lookup' : ', fallback'})`,
+            );
             declaredUnitPowerW = laptopCap;
           }
         }
@@ -4604,7 +4829,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       const calibFactor = Math.min(
         hwAuthority.benchmarkOpsCalibration,
         hwAuthority.benchmarkMemCalibration,
-        _allowGpuCalib ? hwAuthority.benchmarkGpuCalibration : 1.0
+        _allowGpuCalib ? hwAuthority.benchmarkGpuCalibration : 1.0,
       );
       hwAuthority.calibratedUnitPowerW = Math.round(declaredUnitPowerW * calibFactor);
     }
@@ -4628,7 +4853,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         // Note: the -20 mismatch penalty was already applied above; normal
         // per-issue penalty only covers the remaining issues to avoid double-counting.
         const alreadyPenalised = new Set(['hardware identity mismatch (OS ≠ renderer)']);
-        const nonMismatchIssues = allIssues.filter(i => !alreadyPenalised.has(i));
+        const nonMismatchIssues = allIssues.filter((i) => !alreadyPenalised.has(i));
         if (nonMismatchIssues.length > 0) {
           hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - nonMismatchIssues.length);
         }
@@ -4650,14 +4875,10 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     const _memSamples = benchmarkHistory.memSamples;
     result = Object.assign({}, result, {
       trustScoreBefore,
-      trustScoreAfter:  hwAuthority.trustScore,
-      historySamples:   _cpuSamples.length,
-      personalMeanCpu:  _cpuSamples.length >= 2
-        ? _cpuSamples.reduce((a, b) => a + b, 0) / _cpuSamples.length
-        : 0,
-      personalMeanMem:  _memSamples.length >= 2
-        ? _memSamples.reduce((a, b) => a + b, 0) / _memSamples.length
-        : 0,
+      trustScoreAfter: hwAuthority.trustScore,
+      historySamples: _cpuSamples.length,
+      personalMeanCpu: _cpuSamples.length >= 2 ? _cpuSamples.reduce((a, b) => a + b, 0) / _cpuSamples.length : 0,
+      personalMeanMem: _memSamples.length >= 2 ? _memSamples.reduce((a, b) => a + b, 0) / _memSamples.length : 0,
     });
   }
   return result;
@@ -4703,20 +4924,23 @@ ipcMain.handle('wattcoin-save-probe-log', async (_event, entries) => {
     // Sanitise each entry: only allow plain objects with string/number/boolean values,
     // clamping any string field to 512 characters to prevent unbounded memory/disk use.
     const MAX_STR_LEN = 512;
-    const sanitised = entries.slice(0, 500).map(entry => {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
-      const clean = {};
-      for (const [k, v] of Object.entries(entry)) {
-        if (typeof v === 'string')        clean[k] = v.slice(0, MAX_STR_LEN);
-        else if (typeof v === 'number' || typeof v === 'boolean') clean[k] = v;
-        // drop nested objects, arrays, null — keep the log flat and safe
-      }
-      return clean;
-    }).filter(Boolean);
+    const sanitised = entries
+      .slice(0, 500)
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+        const clean = {};
+        for (const [k, v] of Object.entries(entry)) {
+          if (typeof v === 'string') clean[k] = v.slice(0, MAX_STR_LEN);
+          else if (typeof v === 'number' || typeof v === 'boolean') clean[k] = v;
+          // drop nested objects, arrays, null — keep the log flat and safe
+        }
+        return clean;
+      })
+      .filter(Boolean);
     fs.writeFileSync(getProbeLogFilePath(), JSON.stringify({ entries: sanitised }), 'utf8');
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: String(err && err.message || err) };
+    return { ok: false, error: String((err && err.message) || err) };
   }
 });
 
@@ -4828,7 +5052,10 @@ function getOrCreateWalletEncryptionKey() {
   try {
     const deviceSecret = getDeviceIdentitySecret();
     if (deviceSecret && deviceSecret.length >= 32) {
-      const fbKey = crypto.createHash('sha256').update(deviceSecret + ':wallet-encryption').digest();
+      const fbKey = crypto
+        .createHash('sha256')
+        .update(deviceSecret + ':wallet-encryption')
+        .digest();
       _walletEncryptionKey = fbKey;
       return _walletEncryptionKey;
     }
@@ -4852,7 +5079,7 @@ function loadOrCreateDeviceIdentity() {
   } catch (_) {}
 
   if (!identity || !identity.secret || typeof identity.secret !== 'string') {
-    const secret   = crypto.randomBytes(32).toString('hex');
+    const secret = crypto.randomBytes(32).toString('hex');
     const deviceId = crypto.createHash('sha256').update(secret).digest('hex');
     identity = { secret, deviceId, createdAt: Date.now(), version: 1 };
     isNew = true;
@@ -4866,7 +5093,12 @@ function loadOrCreateDeviceIdentity() {
     }
   }
   _deviceIdentitySecret = typeof identity.secret === 'string' ? identity.secret : '';
-  _deviceIdentity = { deviceId: identity.deviceId, createdAt: identity.createdAt, version: identity.version || 1, isNew };
+  _deviceIdentity = {
+    deviceId: identity.deviceId,
+    createdAt: identity.createdAt,
+    version: identity.version || 1,
+    isNew,
+  };
   return _deviceIdentity;
 }
 
@@ -4913,20 +5145,27 @@ ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
   }
 
   const candidatePeers = [...peers];
-  const workerId = String(opts && opts.workerId || walletAddressCache.address || 'unknown');
+  const workerId = String((opts && opts.workerId) || walletAddressCache.address || 'unknown');
   const allowGpu = !!(opts && opts.allowGpuWorkloads);
   while (candidatePeers.length > 0) {
     const index = Math.floor(Math.random() * candidatePeers.length);
     const [peerUrl] = candidatePeers.splice(index, 1);
     try {
-      const result = await requestPeerJson(peerUrl, 'GET', '/api/v1/probe/issue', undefined, {
-        workerId,
-        allowGpu: String(allowGpu),
-      }, {
-        trackReachability: false,
-        suppressPeerDiscovery: true,
-        source: 'peer-probe-issue',
-      });
+      const result = await requestPeerJson(
+        peerUrl,
+        'GET',
+        '/api/v1/probe/issue',
+        undefined,
+        {
+          workerId,
+          allowGpu: String(allowGpu),
+        },
+        {
+          trackReachability: false,
+          suppressPeerDiscovery: true,
+          source: 'peer-probe-issue',
+        },
+      );
       const probe = result && result.probe ? result.probe : null;
       if (probe) probe._peerUrl = peerUrl;
       return { ok: true, source: 'peer', probe };
@@ -4953,9 +5192,9 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
     if (peerUrl) {
       try {
         const body = {
-          probeId:      result.id      || '',
-          proof:        result.proof   || '',
-          pixelHash:    result.pixelHash || '',
+          probeId: result.id || '',
+          proof: result.proof || '',
+          pixelHash: result.pixelHash || '',
           hardwareSpec: hardwareSpec,
         };
         const verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
@@ -4981,29 +5220,32 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
 });
 
 // ── Hardware-authority read-back (renderer uses for display only) ─────────────
-const HW_RESET_COOLDOWN_MS        = 7 * 24 * 60 * 60 * 1000; // 7 days
-const SEARCH_CACHE_COOLDOWN_MS    = 3 * 24 * 60 * 60 * 1000; // 3 days
+const HW_RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SEARCH_CACHE_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 ipcMain.handle('wattcoin-get-authority-state', async () => {
   const now = Date.now();
-  const hwResetCooldownRemainingMs       = Math.max(0, (hwAuthority.lastHwResetAtMs          + HW_RESET_COOLDOWN_MS)     - now);
-  const searchCacheCooldownRemainingMs   = Math.max(0, (hwAuthority.lastSearchCacheClearAtMs + SEARCH_CACHE_COOLDOWN_MS) - now);
+  const hwResetCooldownRemainingMs = Math.max(0, hwAuthority.lastHwResetAtMs + HW_RESET_COOLDOWN_MS - now);
+  const searchCacheCooldownRemainingMs = Math.max(
+    0,
+    hwAuthority.lastSearchCacheClearAtMs + SEARCH_CACHE_COOLDOWN_MS - now,
+  );
   return {
-    trustScore:               hwAuthority.trustScore,
-    hwHoldUntilMs:            hwAuthority.hwHoldUntilMs,
-    isOnHold:                 hwAuthority.hwHoldUntilMs > now,
-    benchmarkOpsCalibration:  hwAuthority.benchmarkOpsCalibration,
-    benchmarkMemCalibration:  hwAuthority.benchmarkMemCalibration,
-    benchmarkGpuCalibration:  hwAuthority.benchmarkGpuCalibration,
+    trustScore: hwAuthority.trustScore,
+    hwHoldUntilMs: hwAuthority.hwHoldUntilMs,
+    isOnHold: hwAuthority.hwHoldUntilMs > now,
+    benchmarkOpsCalibration: hwAuthority.benchmarkOpsCalibration,
+    benchmarkMemCalibration: hwAuthority.benchmarkMemCalibration,
+    benchmarkGpuCalibration: hwAuthority.benchmarkGpuCalibration,
     peerProbeVerifiedForRound: hwAuthority.peerProbeVerifiedForRound,
-    calibratedUnitPowerW:     hwAuthority.calibratedUnitPowerW,
-    currentLoadPercent:       hwAuthority.currentLoadPercent,
-    hwChangedBlocked:         hwAuthority.hwChangedBlocked,
-    lastHwResetAtMs:          hwAuthority.lastHwResetAtMs,
+    calibratedUnitPowerW: hwAuthority.calibratedUnitPowerW,
+    currentLoadPercent: hwAuthority.currentLoadPercent,
+    hwChangedBlocked: hwAuthority.hwChangedBlocked,
+    lastHwResetAtMs: hwAuthority.lastHwResetAtMs,
     hwResetCooldownRemainingMs,
-    hwResetOnCooldown:             hwResetCooldownRemainingMs > 0,
+    hwResetOnCooldown: hwResetCooldownRemainingMs > 0,
     searchCacheCooldownRemainingMs,
-    searchCacheOnCooldown:         searchCacheCooldownRemainingMs > 0,
+    searchCacheOnCooldown: searchCacheCooldownRemainingMs > 0,
     // True the very first time the app runs (no hw-auth-state.json exists yet).
     // Renderer should send its legacy localStorage trust value so it is migrated.
     isFirstRun: hwAuthStateIsNew,
@@ -5012,7 +5254,7 @@ ipcMain.handle('wattcoin-get-authority-state', async () => {
 
 ipcMain.handle('wattcoin-clear-search-cache', async () => {
   const now = Date.now();
-  const cooldownRemainingMs = Math.max(0, (hwAuthority.lastSearchCacheClearAtMs + SEARCH_CACHE_COOLDOWN_MS) - now);
+  const cooldownRemainingMs = Math.max(0, hwAuthority.lastSearchCacheClearAtMs + SEARCH_CACHE_COOLDOWN_MS - now);
   if (cooldownRemainingMs > 0) {
     const remainingDays = Math.ceil(cooldownRemainingMs / (24 * 60 * 60 * 1000));
     console.warn(`[searchCache] Clear blocked — cooldown active, ${remainingDays}d remaining.`);
@@ -5026,7 +5268,7 @@ ipcMain.handle('wattcoin-clear-search-cache', async () => {
 
 ipcMain.handle('wattcoin-reset-hardware-identity', async () => {
   const now = Date.now();
-  const cooldownRemainingMs = Math.max(0, (hwAuthority.lastHwResetAtMs + HW_RESET_COOLDOWN_MS) - now);
+  const cooldownRemainingMs = Math.max(0, hwAuthority.lastHwResetAtMs + HW_RESET_COOLDOWN_MS - now);
   if (cooldownRemainingMs > 0) {
     const remainingDays = Math.ceil(cooldownRemainingMs / (24 * 60 * 60 * 1000));
     console.warn(`[hwReset] Reset blocked — cooldown active, ${remainingDays}d remaining.`);
@@ -5061,7 +5303,7 @@ ipcMain.handle('wattcoin-seed-authority-state', async (_event, payload = {}) => 
     return { ok: false, reason: 'not first run' };
   }
   const legacyTrust = Number(payload && payload.trustScore);
-  const legacyHold  = Number(payload && payload.hwHoldUntilMs || 0);
+  const legacyHold = Number((payload && payload.hwHoldUntilMs) || 0);
   // Cap seeded value at 50 (the neutral default) — prevents an attacker from deleting
   // hw-auth-state.json and seeding an inflated trust score via a modified localStorage.
   if (Number.isFinite(legacyTrust) && legacyTrust >= 0 && legacyTrust <= 50) {
@@ -5085,7 +5327,7 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
   if (!gpuRateLimit.ok) {
     return { ok: gpuRateLimit.ok, personalMeanGpuRatio: 0 };
   }
-  const gpuScore         = Number(payload && payload.gpuScore         || 0);
+  const gpuScore = Number((payload && payload.gpuScore) || 0);
   // Hard bounds on renderer-supplied maxExpectedScore.
   // Lower bound (300 K ops/ms): below any real GPU in the table — prevents a patched
   // renderer sending maxExpectedScore=1 to inflate the ratio to 10× (discard threshold).
@@ -5093,10 +5335,9 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
   // an impossibly large value to deflate the ratio and claim calibration credit for nothing.
   const GPU_MAX_EXPECTED_SCORE_MIN = 300_000;
   const GPU_MAX_EXPECTED_SCORE_MAX = 5_000_000_000;
-  const rawMaxExpected = Number(payload && payload.maxExpectedScore || 0);
-  const maxExpectedScore = rawMaxExpected > 0
-    ? Math.min(GPU_MAX_EXPECTED_SCORE_MAX, Math.max(GPU_MAX_EXPECTED_SCORE_MIN, rawMaxExpected))
-    : 0;
+  const rawMaxExpected = Number((payload && payload.maxExpectedScore) || 0);
+  const maxExpectedScore =
+    rawMaxExpected > 0 ? Math.min(GPU_MAX_EXPECTED_SCORE_MAX, Math.max(GPU_MAX_EXPECTED_SCORE_MIN, rawMaxExpected)) : 0;
   if (maxExpectedScore > 0 && gpuScore > 0) {
     const rawRatio = gpuScore / maxExpectedScore;
     if (rawRatio <= 10.0) {
@@ -5105,12 +5346,11 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
       const benchmarkHistory = loadBenchmarkHistory();
       benchmarkHistory.gpuSamples = appendBenchmarkSample(benchmarkHistory.gpuSamples, rawRatio);
       const referenceRatio = getPersonalReference(benchmarkHistory.gpuSamples, 1.0);
-      hwAuthority.benchmarkGpuCalibration = Math.min(1.20, Math.max(0.20, 0.5 + 0.5 * (rawRatio / referenceRatio)));
+      hwAuthority.benchmarkGpuCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * (rawRatio / referenceRatio)));
       saveBenchmarkHistory(benchmarkHistory);
       const _gpuSamples = benchmarkHistory.gpuSamples;
-      const personalMeanGpuRatio = _gpuSamples.length >= 1
-        ? _gpuSamples.reduce((a, b) => a + b, 0) / _gpuSamples.length
-        : 0;
+      const personalMeanGpuRatio =
+        _gpuSamples.length >= 1 ? _gpuSamples.reduce((a, b) => a + b, 0) / _gpuSamples.length : 0;
       return { ok: true, personalMeanGpuRatio };
     }
   }
@@ -5122,10 +5362,12 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
 // to the WebGL integer shader — so no GPU is needed on the main-process side.
 ipcMain.handle('wattcoin-verify-gpu-proof', async (_event, payload = {}) => {
   // Match the shader's seed guard: gl.uniform1i uses (seed | 0) || 1, so seed=0 → 1.
-  const seed            = (Number(payload && payload.seed) | 0) || 1;
-  const size            = Math.max(1, Math.min(512, Number(payload && payload.size) || 128));
-  const shaderIters     = Math.max(1, Math.min(256, Number(payload && payload.shaderIterations) || 32));
-  const submittedHash   = String(payload && payload.proofHash || '').trim().toLowerCase();
+  const seed = Number(payload && payload.seed) | 0 || 1;
+  const size = Math.max(1, Math.min(512, Number(payload && payload.size) || 128));
+  const shaderIters = Math.max(1, Math.min(256, Number(payload && payload.shaderIterations) || 32));
+  const submittedHash = String((payload && payload.proofHash) || '')
+    .trim()
+    .toLowerCase();
   if (!submittedHash || submittedHash.length !== 8) return { verified: false };
   const expectedHash = computeGpuProbeExpectedHash(seed, size, shaderIters);
   return { verified: submittedHash === expectedHash };
@@ -5138,12 +5380,12 @@ ipcMain.handle('wattcoin-activate-hardware-hold', async (_event, payload = {}) =
   // Hard cap: a compromised renderer cannot set an infinite or multi-year hold.
   const durationMs = Math.min(
     HARDWARE_HOLD_MAX_DURATION_MS,
-    Math.max(0, Number(payload && payload.durationMs || 5 * 60 * 1000))
+    Math.max(0, Number((payload && payload.durationMs) || 5 * 60 * 1000)),
   );
   const now = Date.now();
   if (hwAuthority.hwHoldUntilMs <= now) {
     hwAuthority.hwHoldUntilMs = now + durationMs;
-    hwAuthority.trustScore    = Math.max(0, hwAuthority.trustScore - 10);
+    hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 10);
     saveHwAuthState();
   }
   return { ok: true, hwHoldUntilMs: hwAuthority.hwHoldUntilMs };
@@ -5151,9 +5393,8 @@ ipcMain.handle('wattcoin-activate-hardware-hold', async (_event, payload = {}) =
 
 ipcMain.handle('wattcoin-attestation-issue-challenge', async (_event, payload = {}) => {
   const minerId = payload && payload.minerId ? String(payload.minerId) : 'local-client';
-  const hardwareSummary = payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object'
-    ? payload.hardwareSummary
-    : {};
+  const hardwareSummary =
+    payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object' ? payload.hardwareSummary : {};
   const identityAddress = payload && payload.identityAddress ? String(payload.identityAddress) : '';
   return issueBenchmarkChallenge(minerId, hardwareSummary, identityAddress);
 });
@@ -5164,9 +5405,8 @@ ipcMain.handle('wattcoin-attestation-submit-proof', async (_event, payload = {})
 
 ipcMain.handle('wattcoin-attestation-get-policy', async (_event, payload = {}) => {
   const minerId = payload && payload.minerId ? String(payload.minerId) : 'local-client';
-  const hardwareSummary = payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object'
-    ? payload.hardwareSummary
-    : {};
+  const hardwareSummary =
+    payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object' ? payload.hardwareSummary : {};
   return {
     ok: true,
     policy: computePolicyForMiner(minerId, hardwareSummary, { allowSpotCheck: true }),
@@ -5189,7 +5429,11 @@ ipcMain.handle('wattcoin-sign-attestation-message', async (_event, payload = {})
       const result = wtcNode.signMessage(address, message);
       return { ok: true, address, message, signature: result.signature };
     } catch (e) {
-      return { ok: false, code: 'SIGN_FAILED', message: e && e.message ? e.message : 'Failed to sign attestation message.' };
+      return {
+        ok: false,
+        code: 'SIGN_FAILED',
+        message: e && e.message ? e.message : 'Failed to sign attestation message.',
+      };
     }
   }
   return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
@@ -5369,7 +5613,11 @@ document.getElementById('btn-ext').addEventListener('click',pay);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(html);
       // Shut down after serving once (allow a second request for favicon etc.)
-      setTimeout(() => { try { server.close(); } catch (_) {} }, 3000);
+      setTimeout(() => {
+        try {
+          server.close();
+        } catch (_) {}
+      }, 3000);
     });
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address();
@@ -5404,15 +5652,15 @@ ipcMain.handle('wattcoin-sale-status', async (_event) => {
   const sold = Math.max(0, Math.min(saleQueue.SALE_TOTAL, Number(soldRaw) || 0));
   const poll = saleQueue.getLastPollStatus();
   return {
-    ok:               true,
+    ok: true,
     sellerUsdcAddress: saleQueue.SELLER_USDC_ADDRESS,
-    saleWtcAddress:   saleQueue.SALE_WTC_ADDRESS,
-    sold:             sold,
-    remaining:        Math.max(0, saleQueue.SALE_TOTAL - sold),
-    total:            saleQueue.SALE_TOTAL,
-    tierSize:         saleQueue.SALE_TIER_SIZE,
-    tiers:            saleQueue.SALE_TIERS,
-    minBuy:           saleQueue.MIN_BUY_WTC,
+    saleWtcAddress: saleQueue.SALE_WTC_ADDRESS,
+    sold: sold,
+    remaining: Math.max(0, saleQueue.SALE_TOTAL - sold),
+    total: saleQueue.SALE_TOTAL,
+    tierSize: saleQueue.SALE_TIER_SIZE,
+    tiers: saleQueue.SALE_TIERS,
+    minBuy: saleQueue.MIN_BUY_WTC,
     lastEtherscanPoll: poll,
   };
 });
@@ -5433,22 +5681,25 @@ ipcMain.handle('wattcoin-sale-compute-price', async (_event, { wtcAmount, electr
 });
 
 // Place an order (buyer is the logged-in WTC address)
-ipcMain.handle('wattcoin-sale-place-order', async (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
-  // Basic input sanitisation
-  const addr   = typeof wtcAddress   === 'string' ? wtcAddress.trim() : '';
-  const amount = Number(wtcAmount);
-  const usdc   = Number(usdcRequired);
+ipcMain.handle(
+  'wattcoin-sale-place-order',
+  async (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
+    // Basic input sanitisation
+    const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
+    const amount = Number(wtcAmount);
+    const usdc = Number(usdcRequired);
 
-  if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
-    return { ok: false, error: 'Invalid WTC address' };
-  }
-  return saleQueue.placeSaleOrder({
-    wtcAddress: addr,
-    wtcAmount: amount,
-    usdcRequired: usdc,
-    buyerEthAddress: typeof buyerEthAddress === 'string' ? buyerEthAddress.trim() : null,
-  });
-});
+    if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
+      return { ok: false, error: 'Invalid WTC address' };
+    }
+    return saleQueue.placeSaleOrder({
+      wtcAddress: addr,
+      wtcAmount: amount,
+      usdcRequired: usdc,
+      buyerEthAddress: typeof buyerEthAddress === 'string' ? buyerEthAddress.trim() : null,
+    });
+  },
+);
 
 // Get a specific order status
 ipcMain.handle('wattcoin-sale-get-order', (_event, orderId) => {
@@ -5477,7 +5728,7 @@ ipcMain.handle('wattcoin-sale-get-purchase-total', (_event, wtcAddress) => {
 // Record the on-chain tx hash submitted via in-app wallet connect
 ipcMain.handle('wattcoin-sale-confirm-payment', (_event, payload) => {
   const orderId = typeof (payload && payload.orderId) === 'string' ? payload.orderId.trim() : '';
-  const txHash  = typeof (payload && payload.txHash)  === 'string' ? payload.txHash.trim()  : '';
+  const txHash = typeof (payload && payload.txHash) === 'string' ? payload.txHash.trim() : '';
   if (!orderId || !txHash) return { ok: false, error: 'orderId and txHash required' };
   return saleQueue.setOrderTxHash(orderId, txHash);
 });
@@ -5487,19 +5738,19 @@ ipcMain.handle('wattcoin-sale-confirm-payment', (_event, payload) => {
 // Status: pool balance, total pending staked, current APY
 ipcMain.handle('wattcoin-staking-status', (_event) => {
   return {
-    ok:             true,
-    poolAddress:    stakingQueue.STAKING_POOL_ADDRESS,
-    poolBalance:    stakingQueue.poolBalance(),
-    totalStaked:    stakingQueue.totalPendingWtc(),
-    currentApy:     stakingQueue.currentApy(),
+    ok: true,
+    poolAddress: stakingQueue.STAKING_POOL_ADDRESS,
+    poolBalance: stakingQueue.poolBalance(),
+    totalStaked: stakingQueue.totalPendingWtc(),
+    currentApy: stakingQueue.currentApy(),
     flushThreshold: stakingQueue.FLUSH_THRESHOLD_WTC,
-    minStake:       stakingQueue.MIN_STAKE_WTC,
+    minStake: stakingQueue.MIN_STAKE_WTC,
   };
 });
 
 // Place a staking entry
 ipcMain.handle('wattcoin-staking-stake', (_event, { fromAddress, wtcAmount }) => {
-  const addr   = typeof fromAddress === 'string' ? fromAddress.trim() : '';
+  const addr = typeof fromAddress === 'string' ? fromAddress.trim() : '';
   const amount = Number(wtcAmount);
   if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
     return { ok: false, error: 'Invalid WTC address' };
@@ -5515,7 +5766,9 @@ ipcMain.handle('wattcoin-staking-stake', (_event, { fromAddress, wtcAmount }) =>
       if (Math.floor(amount) > available) {
         return { ok: false, error: `Insufficient balance. You have ${available.toLocaleString()} WTC in your wallet.` };
       }
-    } catch (_) { /* node not ready — allow through and let queue handle it */ }
+    } catch (_) {
+      /* node not ready — allow through and let queue handle it */
+    }
   }
   return stakingQueue.stakeWtc({ fromAddress: addr, wtcAmount: amount });
 });
@@ -5577,9 +5830,9 @@ ipcMain.handle('wattcoin-nft-collection', (_event) => {
 ipcMain.handle('wattcoin-nft-transfer', (_event, { nftId, fromAddress, toAddress }) => {
   try {
     if (!wtcNode) return { ok: false, error: 'Node not ready' };
-    const id   = typeof nftId       === 'string' ? nftId.trim()       : '';
+    const id = typeof nftId === 'string' ? nftId.trim() : '';
     const from = typeof fromAddress === 'string' ? fromAddress.trim() : '';
-    const to   = typeof toAddress   === 'string' ? toAddress.trim()   : '';
+    const to = typeof toAddress === 'string' ? toAddress.trim() : '';
     if (!id || !from || !to) return { ok: false, error: 'nftId, fromAddress, toAddress required' };
     return wtcNode.transferNft({ nftId: id, fromAddress: from, toAddress: to });
   } catch (e) {
@@ -5594,20 +5847,20 @@ ipcMain.handle('wattcoin-explorer-get-blocks', async (_event, { offset = 0, limi
     if (height < 0) return { ok: true, blocks: [], total: 0 };
     const total = height + 1;
     const start = Math.max(0, height - offset - limit + 1);
-    const end   = Math.max(-1, height - offset);
+    const end = Math.max(-1, height - offset);
     const blocks = [];
     for (let h = end; h >= start; h--) {
       const b = wtcNode.getBlock(h);
       if (!b) continue;
       blocks.push({
-        height:     b.height,
-        hash:       b.hash,
-        prevHash:   b.prevHash,
-        timestamp:  b.timestamp,
-        proposer:   b.proposer,
-        energyWh:   b.energyWh,
+        height: b.height,
+        hash: b.hash,
+        prevHash: b.prevHash,
+        timestamp: b.timestamp,
+        proposer: b.proposer,
+        energyWh: b.energyWh,
         rewardTotal: b.rewardTotal,
-        txCount:    (b.transactions || []).length,
+        txCount: (b.transactions || []).length,
         voterCount: b.votes ? Object.keys(b.votes).length : 0,
       });
     }
@@ -5645,18 +5898,12 @@ ipcMain.handle('wattcoin-get-peer-count', async () => {
       const lastSync = opsState.lastSyncResult || null;
       if (settings.enabled && settings.mode === 'peer') {
         // Single merged peer list — avoids double sequential probing.
-        const mergedTargets = Array.from(new Set([
-          ...getActivePeers(settings),
-          ...getPeerDirectoryTargets(settings),
-        ]));
-        const activeConnectivity = await inspectPeerConnectivityForTargets(
-          mergedTargets,
-          {
-            source: 'peer-count-active',
-            concurrency: PEER_COUNT_PROBE_CONCURRENCY,
-            probeTimeoutMs: PEER_COUNT_PROBE_TIMEOUT_MS,
-          }
-        );
+        const mergedTargets = Array.from(new Set([...getActivePeers(settings), ...getPeerDirectoryTargets(settings)]));
+        const activeConnectivity = await inspectPeerConnectivityForTargets(mergedTargets, {
+          source: 'peer-count-active',
+          concurrency: PEER_COUNT_PROBE_CONCURRENCY,
+          probeTimeoutMs: PEER_COUNT_PROBE_TIMEOUT_MS,
+        });
         const tunnelCount = getActiveReverseTunnelPeerConnectionCount();
         const counts = summarizeDisplayedPeerCounts({
           healthyDistinct: activeConnectivity.healthyDistinct,
@@ -5701,31 +5948,41 @@ ipcMain.handle('wattcoin-get-peer-count', async () => {
       peerCountInspectionPromise = null;
     }
   } catch (_) {
-    return { ok: false, count: null, onlineCount: null, connectedCount: 0, tunnelCount: 0, activeCount: 0, configuredPeers: 0, seedPeers: 0, discoveredPeers: 0, lastSyncTrigger: '', lastSyncOk: false };
+    return {
+      ok: false,
+      count: null,
+      onlineCount: null,
+      connectedCount: 0,
+      tunnelCount: 0,
+      activeCount: 0,
+      configuredPeers: 0,
+      seedPeers: 0,
+      discoveredPeers: 0,
+      lastSyncTrigger: '',
+      lastSyncOk: false,
+    };
   }
 });
 
 ipcMain.handle('wattcoin-get-ops-metrics', async () => {
   try {
-    const snapshot = opsState.latestSnapshot || await collectOpsSnapshot();
+    const snapshot = opsState.latestSnapshot || (await collectOpsSnapshot());
     return { ok: true, snapshot };
   } catch (e) {
     return { ok: false, message: e && e.message ? e.message : 'failed to read ops metrics' };
   }
 });
 
-
 ipcMain.handle('wattcoin-get-wallet-readiness', async () => {
   if (wtcNode) {
     const readiness = await wtcNode.getWalletReadiness();
     const lastSyncResult = opsState.lastSyncResult || null;
-    const lastReason = lastSyncResult && typeof lastSyncResult.reason === 'string'
-      ? lastSyncResult.reason.trim()
-      : '';
-    const syncBlockedReason = !readiness.spendReady
-      && lastReason
-      && lastReason !== 'already best chain'
-      && lastReason !== 'sync already in progress'
+    const lastReason = lastSyncResult && typeof lastSyncResult.reason === 'string' ? lastSyncResult.reason.trim() : '';
+    const syncBlockedReason =
+      !readiness.spendReady &&
+      lastReason &&
+      lastReason !== 'already best chain' &&
+      lastReason !== 'sync already in progress'
         ? lastReason
         : '';
     return {
@@ -5789,45 +6046,51 @@ function buildPowerProofCommitment(proofData) {
   // memProof is unique per wallet address (derived salt); a peer verifies it by
   // re-running the deterministic traversal seeded with the submitting miner's address.
   const canonical = {
-    benchmarkTs:         Number(proofData.benchmarkTs)         || 0,
-    challengeSeed:       Number(proofData.challengeSeed)       || 0,
-    cpuOpsPerSec:        Number(proofData.cpuOpsPerSec)        || 0,
+    benchmarkTs: Number(proofData.benchmarkTs) || 0,
+    challengeSeed: Number(proofData.challengeSeed) || 0,
+    cpuOpsPerSec: Number(proofData.cpuOpsPerSec) || 0,
     cpuSpeedInitialSeed: Number(proofData.cpuSpeedInitialSeed) || 0,
-    cpuSpeedProof:       String(proofData.cpuSpeedProof        || ''),
-    cpuSpeedTier:        Number(proofData.cpuSpeedTier)        || 0,  // item 2: measurement-derived tier
-    energyWh:            Number(proofData.energyWh)             || 0,
-    gpuFps:              Number(proofData.gpuFps)               || 0,
-    gpuProofHash:        String(proofData.gpuProofHash          || ''),
-    gpuProofWorkload:    String(proofData.gpuProofWorkload      || 'none'),
-    issues:              Array.isArray(proofData.issues) ? [...proofData.issues].sort() : [],
-    jitterRatio:         Number(proofData.jitterRatio)          || 0,
-    memoryMBps:          Number(proofData.memoryMBps)           || 0,
-    memLatencyTier:      Number(proofData.memLatencyTier)       || 0,  // item 2: measurement-derived tier
-    memProof:            String(proofData.memProof              || ''),
-    miningAddress:       String(proofData.miningAddress         || ''),
-    peerProbeVerified:   !!(proofData.peerProbeVerified),              // item 4: peer probe flag
-    probeReceipt:        proofData.probeReceipt && typeof proofData.probeReceipt === 'object'  // item 5
-                 ? normalizeProbeReceipt(proofData.probeReceipt)
-                           : null,
-    proofTs:             Number(proofData.proofTs)              || 0,
-    score:               Number(proofData.score)                || 0,
-    sensorTier:          String(proofData.sensorTier            || ''),
+    cpuSpeedProof: String(proofData.cpuSpeedProof || ''),
+    cpuSpeedTier: Number(proofData.cpuSpeedTier) || 0, // item 2: measurement-derived tier
+    energyWh: Number(proofData.energyWh) || 0,
+    gpuFps: Number(proofData.gpuFps) || 0,
+    gpuProofHash: String(proofData.gpuProofHash || ''),
+    gpuProofWorkload: String(proofData.gpuProofWorkload || 'none'),
+    issues: Array.isArray(proofData.issues) ? [...proofData.issues].sort() : [],
+    jitterRatio: Number(proofData.jitterRatio) || 0,
+    memoryMBps: Number(proofData.memoryMBps) || 0,
+    memLatencyTier: Number(proofData.memLatencyTier) || 0, // item 2: measurement-derived tier
+    memProof: String(proofData.memProof || ''),
+    miningAddress: String(proofData.miningAddress || ''),
+    peerProbeVerified: !!proofData.peerProbeVerified, // item 4: peer probe flag
+    probeReceipt:
+      proofData.probeReceipt && typeof proofData.probeReceipt === 'object' // item 5
+        ? normalizeProbeReceipt(proofData.probeReceipt)
+        : null,
+    proofTs: Number(proofData.proofTs) || 0,
+    score: Number(proofData.score) || 0,
+    sensorTier: String(proofData.sensorTier || ''),
   };
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
-
 
 ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
   const walletName = 'wattminer';
   // Use the main-process-verified wallet address as the rate-limit actor so the
   // renderer cannot bypass per-miner limits by rotating submitted address strings.
   const verifiedAddr = walletAddressCache.address || '';
-  const actorId = verifiedAddr || (typeof selectedAddress === 'string' && selectedAddress.trim()
-    ? selectedAddress.trim()
-    : 'local-client');
+  const actorId =
+    verifiedAddr ||
+    (typeof selectedAddress === 'string' && selectedAddress.trim() ? selectedAddress.trim() : 'local-client');
   const rateLimit = await enforceEndpointRateLimit('wattcoin-mine-block', actorId, { selectedAddress: actorId });
   if (!rateLimit.ok) {
-    return { address: '', mined: '', error: rateLimit.message, code: rateLimit.code, lockedUntil: rateLimit.lockedUntil || 0 };
+    return {
+      address: '',
+      mined: '',
+      error: rateLimit.message,
+      code: rateLimit.code,
+      lockedUntil: rateLimit.lockedUntil || 0,
+    };
   }
   const reattestationGate = enforceReattestationGateForMiner(actorId, {}, { allowSpotCheck: true });
   if (!reattestationGate.ok) {
@@ -5853,7 +6116,8 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
     const activePeersForProbeCheck = getActivePeers(getLedgerNetworkSettings());
     if (activePeersForProbeCheck.length === 0) {
       return {
-        address: '', mined: '',
+        address: '',
+        mined: '',
         error: 'At least one peer must be connected before mining. Waiting for peer connection...',
         code: 'NO_PEERS',
       };
@@ -5862,7 +6126,8 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
     // and signs the receipt. Cannot be forged without the verifier's private key.
     if (!(proofData && proofData.peerProbeVerified)) {
       return {
-        address: '', mined: '',
+        address: '',
+        mined: '',
         error: 'A peer probe is required before mining. Complete a peer probe first.',
         code: 'PEER_PROBE_REQUIRED',
       };
@@ -5870,45 +6135,49 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
     mineBlockBusy = true;
     try {
       const preferred = typeof selectedAddress === 'string' ? selectedAddress.trim() : '';
-      const addr = (preferred && wtcNode.getAddresses().includes(preferred))
-        ? preferred
-        : wtcNode.getPrimaryAddress();
+      const addr = preferred && wtcNode.getAddresses().includes(preferred) ? preferred : wtcNode.getPrimaryAddress();
       const commitment = buildPowerProofCommitment(proofData);
       const sharedRoundSnapshot = getSharedRoundSnapshot();
       const rewardMap = buildRewardMapFromRoundSnapshot(sharedRoundSnapshot, addr);
       const effectiveEnergyWh = Math.max(
         Number(proofData && proofData.energyWh) || 0,
-        Number(sharedRoundSnapshot.totalWh) || 0
+        Number(sharedRoundSnapshot.totalWh) || 0,
       );
       hwAuthority.pendingProofCommitment = commitment || '';
-      const result = await wtcNode.mineBlock(addr, {
-        energyWh:        effectiveEnergyWh,
-        proofCommitment: commitment || '',
-        peerProbeVerified: !!(proofData && proofData.peerProbeVerified),
-        probeReceipt: proofData && proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
-          ? normalizeProbeReceipt(proofData.probeReceipt)
-          : null,
-      }, rewardMap);
+      const result = await wtcNode.mineBlock(
+        addr,
+        {
+          energyWh: effectiveEnergyWh,
+          proofCommitment: commitment || '',
+          peerProbeVerified: !!(proofData && proofData.peerProbeVerified),
+          probeReceipt:
+            proofData && proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
+              ? normalizeProbeReceipt(proofData.probeReceipt)
+              : null,
+        },
+        rewardMap,
+      );
       announceTipToPeers({ height: result.height, hash: result.hash });
       pushChainToPeers({ windowSize: 200 });
       // Block mined — promote any delivery_pending orders that got confirmed,
       // then flush queued orders into the mempool for natural confirmation.
       saleQueue.onBlockConfirmed();
-      saleQueue.flushSaleQueue()
-        .catch(e => console.warn('[SaleQueue] post-mine flush error:', e && e.message));
-      stakingQueue.flushStakingQueue().catch(e => console.warn('[StakingQueue] post-mine flush error:', e && e.message));
+      saleQueue.flushSaleQueue().catch((e) => console.warn('[SaleQueue] post-mine flush error:', e && e.message));
+      stakingQueue
+        .flushStakingQueue()
+        .catch((e) => console.warn('[StakingQueue] post-mine flush error:', e && e.message));
       return {
-        walletName:      'wtc-native',
-        address:         result.address,
-        mined:           result.hash,
-        blockHash:       result.hash,
+        walletName: 'wtc-native',
+        address: result.address,
+        mined: result.hash,
+        blockHash: result.hash,
         proofCommitment: commitment || null,
-        proofTxid:       null,
-        height:          result.height,
-        reward:          result.reward,
-        energyWh:        effectiveEnergyWh,
+        proofTxid: null,
+        height: result.height,
+        reward: result.reward,
+        energyWh: effectiveEnergyWh,
         contributionsWh: sharedRoundSnapshot.contributionsWh,
-        roundId:         sharedRoundSnapshot.id,
+        roundId: sharedRoundSnapshot.id,
       };
     } catch (e) {
       return { address: '', mined: '', error: e && e.message ? e.message : 'Mine failed' };
@@ -5920,20 +6189,27 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
 
 function getLedgerNetworkSettings() {
   const runtime = getRuntimeConfig();
-  const mode = String(runtime.ledgerNetworkMode || 'standalone').trim().toLowerCase();
+  const mode = String(runtime.ledgerNetworkMode || 'standalone')
+    .trim()
+    .toLowerCase();
   const bootstrapPeers = Array.isArray(runtime.ledgerPeers) ? runtime.ledgerPeers.filter(Boolean) : [];
-  const seedPeers = runtime.network === 'wtc-mainnet'
-    ? [...bootstrapPeers, ...loadBundledSeedPeers(), ...loadCachedRemoteSeedPeers()]
-    : [...bootstrapPeers];
-    const normalizedConfiguredPeers = Array.from(new Set(
-      bootstrapPeers.map(normalizePeerUrl).filter((peer) => peer && !isDeprecatedPeerUrl(peer))
-    ));
-  const normalizedSeedPeers = Array.from(new Set(seedPeers.map(normalizePeerUrl).filter((peer) => peer && !isDeprecatedPeerUrl(peer))));
-  const normalizedAdvertiseUrls = Array.from(new Set(
-    (Array.isArray(runtime.ledgerNetworkAdvertiseUrls) ? runtime.ledgerNetworkAdvertiseUrls : [])
-      .map(normalizePeerUrl)
-      .filter(Boolean)
-  ));
+  const seedPeers =
+    runtime.network === 'wtc-mainnet'
+      ? [...bootstrapPeers, ...loadBundledSeedPeers(), ...loadCachedRemoteSeedPeers()]
+      : [...bootstrapPeers];
+  const normalizedConfiguredPeers = Array.from(
+    new Set(bootstrapPeers.map(normalizePeerUrl).filter((peer) => peer && !isDeprecatedPeerUrl(peer))),
+  );
+  const normalizedSeedPeers = Array.from(
+    new Set(seedPeers.map(normalizePeerUrl).filter((peer) => peer && !isDeprecatedPeerUrl(peer))),
+  );
+  const normalizedAdvertiseUrls = Array.from(
+    new Set(
+      (Array.isArray(runtime.ledgerNetworkAdvertiseUrls) ? runtime.ledgerNetworkAdvertiseUrls : [])
+        .map(normalizePeerUrl)
+        .filter(Boolean),
+    ),
+  );
   return {
     enabled: Boolean(runtime.ledgerNetworkEnabled),
     mode,
@@ -5959,10 +6235,7 @@ function getBundledSeedPeerCandidates() {
     if (process.resourcesPath) {
       candidates.push(path.join(process.resourcesPath, fileName));
     }
-    candidates.push(
-      path.join(__dirname, 'docs', fileName),
-      path.join(__dirname, 'resources', fileName)
-    );
+    candidates.push(path.join(__dirname, 'docs', fileName), path.join(__dirname, 'resources', fileName));
   }
   return Array.from(new Set(candidates));
 }
@@ -5976,7 +6249,9 @@ function loadBundledSeedPeers() {
       const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
       const peerEntries = Array.isArray(parsed && parsed.seedPeers)
         ? parsed.seedPeers
-        : (Array.isArray(parsed && parsed.peers) ? parsed.peers : []);
+        : Array.isArray(parsed && parsed.peers)
+          ? parsed.peers
+          : [];
       const peers = peerEntries
         .map((peer) => {
           const rawUrl = (peer && peer.url) || peer || '';
@@ -6070,9 +6345,7 @@ function isLedgerNetworkAuthorized(req, settings) {
 }
 
 function getPeerProtocolInfo() {
-  const tip = wtcNode && typeof wtcNode.handleGetTip === 'function'
-    ? wtcNode.handleGetTip()
-    : null;
+  const tip = wtcNode && typeof wtcNode.handleGetTip === 'function' ? wtcNode.handleGetTip() : null;
   return {
     networkId: (tip && tip.networkId) || getActiveNetwork(),
     protocolVersion: String((tip && tip.protocolVersion) || 1),
@@ -6086,7 +6359,7 @@ function getLocalPeerIdentity() {
       return String(wtcNode.getPeerIdentity() || '').trim();
     }
     const identity = loadOrCreateDeviceIdentity();
-    return String(identity && identity.deviceId || '').trim();
+    return String((identity && identity.deviceId) || '').trim();
   } catch (_) {
     return '';
   }
@@ -6136,9 +6409,7 @@ function requestPeerJson(peerUrl, method, routePath, payload, query = {}, option
 
     const relativeRoutePath = String(routePath || '').replace(/^\/+/, '');
     const normalizedRoutePath = `/${relativeRoutePath}`;
-    const basePath = base.pathname && base.pathname !== '/'
-      ? `${base.pathname.replace(/\/+$/, '')}/`
-      : '/';
+    const basePath = base.pathname && base.pathname !== '/' ? `${base.pathname.replace(/\/+$/, '')}/` : '/';
     const resolvedBase = resolvePeerRequestBaseUrl(base, settings);
     const fullUrl = new URL(relativeRoutePath, `${resolvedBase.origin}${basePath}`);
     for (const [key, value] of Object.entries(query || {})) {
@@ -6148,10 +6419,11 @@ function requestPeerJson(peerUrl, method, routePath, payload, query = {}, option
 
     const normalizedPeerUrl = normalizePeerUrl(peerUrl);
     const trackReachability = options && options.trackReachability !== false;
-    const isChainTipProbe = method === 'GET'
-      && normalizedRoutePath === '/api/v1/chain/tip'
-      && Object.keys(query || {}).length === 0
-      && payload === undefined;
+    const isChainTipProbe =
+      method === 'GET' &&
+      normalizedRoutePath === '/api/v1/chain/tip' &&
+      Object.keys(query || {}).length === 0 &&
+      payload === undefined;
     if (isChainTipProbe && normalizedPeerUrl) {
       const cached = peerChainTipCache.get(normalizedPeerUrl);
       if (cached && Number(cached.expiresAtMs || 0) > Date.now() && cached.value) {
@@ -6175,65 +6447,72 @@ function requestPeerJson(peerUrl, method, routePath, payload, query = {}, option
     const announcementHeaders = buildPeerAnnouncementHeaders(settings);
     const localPeerIdentity = getLocalPeerIdentity();
     const requestPromise = new Promise((requestResolve, requestReject) => {
-      const request = transport.request({
-      method,
-      protocol: fullUrl.protocol,
-      hostname: fullUrl.hostname,
-      port: fullUrl.port || (isHttps ? 443 : 80),
-      path: `${fullUrl.pathname}${fullUrl.search}`,
-      timeout: Math.max(1000, Number(options && options.timeoutMs) || settings.requestTimeoutMs),
-      // Disable keep-alive pooling: Node.js v19+ uses keep-alive by default,
-      // which causes "socket hang up" (ECONNRESET) when the server closes a
-      // pooled socket just as a new request starts on it.
-      agent: false,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Length': Buffer.byteLength(body),
-        'x-wtc-network-id': protocolInfo.networkId,
-        'x-wtc-protocol-version': String(protocolInfo.protocolVersion),
-        ...(protocolInfo.genesisHash ? { 'x-wtc-genesis-hash': protocolInfo.genesisHash } : {}),
-        ...(localPeerIdentity ? { 'x-wtc-peer-identity': localPeerIdentity } : {}),
-        ...(settings.authToken ? { 'x-wattcoin-ledger-token': settings.authToken } : {}),
-        ...announcementHeaders,
-      },
-      }, (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-            if (res.statusCode >= 400) {
-              const msg = (parsed && parsed.message) ? parsed.message : `HTTP ${res.statusCode}`;
-              const isUnavailableReverseTunnel = normalizedPeerUrl
-                && isReverseTunnelPeerUrl(normalizedPeerUrl)
-                && parsed
-                && parsed.code === 'REVERSE_TUNNEL_UNAVAILABLE';
-              if (isUnavailableReverseTunnel) {
-                forgetPeerUrlState(normalizedPeerUrl);
-              }
-              if (trackReachability) {
-                if (!isUnavailableReverseTunnel) {
-                  recordPeerUrlFailure(peerUrl, `http-${res.statusCode}`);
+      const request = transport.request(
+        {
+          method,
+          protocol: fullUrl.protocol,
+          hostname: fullUrl.hostname,
+          port: fullUrl.port || (isHttps ? 443 : 80),
+          path: `${fullUrl.pathname}${fullUrl.search}`,
+          timeout: Math.max(1000, Number(options && options.timeoutMs) || settings.requestTimeoutMs),
+          // Disable keep-alive pooling: Node.js v19+ uses keep-alive by default,
+          // which causes "socket hang up" (ECONNRESET) when the server closes a
+          // pooled socket just as a new request starts on it.
+          agent: false,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Content-Length': Buffer.byteLength(body),
+            'x-wtc-network-id': protocolInfo.networkId,
+            'x-wtc-protocol-version': String(protocolInfo.protocolVersion),
+            ...(protocolInfo.genesisHash ? { 'x-wtc-genesis-hash': protocolInfo.genesisHash } : {}),
+            ...(localPeerIdentity ? { 'x-wtc-peer-identity': localPeerIdentity } : {}),
+            ...(settings.authToken ? { 'x-wattcoin-ledger-token': settings.authToken } : {}),
+            ...announcementHeaders,
+          },
+        },
+        (res) => {
+          const chunks = [];
+          res.on('data', (chunk) => chunks.push(chunk));
+          res.on('end', () => {
+            try {
+              const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+              if (res.statusCode >= 400) {
+                const msg = parsed && parsed.message ? parsed.message : `HTTP ${res.statusCode}`;
+                const isUnavailableReverseTunnel =
+                  normalizedPeerUrl &&
+                  isReverseTunnelPeerUrl(normalizedPeerUrl) &&
+                  parsed &&
+                  parsed.code === 'REVERSE_TUNNEL_UNAVAILABLE';
+                if (isUnavailableReverseTunnel) {
+                  forgetPeerUrlState(normalizedPeerUrl);
                 }
+                if (trackReachability) {
+                  if (!isUnavailableReverseTunnel) {
+                    recordPeerUrlFailure(peerUrl, `http-${res.statusCode}`);
+                  }
+                }
+                requestReject(new Error(msg));
+              } else {
+                if (trackReachability) {
+                  recordPeerUrlSuccess(peerUrl);
+                }
+                if (trackReachability && (!options || options.suppressPeerDiscovery !== true)) {
+                  rememberDiscoveredPeer(peerUrl, {
+                    source: String((options && options.source) || 'peer-contact'),
+                    quiet: true,
+                  });
+                }
+                requestResolve(parsed);
               }
-              requestReject(new Error(msg));
-            } else {
+            } catch (_) {
               if (trackReachability) {
-                recordPeerUrlSuccess(peerUrl);
+                recordPeerUrlFailure(peerUrl, 'invalid-json');
               }
-              if (trackReachability && (!options || options.suppressPeerDiscovery !== true)) {
-                rememberDiscoveredPeer(peerUrl, { source: String((options && options.source) || 'peer-contact'), quiet: true });
-              }
-              requestResolve(parsed);
+              requestReject(new Error('Invalid JSON from peer'));
             }
-          } catch (_) {
-            if (trackReachability) {
-              recordPeerUrlFailure(peerUrl, 'invalid-json');
-            }
-            requestReject(new Error('Invalid JSON from peer'));
-          }
-        });
-      });
+          });
+        },
+      );
       request.on('timeout', () => {
         request.destroy(new Error('Peer request timed out.'));
       });
@@ -6406,9 +6685,7 @@ async function getLocalLedgerBalances(selectedAddress) {
   roundLedger.syncMaturity(blockHeight);
   const snapshot = roundLedger.getAddressSnapshot(address);
   const currentRoundWh = roundLedger.getRoundContribution(address);
-  const maturityDepth = typeof roundLedger.getMaturityDepth === 'function'
-    ? roundLedger.getMaturityDepth()
-    : 100;
+  const maturityDepth = typeof roundLedger.getMaturityDepth === 'function' ? roundLedger.getMaturityDepth() : 100;
   return {
     ok: true,
     address: snapshot.address,
@@ -6430,7 +6707,11 @@ async function settleLocalLedgerRound(payload = {}) {
   const proofCommitment = payload && payload.proofCommitment ? String(payload.proofCommitment).trim() : '';
   if (ENABLE_POWER_PROOF_COMMITMENT && !proofCommitment) {
     console.warn('[Ledger] Settlement rejected: missing power-proof commitment.');
-    return { ok: false, code: 'PROOF_MISSING', message: 'Settlement rejected: no power-proof commitment was present for this block.' };
+    return {
+      ok: false,
+      code: 'PROOF_MISSING',
+      message: 'Settlement rejected: no power-proof commitment was present for this block.',
+    };
   }
 
   // Tier 5b: verify commitment matches what was recorded at mine time to prevent
@@ -6440,7 +6721,11 @@ async function settleLocalLedgerRound(payload = {}) {
     if (!expected || proofCommitment !== expected) {
       console.warn('[Ledger] Settlement rejected: proof commitment mismatch.');
       hwAuthority.pendingProofCommitment = '';
-      return { ok: false, code: 'PROOF_COMMITMENT_MISMATCH', message: 'Settlement rejected: proof commitment does not match mined block.' };
+      return {
+        ok: false,
+        code: 'PROOF_COMMITMENT_MISMATCH',
+        message: 'Settlement rejected: proof commitment does not match mined block.',
+      };
     }
   }
   hwAuthority.pendingProofCommitment = '';
@@ -6451,36 +6736,44 @@ async function settleLocalLedgerRound(payload = {}) {
   const proofIssues = Array.isArray(payload && payload.proofIssues) ? payload.proofIssues : [];
   if (proofIssues.includes('device fingerprint changed unexpectedly') && minedAddress) {
     const forfeited = roundLedger.forfeitContribution(minedAddress);
-    console.warn(`[Ledger] Tier 4 forfeiture: zeroed ${forfeited.forfeited} Wh for ${minedAddress} due to fingerprint change.`);
+    console.warn(
+      `[Ledger] Tier 4 forfeiture: zeroed ${forfeited.forfeited} Wh for ${minedAddress} due to fingerprint change.`,
+    );
   }
 
   // Tier 4b: forfeit when benchmark proof hash verification failed inside Node.
-  const cpuProofFailed = proofIssues.some(i => i.includes('cpu speed proof failed verification'));
-  const memProofFailed = proofIssues.some(i => i.includes('memory proof failed verification'));
+  const cpuProofFailed = proofIssues.some((i) => i.includes('cpu speed proof failed verification'));
+  const memProofFailed = proofIssues.some((i) => i.includes('memory proof failed verification'));
   if ((cpuProofFailed || memProofFailed) && minedAddress) {
     const forfeited = roundLedger.forfeitContribution(minedAddress);
     const which = [cpuProofFailed && 'cpu', memProofFailed && 'memory'].filter(Boolean).join('+');
-    console.warn(`[Ledger] Tier 4b forfeiture: zeroed ${forfeited.forfeited} Wh for ${minedAddress} due to ${which} proof mismatch.`);
+    console.warn(
+      `[Ledger] Tier 4b forfeiture: zeroed ${forfeited.forfeited} Wh for ${minedAddress} due to ${which} proof mismatch.`,
+    );
   }
 
   // Tier 4c (item 1): main process independently re-verifies the CPU and memory proof hashes.
   // The renderer already verified these in the same process (weak), but here we do it in the
   // main process (strong cross-process check — a patched renderer cannot fake this).
   const cpuSpeedInitialSeed = Number(payload && payload.cpuSpeedInitialSeed) || 0;
-  const cpuSpeedProof       = String(payload && payload.cpuSpeedProof       || '');
-  const memProof            = String(payload && payload.memProof            || '');
+  const cpuSpeedProof = String((payload && payload.cpuSpeedProof) || '');
+  const memProof = String((payload && payload.memProof) || '');
   if (cpuSpeedInitialSeed > 0 && cpuSpeedProof) {
     const coordCpuOk = verifyCpuSpeedProof(cpuSpeedInitialSeed, cpuSpeedProof);
     if (!coordCpuOk && minedAddress) {
       const forfeited = roundLedger.forfeitContribution(minedAddress);
-      console.warn(`[Ledger] Tier 4c forfeiture (cpu): main-process re-run returned different hash for ${minedAddress} (forfeited ${forfeited.forfeited} Wh).`);
+      console.warn(
+        `[Ledger] Tier 4c forfeiture (cpu): main-process re-run returned different hash for ${minedAddress} (forfeited ${forfeited.forfeited} Wh).`,
+      );
     }
   }
   if (memProof) {
     const coordMemOk = verifyMemProof(memProof, minedAddress);
     if (!coordMemOk && minedAddress) {
       const forfeited = roundLedger.forfeitContribution(minedAddress);
-      console.warn(`[Ledger] Tier 4c forfeiture (mem): main-process re-run returned different hash for ${minedAddress} (forfeited ${forfeited.forfeited} Wh).`);
+      console.warn(
+        `[Ledger] Tier 4c forfeiture (mem): main-process re-run returned different hash for ${minedAddress} (forfeited ${forfeited.forfeited} Wh).`,
+      );
     }
   }
 
@@ -6490,10 +6783,12 @@ async function settleLocalLedgerRound(payload = {}) {
   // The main process tracks peerProbeVerifiedForRound via IPC — the renderer
   // cannot self-certify this flag.
   const peerProbeVerified = hwAuthority.peerProbeVerifiedForRound;
-  hwAuthority.peerProbeVerifiedForRound = false;  // reset for next round
+  hwAuthority.peerProbeVerifiedForRound = false; // reset for next round
   if (!peerProbeVerified && minedAddress) {
     const partial = roundLedger.partialForfeit(minedAddress, 0.5);
-    console.log(`[Ledger] Tier 4d: no peer probe for ${minedAddress} - halved contribution to ${partial.remaining} Wh.`);
+    console.log(
+      `[Ledger] Tier 4d: no peer probe for ${minedAddress} - halved contribution to ${partial.remaining} Wh.`,
+    );
   }
 
   // Tier 4e: coverage-ratio penalty based on chained-probe continuity.
@@ -6510,22 +6805,23 @@ async function settleLocalLedgerRound(payload = {}) {
   // The backend-measured probeState is used directly (cannot be spoofed by the renderer).
   const probeChain = getLocalProbeChain();
   if (probeChain && peerProbeVerified && minedAddress) {
-    const chainIndex      = Math.max(0, Number(probeChain.chainIndex) || 0);
-    const chainBroken     = !!probeChain.chainBroken;
+    const chainIndex = Math.max(0, Number(probeChain.chainIndex) || 0);
+    const chainBroken = !!probeChain.chainBroken;
     const roundDurationMs = Math.max(0, Date.now() - (roundLedger.getCurrentRoundStartMs() || 0));
     // Guard: if round duration is unknown (< 1s) skip the check to avoid false penalties.
     if (roundDurationMs >= 1000) {
       const expectedProbeCount = Math.max(1, Math.floor(roundDurationMs / PROBE_INTERVAL_MS));
-      const coverageRatio      = Math.min(1, chainIndex / expectedProbeCount);
-      const breakPenalty       = chainBroken ? 0.20 : 0;
-      const forfeitFraction    = Math.min(1, (1 - coverageRatio) + breakPenalty);
-      if (forfeitFraction > 0.01) { // skip negligible rounding noise
+      const coverageRatio = Math.min(1, chainIndex / expectedProbeCount);
+      const breakPenalty = chainBroken ? 0.2 : 0;
+      const forfeitFraction = Math.min(1, 1 - coverageRatio + breakPenalty);
+      if (forfeitFraction > 0.01) {
+        // skip negligible rounding noise
         const partial = roundLedger.partialForfeit(minedAddress, forfeitFraction);
         console.log(
           `[Ledger] Tier 4e: coverage=${(coverageRatio * 100).toFixed(0)}% ` +
-          `(${chainIndex}/${expectedProbeCount} probes, roundDuration=${Math.round(roundDurationMs / 1000)}s)` +
-          `${chainBroken ? ', chain broken (+20%)' : ''} — ` +
-          `forfeited ${(forfeitFraction * 100).toFixed(0)}% for ${minedAddress}, remaining=${partial.remaining} Wh.`
+            `(${chainIndex}/${expectedProbeCount} probes, roundDuration=${Math.round(roundDurationMs / 1000)}s)` +
+            `${chainBroken ? ', chain broken (+20%)' : ''} — ` +
+            `forfeited ${(forfeitFraction * 100).toFixed(0)}% for ${minedAddress}, remaining=${partial.remaining} Wh.`,
         );
       }
     }
@@ -6537,9 +6833,10 @@ async function settleLocalLedgerRound(payload = {}) {
     minedAddress,
     blockHeight,
     rewardCoins: Number(payload && payload.rewardCoins) || 0,
-    contributionsWh: payload && payload.contributionsWh && typeof payload.contributionsWh === 'object'
-      ? payload.contributionsWh
-      : null,
+    contributionsWh:
+      payload && payload.contributionsWh && typeof payload.contributionsWh === 'object'
+        ? payload.contributionsWh
+        : null,
   });
   const maturedRounds = roundLedger.syncMaturity(blockHeight);
   // Fire-and-forget broadcast to peers for cross-node audit trail.
@@ -6549,38 +6846,44 @@ async function settleLocalLedgerRound(payload = {}) {
 
 // Returns the union of statically configured peers and dynamically discovered ones.
 function getActivePeers(settings) {
-  const staticPeers = (settings && settings.peers) ? settings.peers : [];
-  const seedPeers = (settings && settings.seedPeers) ? settings.seedPeers : [];
+  const staticPeers = settings && settings.peers ? settings.peers : [];
+  const seedPeers = settings && settings.seedPeers ? settings.seedPeers : [];
   const now = Date.now();
   const dynamic = [];
   for (const [url, info] of discoveredPeers.entries()) {
-    if ((now - info.lastSeenMs) > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(url)) continue;
+    if (now - info.lastSeenMs > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(url)) continue;
     dynamic.push(url);
   }
-  const preferredPeers = sortPeerUrlsByPreference(Array.from(new Set([...staticPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)));
-  const bootstrapPeers = preferredPeers.length > 0
-    ? preferredPeers
-    : sortPeerUrlsByPreference(Array.from(new Set([...staticPeers, ...seedPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)));
-  return filterExternalPeerUrls(
-    bootstrapPeers,
-    {
-      selfAdvertisedUrls: getConfiguredAdvertisedPeerUrls(settings),
-      listenPort: settings && settings.listenPort,
-      localHosts: Array.from(getLocalPeerHosts()),
-    }
+  const preferredPeers = sortPeerUrlsByPreference(
+    Array.from(new Set([...staticPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)),
   );
+  const bootstrapPeers =
+    preferredPeers.length > 0
+      ? preferredPeers
+      : sortPeerUrlsByPreference(
+          Array.from(new Set([...staticPeers, ...seedPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)),
+        );
+  return filterExternalPeerUrls(bootstrapPeers, {
+    selfAdvertisedUrls: getConfiguredAdvertisedPeerUrls(settings),
+    listenPort: settings && settings.listenPort,
+    localHosts: Array.from(getLocalPeerHosts()),
+  });
 }
 
 function getPeerDirectoryTargets(settings) {
   const configuredPeers = settings && settings.configuredPeers ? settings.configuredPeers : [];
   const seedPeers = settings && settings.seedPeers ? settings.seedPeers : [];
   return filterExternalPeerUrls(
-    sortPeerUrlsByPreference(Array.from(new Set([...configuredPeers, ...seedPeers, ...getActivePeers(settings)])).filter((peerUrl) => !isPeerUrlBanned(peerUrl))),
+    sortPeerUrlsByPreference(
+      Array.from(new Set([...configuredPeers, ...seedPeers, ...getActivePeers(settings)])).filter(
+        (peerUrl) => !isPeerUrlBanned(peerUrl),
+      ),
+    ),
     {
       selfAdvertisedUrls: getConfiguredAdvertisedPeerUrls(settings),
       listenPort: settings && settings.listenPort,
       localHosts: Array.from(getLocalPeerHosts()),
-    }
+    },
   );
 }
 
@@ -6599,18 +6902,20 @@ function getTrustedPeerTargets(settings) {
       selfAdvertisedUrls: getConfiguredAdvertisedPeerUrls(settings),
       listenPort: settings && settings.listenPort,
       localHosts: Array.from(getLocalPeerHosts()),
-    }
+    },
   );
 }
 
 function sendPeerBeacon(httpPort, publicUrl = '') {
   if (!peerDiscoverySocket) return;
   const normalizedPublicUrl = normalizePeerUrl(publicUrl) || getPrimaryAdvertisedPeerUrl(getLedgerNetworkSettings());
-  const msg = Buffer.from(JSON.stringify({
-    type: 'wattcoin-peer-beacon',
-    httpPort,
-    ...(normalizedPublicUrl ? { publicUrl: normalizedPublicUrl } : {}),
-  }));
+  const msg = Buffer.from(
+    JSON.stringify({
+      type: 'wattcoin-peer-beacon',
+      httpPort,
+      ...(normalizedPublicUrl ? { publicUrl: normalizedPublicUrl } : {}),
+    }),
+  );
   const interfaceAddresses = getLocalPeerIpv4Interfaces();
   const sendBeacon = () => {
     peerDiscoverySocket.send(msg, 0, msg.length, PEER_DISCOVERY_PORT, PEER_DISCOVERY_MCAST, (err) => {
@@ -6626,7 +6931,10 @@ function sendPeerBeacon(httpPort, publicUrl = '') {
       peerDiscoverySocket.setMulticastInterface(address);
       sendBeacon();
     } catch (err) {
-      console.warn(`[PeerDiscovery] Failed to select multicast interface ${address}:`, err && err.message ? err.message : err);
+      console.warn(
+        `[PeerDiscovery] Failed to select multicast interface ${address}:`,
+        err && err.message ? err.message : err,
+      );
     }
   }
 }
@@ -6648,7 +6956,7 @@ async function discoverPeersOnLocalSubnets(httpPort, settings = getLedgerNetwork
   if (hasKnownPrivateLanPeer(settings)) return;
   if (peerLocalSubnetDiscoveryPromise) return peerLocalSubnetDiscoveryPromise;
   const now = Date.now();
-  if ((now - peerLocalSubnetDiscoveryLastRunAt) < PEER_LOCAL_SUBNET_DISCOVERY_MIN_INTERVAL_MS) return;
+  if (now - peerLocalSubnetDiscoveryLastRunAt < PEER_LOCAL_SUBNET_DISCOVERY_MIN_INTERVAL_MS) return;
   const candidates = getLocalSubnetProbeCandidates(getLocalPeerIpv4InterfaceEntries(), {
     selfHosts: Array.from(getLocalPeerHosts()),
   });
@@ -6673,7 +6981,7 @@ async function discoverPeersOnLocalSubnets(httpPort, settings = getLedgerNetwork
           rememberDiscoveredPeer(peerUrl, {
             source: 'subnet-probe',
             quiet: true,
-            peerIdentity: String(tip && tip.peerIdentity || '').trim(),
+            peerIdentity: String((tip && tip.peerIdentity) || '').trim(),
           });
           found += 1;
         } catch (_) {}
@@ -6710,7 +7018,12 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
         // router share the same public IP, so we must NOT return early — the direct LAN URL
         // from the socket may still be a valid non-self peer.  Only bail out when both the
         // advertised URL and the direct LAN URL point at this machine.
-        if (advertisedPeerUrl && isSelfPeerUrl(advertisedPeerUrl) && (!directLanPeerUrl || isSelfPeerUrl(directLanPeerUrl))) return;
+        if (
+          advertisedPeerUrl &&
+          isSelfPeerUrl(advertisedPeerUrl) &&
+          (!directLanPeerUrl || isSelfPeerUrl(directLanPeerUrl))
+        )
+          return;
         if (!advertisedPeerUrl && !directLanPeerUrl) return;
         if (!advertisedPeerUrl && selfIps.has(rinfo.address) && data.httpPort === httpPort) return;
         if (directLanPeerUrl && isSelfPeerUrl(directLanPeerUrl)) return;
@@ -6748,7 +7061,10 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
             sock.addMembership(PEER_DISCOVERY_MCAST, address);
             joinedGroups += 1;
           } catch (err) {
-            console.warn(`[PeerDiscovery] Failed to join multicast group on ${address}:`, err && err.message ? err.message : err);
+            console.warn(
+              `[PeerDiscovery] Failed to join multicast group on ${address}:`,
+              err && err.message ? err.message : err,
+            );
           }
         }
       }
@@ -6759,7 +7075,9 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
       sock.setMulticastTTL(1);
       sock.setMulticastLoopback(true); // receive own beacons (useful for single-machine testing)
     } catch (_) {}
-    console.log(`[PeerDiscovery] Listening for peers on UDP ${PEER_DISCOVERY_PORT}${joinedGroups > 0 ? ` across ${joinedGroups} interface(s)` : ''}`);
+    console.log(
+      `[PeerDiscovery] Listening for peers on UDP ${PEER_DISCOVERY_PORT}${joinedGroups > 0 ? ` across ${joinedGroups} interface(s)` : ''}`,
+    );
     sendPeerBeacon(httpPort, getPrimaryAdvertisedPeerUrl(getLedgerNetworkSettings()) || publicUrl);
     discoverPeersOnLocalSubnets(httpPort, getLedgerNetworkSettings()).catch(() => {});
     refreshPeerDirectory(getLedgerNetworkSettings()).catch(() => {});
@@ -6795,7 +7113,9 @@ function stopPeerDiscovery() {
     peerDiscoveryInterval = null;
   }
   if (peerDiscoverySocket) {
-    try { peerDiscoverySocket.close(); } catch (_) {}
+    try {
+      peerDiscoverySocket.close();
+    } catch (_) {}
     peerDiscoverySocket = null;
   }
   peerLocalSubnetDiscoveryPromise = null;
@@ -6809,21 +7129,23 @@ function recordWitnessedSettlement(summary, fromPeer) {
   const entry = {
     blockHash,
     minedAddress: String(summary.minedAddress || ''),
-    totalWh:      Number(summary.totalWh)      || 0,
-    rewardCoins:  Number(summary.rewardCoins)  || 0,
-    settledAtMs:  Number(summary.settledAtMs)  || Date.now(),
-    sig:          String(summary.sig           || ''),
-    fromPeer:     String(fromPeer              || 'self'),
+    totalWh: Number(summary.totalWh) || 0,
+    rewardCoins: Number(summary.rewardCoins) || 0,
+    settledAtMs: Number(summary.settledAtMs) || Date.now(),
+    sig: String(summary.sig || ''),
+    fromPeer: String(fromPeer || 'self'),
   };
   const existing = witnessedSettlements.get(blockHash);
   if (existing && fromPeer !== 'self') {
-    if (Math.abs(existing.totalWh - entry.totalWh) > 0.0001 ||
-        Math.abs(existing.rewardCoins - entry.rewardCoins) > 1e-8) {
+    if (
+      Math.abs(existing.totalWh - entry.totalWh) > 0.0001 ||
+      Math.abs(existing.rewardCoins - entry.rewardCoins) > 1e-8
+    ) {
       recordForkMismatch({ blockHash, fromPeer, localTotalWh: existing.totalWh, peerTotalWh: entry.totalWh });
       console.warn(
         `[SettlementGossip] MISMATCH for block ${blockHash}: ` +
-        `local totalWh=${existing.totalWh} vs peer=${entry.totalWh}, ` +
-        `local coins=${existing.rewardCoins} vs peer=${entry.rewardCoins} (from ${fromPeer})`
+          `local totalWh=${existing.totalWh} vs peer=${entry.totalWh}, ` +
+          `local coins=${existing.rewardCoins} vs peer=${entry.rewardCoins} (from ${fromPeer})`,
       );
     }
   } else {
@@ -6840,11 +7162,11 @@ async function broadcastSettlementToPeers(round) {
   const peers = getActivePeers(settings);
   if (!peers || peers.length === 0) return;
   const summary = {
-    blockHash:    round.blockHash,
+    blockHash: round.blockHash,
     minedAddress: round.minedAddress,
-    totalWh:      round.totalWh,
-    rewardCoins:  round.rewardCoins,
-    settledAtMs:  Date.now(),
+    totalWh: round.totalWh,
+    rewardCoins: round.rewardCoins,
+    settledAtMs: Date.now(),
   };
   summary.sig = computeHwAuthSig(summary);
   recordWitnessedSettlement(summary, 'self');
@@ -6881,17 +7203,20 @@ function startLedgerNetworkServer() {
       // Rate-limited by remote IP to prevent DoS.
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/probe/issue') {
         refreshCoordinatorIdentityKey();
-        const identity  = getRequesterIdentity(req);
+        const identity = getRequesterIdentity(req);
         const rl = await enforceEndpointRateLimit('peer-probe-issue', identity);
-        if (!rl.ok) { sendJson(res, 429, { ok: false, code: rl.code, message: rl.message }); return; }
-        const workerId  = String(reqUrl.searchParams.get('workerId') || identity || 'unknown');
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
+        const workerId = String(reqUrl.searchParams.get('workerId') || identity || 'unknown');
         if (workerId === 'unknown') {
           // No usable workerId and no IP fallback — issuing a probe here would create
           // an entry that can never be resolved, polluting the attest history.
           sendJson(res, 400, { ok: false, code: 'MISSING_WORKER_ID', message: 'workerId is required.' });
           return;
         }
-        const allowGpu  = reqUrl.searchParams.get('allowGpu') === 'true';
+        const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
         const probe = issuePeerProbe(workerId, allowGpu);
         sendJson(res, 200, { ok: true, probe });
         return;
@@ -6903,12 +7228,15 @@ function startLedgerNetworkServer() {
         refreshCoordinatorIdentityKey();
         const identity = getRequesterIdentity(req);
         const rl = await enforceEndpointRateLimit('peer-probe-submit', identity);
-        if (!rl.ok) { sendJson(res, 429, { ok: false, code: rl.code, message: rl.message }); return; }
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
         const body = await readJsonBody(req);
         const probeResult = {
-          id:        body && body.probeId    ? String(body.probeId)    : '',
-          proof:     body && body.proof      ? String(body.proof)      : '',
-          pixelHash: body && body.pixelHash  ? String(body.pixelHash)  : '',
+          id: body && body.probeId ? String(body.probeId) : '',
+          proof: body && body.proof ? String(body.proof) : '',
+          pixelHash: body && body.pixelHash ? String(body.pixelHash) : '',
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
         const verdict = submitPeerProbeResult(probeResult, hardwareSpec);
@@ -6922,7 +7250,10 @@ function startLedgerNetworkServer() {
             } catch (error) {
               console.warn('[PeerProbe] Failed to sign probe receipt:', error && error.message ? error.message : error);
               verdict.ok = false;
-              verdict.issues = [...(Array.isArray(verdict.issues) ? verdict.issues : []), 'peer probe receipt signing failed'];
+              verdict.issues = [
+                ...(Array.isArray(verdict.issues) ? verdict.issues : []),
+                'peer probe receipt signing failed',
+              ];
               verdict.receipt = null;
             }
           }
@@ -6937,7 +7268,7 @@ function startLedgerNetworkServer() {
           sendJson(res, 401, { ok: false, code: 'UNAUTHORIZED', message: 'Missing or invalid ledger network token.' });
           return;
         }
-        const snapshot = opsState.latestSnapshot || await collectOpsSnapshot();
+        const snapshot = opsState.latestSnapshot || (await collectOpsSnapshot());
         sendJson(res, 200, { ok: true, snapshot });
         return;
       }
@@ -6962,10 +7293,14 @@ function startLedgerNetworkServer() {
           sendJson(res, 401, { ok: false, code: 'UNAUTHORIZED', message: 'Missing or invalid ledger network token.' });
           return;
         }
-        const snapshot = opsState.latestSnapshot || await collectOpsSnapshot();
-        sendJson(res, 200, buildOpsHealthResponse(snapshot, {
-          chainStallAlertMs: CHAIN_STALL_ALERT_MS,
-        }));
+        const snapshot = opsState.latestSnapshot || (await collectOpsSnapshot());
+        sendJson(
+          res,
+          200,
+          buildOpsHealthResponse(snapshot, {
+            chainStallAlertMs: CHAIN_STALL_ALERT_MS,
+          }),
+        );
         return;
       }
 
@@ -6992,19 +7327,23 @@ function startLedgerNetworkServer() {
           return;
         }
         const body = await readJsonBody(req);
-        const address = String(body && body.address || '').trim();
+        const address = String((body && body.address) || '').trim();
         const roundId = Math.max(1, Math.floor(Number(body && body.roundId) || 0));
         const totalWh = Number(Math.max(0, Number(body && body.totalWh) || 0).toFixed(8));
         const updatedAtMs = Math.max(0, Math.floor(Number(body && body.updatedAtMs) || 0));
-        const message = String(body && body.message || '');
-        const signature = String(body && body.signature || '').trim();
+        const message = String((body && body.message) || '');
+        const signature = String((body && body.signature) || '').trim();
         const expectedRoundId = getCurrentNetworkRoundId();
         if (!address || !isValidWtcAddress(address)) {
           sendJson(res, 400, { ok: false, code: 'INVALID_ADDRESS', message: 'Contribution address invalid.' });
           return;
         }
         if (roundId !== expectedRoundId) {
-          sendJson(res, 409, { ok: false, code: 'ROUND_MISMATCH', message: `Expected round ${expectedRoundId}, got ${roundId}.` });
+          sendJson(res, 409, {
+            ok: false,
+            code: 'ROUND_MISMATCH',
+            message: `Expected round ${expectedRoundId}, got ${roundId}.`,
+          });
           return;
         }
         const expectedMessage = buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs });
@@ -7060,7 +7399,10 @@ function startLedgerNetworkServer() {
       }
 
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/chain/push') {
-        if (!wtcNode) { sendJson(res, 503, { ok: false, reason: 'node not ready' }); return; }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, reason: 'node not ready' });
+          return;
+        }
         const body = await readJsonBody(req);
         const fromPeer = getRequesterIdentity(req) || req.socket.remoteAddress || 'unknown';
         const pushResult = wtcNode.handlePushBlocks({
@@ -7086,10 +7428,16 @@ function startLedgerNetworkServer() {
 
       // GET /api/v1/chain/headers?fromHeight=&limit=
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/chain/headers') {
-        if (!wtcNode) { sendJson(res, 503, { ok: false, reason: 'node not ready' }); return; }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, reason: 'node not ready' });
+          return;
+        }
         const identity = getRequesterIdentity(req);
         const rl = await enforceEndpointRateLimit('wtc-peer-chain-headers', identity);
-        if (!rl.ok) { sendJson(res, 429, { ok: false, code: rl.code, message: rl.message }); return; }
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
         const fromHeight = Number(reqUrl.searchParams.get('fromHeight')) || 0;
         const limit = Number(reqUrl.searchParams.get('limit')) || 200;
         sendJson(res, 200, wtcNode.handleGetHeaders(fromHeight, limit));
@@ -7098,10 +7446,16 @@ function startLedgerNetworkServer() {
 
       // GET /api/v1/chain/blocks?fromHeight=&limit=
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/chain/blocks') {
-        if (!wtcNode) { sendJson(res, 503, { ok: false, reason: 'node not ready' }); return; }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, reason: 'node not ready' });
+          return;
+        }
         const identity = getRequesterIdentity(req);
         const rl = await enforceEndpointRateLimit('wtc-peer-chain-blocks', identity);
-        if (!rl.ok) { sendJson(res, 429, { ok: false, code: rl.code, message: rl.message }); return; }
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
         const fromHeight = Number(reqUrl.searchParams.get('fromHeight')) || 0;
         const limit = Number(reqUrl.searchParams.get('limit')) || 100;
         sendJson(res, 200, wtcNode.handleGetBlocks(fromHeight, limit));
@@ -7110,10 +7464,16 @@ function startLedgerNetworkServer() {
 
       // GET /api/v1/chain/block/{hash}
       if (req.method === 'GET' && reqUrl.pathname.startsWith('/api/v1/chain/block/')) {
-        if (!wtcNode) { sendJson(res, 503, { ok: false, reason: 'node not ready' }); return; }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, reason: 'node not ready' });
+          return;
+        }
         const identity = getRequesterIdentity(req);
         const rl = await enforceEndpointRateLimit('wtc-peer-chain-block-hash', identity);
-        if (!rl.ok) { sendJson(res, 429, { ok: false, code: rl.code, message: rl.message }); return; }
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
         const hash = reqUrl.pathname.slice('/api/v1/chain/block/'.length);
         sendJson(res, 200, wtcNode.handleGetBlockByHash(hash));
         return;
@@ -7121,7 +7481,10 @@ function startLedgerNetworkServer() {
 
       // POST /api/v1/chain/propose
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/chain/propose') {
-        if (!wtcNode) { sendJson(res, 503, { ok: false, reason: 'node not ready' }); return; }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, reason: 'node not ready' });
+          return;
+        }
         const body = await readJsonBody(req);
         const fromPeer = getRequesterIdentity(req) || req.socket.remoteAddress || 'unknown';
         const voteReply = await wtcNode.handleProposal(body, fromPeer);
@@ -7131,7 +7494,10 @@ function startLedgerNetworkServer() {
 
       // POST /api/v1/chain/vote
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/chain/vote') {
-        if (!wtcNode) { sendJson(res, 503, { ok: false, reason: 'node not ready' }); return; }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, reason: 'node not ready' });
+          return;
+        }
         const body = await readJsonBody(req);
         const result = wtcNode.handleVote(body);
         sendJson(res, 200, result);
@@ -7162,7 +7528,9 @@ function startLedgerNetworkServer() {
     if (advertisedUrls.length > 0) {
       console.log(`[Wattcoin] Ledger ${effectiveSettings.mode} advertising as: ${advertisedUrls.join(', ')}`);
     } else if (effectiveSettings.mode === 'peer') {
-      console.log('[Wattcoin] Ledger peer public advertise URL: none configured; using seed/bootstrap peers, discovery, and managed tunnel when available.');
+      console.log(
+        '[Wattcoin] Ledger peer public advertise URL: none configured; using seed/bootstrap peers, discovery, and managed tunnel when available.',
+      );
     }
     if (configuredPeers) {
       console.log(`[Wattcoin] Explicit static ledger peers: ${configuredPeers}`);
@@ -7196,12 +7564,16 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   // ── Address: use verified wallet cache; renderer-supplied is only a fallback ─
   // Once the wallet is known to main, we ignore the renderer-supplied address so
   // a patched renderer cannot credit energy to an arbitrary wallet.
-  const verifiedAddress = walletAddressCache.address
-    || (typeof address === 'string' && address.trim() ? address.trim() : 'local-client');
+  const verifiedAddress =
+    walletAddressCache.address || (typeof address === 'string' && address.trim() ? address.trim() : 'local-client');
 
   // Block if hardware changed but wallet hasn't been regenerated yet.
   if (hwAuthority.hwChangedBlocked) {
-    return { ok: false, code: 'HW_CHANGED', message: 'Hardware changed. Please create a new wallet to continue mining.' };
+    return {
+      ok: false,
+      code: 'HW_CHANGED',
+      message: 'Hardware changed. Please create a new wallet to continue mining.',
+    };
   }
 
   // ── deltaWh ceiling: clamp to one second of trust-capped calibrated power ───
@@ -7209,14 +7581,14 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   // values.  At the normal 0.25s tick rate the legitimate value is 4× smaller.
   let clampedDeltaWh = Math.max(0, Number(deltaWh) || 0);
   if (hwAuthority.calibratedUnitPowerW > 0) {
-    const tf = Math.min(1.0, 0.60 + Math.max(0, (hwAuthority.trustScore - 50) / 50) * 0.40);
+    const tf = Math.min(1.0, 0.6 + Math.max(0, (hwAuthority.trustScore - 50) / 50) * 0.4);
     // 0.5 s of max power: twice the normal 0.25 s tick interval as jitter headroom.
     // At the 240-calls/min rate limit this caps injection at ≤2× the legitimate rate.
-    const maxDeltaWh = hwAuthority.calibratedUnitPowerW * tf * 0.5 / 3600;
+    const maxDeltaWh = (hwAuthority.calibratedUnitPowerW * tf * 0.5) / 3600;
     if (clampedDeltaWh > maxDeltaWh) {
       console.warn(
         `[Ledger] deltaWh clamped ${clampedDeltaWh.toFixed(6)} â†’ ${maxDeltaWh.toFixed(6)} Wh` +
-        ` for ${verifiedAddress} (calibratedUnitPowerW=${hwAuthority.calibratedUnitPowerW} W, trust=${hwAuthority.trustScore})`
+          ` for ${verifiedAddress} (calibratedUnitPowerW=${hwAuthority.calibratedUnitPowerW} W, trust=${hwAuthority.trustScore})`,
       );
       clampedDeltaWh = maxDeltaWh;
     }
@@ -7241,7 +7613,11 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
     }).catch(() => {});
     return { ...added, roundTotalWh: snapshot.totalWh };
   } catch (e) {
-    return { ok: false, code: 'LEDGER_ADD_FAILED', message: e && e.message ? e.message : 'Failed to add contribution.' };
+    return {
+      ok: false,
+      code: 'LEDGER_ADD_FAILED',
+      message: e && e.message ? e.message : 'Failed to add contribution.',
+    };
   }
 });
 
@@ -7256,7 +7632,11 @@ ipcMain.handle('wattcoin-ledger-get-round-summary', async () => {
       contributionsWh: snapshot.contributionsWh,
     };
   } catch (e) {
-    return { ok: false, code: 'ROUND_SUMMARY_FAILED', message: e && e.message ? e.message : 'Failed to read round summary.' };
+    return {
+      ok: false,
+      code: 'ROUND_SUMMARY_FAILED',
+      message: e && e.message ? e.message : 'Failed to read round summary.',
+    };
   }
 });
 
@@ -7277,37 +7657,45 @@ ipcMain.handle('wattcoin-ledger-settle-round', async (_, payload = {}) => {
 });
 
 ipcMain.handle('wattcoin-ledger-get-balances', async (_, selectedAddress) => {
-  const actorId = typeof selectedAddress === 'string' && selectedAddress.trim() ? selectedAddress.trim() : 'local-client';
-  const rateLimit = await enforceEndpointRateLimit('wattcoin-ledger-get-balances', actorId, { selectedAddress: actorId });
+  const actorId =
+    typeof selectedAddress === 'string' && selectedAddress.trim() ? selectedAddress.trim() : 'local-client';
+  const rateLimit = await enforceEndpointRateLimit('wattcoin-ledger-get-balances', actorId, {
+    selectedAddress: actorId,
+  });
   if (!rateLimit.ok) {
     return { ok: false, code: rateLimit.code, message: rateLimit.message, lockedUntil: rateLimit.lockedUntil || 0 };
   }
   // ── WTC native chain balance ───────────────────────────────────────────────
   if (wtcNode) {
     try {
-      const addr = (typeof selectedAddress === 'string' && selectedAddress.trim())
-        ? selectedAddress.trim()
-        : wtcNode.getPrimaryAddress();
+      const addr =
+        typeof selectedAddress === 'string' && selectedAddress.trim()
+          ? selectedAddress.trim()
+          : wtcNode.getPrimaryAddress();
       const bal = wtcNode.getBalance(addr);
       const stats = wtcNode.getMinedStats(addr);
       const blockHeight = wtcNode.getHeight();
       const currentRoundContributionWh = roundLedger.getRoundContribution(addr);
       return {
-        ok:                        true,
-        address:                   addr,
-        balanceSource:             'wtc-native-chain',
-        accountingModel:           'wtc-native',
-        balanceSemanticsVersion:   3,
-        isAddressSpecific:         true,
-        totalMinedCoins:           stats.totalWTC,
-        maturedMinedCoins:         bal.confirmed,
-        unmaturedMinedCoins:       bal.unmatured,
+        ok: true,
+        address: addr,
+        balanceSource: 'wtc-native-chain',
+        accountingModel: 'wtc-native',
+        balanceSemanticsVersion: 3,
+        isAddressSpecific: true,
+        totalMinedCoins: stats.totalWTC,
+        maturedMinedCoins: bal.confirmed,
+        unmaturedMinedCoins: bal.unmatured,
         currentRoundContributionWh,
         blockHeight,
-        maturityDepth:             100,
+        maturityDepth: 100,
       };
     } catch (e) {
-      return { ok: false, code: 'BALANCE_READ_FAILED', message: e && e.message ? e.message : 'Failed to read balance.' };
+      return {
+        ok: false,
+        code: 'BALANCE_READ_FAILED',
+        message: e && e.message ? e.message : 'Failed to read balance.',
+      };
     }
   }
   try {
@@ -7322,23 +7710,24 @@ ipcMain.handle('wattcoin-get-node-mined-coins', async (_, selectedAddress) => {
   // ── WTC native chain fast-path ───────────────────────────────────────
   if (wtcNode) {
     try {
-      const addr = (typeof selectedAddress === 'string' && selectedAddress.trim())
-        ? selectedAddress.trim()
-        : wtcNode.getPrimaryAddress();
-      const bal   = wtcNode.getBalance(addr);
+      const addr =
+        typeof selectedAddress === 'string' && selectedAddress.trim()
+          ? selectedAddress.trim()
+          : wtcNode.getPrimaryAddress();
+      const bal = wtcNode.getBalance(addr);
       const stats = wtcNode.getMinedStats(addr);
       return {
-        ok:                  true,
-        address:             addr,
-        blocks:              wtcNode.getHeight(),
-        minedCoins:          stats.totalWTC,
-        maturedMinedCoins:   bal.confirmed,
+        ok: true,
+        address: addr,
+        blocks: wtcNode.getHeight(),
+        minedCoins: stats.totalWTC,
+        maturedMinedCoins: bal.confirmed,
         unmaturedMinedCoins: bal.unmatured,
-        totalMinedCoins:     stats.totalWTC,
-        totalMinedBlocks:    stats.totalBlocks,
-        maturedMinedBlocks:  stats.maturedBlocks,
+        totalMinedCoins: stats.totalWTC,
+        totalMinedBlocks: stats.totalBlocks,
+        maturedMinedBlocks: stats.maturedBlocks,
         unmaturedMinedBlocks: Math.max(0, stats.totalBlocks - stats.maturedBlocks),
-        maturityDepth:       100,
+        maturityDepth: 100,
       };
     } catch (e) {
       return { ok: false, code: 'BALANCE_READ_FAILED', message: e && e.message ? e.message : 'Failed' };
@@ -7362,15 +7751,14 @@ ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
   }
 
   // ── Sender whitelist (hardcoded — cannot be overridden by config) ─────────
-  const fromAddr = payload && typeof payload.selectedAddress === 'string'
-    ? payload.selectedAddress.trim()
-    : '';
+  const fromAddr = payload && typeof payload.selectedAddress === 'string' ? payload.selectedAddress.trim() : '';
   if (!fromAddr || !ALLOWED_SENDER_ADDRESSES.has(fromAddr)) {
     return { ok: false, code: 'SENDER_NOT_ALLOWED', message: 'Withdrawals are not available for this address.' };
   }
-  const actorId = payload && typeof payload.selectedAddress === 'string' && payload.selectedAddress.trim()
-    ? payload.selectedAddress.trim()
-    : 'local-client';
+  const actorId =
+    payload && typeof payload.selectedAddress === 'string' && payload.selectedAddress.trim()
+      ? payload.selectedAddress.trim()
+      : 'local-client';
   const rateLimit = await enforceEndpointRateLimit('wattcoin-send', actorId, {
     toAddress: payload && payload.toAddress ? String(payload.toAddress) : '',
     amount: Number(payload && payload.amount) || 0,
@@ -7392,9 +7780,10 @@ ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
   // ── WTC native chain path ─────────────────────────────────────────────────
   if (wtcNode) {
     try {
-      const fromAddress = payload && typeof payload.selectedAddress === 'string'
-        ? payload.selectedAddress.trim()
-        : wtcNode.getPrimaryAddress();
+      const fromAddress =
+        payload && typeof payload.selectedAddress === 'string'
+          ? payload.selectedAddress.trim()
+          : wtcNode.getPrimaryAddress();
       const result = wtcNode.send({ fromAddress, toAddress, amount, subtractFeeFromAmount });
       // Transaction is now in the mempool — it will be included in the next
       // naturally mined block. No flush block is triggered here.
@@ -7417,9 +7806,10 @@ ipcMain.handle('wattcoin-get-tx-status', async (_, payload = {}) => {
 
 ipcMain.handle('wattcoin-list-transactions', async (_, payload = {}) => {
   const walletName = 'wattminer';
-  const actorId = payload && typeof payload.selectedAddress === 'string' && payload.selectedAddress.trim()
-    ? payload.selectedAddress.trim()
-    : 'local-client';
+  const actorId =
+    payload && typeof payload.selectedAddress === 'string' && payload.selectedAddress.trim()
+      ? payload.selectedAddress.trim()
+      : 'local-client';
   const rateLimit = await enforceEndpointRateLimit('wattcoin-list-transactions', actorId, { selectedAddress: actorId });
   if (!rateLimit.ok) {
     return { ok: false, code: rateLimit.code, message: rateLimit.message, lockedUntil: rateLimit.lockedUntil || 0 };
@@ -7568,11 +7958,16 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
       return { ok: false, code: 'DECRYPT_FAILED', message: 'Failed to decrypt backup. Check your passphrase.' };
     }
     const metadata = payload && payload.metadata ? payload.metadata : {};
-    const walletName = typeof metadata.walletName === 'string' && metadata.walletName ? metadata.walletName : defaultWalletName;
+    const walletName =
+      typeof metadata.walletName === 'string' && metadata.walletName ? metadata.walletName : defaultWalletName;
     const expectedNetwork = getActiveNetwork();
     const network = metadata && metadata.network ? metadata.network : 'unknown';
     if (network !== expectedNetwork) {
-      return { ok: false, code: 'NETWORK_MISMATCH', message: `Backup network is ${network}, expected ${expectedNetwork}.` };
+      return {
+        ok: false,
+        code: 'NETWORK_MISMATCH',
+        message: `Backup network is ${network}, expected ${expectedNetwork}.`,
+      };
     }
     const walletDataBase64 = payload && payload.walletDatBase64 ? payload.walletDatBase64 : '';
     const walletDat = Buffer.from(walletDataBase64, 'base64');
@@ -7587,30 +7982,39 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
     const walletFilePath = path.join(getWalletDataDir(), 'wtc-wallet.json');
     const walletDir = path.dirname(walletFilePath);
     if (!allowOverwrite && fs.existsSync(walletFilePath)) {
-      return { ok: false, code: 'WALLET_EXISTS', backupPath, message: `Wallet already exists at ${walletFilePath}. Confirm overwrite in the UI.` };
+      return {
+        ok: false,
+        code: 'WALLET_EXISTS',
+        backupPath,
+        message: `Wallet already exists at ${walletFilePath}. Confirm overwrite in the UI.`,
+      };
     }
-    try { stopHardwareLoad(); } catch (_) {}
+    try {
+      stopHardwareLoad();
+    } catch (_) {}
     await fsp.mkdir(walletDir, { recursive: true });
     await fsp.writeFile(walletFilePath, walletDat);
     try {
       const wtcSecret = (() => {
         try {
           const raw = JSON.parse(fs.readFileSync(getDeviceIdentityFilePath(), 'utf8'));
-          return (raw && raw.secret) ? raw.secret : '';
-        } catch (_) { return ''; }
+          return raw && raw.secret ? raw.secret : '';
+        } catch (_) {
+          return '';
+        }
       })();
       wtcNode = createWtcNode({
-        dataDir:         getWalletDataDir(),
-        signingSecret:   wtcSecret || crypto.randomBytes(32).toString('hex'),
-        peerIdentity:    String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
-        walletKey:       getOrCreateWalletEncryptionKey(),
-        getActivePeers:  () => getActivePeers(getLedgerNetworkSettings()),
+        dataDir: getWalletDataDir(),
+        signingSecret: wtcSecret || crypto.randomBytes(32).toString('hex'),
+        peerIdentity: String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
+        walletKey: getOrCreateWalletEncryptionKey(),
+        getActivePeers: () => getActivePeers(getLedgerNetworkSettings()),
         getConnectedPeerCount: () => getActiveReverseTunnelPeerConnectionCount(),
-        getPeerTargets:  () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
+        getPeerTargets: () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
         getTrustedPeerTargets: () => getTrustedPeerTargets(getLedgerNetworkSettings()),
         requestPeerJson,
         isSelfPeerUrl,
-        onPeerTip:       (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
+        onPeerTip: (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
         allowPartialQuorumCommit: !(getLedgerNetworkSettings().enabled && getLedgerNetworkSettings().mode === 'peer'),
         isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
         getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
@@ -7625,7 +8029,15 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
     }
     const allAddresses = wtcNode ? wtcNode.getAddresses() : [];
     refreshWalletSyncState('restore-wallet-backup', { force: true }).catch(() => {});
-    return { ok: true, walletName: 'wtc-native', filePath: backupPath, restoredTo: walletFilePath, checksum: actualHash, restartedNode: true, allAddresses };
+    return {
+      ok: true,
+      walletName: 'wtc-native',
+      filePath: backupPath,
+      restoredTo: walletFilePath,
+      checksum: actualHash,
+      restartedNode: true,
+      allAddresses,
+    };
   } catch (e) {
     return normalizeWalletError(e);
   }
@@ -7782,7 +8194,9 @@ async function runWtcPeerSync(triggerLabel) {
     const res = await wtcNode.syncWithPeers();
     opsState.lastSyncResult = res || null;
     if (res && res.synced) {
-      console.log(`[WtcSync] ${label}: synced ${res.fromHeight}->${res.toHeight} from ${res.peer} (${res.imported} blocks)`);
+      console.log(
+        `[WtcSync] ${label}: synced ${res.fromHeight}->${res.toHeight} from ${res.peer} (${res.imported} blocks)`,
+      );
     } else if (res && !res.ok) {
       console.warn(`[WtcSync] ${label}: sync failed: ${res.reason}`);
     }
@@ -7806,20 +8220,21 @@ function scheduleWtcPeerSync(reason, delayMs = WTC_PEER_SYNC_DEBOUNCE_MS) {
     ? `${wtcPeerSyncPendingReason},${normalizedReason}`
     : normalizedReason;
   if (wtcPeerSyncDebounceTimer) return;
-  wtcPeerSyncDebounceTimer = setTimeout(async () => {
-    const pendingReason = wtcPeerSyncPendingReason || normalizedReason;
-    wtcPeerSyncPendingReason = '';
-    wtcPeerSyncDebounceTimer = null;
-    await runWtcPeerSync(`debounced:${pendingReason}`);
-  }, Math.max(0, Number(delayMs) || 0));
+  wtcPeerSyncDebounceTimer = setTimeout(
+    async () => {
+      const pendingReason = wtcPeerSyncPendingReason || normalizedReason;
+      wtcPeerSyncPendingReason = '';
+      wtcPeerSyncDebounceTimer = null;
+      await runWtcPeerSync(`debounced:${pendingReason}`);
+    },
+    Math.max(0, Number(delayMs) || 0),
+  );
 }
 
 function handlePeerTipSignal(peerUrl, tip = null, source = 'tip-probe') {
   rememberDiscoveredPeer(peerUrl, { source, quiet: true });
   const remoteHeight = Number(tip && tip.height);
-  const localHeight = wtcNode && typeof wtcNode.getHeight === 'function'
-    ? Number(wtcNode.getHeight())
-    : Number.NaN;
+  const localHeight = wtcNode && typeof wtcNode.getHeight === 'function' ? Number(wtcNode.getHeight()) : Number.NaN;
   if (Number.isFinite(remoteHeight) && Number.isFinite(localHeight) && remoteHeight > localHeight) {
     scheduleWtcPeerSync(`${source}-higher-tip`, 250);
   }
@@ -7898,8 +8313,7 @@ function createWindow() {
   // Restricts script, style, and connection sources to 'self' (the local app bundle).
   // In dev mode we also allow localhost:5173 for the Vite dev server.
   const devMode = process.env.NODE_ENV === 'development';
-  const externalApiHosts = [
-  ].join(' ');
+  const externalApiHosts = [].join(' ');
   const connectSrc = devMode
     ? `'self' http://localhost:5173 ws://localhost:5173 ${externalApiHosts}`
     : `'self' ${externalApiHosts}`;
@@ -7931,13 +8345,17 @@ function createWindow() {
   });
   // Uncomment to debug: win.webContents.openDevTools();
   // Keep the versioned title even after the page's <title> tag loads.
-  win.on('page-title-updated', (event) => { event.preventDefault(); });
+  win.on('page-title-updated', (event) => {
+    event.preventDefault();
+  });
   // Block all new-window openings and external navigations.
   // The renderer is a local single-page app; it should never open popups or
   // navigate away from the local file:// bundle.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (event, url) => {
-    const allowed = devMode ? (url.startsWith('http://localhost:5173') || url.startsWith('file://')) : url.startsWith('file://');
+    const allowed = devMode
+      ? url.startsWith('http://localhost:5173') || url.startsWith('file://')
+      : url.startsWith('file://');
     if (!allowed) {
       event.preventDefault();
       console.warn('[Security] Blocked renderer navigation to:', url);
@@ -7968,7 +8386,7 @@ if (!gotSingleInstanceLock) {
   app.on('second-instance', () => {
     // Someone tried to launch a second instance — focus the existing window.
     const wins = require('electron').BrowserWindow.getAllWindows();
-    const main = wins.find(w => !w.isDestroyed());
+    const main = wins.find((w) => !w.isDestroyed());
     if (main) {
       if (main.isMinimized()) main.restore();
       main.focus();
@@ -7981,24 +8399,26 @@ app.whenReady().then(async () => {
   // cores only.  On HT CPUs (2 logical per physical) spawning workers on all logical
   // cores doubles the duty-cycle pressure on each physical core, causing actual power
   // draw that is ~2× the intended %.  One worker per physical core makes N% duty = N% TDP.
-  si.cpu().then(cpu => {
-    try {
-      const logical = Math.max(1, (os.cpus() || []).length || 1);
-      let physical = Math.max(0, Number(cpu && cpu.physicalCores) || 0);
-      // Some Windows/laptop environments occasionally report physicalCores=1
-      // despite multiple logical cores. That under-provisions workers and can make
-      // a 20% target look like ~0-1% total system load. Use HT-style fallback.
-      if (logical >= 4 && physical === 1) {
-        physical = Math.max(1, Math.floor(logical / 2));
+  si.cpu()
+    .then((cpu) => {
+      try {
+        const logical = Math.max(1, (os.cpus() || []).length || 1);
+        let physical = Math.max(0, Number(cpu && cpu.physicalCores) || 0);
+        // Some Windows/laptop environments occasionally report physicalCores=1
+        // despite multiple logical cores. That under-provisions workers and can make
+        // a 20% target look like ~0-1% total system load. Use HT-style fallback.
+        if (logical >= 4 && physical === 1) {
+          physical = Math.max(1, Math.floor(logical / 2));
+        }
+        if (physical <= 0) {
+          physical = logical;
+        }
+        configurePhysicalCores(physical);
+      } catch (_) {
+        // Best effort; controller fallback remains logical core count.
       }
-      if (physical <= 0) {
-        physical = logical;
-      }
-      configurePhysicalCores(physical);
-    } catch (_) {
-      // Best effort; controller fallback remains logical core count.
-    }
-  }).catch(() => {}); // best-effort; controller falls back to logical core count
+    })
+    .catch(() => {}); // best-effort; controller falls back to logical core count
 
   // Load and decrypt attestation state now that safeStorage is available.
   // Re-save immediately to migrate any legacy plaintext secret to encrypted form.
@@ -8026,7 +8446,9 @@ app.whenReady().then(async () => {
       const { getLocalOverrideConfigPath } = require('./runtime-config');
       const localPath = getLocalOverrideConfigPath();
       let localCfg = {};
-      try { localCfg = JSON.parse(fs.readFileSync(localPath, 'utf8')); } catch (_) {}
+      try {
+        localCfg = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+      } catch (_) {}
       const currentUser = String(localCfg.rpcUser || getRuntimeConfig().rpcUser || '');
       const currentPass = String(localCfg.rpcPassword || getRuntimeConfig().rpcPassword || '');
       const currentToken = String(localCfg.ledgerNetworkAuthToken || getRuntimeConfig().ledgerNetworkAuthToken || '');
@@ -8035,7 +8457,7 @@ app.whenReady().then(async () => {
       const shouldUseSharedPeerToken = runtime.ledgerNetworkEnabled && runtime.ledgerNetworkMode === 'peer';
       let dirty = false;
       if (currentUser === 'user' || currentPass === 'pass' || !currentUser || !currentPass) {
-        localCfg.rpcUser     = 'wtc_' + crypto.randomBytes(8).toString('hex');
+        localCfg.rpcUser = 'wtc_' + crypto.randomBytes(8).toString('hex');
         localCfg.rpcPassword = crypto.randomBytes(24).toString('hex');
         dirty = true;
       }
@@ -8049,13 +8471,18 @@ app.whenReady().then(async () => {
         dirty = true;
       }
       const shippedPublicUrl = normalizePeerUrl(runtime.ledgerNetworkPublicUrl);
-      const bundledPeerUrls = Array.from(new Set([
-        ...(Array.isArray(runtime.ledgerPeers) ? runtime.ledgerPeers : []),
-        ...loadBundledSeedPeers(),
-      ].map(normalizePeerUrl).filter(Boolean)));
-      if (!Object.prototype.hasOwnProperty.call(localCfg, 'ledgerNetworkPublicUrl')
-          && shippedPublicUrl
-          && bundledPeerUrls.includes(shippedPublicUrl)) {
+      const bundledPeerUrls = Array.from(
+        new Set(
+          [...(Array.isArray(runtime.ledgerPeers) ? runtime.ledgerPeers : []), ...loadBundledSeedPeers()]
+            .map(normalizePeerUrl)
+            .filter(Boolean),
+        ),
+      );
+      if (
+        !Object.prototype.hasOwnProperty.call(localCfg, 'ledgerNetworkPublicUrl') &&
+        shippedPublicUrl &&
+        bundledPeerUrls.includes(shippedPublicUrl)
+      ) {
         localCfg.ledgerNetworkPublicUrl = '';
         dirty = true;
       }
@@ -8063,9 +8490,11 @@ app.whenReady().then(async () => {
         const dir = path.dirname(localPath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(localPath, JSON.stringify(localCfg, null, 2), 'utf8');
-        console.log(shouldUseSharedPeerToken
-          ? '[startup] Normalized peer-network credentials.'
-          : '[startup] Generated unique per-machine credentials.');
+        console.log(
+          shouldUseSharedPeerToken
+            ? '[startup] Normalized peer-network credentials.'
+            : '[startup] Generated unique per-machine credentials.',
+        );
       }
     } catch (e) {
       console.error('[startup] Failed to generate RPC credentials:', e);
@@ -8074,8 +8503,12 @@ app.whenReady().then(async () => {
 
   // Generate (or load) the hardware-bound device identity on every launch so it
   // is always available before the first renderer IPC call arrives.
-  try { loadOrCreateDeviceIdentity(); } catch (_) {}
-  try { persistDevPeerPrivacyRecoveryKey(); } catch (e) {
+  try {
+    loadOrCreateDeviceIdentity();
+  } catch (_) {}
+  try {
+    persistDevPeerPrivacyRecoveryKey();
+  } catch (e) {
     console.warn('[PeerPrivacy] Failed to write dev recovery key:', e && e.message ? e.message : e);
   }
 
@@ -8108,21 +8541,23 @@ app.whenReady().then(async () => {
     const wtcSecret = (() => {
       try {
         const raw = JSON.parse(fs.readFileSync(getDeviceIdentityFilePath(), 'utf8'));
-        return (raw && raw.secret) ? raw.secret : '';
-      } catch (_) { return ''; }
+        return raw && raw.secret ? raw.secret : '';
+      } catch (_) {
+        return '';
+      }
     })();
     wtcNode = createWtcNode({
-      dataDir:         getWalletDataDir(),
-      signingSecret:   wtcSecret || crypto.randomBytes(32).toString('hex'),
-      peerIdentity:    String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
-      walletKey:       getOrCreateWalletEncryptionKey(),
-      getActivePeers:  () => getActivePeers(getLedgerNetworkSettings()),
+      dataDir: getWalletDataDir(),
+      signingSecret: wtcSecret || crypto.randomBytes(32).toString('hex'),
+      peerIdentity: String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
+      walletKey: getOrCreateWalletEncryptionKey(),
+      getActivePeers: () => getActivePeers(getLedgerNetworkSettings()),
       getConnectedPeerCount: () => getActiveReverseTunnelPeerConnectionCount(),
-      getPeerTargets:  () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
+      getPeerTargets: () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
       getTrustedPeerTargets: () => getTrustedPeerTargets(getLedgerNetworkSettings()),
       requestPeerJson,
       isSelfPeerUrl,
-      onPeerTip:       (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
+      onPeerTip: (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
       allowPartialQuorumCommit: !(getLedgerNetworkSettings().enabled && getLedgerNetworkSettings().mode === 'peer'),
       isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
       getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
@@ -8148,7 +8583,7 @@ app.whenReady().then(async () => {
   if (!debugFrictionResult.ok) {
     dialog.showErrorBox(
       'Wattcoin Miner — Debugger Blocked',
-      `Debugger launch flags were detected in this release build.\n\n${(debugFrictionResult.reasons || []).join('\n')}\n\nTo run with debugger for support, set WATTCOIN_ALLOW_DEBUGGER=1.`
+      `Debugger launch flags were detected in this release build.\n\n${(debugFrictionResult.reasons || []).join('\n')}\n\nTo run with debugger for support, set WATTCOIN_ALLOW_DEBUGGER=1.`,
     );
     app.quit();
     return;
@@ -8156,12 +8591,10 @@ app.whenReady().then(async () => {
 
   const appIntegrityResult = verifyAppIntegrityManifest();
   if (!appIntegrityResult.ok) {
-    const failedList = (appIntegrityResult.failures || [])
-      .map((f) => `  • ${f.rel} (${f.reason})`)
-      .join('\n');
+    const failedList = (appIntegrityResult.failures || []).map((f) => `  • ${f.rel} (${f.reason})`).join('\n');
     dialog.showErrorBox(
       'Wattcoin Miner — Integrity Check Failed',
-      `One or more application modules have been modified or are missing.\n\n${failedList}\n\nThe application cannot start safely. Please reinstall Wattcoin Miner.`
+      `One or more application modules have been modified or are missing.\n\n${failedList}\n\nThe application cannot start safely. Please reinstall Wattcoin Miner.`,
     );
     app.quit();
     return;
@@ -8169,12 +8602,10 @@ app.whenReady().then(async () => {
 
   const binaryIntegrityResult = verifyBinaryManifest();
   if (!binaryIntegrityResult.ok) {
-    const failedList = (binaryIntegrityResult.failures || [])
-      .map((f) => `  \u2022 ${f.rel} (${f.reason})`)
-      .join('\n');
+    const failedList = (binaryIntegrityResult.failures || []).map((f) => `  \u2022 ${f.rel} (${f.reason})`).join('\n');
     dialog.showErrorBox(
       'Wattcoin Miner \u2014 Integrity Check Failed',
-      `One or more bundled binaries have been modified or are missing.\n\n${failedList}\n\nThe application cannot start safely. Please reinstall Wattcoin Miner.`
+      `One or more bundled binaries have been modified or are missing.\n\n${failedList}\n\nThe application cannot start safely. Please reinstall Wattcoin Miner.`,
     );
     app.quit();
     return;
@@ -8204,7 +8635,7 @@ app.whenReady().then(async () => {
       if (fs.existsSync(apiKeyFile)) {
         apiKey = fs.readFileSync(apiKeyFile, 'utf8');
         // Strip UTF-8 BOM if present (e.g., from PowerShell Set-Content -Encoding UTF8)
-        if (apiKey.charCodeAt(0) === 0xFEFF) apiKey = apiKey.slice(1);
+        if (apiKey.charCodeAt(0) === 0xfeff) apiKey = apiKey.slice(1);
         apiKey = apiKey.trim();
       }
 
@@ -8229,7 +8660,7 @@ app.whenReady().then(async () => {
       const stakingKeyFile = path.join(getDataDir(), 'sale-api-key.txt');
       if (fs.existsSync(stakingKeyFile)) {
         stakingApiKey = fs.readFileSync(stakingKeyFile, 'utf8');
-        if (stakingApiKey.charCodeAt(0) === 0xFEFF) stakingApiKey = stakingApiKey.slice(1);
+        if (stakingApiKey.charCodeAt(0) === 0xfeff) stakingApiKey = stakingApiKey.slice(1);
         stakingApiKey = stakingApiKey.trim();
       }
       if (stakingApiKey) {
@@ -8259,7 +8690,11 @@ app.on('window-all-closed', () => {
     clearInterval(remoteProfileFeedRefreshTimer);
     remoteProfileFeedRefreshTimer = null;
   }
-  try { stopHardwareLoad(); } catch (e) { console.error('Failed to stop hardware load controller:', e); }
+  try {
+    stopHardwareLoad();
+  } catch (e) {
+    console.error('Failed to stop hardware load controller:', e);
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -8294,10 +8729,7 @@ function readConfiguredUpdateFeedUrl() {
 
 function buildUpdateFeedOrder() {
   const configured = readConfiguredUpdateFeedUrl();
-  const defaults = [
-    'https://wattcoin.ee/releases',
-    'https://wattcoin.ee',
-  ];
+  const defaults = ['https://wattcoin.ee/releases', 'https://wattcoin.ee'];
 
   const ordered = [];
   const seen = new Set();
@@ -8372,8 +8804,10 @@ if (app.isPackaged) {
 
   autoUpdater.on('update-downloaded', (info) => {
     const wins = BrowserWindow.getAllWindows();
-    wins.forEach(w => {
-      try { w.webContents.send('wattcoin-update-downloaded', { version: info.version }); } catch (_) {}
+    wins.forEach((w) => {
+      try {
+        w.webContents.send('wattcoin-update-downloaded', { version: info.version });
+      } catch (_) {}
     });
   });
 
@@ -8382,17 +8816,24 @@ if (app.isPackaged) {
   });
 
   ipcMain.handle('wattcoin-check-for-update', async () => {
-    try { return await checkForUpdatesWithFallback(); } catch (_) { return null; }
+    try {
+      return await checkForUpdatesWithFallback();
+    } catch (_) {
+      return null;
+    }
   });
-
 
   ipcMain.handle('wattcoin-install-update', () => {
     updateInstallInProgress = true;
 
     const wins = BrowserWindow.getAllWindows();
     wins.forEach((win) => {
-      try { win.removeAllListeners('close'); } catch (_) {}
-      try { win.close(); } catch (_) {}
+      try {
+        win.removeAllListeners('close');
+      } catch (_) {}
+      try {
+        win.close();
+      } catch (_) {}
     });
 
     setImmediate(() => {
@@ -8420,13 +8861,12 @@ if (app.isPackaged) {
 // ─── Global average electricity price (USD/kWh) ──────────────────────────────
 // Fetches from GlobalPetrolPrices.com. Cached for 24 h. Falls back to the
 // widely-cited 2024 global average of $0.165/kWh if the fetch or parse fails.
-const ELECTRICITY_PRICE_FALLBACK = 0.174;  // USD/kWh — Q1 2026 world average
-const ELECTRICITY_PRICE_CACHE_MS = 24 * 60 * 60 * 1000;  // 24 h
+const ELECTRICITY_PRICE_FALLBACK = 0.174; // USD/kWh — Q1 2026 world average
+const ELECTRICITY_PRICE_CACHE_MS = 24 * 60 * 60 * 1000; // 24 h
 let _electricityCache = { price: null, fetchedAt: 0 };
 
 ipcMain.handle('wattcoin-get-electricity-price', () => {
-  if (_electricityCache.price !== null &&
-      Date.now() - _electricityCache.fetchedAt < ELECTRICITY_PRICE_CACHE_MS) {
+  if (_electricityCache.price !== null && Date.now() - _electricityCache.fetchedAt < ELECTRICITY_PRICE_CACHE_MS) {
     saleQueue.setElectricityPrice(_electricityCache.price);
     return Promise.resolve({ ok: true, price: _electricityCache.price, source: 'cache' });
   }
@@ -8446,7 +8886,8 @@ ipcMain.handle('wattcoin-get-electricity-price', () => {
           headers: {
             Accept: 'text/html,application/xhtml+xml,*/*',
             'Accept-Language': 'en-US,en;q=0.9',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           },
         },
         (res) => {
@@ -8454,7 +8895,10 @@ ipcMain.handle('wattcoin-get-electricity-price', () => {
           let total = 0;
           res.on('data', (chunk) => {
             total += chunk.length;
-            if (total > 3 * 1024 * 1024) { req.destroy(); return; }
+            if (total > 3 * 1024 * 1024) {
+              req.destroy();
+              return;
+            }
             chunks.push(chunk);
           });
           res.on('end', () => {
@@ -8486,12 +8930,19 @@ ipcMain.handle('wattcoin-get-electricity-price', () => {
                 }
               }
               fallback('fallback-parse');
-            } catch (_) { fallback('fallback-error'); }
+            } catch (_) {
+              fallback('fallback-error');
+            }
           });
-        }
+        },
       );
       req.on('error', () => fallback('fallback-network'));
-      req.on('timeout', () => { req.destroy(); fallback('fallback-timeout'); });
-    } catch (_) { fallback('fallback-exception'); }
+      req.on('timeout', () => {
+        req.destroy();
+        fallback('fallback-timeout');
+      });
+    } catch (_) {
+      fallback('fallback-exception');
+    }
   });
 });

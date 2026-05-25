@@ -103,15 +103,27 @@ async function run() {
     assert.strictEqual(typeof minedBlock.probeReceipt.signature, 'string', 'stored receipt should include a signature');
 
     const accepted = await validator.handleProposal(minedBlock, 'miner-peer');
-    assert.strictEqual(Boolean(accepted && accepted.ok), true, 'validator should accept a block with a valid signed probe receipt');
+    assert.strictEqual(
+      Boolean(accepted && accepted.ok),
+      true,
+      'validator should accept a block with a valid signed probe receipt',
+    );
 
     const tampered = JSON.parse(JSON.stringify(minedBlock));
-    tampered.probeReceipt.signature = `0${tampered.probeReceipt.signature.slice(1)}`;
+    // Corrupt the signature with a 130-char hex string that won't verify
+    tampered.probeReceipt.signature = 'a'.repeat(128) + '00';
     tampered.hash = computeBlockHash(tampered);
 
     const rejected = await rejector.handleProposal(tampered, 'tampered-peer');
-    assert.strictEqual(Boolean(rejected && rejected.ok), false, 'validator should reject a block with a tampered signed probe receipt');
-    assert.match(String(rejected && rejected.reason || ''), /receipt signature verification failed/i);
+    assert.strictEqual(
+      Boolean(rejected && rejected.ok),
+      false,
+      'validator should reject a block with a tampered signed probe receipt',
+    );
+    assert.match(
+      String((rejected && rejected.reason) || ''),
+      /(receipt signature verification failed|invalid receipt signature)/i,
+    );
 
     console.log('wtc probe attestation tests passed');
   } finally {

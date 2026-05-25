@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: MIT
 'use strict';
 
-function countLiveReverseTunnelPeers({
-  sessions = [],
-  nowMs = Date.now(),
-  liveThresholdMs = 0,
-  openState = 1,
-} = {}) {
+function countLiveReverseTunnelPeers({ sessions = [], nowMs = Date.now(), liveThresholdMs = 0, openState = 1 } = {}) {
   const inboundConnections = new Set();
   for (const session of sessions) {
     if (!session || !session.socket || session.socket.readyState !== openState) continue;
-    if ((nowMs - Number(session.lastSeenAtMs || 0)) > liveThresholdMs) continue;
+    if (nowMs - Number(session.lastSeenAtMs || 0) > liveThresholdMs) continue;
     const key = String(session.peerIdentity || '').trim() || `tunnel:${String(session.tunnelId || '').trim()}`;
     inboundConnections.add(key);
   }

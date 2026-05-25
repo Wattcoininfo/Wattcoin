@@ -12,39 +12,49 @@
  */
 
 const assert = require('assert');
-const fs     = require('fs');
-const os     = require('os');
-const path   = require('path');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const { createWtcNode } = require('../wtc-node');
 const { generateKeypair } = require('../wtc-address');
 
 const ENERGY_WH_PER_BLOCK = 10_000_000;
 
-function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
+function ensureDir(d) {
+  fs.mkdirSync(d, { recursive: true });
+}
 
 function rmrf(t) {
-  try { fs.rmSync(t, { recursive: true, force: true }); } catch (_) {}
+  try {
+    fs.rmSync(t, { recursive: true, force: true });
+  } catch (_) {}
 }
 
 function writeGenesis(dir, teamAddress) {
   fs.writeFileSync(
     path.join(dir, 'wtc-genesis.json'),
-    JSON.stringify({
-      timestamp:   1710000000000,
-      teamWallets: [{ address: teamAddress, amount: 1_000_000 }],
-    }, null, 2),
-    'utf8'
+    JSON.stringify(
+      {
+        timestamp: 1710000000000,
+        teamWallets: [{ address: teamAddress, amount: 1_000_000 }],
+      },
+      null,
+      2,
+    ),
+    'utf8',
   );
 }
 
 function standaloneNode(id, dir) {
   return createWtcNode({
-    dataDir:                 dir,
-    signingSecret:           `secret-${id}`,
+    dataDir: dir,
+    signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: true,
-    getActivePeers:          () => [],
-    requestPeerJson:         async () => { throw new Error('no peers in test'); },
+    getActivePeers: () => [],
+    requestPeerJson: async () => {
+      throw new Error('no peers in test');
+    },
   });
 }
 
@@ -59,7 +69,7 @@ async function run() {
     writeGenesis(bDir, team);
     const nodeB = standaloneNode('b', bDir);
     await nodeB.mineBlock(nodeB.getPrimaryAddress(), {
-      energyWh:        ENERGY_WH_PER_BLOCK,
+      energyWh: ENERGY_WH_PER_BLOCK,
       proofCommitment: 'rollback-risk-test',
     });
     assert.strictEqual(nodeB.getHeight(), 1, 'node B should be at height 1 after mining');
@@ -71,7 +81,7 @@ async function run() {
     const nodeA = standaloneNode('a', aDir);
     assert.strictEqual(nodeA.getHeight(), 0, 'node A starts at genesis (height 0)');
 
-    const minerAddr     = nodeB.getPrimaryAddress();
+    const minerAddr = nodeB.getPrimaryAddress();
     const balanceBefore = nodeA.getBalance(minerAddr); // 0 — miner not known to node A yet
 
     // Build the candidate chain that _applyCandidateChain would receive after a
@@ -95,33 +105,37 @@ async function run() {
     try {
       result = nodeA._applyCandidateChain(candidate, {
         localHeight: 0,
-        peer:        'node-b',
-        ancestor:    0,
-        imported:    1,
-        mode:        'push',
+        peer: 'node-b',
+        ancestor: 0,
+        imported: 1,
+        mode: 'push',
       });
     } catch (e) {
       assert.fail('_applyCandidateChain should not throw when NFT rebuild fails after rollback fix');
     }
 
-    assert.strictEqual(result.ok, false,
-      '_applyCandidateChain should return ok:false when NFT rebuild fails');
-    assert.match(result.reason, /simulated NFT rebuild failure/,
-      'reason should mention simulated NFT rebuild failure');
+    assert.strictEqual(result.ok, false, '_applyCandidateChain should return ok:false when NFT rebuild fails');
+    assert.match(result.reason, /simulated NFT rebuild failure/, 'reason should mention simulated NFT rebuild failure');
 
     // Chain must NOT have advanced — _chain.replaceWithBlocks comes after the NFT
     // rebuild call and was never reached.
-    assert.strictEqual(nodeA.getHeight(), 0,
-      'chain height must still be 0 because replaceWithBlocks was never reached');
+    assert.strictEqual(
+      nodeA.getHeight(),
+      0,
+      'chain height must still be 0 because replaceWithBlocks was never reached',
+    );
 
     // Accounts are now ROLLED BACK to their original state thanks to the snapshot
     // restoration added in the rollback fix.
     const balanceAfter = nodeA.getBalance(minerAddr);
-    assert.deepStrictEqual(balanceAfter, balanceBefore,
-      'accounts should be restored to pre-candidate state after NFT rebuild rollback');
+    assert.deepStrictEqual(
+      balanceAfter,
+      balanceBefore,
+      'accounts should be restored to pre-candidate state after NFT rebuild rollback',
+    );
 
     console.log('[PASS] chain-apply-rollback: NFT rebuild failure correctly rolled back accounts', {
-      chainHeight:  nodeA.getHeight(),
+      chainHeight: nodeA.getHeight(),
       balanceBefore,
       balanceAfter,
     });

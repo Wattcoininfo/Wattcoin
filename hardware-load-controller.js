@@ -117,7 +117,7 @@ function startRampUp(targetLoad) {
     const elapsedMs = Date.now() - rampUpStartTime;
     const rampFactor = Math.min(1, elapsedMs / RAMP_UP_DURATION_MS);
     const nextPercent = Math.round(startPercent + (targetLoad - startPercent) * rampFactor);
-    
+
     if (nextPercent !== currentPercent) {
       currentPercent = nextPercent;
       // Apply ramped load to CPU workers
@@ -129,7 +129,7 @@ function startRampUp(targetLoad) {
         stopMemoryPressure();
       }
     }
-    
+
     // Ramp complete
     if (rampFactor >= 1) {
       stopRampUp();
@@ -148,11 +148,13 @@ function ensureDdrShared() {
 
 function stopMemoryPressure() {
   if (ddrSharedInt) {
-    Atomics.store(ddrSharedInt, 1, 0);  // signal worker: target = 0
-    Atomics.notify(ddrSharedInt, 0);    // wake it if sleeping
+    Atomics.store(ddrSharedInt, 1, 0); // signal worker: target = 0
+    Atomics.notify(ddrSharedInt, 0); // wake it if sleeping
   }
   if (ddrWorker) {
-    try { ddrWorker.terminate(); } catch (_) {}
+    try {
+      ddrWorker.terminate();
+    } catch (_) {}
     ddrWorker = null;
   }
   ddrTelemetry = {
@@ -168,7 +170,8 @@ function stopMemoryPressure() {
 function getEffectiveMemoryTargetPercent(percent) {
   const clamped = clampPercent(percent);
   if (clamped <= MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT) return 0;
-  const normalizedRange = (clamped - MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT) / (100 - MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT);
+  const normalizedRange =
+    (clamped - MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT) / (100 - MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT);
   return Math.round(clamped * MEMORY_LOAD_MAX_WEIGHT * Math.max(0, Math.min(1, normalizedRange)));
 }
 
@@ -204,7 +207,9 @@ function setMemoryTarget(percent) {
         ts: Date.now(),
       };
     });
-    ddrWorker.on('error', () => { ddrWorker = null; });
+    ddrWorker.on('error', () => {
+      ddrWorker = null;
+    });
   }
 }
 
@@ -241,15 +246,16 @@ function getHardwareLoadState() {
   const staleAfterMs = 2500;
 
   for (const t of cpuWorkerTelemetry.values()) {
-    if (!t || (nowMs - (t.ts || 0)) > staleAfterMs) continue;
+    if (!t || nowMs - (t.ts || 0) > staleAfterMs) continue;
     cpuLoadOpsPerSec += Math.max(0, Number(t.opsPerSec) || 0);
     cpuDutySum += Math.max(0, Math.min(1, Number(t.duty) || 0));
     cpuDutyCount += 1;
   }
 
-  const avgCpuWorkerDuty = cpuDutyCount > 0 ? (cpuDutySum / cpuDutyCount) : 0;
-  const memLoadMBps = (nowMs - (ddrTelemetry.ts || 0)) <= staleAfterMs ? Math.max(0, Number(ddrTelemetry.mbps) || 0) : 0;
-  const memDuty = (nowMs - (ddrTelemetry.ts || 0)) <= staleAfterMs ? Math.max(0, Math.min(1, Number(ddrTelemetry.duty) || 0)) : 0;
+  const avgCpuWorkerDuty = cpuDutyCount > 0 ? cpuDutySum / cpuDutyCount : 0;
+  const memLoadMBps = nowMs - (ddrTelemetry.ts || 0) <= staleAfterMs ? Math.max(0, Number(ddrTelemetry.mbps) || 0) : 0;
+  const memDuty =
+    nowMs - (ddrTelemetry.ts || 0) <= staleAfterMs ? Math.max(0, Math.min(1, Number(ddrTelemetry.duty) || 0)) : 0;
 
   return {
     targetPercent: targetPercent,
@@ -299,11 +305,11 @@ function applyOsCpuFeedback(osUtilPct, targetPct) {
   if (cpuWorkers.length === 0) return;
 
   const measuredDuty = Math.max(0.01, osUtilPct / 100);
-  const targetDuty   = targetPct / 100;
-  const error        = targetDuty - measuredDuty; // positive = under-shooting
+  const targetDuty = targetPct / 100;
+  const error = targetDuty - measuredDuty; // positive = under-shooting
 
   // Proportional correction: clamp to ±15 pp to avoid over-reacting to spikes.
-  const correctionPp   = Math.max(-15, Math.min(15, error * 100 * 1.5));
+  const correctionPp = Math.max(-15, Math.min(15, error * 100 * 1.5));
   const correctedTarget = Math.max(1, Math.min(100, targetPct + correctionPp));
   setCpuTarget(correctedTarget);
 }

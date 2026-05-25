@@ -27,7 +27,7 @@ const MIN_RELAY_FEE = 0.01;
 const MIN_RELAY_AMOUNT = 0.0001;
 class Mempool {
   constructor() {
-    this._txs = new Map();  // id → tx
+    this._txs = new Map(); // id → tx
   }
 
   /** Count how many NFT transactions are currently in the pool. */
@@ -47,16 +47,16 @@ class Mempool {
    */
   add(tx) {
     if (!tx || typeof tx !== 'object') {
-      return { ok: false, code: 'INVALID',        message: 'transaction must be an object' };
+      return { ok: false, code: 'INVALID', message: 'transaction must be an object' };
     }
     if (!tx.id) {
-      return { ok: false, code: 'MISSING_ID',     message: 'transaction id required' };
+      return { ok: false, code: 'MISSING_ID', message: 'transaction id required' };
     }
     if (this._txs.has(tx.id)) {
-      return { ok: false, code: 'DUPLICATE',      message: `tx ${tx.id.slice(0, 12)} already in pool` };
+      return { ok: false, code: 'DUPLICATE', message: `tx ${tx.id.slice(0, 12)} already in pool` };
     }
     if (this._txs.size >= MEMPOOL_MAX_SIZE) {
-      return { ok: false, code: 'POOL_FULL',      message: 'mempool is full' };
+      return { ok: false, code: 'POOL_FULL', message: 'mempool is full' };
     }
 
     // ── NFT transactions bypass coin amount/fee validation ────────────────
@@ -87,35 +87,35 @@ class Mempool {
     }
 
     if (!tx.from || typeof tx.from !== 'string') {
-      return { ok: false, code: 'MISSING_FROM',   message: 'from address required' };
+      return { ok: false, code: 'MISSING_FROM', message: 'from address required' };
     }
     if (!tx.to || typeof tx.to !== 'string') {
-      return { ok: false, code: 'MISSING_TO',     message: 'to address required' };
+      return { ok: false, code: 'MISSING_TO', message: 'to address required' };
     }
     if (typeof tx.amount !== 'number' || tx.amount <= 0) {
       return { ok: false, code: 'INVALID_AMOUNT', message: 'amount must be a positive number' };
     }
     if (tx.amount < MIN_RELAY_AMOUNT) {
-      return { ok: false, code: 'DUST',           message: `amount below relay minimum (${MIN_RELAY_AMOUNT} WTC)` };
+      return { ok: false, code: 'DUST', message: `amount below relay minimum (${MIN_RELAY_AMOUNT} WTC)` };
     }
     if (typeof tx.fee !== 'number' || tx.fee < MIN_RELAY_FEE) {
-      return { ok: false, code: 'FEE_TOO_LOW',    message: `fee must be >= ${MIN_RELAY_FEE} WTC` };
+      return { ok: false, code: 'FEE_TOO_LOW', message: `fee must be >= ${MIN_RELAY_FEE} WTC` };
     }
     if (typeof tx.nonce !== 'number' || tx.nonce < 0) {
-      return { ok: false, code: 'INVALID_NONCE',  message: 'nonce must be a non-negative integer' };
+      return { ok: false, code: 'INVALID_NONCE', message: 'nonce must be a non-negative integer' };
     }
     if (!Number.isInteger(tx.nonce)) {
-      return { ok: false, code: 'INVALID_NONCE',  message: 'nonce must be an integer' };
+      return { ok: false, code: 'INVALID_NONCE', message: 'nonce must be an integer' };
     }
     if (typeof tx.timestamp !== 'number' || !Number.isFinite(tx.timestamp)) {
-      return { ok: false, code: 'INVALID_TIME',   message: 'timestamp required' };
+      return { ok: false, code: 'INVALID_TIME', message: 'timestamp required' };
     }
     const now = Date.now();
     if (tx.timestamp > now + MAX_FUTURE_DRIFT_MS) {
       return { ok: false, code: 'TIME_IN_FUTURE', message: 'timestamp too far in the future' };
     }
     if (!tx.sig || typeof tx.sig !== 'object') {
-      return { ok: false, code: 'MISSING_SIG',    message: 'signature object required' };
+      return { ok: false, code: 'MISSING_SIG', message: 'signature object required' };
     }
 
     this._txs.set(tx.id, { ...tx, addedAt: Date.now() });
@@ -134,18 +134,22 @@ class Mempool {
 
   // ─── Read operations ──────────────────────────────────────────────────────
 
-  has(id)  { return this._txs.has(id); }
-  get(id)  { return this._txs.get(id) || null; }
-  size()   { return this._txs.size; }
+  has(id) {
+    return this._txs.has(id);
+  }
+  get(id) {
+    return this._txs.get(id) || null;
+  }
+  size() {
+    return this._txs.size;
+  }
 
   /**
    * Return up to maxCount transactions ordered by fee (highest first).
    * Used by the block proposer to choose which transactions to include.
    */
   getTxs(maxCount = 500) {
-    return [...this._txs.values()]
-      .sort((a, b) => (b.fee || 0) - (a.fee || 0))
-      .slice(0, maxCount);
+    return [...this._txs.values()].sort((a, b) => (b.fee || 0) - (a.fee || 0)).slice(0, maxCount);
   }
 
   // ─── Factory ──────────────────────────────────────────────────────────────

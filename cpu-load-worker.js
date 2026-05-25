@@ -60,13 +60,16 @@ const MIN_BURN_MS = 8;
 // Convergence: with WINDOW=16 and gain=1.2, correction is smoother (less oscillation)
 // and typically settles within ~1-2 seconds after start/target change.
 // ---------------------------------------------------------------------------
-const WINDOW  = 16;
-const burnBuf  = new Float64Array(WINDOW);
+const WINDOW = 16;
+const burnBuf = new Float64Array(WINDOW);
 const totalBuf = new Float64Array(WINDOW);
-let wIdx  = 0;
+let wIdx = 0;
 let wFull = false;
 
-function resetWindow() { wIdx = 0; wFull = false; }
+function resetWindow() {
+  wIdx = 0;
+  wFull = false;
+}
 
 function loop() {
   if (!running) return;
@@ -111,16 +114,20 @@ function loop() {
     opsPerMs = 0.85 * opsPerMs + 0.15 * (ops / wallBurnMs);
 
     // Nominal idle for this cycle, ignoring history: busy/(busy+idle) = f
-    const nominalIdle = (1 - f) / f * wallBurnMs;
+    const nominalIdle = ((1 - f) / f) * wallBurnMs;
 
     // Proportional correction: compare measured duty over the last n cycles to f.
     let idleMs = nominalIdle;
     const n = wFull ? WINDOW : wIdx;
     if (n >= 4) {
-      let sumBurn = 0, sumTotal = 0;
-      for (let i = 0; i < n; i++) { sumBurn += burnBuf[i]; sumTotal += totalBuf[i]; }
+      let sumBurn = 0,
+        sumTotal = 0;
+      for (let i = 0; i < n; i++) {
+        sumBurn += burnBuf[i];
+        sumTotal += totalBuf[i];
+      }
       const measuredDuty = sumBurn / sumTotal;
-      const error = f - measuredDuty;          // positive = under-shooting target
+      const error = f - measuredDuty; // positive = under-shooting target
       const avgCycle = sumTotal / n;
       // Reduce idle when under-shooting, increase when over-shooting.
       // Gain 1.2: smoother correction for laptop schedulers and core parking.
@@ -135,7 +142,7 @@ function loop() {
     statsTotalMs += wallBurnMs + actualSleep;
 
     // Record this cycle in the rolling window
-    burnBuf[wIdx]  = wallBurnMs;
+    burnBuf[wIdx] = wallBurnMs;
     totalBuf[wIdx] = wallBurnMs + actualSleep;
     wIdx = (wIdx + 1) % WINDOW;
     if (wIdx === 0) wFull = true;

@@ -27,7 +27,11 @@ async function testDirectPublicPeerUsesExplicitAnnouncement() {
   });
 
   assert.strictEqual(result.ok, true);
-  assert.deepStrictEqual(calls, [{ candidate: 'http://198.51.100.24:39310', source: 'peer-directory' }], 'explicit public peer announcement should be verified');
+  assert.deepStrictEqual(
+    calls,
+    [{ candidate: 'http://198.51.100.24:39310', source: 'peer-directory' }],
+    'explicit public peer announcement should be verified',
+  );
 }
 
 async function testNatedPeerWithoutExplicitPublicUrlUsesSocketCandidate() {
@@ -53,7 +57,11 @@ async function testNatedPeerWithoutExplicitPublicUrlUsesSocketCandidate() {
   });
 
   assert.strictEqual(result.ok, true);
-  assert.deepStrictEqual(calls, [{ candidate: 'http://192.168.1.44:39310', source: 'peer-contact' }], 'NATed peer should still be probed via inferred socket candidate');
+  assert.deepStrictEqual(
+    calls,
+    [{ candidate: 'http://192.168.1.44:39310', source: 'peer-contact' }],
+    'NATed peer should still be probed via inferred socket candidate',
+  );
 }
 
 async function testReverseTunnelForwardedRequesterSkipsReachabilityProbe() {
@@ -84,7 +92,11 @@ async function testReverseTunnelForwardedRequesterSkipsReachabilityProbe() {
   });
 
   assert.strictEqual(result.ok, true);
-  assert.strictEqual(result.skippedReachability, true, 'reverse-tunnel forwarded requests should skip callback probing');
+  assert.strictEqual(
+    result.skippedReachability,
+    true,
+    'reverse-tunnel forwarded requests should skip callback probing',
+  );
   assert.deepStrictEqual(remembered, ['peer-directory-tunnel']);
   assert.strictEqual(verifyCalls, 0, 'reverse-tunnel forwarded requests should not issue reachability probes');
 }

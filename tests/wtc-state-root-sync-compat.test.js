@@ -129,7 +129,7 @@ async function run() {
     assert.throws(
       () => strictReplay.rebuildFromBlocks([peer.getBlock(0), mutatedBlock]),
       /stateRoot mismatch at height 1/,
-      'strict replay should still reject the legacy stateRoot'
+      'strict replay should still reject the legacy stateRoot',
     );
 
     const fresh = createNode('A', aDir, net);

@@ -30,11 +30,11 @@
 // SPDX-License-Identifier: MIT
 'use strict';
 
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
-const https  = require('https');
-const http   = require('http');
+const https = require('https');
+const http = require('http');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -53,21 +53,21 @@ const MAX_APY_PCT = 100;
 
 // Expose for use in electron-main.js.
 module.exports.STAKING_POOL_ADDRESS = STAKING_POOL_ADDRESS;
-module.exports.FLUSH_THRESHOLD_WTC  = FLUSH_THRESHOLD_WTC;
-module.exports.MIN_STAKE_WTC        = MIN_STAKE_WTC;
+module.exports.FLUSH_THRESHOLD_WTC = FLUSH_THRESHOLD_WTC;
+module.exports.MIN_STAKE_WTC = MIN_STAKE_WTC;
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-let _dataDir  = null;
-let _wtcNode  = null;
-let _entries  = [];   // in-memory, persisted to disk
+let _dataDir = null;
+let _wtcNode = null;
+let _entries = []; // in-memory, persisted to disk
 
 // ─── Init / shutdown ─────────────────────────────────────────────────────────
 
 function init(dataDir, wtcNode) {
   _dataDir = dataDir;
   _wtcNode = wtcNode;
-  _queueSecret = null;  // reset so the correct per-dir secret is loaded
+  _queueSecret = null; // reset so the correct per-dir secret is loaded
   _loadEntries();
   console.log('[StakingQueue] init - loaded', _entries.length, 'entries');
 }
@@ -87,7 +87,9 @@ function _entriesPath() {
 // Per-install HMAC secret so tampering with staking-entries.json
 // (e.g. inflating wtcAmount or injecting fake 'rewarded' entries) is detected.
 let _queueSecret = null;
-function _secretPath() { return path.join(_dataDir, 'staking-queue-secret.json'); }
+function _secretPath() {
+  return path.join(_dataDir, 'staking-queue-secret.json');
+}
 function _loadOrCreateQueueSecret() {
   if (_queueSecret) return _queueSecret;
   try {
@@ -112,13 +114,16 @@ function _computeEntriesSig(entries) {
 }
 
 function _loadEntries() {
-  _entries = [];  // always reset so stale in-memory state never leaks across init() calls
+  _entries = []; // always reset so stale in-memory state never leaks across init() calls
   try {
     if (fs.existsSync(_entriesPath())) {
       const parsed = JSON.parse(fs.readFileSync(_entriesPath(), 'utf8'));
-      if (!parsed || typeof parsed !== 'object') { _entries = []; return; }
+      if (!parsed || typeof parsed !== 'object') {
+        _entries = [];
+        return;
+      }
       const { _sig, entries } = parsed;
-      const arr = Array.isArray(entries) ? entries : (Array.isArray(parsed) ? parsed : []);
+      const arr = Array.isArray(entries) ? entries : Array.isArray(parsed) ? parsed : [];
       // If the file was written with HMAC, verify it. Legacy plain-array files are
       // accepted once and re-saved with a signature on the next write.
       if (typeof _sig === 'string') {
@@ -131,7 +136,9 @@ function _loadEntries() {
       }
       _entries = arr;
     }
-  } catch (_) { _entries = []; }
+  } catch (_) {
+    _entries = [];
+  }
 }
 
 function _saveEntries() {
@@ -139,8 +146,8 @@ function _saveEntries() {
     if (!_dataDir) return;
     fs.mkdirSync(_dataDir, { recursive: true });
     const dest = _entriesPath();
-    const tmp  = dest + '.tmp';
-    const sig  = _computeEntriesSig(_entries);
+    const tmp = dest + '.tmp';
+    const sig = _computeEntriesSig(_entries);
     fs.writeFileSync(tmp, JSON.stringify({ entries: _entries, _sig: sig }, null, 2), 'utf8');
     fs.renameSync(tmp, dest);
   } catch (_) {}
@@ -148,10 +155,10 @@ function _saveEntries() {
 
 // ─── Web API integration (shared pool: app + website) ────────────────────────
 
-let _webApiUrl     = null;   // e.g. 'https://wattcoin.ee/api'
-let _webApiKey     = null;
-let _webPendingWtc = 0;      // cached pending WTC from website staking entries
-let _webSyncTimer  = null;
+let _webApiUrl = null; // e.g. 'https://wattcoin.ee/api'
+let _webApiKey = null;
+let _webPendingWtc = 0; // cached pending WTC from website staking entries
+let _webSyncTimer = null;
 
 /**
  * Configure the web API so this queue syncs with the website staking backend.
@@ -161,7 +168,10 @@ function setWebApi(url, key) {
   _webApiUrl = url ? url.replace(/\/$/, '') : null;
   _webApiKey = key || null;
   _webPendingWtc = 0;
-  if (_webSyncTimer) { clearInterval(_webSyncTimer); _webSyncTimer = null; }
+  if (_webSyncTimer) {
+    clearInterval(_webSyncTimer);
+    _webSyncTimer = null;
+  }
   if (_webApiUrl && _webApiKey) {
     _syncWebPending().catch(() => {});
     _pushWebStats().catch(() => {});
@@ -175,39 +185,48 @@ function setWebApi(url, key) {
 module.exports.setWebApi = setWebApi;
 
 function stopWebSync() {
-  if (_webSyncTimer) { clearInterval(_webSyncTimer); _webSyncTimer = null; }
+  if (_webSyncTimer) {
+    clearInterval(_webSyncTimer);
+    _webSyncTimer = null;
+  }
 }
 module.exports.stopWebSync = stopWebSync;
 
 /** Minimal promise-based HTTPS/HTTP JSON helper (no external deps). */
 function _httpJson(method, url, headers, bodyObj) {
   return new Promise((resolve, reject) => {
-    const parsed  = new URL(url);
-    const lib     = parsed.protocol === 'https:' ? https : http;
+    const parsed = new URL(url);
+    const lib = parsed.protocol === 'https:' ? https : http;
     const payload = bodyObj ? Buffer.from(JSON.stringify(bodyObj), 'utf8') : null;
     const opts = {
       hostname: parsed.hostname,
-      port:     parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-      path:     parsed.pathname + (parsed.search || ''),
+      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      path: parsed.pathname + (parsed.search || ''),
       method,
-      timeout:  12_000,
-      headers:  {
+      timeout: 12_000,
+      headers: {
         'Content-Type': 'application/json',
-        'Accept':       'application/json',
+        Accept: 'application/json',
         ...headers,
         ...(payload ? { 'Content-Length': payload.length } : {}),
       },
     };
     const req = lib.request(opts, (res) => {
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) }); }
-        catch (_) { resolve({ status: res.statusCode, body: null }); }
+        try {
+          resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks).toString('utf8')) });
+        } catch (_) {
+          resolve({ status: res.statusCode, body: null });
+        }
       });
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('HTTP timeout')); });
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('HTTP timeout'));
+    });
     if (payload) req.write(payload);
     req.end();
   });
@@ -220,7 +239,7 @@ async function _syncWebPending() {
     const r = await _httpJson('GET', _webApiUrl + '/staking/entries', { 'X-Api-Key': _webApiKey }, null);
     if (r.status === 200 && r.body && r.body.ok && Array.isArray(r.body.entries)) {
       _webPendingWtc = r.body.entries
-        .filter(e => e.status === 'pending')
+        .filter((e) => e.status === 'pending')
         .reduce((s, e) => s + (Number(e.wtcAmount) || 0), 0);
     }
   } catch (e) {
@@ -233,13 +252,15 @@ async function _pushWebStats() {
   if (!_webApiUrl || !_webApiKey) return;
   const bal = poolBalance();
   try {
-    await _httpJson('POST', _webApiUrl + '/staking/update-pool-balance',
+    await _httpJson(
+      'POST',
+      _webApiUrl + '/staking/update-pool-balance',
       { 'X-Api-Key': _webApiKey },
       {
-        balance:     bal !== null ? bal : undefined,
+        balance: bal !== null ? bal : undefined,
         totalStaked: totalPendingWtc(),
-        currentApy:  currentApy(),
-      }
+        currentApy: currentApy(),
+      },
     );
   } catch (e) {
     console.warn('[StakingQueue] Web stats push failed:', e && e.message);
@@ -255,7 +276,7 @@ async function _pushWebStats() {
  */
 function currentApy() {
   const total = totalPendingWtc();
-  return Math.min(MAX_APY_PCT, Math.round(total / 10_000 * 100) / 100);
+  return Math.min(MAX_APY_PCT, Math.round((total / 10_000) * 100) / 100);
 }
 module.exports.currentApy = currentApy;
 
@@ -264,9 +285,7 @@ module.exports.currentApy = currentApy;
  * Includes both local (app) pending entries AND cached website pending entries.
  */
 function totalPendingWtc() {
-  const local = _entries
-    .filter(e => e.status === 'pending')
-    .reduce((s, e) => s + e.wtcAmount, 0);
+  const local = _entries.filter((e) => e.status === 'pending').reduce((s, e) => s + e.wtcAmount, 0);
   return local + _webPendingWtc;
 }
 module.exports.totalPendingWtc = totalPendingWtc;
@@ -280,7 +299,9 @@ function poolBalance() {
   try {
     const bal = _wtcNode.getBalance(STAKING_POOL_ADDRESS);
     return (bal.confirmed || 0) + (bal.unmatured || 0);
-  } catch (_) { return null; }
+  } catch (_) {
+    return null;
+  }
 }
 module.exports.poolBalance = poolBalance;
 
@@ -299,25 +320,23 @@ function stakeWtc({ fromAddress, wtcAmount }) {
   }
 
   // Prevent duplicate pending entries for the same address.
-  const existing = _entries.find(
-    e => e.fromAddress === fromAddress && e.status === 'pending'
-  );
+  const existing = _entries.find((e) => e.fromAddress === fromAddress && e.status === 'pending');
   if (existing) {
     return { ok: true, entryId: existing.id, alreadyExists: true };
   }
 
   const entryId = crypto.randomBytes(12).toString('hex');
   const entry = {
-    id:           entryId,
+    id: entryId,
     fromAddress,
-    wtcAmount:    Math.floor(wtcAmount),
-    status:       'pending',    // pending | rewarded | cancelled | failed
-    createdAtMs:  Date.now(),
-    rewardAtMs:   null,
+    wtcAmount: Math.floor(wtcAmount),
+    status: 'pending', // pending | rewarded | cancelled | failed
+    createdAtMs: Date.now(),
+    rewardAtMs: null,
     rewardAmount: null,
-    rewardTxId:   null,
-    apyAtFlush:   null,
-    failReason:   null,
+    rewardTxId: null,
+    apyAtFlush: null,
+    failReason: null,
   };
 
   _entries.push(entry);
@@ -332,7 +351,7 @@ module.exports.stakeWtc = stakeWtc;
  * Get a single entry by id.
  */
 function getEntry(entryId) {
-  const e = _entries.find(e => e.id === entryId);
+  const e = _entries.find((e) => e.id === entryId);
   return e ? { ...e } : null;
 }
 module.exports.getEntry = getEntry;
@@ -342,9 +361,7 @@ module.exports.getEntry = getEntry;
  */
 function getEntryForAddress(addr) {
   if (!addr) return [];
-  return _entries
-    .filter(e => e.fromAddress === addr)
-    .map(e => ({ ...e }));
+  return _entries.filter((e) => e.fromAddress === addr).map((e) => ({ ...e }));
 }
 module.exports.getEntryForAddress = getEntryForAddress;
 
@@ -352,7 +369,7 @@ module.exports.getEntryForAddress = getEntryForAddress;
  * Cancel a pending staking entry before it is flushed.
  */
 function cancelEntry(entryId) {
-  const e = _entries.find(e => e.id === entryId);
+  const e = _entries.find((e) => e.id === entryId);
   if (!e) return { ok: false, error: 'Entry not found' };
   if (e.status !== 'pending') return { ok: false, error: `Cannot cancel entry in status '${e.status}'` };
   e.status = 'cancelled';
@@ -365,7 +382,7 @@ module.exports.cancelEntry = cancelEntry;
  * Get all entries (admin view).
  */
 function getAllEntries() {
-  return _entries.map(e => ({ ...e }));
+  return _entries.map((e) => ({ ...e }));
 }
 module.exports.getAllEntries = getAllEntries;
 
@@ -396,7 +413,7 @@ async function flushStakingQueue() {
     try {
       const r = await _httpJson('GET', _webApiUrl + '/staking/entries', { 'X-Api-Key': _webApiKey }, null);
       if (r.status === 200 && r.body && r.body.ok && Array.isArray(r.body.entries)) {
-        webBatch = r.body.entries.filter(e => e.status === 'pending');
+        webBatch = r.body.entries.filter((e) => e.status === 'pending');
         // Update cached total from the live fetch
         _webPendingWtc = webBatch.reduce((s, e) => s + (Number(e.wtcAmount) || 0), 0);
       }
@@ -405,26 +422,34 @@ async function flushStakingQueue() {
     }
   }
 
-  const localBatch = _entries.filter(e => e.status === 'pending');
+  const localBatch = _entries.filter((e) => e.status === 'pending');
   if (localBatch.length === 0 && webBatch.length === 0) return;
 
   // Deduplicate: if the same address has a local entry AND a web entry, drop the
   // web one — the local entry already covers that address with an on-chain balance
   // check. Without this, a user could double-stake (app + website) for double rewards.
-  const localAddresses = new Set(localBatch.map(e => e.fromAddress));
-  const dedupedWebBatch = webBatch.filter(e => !localAddresses.has(e.wtcAddress));
+  const localAddresses = new Set(localBatch.map((e) => e.fromAddress));
+  const dedupedWebBatch = webBatch.filter((e) => !localAddresses.has(e.wtcAddress));
 
   // APY is computed from the combined total (local + web) via totalPendingWtc()
-  const apy        = currentApy();
+  const apy = currentApy();
   const totalLocal = localBatch.reduce((s, e) => s + e.wtcAmount, 0);
-  const totalWeb   = dedupedWebBatch.reduce((s, e) => s + (Number(e.wtcAmount) || 0), 0);
+  const totalWeb = dedupedWebBatch.reduce((s, e) => s + (Number(e.wtcAmount) || 0), 0);
   console.log(
     `[StakingQueue] Flushing ${localBatch.length} local + ${dedupedWebBatch.length} web entries` +
-    ` (${totalLocal + totalWeb} WTC combined, APY ${apy}%)` +
-    (webBatch.length !== dedupedWebBatch.length ? ` [${webBatch.length - dedupedWebBatch.length} web entries skipped: cross-platform duplicate address]` : '')
+      ` (${totalLocal + totalWeb} WTC combined, APY ${apy}%)` +
+      (webBatch.length !== dedupedWebBatch.length
+        ? ` [${webBatch.length - dedupedWebBatch.length} web entries skipped: cross-platform duplicate address]`
+        : ''),
   );
 
-  const poolAvailable = () => { try { return poolBalance(); } catch (_) { return null; } };
+  const poolAvailable = () => {
+    try {
+      return poolBalance();
+    } catch (_) {
+      return null;
+    }
+  };
   if (poolAvailable() !== null && poolAvailable() <= 0) {
     console.warn('[StakingQueue] Staking pool balance is 0 - skipping reward distribution');
     return;
@@ -439,19 +464,19 @@ async function flushStakingQueue() {
       const bal = _wtcNode.getBalance(entry.fromAddress);
       const available = (bal.confirmed || 0) + (bal.unmatured || 0);
       if (available < entry.wtcAmount) {
-        entry.status     = 'failed';
+        entry.status = 'failed';
         entry.failReason = 'balance_insufficient_at_flush';
         entry.rewardAtMs = Date.now();
         entry.apyAtFlush = apy;
         console.warn(
           `[StakingQueue] Rejected entry ${entry.id}: ` +
-          `balance ${available} WTC < staked ${entry.wtcAmount} WTC at flush time`
+            `balance ${available} WTC < staked ${entry.wtcAmount} WTC at flush time`,
         );
         continue;
       }
     } catch (e) {
       // Balance check failed — skip entry rather than pay a potentially fraudulent reward
-      entry.status     = 'failed';
+      entry.status = 'failed';
       entry.failReason = 'balance_check_error_at_flush';
       entry.rewardAtMs = Date.now();
       entry.apyAtFlush = apy;
@@ -459,38 +484,38 @@ async function flushStakingQueue() {
       continue;
     }
 
-    const reward = Math.floor(entry.wtcAmount * apy / 100);
+    const reward = Math.floor((entry.wtcAmount * apy) / 100);
     if (reward <= 0) {
-      entry.status       = 'rewarded';
-      entry.rewardAtMs   = Date.now();
+      entry.status = 'rewarded';
+      entry.rewardAtMs = Date.now();
       entry.rewardAmount = 0;
-      entry.apyAtFlush   = apy;
+      entry.apyAtFlush = apy;
       continue;
     }
     const livePool = poolAvailable();
     if (livePool !== null && reward > livePool) {
       console.warn(`[StakingQueue] Pool insufficient for entry ${entry.id} reward ${reward} WTC (pool=${livePool})`);
-      entry.status     = 'failed';
+      entry.status = 'failed';
       entry.failReason = 'pool_insufficient';
       continue;
     }
     try {
       const result = _wtcNode.send({
         fromAddress: STAKING_POOL_ADDRESS,
-        toAddress:   entry.fromAddress,
-        amount:      reward,
+        toAddress: entry.fromAddress,
+        amount: reward,
       });
-      entry.status       = 'rewarded';
-      entry.rewardAtMs   = Date.now();
+      entry.status = 'rewarded';
+      entry.rewardAtMs = Date.now();
       entry.rewardAmount = reward;
-      entry.rewardTxId   = result.txid;
-      entry.apyAtFlush   = apy;
+      entry.rewardTxId = result.txid;
+      entry.apyAtFlush = apy;
       console.log(
         `[StakingQueue] Paid ${reward} WTC reward -> ${entry.fromAddress}` +
-        ` (staked ${entry.wtcAmount} WTC @ ${apy}% APY) txid=${result.txid}`
+          ` (staked ${entry.wtcAmount} WTC @ ${apy}% APY) txid=${result.txid}`,
       );
     } catch (e) {
-      entry.status     = 'failed';
+      entry.status = 'failed';
       entry.rewardAtMs = Date.now();
       entry.apyAtFlush = apy;
       entry.failReason = e && e.message ? e.message : 'unknown';
@@ -505,26 +530,33 @@ async function flushStakingQueue() {
   for (const entry of dedupedWebBatch) {
     const stakedAmt = Number(entry.wtcAmount) || 0;
     const update = { entryId: entry.id };
-    const reward = Math.floor(stakedAmt * apy / 100);
+    const reward = Math.floor((stakedAmt * apy) / 100);
     if (reward <= 0) {
-      update.status = 'rewarded'; update.rewardAmount = 0; update.apyAtFlush = apy;
+      update.status = 'rewarded';
+      update.rewardAmount = 0;
+      update.apyAtFlush = apy;
     } else {
       const livePool = poolAvailable();
       if (livePool !== null && reward > livePool) {
-        console.warn(`[StakingQueue] Pool insufficient for web entry ${entry.id} reward ${reward} WTC (pool=${livePool})`);
-        update.status = 'failed'; update.failReason = 'pool_insufficient';
+        console.warn(
+          `[StakingQueue] Pool insufficient for web entry ${entry.id} reward ${reward} WTC (pool=${livePool})`,
+        );
+        update.status = 'failed';
+        update.failReason = 'pool_insufficient';
       } else {
         try {
           const result = _wtcNode.send({
             fromAddress: STAKING_POOL_ADDRESS,
-            toAddress:   entry.wtcAddress,
-            amount:      reward,
+            toAddress: entry.wtcAddress,
+            amount: reward,
           });
-          update.status = 'rewarded'; update.rewardAmount = reward;
-          update.rewardTxId = result.txid; update.apyAtFlush = apy;
+          update.status = 'rewarded';
+          update.rewardAmount = reward;
+          update.rewardTxId = result.txid;
+          update.apyAtFlush = apy;
           console.log(
             `[StakingQueue] Paid ${reward} WTC reward -> ${entry.wtcAddress}` +
-            ` (web entry ${entry.id}, staked ${entry.wtcAmount} WTC @ ${apy}% APY) txid=${result.txid}`
+              ` (web entry ${entry.id}, staked ${entry.wtcAmount} WTC @ ${apy}% APY) txid=${result.txid}`,
           );
         } catch (e) {
           update.status = 'failed';
@@ -532,8 +564,7 @@ async function flushStakingQueue() {
           console.warn(`[StakingQueue] Failed web entry ${entry.id}:`, update.failReason);
         }
         try {
-          await _httpJson('POST', _webApiUrl + '/staking/update-entry',
-            { 'X-Api-Key': _webApiKey }, update);
+          await _httpJson('POST', _webApiUrl + '/staking/update-entry', { 'X-Api-Key': _webApiKey }, update);
         } catch (e) {
           console.warn(`[StakingQueue] Failed to report web entry ${entry.id}:`, e && e.message);
         }

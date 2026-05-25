@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT
 'use strict';
 
-function buildPeerDiscoverySnapshot({ settings, discoveredEntries, staleThresholdMs, isPeerUrlBanned, nowMs = Date.now(), transformUrl }) {
+function buildPeerDiscoverySnapshot({
+  settings,
+  discoveredEntries,
+  staleThresholdMs,
+  isPeerUrlBanned,
+  nowMs = Date.now(),
+  transformUrl,
+}) {
   const bySource = {};
   const discovered = [];
   const rows = Array.isArray(discoveredEntries) ? discoveredEntries : [];
@@ -12,12 +19,16 @@ function buildPeerDiscoverySnapshot({ settings, discoveredEntries, staleThreshol
     const url = entry && entry.url ? String(entry.url) : '';
     const info = entry && entry.info ? entry.info : null;
     if (!url || !info) continue;
-    if (Number.isFinite(staleThresholdMs) && staleThresholdMs >= 0 && nowMs - (Number(info.lastSeenMs) || 0) > staleThresholdMs) continue;
+    if (
+      Number.isFinite(staleThresholdMs) &&
+      staleThresholdMs >= 0 &&
+      nowMs - (Number(info.lastSeenMs) || 0) > staleThresholdMs
+    )
+      continue;
     if (bannedCheck(url)) continue;
 
-    const sources = Array.isArray(info.sources) && info.sources.length > 0
-      ? [...info.sources]
-      : [info.source || 'peer-exchange'];
+    const sources =
+      Array.isArray(info.sources) && info.sources.length > 0 ? [...info.sources] : [info.source || 'peer-exchange'];
 
     for (const source of sources) {
       const key = String(source || 'unknown');

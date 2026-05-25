@@ -11,28 +11,27 @@
  *   after MATURITY_DEPTH blocks have been built on top.
  */
 
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
-const MATURITY_DEPTH = 100;  // blocks before mining rewards spendable
+const MATURITY_DEPTH = 100; // blocks before mining rewards spendable
 
 class Accounts {
   /**
    * @param {{ dataDir: string, signingSecret: string }} opts
    */
   constructor({ dataDir, signingSecret }) {
-    this._file   = path.join(dataDir, 'wtc-accounts.json');
+    this._file = path.join(dataDir, 'wtc-accounts.json');
     this._secret = signingSecret;
-    this._bal    = {};  // address → { confirmed, unmatured: [{amount, matureAtHeight}], nonce }
+    this._bal = {}; // address → { confirmed, unmatured: [{amount, matureAtHeight}], nonce }
     this._load();
   }
 
   // ─── Persistence ────────────────────────────────────────────────────────────
 
   _hmac(data) {
-    return crypto.createHmac('sha256', this._secret)
-      .update(JSON.stringify(data)).digest('hex');
+    return crypto.createHmac('sha256', this._secret).update(JSON.stringify(data)).digest('hex');
   }
 
   _load() {
@@ -54,12 +53,10 @@ class Accounts {
     try {
       fs.mkdirSync(path.dirname(this._file), { recursive: true });
       const data = { balances: this._bal };
-      fs.writeFileSync(
-        this._file,
-        JSON.stringify({ ...data, _sig: this._hmac(data) }, null, 2),
-        'utf8'
-      );
-    } catch (_) { /* non-fatal */ }
+      fs.writeFileSync(this._file, JSON.stringify({ ...data, _sig: this._hmac(data) }, null, 2), 'utf8');
+    } catch (_) {
+      /* non-fatal */
+    }
   }
 
   _acc(addr) {
@@ -77,10 +74,10 @@ class Accounts {
     const a = this._acc(addr);
     const unmaturedTotal = a.unmatured.reduce((s, u) => s + u.amount, 0);
     return {
-      confirmed:  a.confirmed,
-      unmatured:  unmaturedTotal,
-      total:      a.confirmed + unmaturedTotal,
-      nonce:      a.nonce,
+      confirmed: a.confirmed,
+      unmatured: unmaturedTotal,
+      total: a.confirmed + unmaturedTotal,
+      nonce: a.nonce,
     };
   }
 
@@ -128,10 +125,10 @@ class Accounts {
   applyMaturity(height) {
     let changed = false;
     for (const a of Object.values(this._bal)) {
-      const now = a.unmatured.filter(u => height >= u.matureAtHeight);
+      const now = a.unmatured.filter((u) => height >= u.matureAtHeight);
       if (now.length > 0) {
         a.confirmed += now.reduce((s, u) => s + u.amount, 0);
-        a.unmatured  = a.unmatured.filter(u => height < u.matureAtHeight);
+        a.unmatured = a.unmatured.filter((u) => height < u.matureAtHeight);
         changed = true;
       }
     }
@@ -146,7 +143,7 @@ class Accounts {
    */
   applyBlock(block) {
     // 1. Transactions
-    for (const tx of (block.transactions || [])) {
+    for (const tx of block.transactions || []) {
       try {
         // Skip NFT transactions — handled by NftStore, not by Accounts
         if (tx.type && tx.type !== 'transfer') continue;
@@ -182,13 +179,8 @@ class Accounts {
    */
   stateHash() {
     const entries = Object.entries(this._bal)
-      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
-      .map(([addr, a]) => [
-        addr,
-        a.confirmed,
-        a.unmatured.reduce((s, u) => s + u.amount, 0),
-        a.nonce,
-      ]);
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([addr, a]) => [addr, a.confirmed, a.unmatured.reduce((s, u) => s + u.amount, 0), a.nonce]);
     return crypto.createHash('sha256').update(JSON.stringify(entries)).digest('hex');
   }
 
@@ -234,13 +226,8 @@ class Accounts {
 
     const stateHashFor = () => {
       const entries = Object.entries(next)
-        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
-        .map(([addr, a]) => [
-          addr,
-          a.confirmed,
-          a.unmatured.reduce((s, u) => s + u.amount, 0),
-          a.nonce,
-        ]);
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([addr, a]) => [addr, a.confirmed, a.unmatured.reduce((s, u) => s + u.amount, 0), a.nonce]);
       return crypto.createHash('sha256').update(JSON.stringify(entries)).digest('hex');
     };
 
@@ -259,7 +246,7 @@ class Accounts {
         }
       }
 
-      for (const tx of (block.transactions || [])) {
+      for (const tx of block.transactions || []) {
         if (!tx || typeof tx !== 'object') throw new Error(`Invalid tx in block ${block.height}`);
         const from = String(tx.from || '');
         const to = String(tx.to || '');
@@ -298,7 +285,6 @@ class Accounts {
       }
 
       applyMaturity(block.height);
-
     }
 
     this._bal = next;

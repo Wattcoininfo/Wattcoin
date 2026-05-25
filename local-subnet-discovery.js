@@ -24,12 +24,7 @@ function ipv4ToInt(address) {
 
 function intToIpv4(value) {
   const normalized = Number(value) >>> 0;
-  return [
-    (normalized >>> 24) & 255,
-    (normalized >>> 16) & 255,
-    (normalized >>> 8) & 255,
-    normalized & 255,
-  ].join('.');
+  return [(normalized >>> 24) & 255, (normalized >>> 16) & 255, (normalized >>> 8) & 255, normalized & 255].join('.');
 }
 
 function isPrivateIpv4(address) {
@@ -69,12 +64,13 @@ function selectPreferredPeerUrl(currentPeerUrl = '', candidatePeerUrl = '') {
 }
 
 function sortPeerUrlsByPreference(peerUrls = []) {
-  return Array.from(new Set((Array.isArray(peerUrls) ? peerUrls : []).map((entry) => String(entry || '').trim()).filter(Boolean)))
-    .sort((left, right) => {
-      const scoreDelta = getPeerUrlPreferenceScore(right) - getPeerUrlPreferenceScore(left);
-      if (scoreDelta !== 0) return scoreDelta;
-      return left.localeCompare(right);
-    });
+  return Array.from(
+    new Set((Array.isArray(peerUrls) ? peerUrls : []).map((entry) => String(entry || '').trim()).filter(Boolean)),
+  ).sort((left, right) => {
+    const scoreDelta = getPeerUrlPreferenceScore(right) - getPeerUrlPreferenceScore(left);
+    if (scoreDelta !== 0) return scoreDelta;
+    return left.localeCompare(right);
+  });
 }
 
 function selectDiscoveryPeerUrl(peerUrls = []) {
@@ -103,9 +99,7 @@ function countMaskBits(maskInt) {
 function getLocalSubnetProbeCandidates(interfaces, { selfHosts = [] } = {}) {
   const candidates = new Set();
   const excludedHosts = new Set(
-    (Array.isArray(selfHosts) ? selfHosts : [])
-      .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
+    (Array.isArray(selfHosts) ? selfHosts : []).map((entry) => String(entry || '').trim()).filter(Boolean),
   );
 
   for (const entry of Array.isArray(interfaces) ? interfaces : []) {
@@ -118,7 +112,7 @@ function getLocalSubnetProbeCandidates(interfaces, { selfHosts = [] } = {}) {
     const prefixBits = countMaskBits(maskInt);
     if (!Number.isInteger(prefixBits)) continue;
     const effectivePrefixBits = Math.max(prefixBits, 24);
-    const effectiveMaskInt = effectivePrefixBits === 0 ? 0 : ((0xffffffff << (32 - effectivePrefixBits)) >>> 0);
+    const effectiveMaskInt = effectivePrefixBits === 0 ? 0 : (0xffffffff << (32 - effectivePrefixBits)) >>> 0;
     const networkInt = (addressInt & effectiveMaskInt) >>> 0;
     const broadcastInt = (networkInt | (~effectiveMaskInt >>> 0)) >>> 0;
     for (let current = networkInt + 1; current < broadcastInt; current += 1) {
@@ -157,15 +151,18 @@ function getLocalSubnetProbeCandidates(interfaces, { selfHosts = [] } = {}) {
  *   now?: number,
  * }} opts
  */
-function checkHasKnownPrivateLanPeer(peerUrls, {
-  discoveredPeers = new Map(),
-  peerReachabilityCache = new Map(),
-  normalizePeerUrl = (url) => url,
-  isSelfPeerUrl = () => false,
-  staleThresholdMs = 5 * 60_000,
-  reachabilitySuccessTtlMs = 10 * 60_000,
-  now = Date.now(),
-} = {}) {
+function checkHasKnownPrivateLanPeer(
+  peerUrls,
+  {
+    discoveredPeers = new Map(),
+    peerReachabilityCache = new Map(),
+    normalizePeerUrl = (url) => url,
+    isSelfPeerUrl = () => false,
+    staleThresholdMs = 5 * 60_000,
+    reachabilitySuccessTtlMs = 10 * 60_000,
+    now = Date.now(),
+  } = {},
+) {
   for (const peerUrl of Array.isArray(peerUrls) ? peerUrls : []) {
     try {
       const parsed = new URL(String(peerUrl || '').trim());
@@ -176,7 +173,7 @@ function checkHasKnownPrivateLanPeer(peerUrls, {
       const normalized = normalizePeerUrl(peerUrl);
 
       const discovered = normalized ? discoveredPeers.get(normalized) : null;
-      if (discovered && (now - Number(discovered.lastSeenMs || 0)) <= staleThresholdMs) {
+      if (discovered && now - Number(discovered.lastSeenMs || 0) <= staleThresholdMs) {
         return true;
       }
 
@@ -184,7 +181,7 @@ function checkHasKnownPrivateLanPeer(peerUrls, {
       if (
         reachability &&
         reachability.ok &&
-        (now - Number(reachability.lastSuccessAtMs || 0)) <= reachabilitySuccessTtlMs
+        now - Number(reachability.lastSuccessAtMs || 0) <= reachabilitySuccessTtlMs
       ) {
         return true;
       }

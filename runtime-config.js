@@ -32,7 +32,9 @@ function parseString(value, fallback = '') {
 }
 
 function parseEnum(value, allowed, fallback) {
-  const normalized = String(value || '').trim().toLowerCase();
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
   if (allowed.includes(normalized)) return normalized;
   return fallback;
 }
@@ -53,7 +55,7 @@ function getConfigCandidates() {
   candidates.push(getLocalOverrideConfigPath());
   candidates.push(
     path.join(process.cwd(), 'wattcoin-beta-config.json'),
-    path.join(__dirname, 'wattcoin-beta-config.json')
+    path.join(__dirname, 'wattcoin-beta-config.json'),
   );
   if (process.resourcesPath) {
     candidates.push(path.join(process.resourcesPath, 'wattcoin-beta-config.json'));
@@ -87,7 +89,7 @@ function getRuntimeConfig() {
   const fileConfig = readConfigFile();
   const antimalwareSafeMode = parseBoolean(
     process.env.WATTCOIN_ANTIMALWARE_SAFE_MODE,
-    parseBoolean(fileConfig.antimalwareSafeMode, true)
+    parseBoolean(fileConfig.antimalwareSafeMode, true),
   );
   // Security lock: the writable config files must never be able to move a client
   // off mainnet. This avoids stale local overrides (for example old testnet4
@@ -97,32 +99,32 @@ function getRuntimeConfig() {
   const network = envNetwork || 'wtc-mainnet';
   const autoLaunchNode = parseBoolean(
     process.env.WATTCOIN_AUTO_LAUNCH_NODE,
-    parseBoolean(fileConfig.autoLaunchNode, !antimalwareSafeMode)
+    parseBoolean(fileConfig.autoLaunchNode, !antimalwareSafeMode),
   );
-  const autoLaunchNodeDelayMs = Math.max(0, parseNumber(
-    process.env.WATTCOIN_AUTO_LAUNCH_NODE_DELAY_MS,
-    parseNumber(fileConfig.autoLaunchNodeDelayMs, 0)
-  ));
-  const nodeStartupCliWarmupMs = Math.max(0, parseNumber(
-    process.env.WATTCOIN_NODE_STARTUP_CLI_WARMUP_MS,
-    parseNumber(fileConfig.nodeStartupCliWarmupMs, 25000)
-  ));
+  const autoLaunchNodeDelayMs = Math.max(
+    0,
+    parseNumber(process.env.WATTCOIN_AUTO_LAUNCH_NODE_DELAY_MS, parseNumber(fileConfig.autoLaunchNodeDelayMs, 0)),
+  );
+  const nodeStartupCliWarmupMs = Math.max(
+    0,
+    parseNumber(process.env.WATTCOIN_NODE_STARTUP_CLI_WARMUP_MS, parseNumber(fileConfig.nodeStartupCliWarmupMs, 25000)),
+  );
   // The node starts offline (-connect=0 -dnsseed=0 -listen=0) when antimalwareSafeMode
   // is true.  This prevents AV burst-connection triggers at process launch — the node
   // process initialises quietly, then the app calls setnetworkactive=true via RPC after
   // the warmup period and injects peers one-at-a-time via the drip queue.
   const nodeStartupOfflineMode = parseBoolean(
     process.env.WATTCOIN_NODE_STARTUP_OFFLINE_MODE,
-    parseBoolean(fileConfig.nodeStartupOfflineMode, antimalwareSafeMode)
+    parseBoolean(fileConfig.nodeStartupOfflineMode, antimalwareSafeMode),
   );
   const enableStartupTraceLogging = parseBoolean(
     process.env.WATTCOIN_ENABLE_STARTUP_TRACE_LOGGING,
-    parseBoolean(fileConfig.enableStartupTraceLogging, true)
+    parseBoolean(fileConfig.enableStartupTraceLogging, true),
   );
-  const startupTraceWindowMs = Math.max(10_000, parseNumber(
-    process.env.WATTCOIN_STARTUP_TRACE_WINDOW_MS,
-    parseNumber(fileConfig.startupTraceWindowMs, 180_000)
-  ));
+  const startupTraceWindowMs = Math.max(
+    10_000,
+    parseNumber(process.env.WATTCOIN_STARTUP_TRACE_WINDOW_MS, parseNumber(fileConfig.startupTraceWindowMs, 180_000)),
+  );
   // ── Security-locked fields ────────────────────────────────────────────────
   // These fields are intentionally NOT read from the config file.
   // wattcoin-beta-config.json is outside the ASAR and writable post-install;
@@ -133,63 +135,65 @@ function getRuntimeConfig() {
   // Overrides are only accepted via environment variables (dev/CI use only).
   // To deploy with a real policy feed, set WATTCOIN_ATTESTATION_POLICY_FEED_URL
   // and WATTCOIN_ATTESTATION_POLICY_FEED_PUBLIC_KEY in the build environment.
-  const attestationPolicyFeedUrl = parseString(
-    process.env.WATTCOIN_ATTESTATION_POLICY_FEED_URL, ''
-  );
-  const attestationPolicyFeedPublicKey = parseString(
-    process.env.WATTCOIN_ATTESTATION_POLICY_FEED_PUBLIC_KEY, ''
-  );
+  const attestationPolicyFeedUrl = parseString(process.env.WATTCOIN_ATTESTATION_POLICY_FEED_URL, '');
+  const attestationPolicyFeedPublicKey = parseString(process.env.WATTCOIN_ATTESTATION_POLICY_FEED_PUBLIC_KEY, '');
   const ledgerNetworkEnabled = parseBoolean(
     process.env.WATTCOIN_LEDGER_NETWORK_ENABLED,
-    parseBoolean(fileConfig.ledgerNetworkEnabled, false)
+    parseBoolean(fileConfig.ledgerNetworkEnabled, false),
   );
   const ledgerNetworkMode = parseEnum(
     process.env.WATTCOIN_LEDGER_NETWORK_MODE || fileConfig.ledgerNetworkMode,
     ['standalone', 'peer'],
-    'standalone'
+    'standalone',
   );
-  const ledgerPeers = parseSeedNodes(
-    process.env.WATTCOIN_LEDGER_PEERS || fileConfig.ledgerPeers || []
-  );
+  const ledgerPeers = parseSeedNodes(process.env.WATTCOIN_LEDGER_PEERS || fileConfig.ledgerPeers || []);
   const ledgerCoordinatorUrl = parseString(
     process.env.WATTCOIN_LEDGER_COORDINATOR_URL,
-    parseString(fileConfig.ledgerCoordinatorUrl, '')
+    parseString(fileConfig.ledgerCoordinatorUrl, ''),
   );
   const ledgerNetworkAuthToken = parseString(
     process.env.WATTCOIN_LEDGER_NETWORK_AUTH_TOKEN,
-    parseString(fileConfig.ledgerNetworkAuthToken, '')
+    parseString(fileConfig.ledgerNetworkAuthToken, ''),
   );
   const ledgerNetworkListenHost = parseString(
     process.env.WATTCOIN_LEDGER_NETWORK_LISTEN_HOST,
-    parseString(fileConfig.ledgerNetworkListenHost, '0.0.0.0')
+    parseString(fileConfig.ledgerNetworkListenHost, '0.0.0.0'),
   );
-  const ledgerNetworkListenPort = Math.max(1, parseNumber(
-    process.env.WATTCOIN_LEDGER_NETWORK_LISTEN_PORT,
-    parseNumber(fileConfig.ledgerNetworkListenPort, 39310)
-  ));
+  const ledgerNetworkListenPort = Math.max(
+    1,
+    parseNumber(
+      process.env.WATTCOIN_LEDGER_NETWORK_LISTEN_PORT,
+      parseNumber(fileConfig.ledgerNetworkListenPort, 39310),
+    ),
+  );
   const ledgerNetworkPublicUrl = parseString(
     process.env.WATTCOIN_LEDGER_NETWORK_PUBLIC_URL,
-    parseString(fileConfig.ledgerNetworkPublicUrl, '')
+    parseString(fileConfig.ledgerNetworkPublicUrl, ''),
   );
   const ledgerNetworkTunnelPublicUrl = parseString(
     process.env.WATTCOIN_LEDGER_NETWORK_TUNNEL_PUBLIC_URL,
-    parseString(fileConfig.ledgerNetworkTunnelPublicUrl, '')
+    parseString(fileConfig.ledgerNetworkTunnelPublicUrl, ''),
   );
   const ledgerNetworkAdvertiseUrls = parseSeedNodes(
-    process.env.WATTCOIN_LEDGER_NETWORK_ADVERTISE_URLS || fileConfig.ledgerNetworkAdvertiseUrls || []
+    process.env.WATTCOIN_LEDGER_NETWORK_ADVERTISE_URLS || fileConfig.ledgerNetworkAdvertiseUrls || [],
   );
   const ledgerSeedManifestUrls = parseSeedNodes(
-    process.env.WATTCOIN_LEDGER_SEED_MANIFEST_URLS || fileConfig.ledgerSeedManifestUrls || []
+    process.env.WATTCOIN_LEDGER_SEED_MANIFEST_URLS || fileConfig.ledgerSeedManifestUrls || [],
   );
-  const ledgerNetworkRequestTimeoutMs = Math.max(1000, parseNumber(
-    process.env.WATTCOIN_LEDGER_NETWORK_REQUEST_TIMEOUT_MS,
-    parseNumber(fileConfig.ledgerNetworkRequestTimeoutMs, 7000)
-  ));
+  const ledgerNetworkRequestTimeoutMs = Math.max(
+    1000,
+    parseNumber(
+      process.env.WATTCOIN_LEDGER_NETWORK_REQUEST_TIMEOUT_MS,
+      parseNumber(fileConfig.ledgerNetworkRequestTimeoutMs, 7000),
+    ),
+  );
   return {
     network,
     antimalwareSafeMode,
     betaMode: parseBoolean(process.env.WATTCOIN_BETA_MODE, parseBoolean(fileConfig.betaMode, false)),
-    minerPassword: String(process.env.WATTCOIN_MINER_PASSWORD || process.env.WATTCOIN_BETA_PASSWORD || fileConfig.minerPassword || ''),
+    minerPassword: String(
+      process.env.WATTCOIN_MINER_PASSWORD || process.env.WATTCOIN_BETA_PASSWORD || fileConfig.minerPassword || '',
+    ),
     // RPC credentials must never ship with a hardcoded fallback.
     // When absent, the main process generates per-install random values and
     // persists them to the local override config outside the packaged app.

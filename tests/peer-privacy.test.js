@@ -5,15 +5,9 @@ const assert = require('assert');
 const { filterAdvertisedPeerUrls, resolvePeerPrivacySecret } = require('../peer-privacy');
 
 function testKeepsDirectIpUrlsWhenTheyAreAllWeHave() {
-  const urls = filterAdvertisedPeerUrls([
-    'http://198.51.100.24:39310',
-    'http://192.168.1.44:39310',
-  ]);
+  const urls = filterAdvertisedPeerUrls(['http://198.51.100.24:39310', 'http://192.168.1.44:39310']);
 
-  assert.deepStrictEqual(urls, [
-    'http://198.51.100.24:39310',
-    'http://192.168.1.44:39310',
-  ]);
+  assert.deepStrictEqual(urls, ['http://198.51.100.24:39310', 'http://192.168.1.44:39310']);
 }
 
 function testDropsRawIpUrlsWhenTunnelOrDomainEndpointExists() {
@@ -23,9 +17,7 @@ function testDropsRawIpUrlsWhenTunnelOrDomainEndpointExists() {
     'http://192.168.1.44:39310',
   ]);
 
-  assert.deepStrictEqual(urls, [
-    'https://relay.wattcoin.ee/api/v1/tunnel/node-123',
-  ]);
+  assert.deepStrictEqual(urls, ['https://relay.wattcoin.ee/api/v1/tunnel/node-123']);
 }
 
 function testResolvePeerPrivacySecretPrefersPersistedInstallSecret() {

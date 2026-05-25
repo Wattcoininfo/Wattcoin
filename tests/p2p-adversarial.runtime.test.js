@@ -109,13 +109,12 @@ function createNode(id, dataDir, net, opts = {}) {
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: false,
     getActivePeers: () => net.getActivePeers(id),
-    getTrustedPeerTargets: typeof opts.getTrustedPeerTargets === 'function'
-      ? opts.getTrustedPeerTargets
-      : undefined,
+    getTrustedPeerTargets: typeof opts.getTrustedPeerTargets === 'function' ? opts.getTrustedPeerTargets : undefined,
     requestPeerJson: (peerUrl, method, routePath, payload, query) => {
       if (typeof opts.requestPeerJson === 'function') {
         return opts.requestPeerJson(peerUrl, method, routePath, payload, query, () =>
-          net.request(id, peerUrl, method, routePath, payload, query));
+          net.request(id, peerUrl, method, routePath, payload, query),
+        );
       }
       return net.request(id, peerUrl, method, routePath, payload, query);
     },
@@ -161,7 +160,10 @@ async function mineNWithFallback(nodes, n) {
     for (const node of nodes) {
       const addr = node.getPrimaryAddress();
       try {
-        await node.mineBlock(addr, { energyWh: ENERGY_WH_PER_BLOCK, proofCommitment: `fallback-${Date.now()}-${mined}` });
+        await node.mineBlock(addr, {
+          energyWh: ENERGY_WH_PER_BLOCK,
+          proofCommitment: `fallback-${Date.now()}-${mined}`,
+        });
         committed = true;
         mined += 1;
         break;
@@ -197,7 +199,9 @@ async function scenarioPartitionHeal(baseDir) {
   const aDir = path.join(baseDir, 'partition-a');
   const bDir = path.join(baseDir, 'partition-b');
   const cDir = path.join(baseDir, 'partition-c');
-  ensureDir(aDir); ensureDir(bDir); ensureDir(cDir);
+  ensureDir(aDir);
+  ensureDir(bDir);
+  ensureDir(cDir);
 
   const team = generateKeypair().address;
   writeCanonicalGenesis(aDir, team);
@@ -232,7 +236,8 @@ async function scenarioConflictingBranches(baseDir) {
   const net = new SimulatedPeerNetwork();
   const aDir = path.join(baseDir, 'conflict-a');
   const bDir = path.join(baseDir, 'conflict-b');
-  ensureDir(aDir); ensureDir(bDir);
+  ensureDir(aDir);
+  ensureDir(bDir);
 
   const team = generateKeypair().address;
   writeCanonicalGenesis(aDir, team);
@@ -258,7 +263,9 @@ async function scenarioRestartStorm(baseDir) {
   const aDir = path.join(baseDir, 'restart-a');
   const bDir = path.join(baseDir, 'restart-b');
   const cDir = path.join(baseDir, 'restart-c');
-  ensureDir(aDir); ensureDir(bDir); ensureDir(cDir);
+  ensureDir(aDir);
+  ensureDir(bDir);
+  ensureDir(cDir);
 
   const team = generateKeypair().address;
   writeCanonicalGenesis(aDir, team);
@@ -293,7 +300,8 @@ async function scenarioTrustedBootstrapRecovery(baseDir) {
   const net = new SimulatedPeerNetwork();
   const aDir = path.join(baseDir, 'trusted-bootstrap-a');
   const bDir = path.join(baseDir, 'trusted-bootstrap-b');
-  ensureDir(aDir); ensureDir(bDir);
+  ensureDir(aDir);
+  ensureDir(bDir);
 
   const team = generateKeypair().address;
   writeCanonicalGenesis(aDir, team);
@@ -303,11 +311,7 @@ async function scenarioTrustedBootstrapRecovery(baseDir) {
   const A = createNode('A4', aDir, net, {
     getTrustedPeerTargets: () => ['B4'],
     requestPeerJson: (peerUrl, method, routePath, payload, query, fallback) => {
-      if (
-        peerUrl === 'B4' &&
-        method === 'GET' &&
-        routePath === '/api/v1/chain/headers'
-      ) {
+      if (peerUrl === 'B4' && method === 'GET' && routePath === '/api/v1/chain/headers') {
         return Promise.resolve({ ok: true, headers: [{ hash: `mismatch-${query.fromHeight}` }] });
       }
       return fallback();
@@ -330,7 +334,8 @@ async function scenarioTrustedSameHeightConflict(baseDir) {
     const net = new SimulatedPeerNetwork();
     const aDir = path.join(baseDir, `trusted-same-height-a-${attempt}`);
     const bDir = path.join(baseDir, `trusted-same-height-b-${attempt}`);
-    ensureDir(aDir); ensureDir(bDir);
+    ensureDir(aDir);
+    ensureDir(bDir);
 
     const team = generateKeypair().address;
     writeCanonicalGenesis(aDir, team);

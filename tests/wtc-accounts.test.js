@@ -2,15 +2,15 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
-const os     = require('os');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 const crypto = require('crypto');
 
 const { Accounts, MATURITY_DEPTH } = require('../wtc-accounts');
 
 const ALICE = 'wtc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
-const BOB   = 'wtc1q3t8y4q7g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
+const BOB = 'wtc1q3t8y4q7g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-accounts-test-'));
@@ -50,7 +50,6 @@ function it(name, fn) {
 }
 
 describe('wtc-accounts — construction and initial state', () => {
-
   it('constructs with empty state', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
@@ -81,11 +80,9 @@ describe('wtc-accounts — construction and initial state', () => {
     const accts2 = makeAccounts(dir);
     assert.strictEqual(accts2.getBalance(ALICE).confirmed, 0);
   });
-
 });
 
 describe('wtc-accounts — credit', () => {
-
   it('credits mature balance directly', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
@@ -129,11 +126,9 @@ describe('wtc-accounts — credit', () => {
     assert.strictEqual(accts.getBalance(ALICE).unmatured, 100);
     assert.strictEqual(accts.getBalance(ALICE).confirmed, 0);
   });
-
 });
 
 describe('wtc-accounts — transfer', () => {
-
   it('transfers confirmed balance between addresses', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
@@ -177,19 +172,15 @@ describe('wtc-accounts — transfer', () => {
     assert.strictEqual(fee, 0);
     assert.strictEqual(accts.getBalance(BOB).confirmed, 100);
   });
-
 });
 
 describe('wtc-accounts — applyBlock', () => {
-
   it('applies transactions in a block', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
     accts.credit(ALICE, 1000, { mature: true });
     const block = makeBlock({
-      transactions: [
-        { id: 'tx1', from: ALICE, to: BOB, amount: 200, fee: 10, nonce: 0, type: 'transfer' },
-      ],
+      transactions: [{ id: 'tx1', from: ALICE, to: BOB, amount: 200, fee: 10, nonce: 0, type: 'transfer' }],
     });
     accts.applyBlock(block);
     assert.strictEqual(accts.getBalance(ALICE).confirmed, 790);
@@ -221,9 +212,7 @@ describe('wtc-accounts — applyBlock', () => {
     const accts = makeAccounts(dir);
     accts.credit(ALICE, 1000, { mature: true });
     const block = makeBlock({
-      transactions: [
-        { id: 'nft1', from: ALICE, to: BOB, amount: 0, fee: 0, nonce: 0, type: 'nft_mint' },
-      ],
+      transactions: [{ id: 'nft1', from: ALICE, to: BOB, amount: 0, fee: 0, nonce: 0, type: 'nft_mint' }],
     });
     accts.applyBlock(block);
     assert.strictEqual(accts.getBalance(ALICE).confirmed, 1000, 'NFT tx should not affect balances');
@@ -242,11 +231,9 @@ describe('wtc-accounts — applyBlock', () => {
     accts.applyBlock(block);
     assert.strictEqual(accts.getBalance(BOB).confirmed, 100, 'second tx with same nonce should be skipped');
   });
-
 });
 
 describe('wtc-accounts — stateHash', () => {
-
   it('produces deterministic hash for same state', () => {
     const dir = tmpDir();
     const accts1 = makeAccounts(dir);
@@ -264,11 +251,9 @@ describe('wtc-accounts — stateHash', () => {
     const h2 = accts.stateHash();
     assert.notStrictEqual(h1, h2);
   });
-
 });
 
 describe('wtc-accounts — rebuildFromBlocks', () => {
-
   it('rebuilds state from a sequence of blocks', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
@@ -285,9 +270,7 @@ describe('wtc-accounts — rebuildFromBlocks', () => {
     const block1 = makeBlock({
       height: 1,
       prevHash: genesisBlock.hash,
-      transactions: [
-        { id: 'tx1', from: ALICE, to: BOB, amount: 200, fee: 10, nonce: aliceNonce, type: 'transfer' },
-      ],
+      transactions: [{ id: 'tx1', from: ALICE, to: BOB, amount: 200, fee: 10, nonce: aliceNonce, type: 'transfer' }],
       rewardAddresses: { [BOB]: 500 },
       rewardTotal: 500,
     });
@@ -324,11 +307,9 @@ describe('wtc-accounts — rebuildFromBlocks', () => {
     const block1 = makeBlock({ height: 1, transactions: [null] });
     assert.throws(() => accts.rebuildFromBlocks([block1]), /Invalid tx/);
   });
-
 });
 
 describe('wtc-accounts — snapshot and restore', () => {
-
   it('snapshot returns deep copy', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
@@ -347,13 +328,10 @@ describe('wtc-accounts — snapshot and restore', () => {
     accts.restoreSnapshot(snap);
     assert.strictEqual(accts.getBalance(ALICE).confirmed, 1000);
   });
-
 });
 
 function run() {
-  const labels = [
-    'construction', 'credit', 'transfer', 'applyBlock', 'stateHash', 'rebuildFromBlocks', 'snapshot',
-  ];
+  const labels = ['construction', 'credit', 'transfer', 'applyBlock', 'stateHash', 'rebuildFromBlocks', 'snapshot'];
   for (const label of labels) {
     try {
       require(`./wtc-accounts.test`).run();

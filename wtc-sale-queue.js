@@ -19,11 +19,11 @@ const os = require('os');
  *         then clears the flush batch.
  */
 
-'use strict';
+('use strict');
 
 const _ts = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const crypto = require('crypto');
@@ -31,18 +31,18 @@ const crypto = require('crypto');
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const SELLER_USDC_ADDRESS = '0x0ca8cc23d85e5c988828076978c4ca65aa4293e8';
-const SALE_WTC_ADDRESS    = 'wtc1qd6dqez6rvh3ak2xw9jtsz3h8na0ssyepjgec3t';
-const REWARD_WTC_ADDRESS  = 'wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn';
+const SALE_WTC_ADDRESS = 'wtc1qd6dqez6rvh3ak2xw9jtsz3h8na0ssyepjgec3t';
+const REWARD_WTC_ADDRESS = 'wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn';
 
 // USDC on Ethereum mainnet
-const USDC_CONTRACT       = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 
-const FLUSH_THRESHOLD_WTC = 10_101;  // flush when queued >= 10101 WTC
-const POLL_INTERVAL_MS    = 10 * 60 * 1000;  // check Etherscan every 10 minutes
-const PAYMENT_EXPIRY_MS   = 24 * 60 * 60 * 1000;  // orders expire after 24 h if unpaid
-const MATCH_TX_GRACE_MS   = 5 * 60 * 1000; // allow small chain index / clock skew
-const MIN_BUY_WTC         = 1;
-const ETHERSCAN_BASE      = 'https://api.etherscan.io/v2/api';
+const FLUSH_THRESHOLD_WTC = 10_101; // flush when queued >= 10101 WTC
+const POLL_INTERVAL_MS = 10 * 60 * 1000; // check Etherscan every 10 minutes
+const PAYMENT_EXPIRY_MS = 24 * 60 * 60 * 1000; // orders expire after 24 h if unpaid
+const MATCH_TX_GRACE_MS = 5 * 60 * 1000; // allow small chain index / clock skew
+const MIN_BUY_WTC = 1;
+const ETHERSCAN_BASE = 'https://api.etherscan.io/v2/api';
 const ETHERSCAN_API_KEY = (() => {
   try {
     const v = fs.readFileSync(path.join(os.homedir(), '.secrets', 'etherscan-api-key'), 'utf8').trim();
@@ -58,35 +58,35 @@ const ETHERSCAN_RETRY_DELAY_MS = 1_500;
 // Tiered pricing: cost per WTC in kWh units (20 kWh/WTC for tier 1 mining)
 // Price in USD = electricityPrice ($/kWh) * 20 kWh * tierFraction
 // We store wtcAmount + usdcRequired in the order - caller computes the USD.
-const SALE_TOTAL        = 333_333;
-const SALE_TIER_SIZE    = 111_111;
+const SALE_TOTAL = 333_333;
+const SALE_TIER_SIZE = 111_111;
 const SALE_TIERS = [
-  { fraction: 1/3, start: 0,           end: 111_111 },
-  { fraction: 2/3, start: 111_111,     end: 222_222 },
-  { fraction: 3/3, start: 222_222,     end: 333_333 },
+  { fraction: 1 / 3, start: 0, end: 111_111 },
+  { fraction: 2 / 3, start: 111_111, end: 222_222 },
+  { fraction: 3 / 3, start: 222_222, end: 333_333 },
 ];
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-let _dataDir      = null;   // set via init()
-let _wtcNode      = null;   // set via init()
-let _pollTimer    = null;
-let _orders       = [];     // in-memory array, persisted to disk
-let _seenTxHashes = new Set();  // USDC tx hashes already processed
-let _unmatchedTxs = [];     // [{hash, usdcValue, fromEthAddr, receivedAtMs}] — unmatched payments awaiting an order
-let _electricityPrice = null;  // $/kWh, set via setElectricityPrice() from electron-main.js
-let _serverApiUrl = 'https://wattcoin.ee/api';  // default — GET /orders works without auth
-let _serverApiKey = null;   // for POST /update-order — read from WattcoinMinerUserData/sale-api-key.txt
-let _serverSoldWtc = null;  // last authoritative sold total computed from server orders
+let _dataDir = null; // set via init()
+let _wtcNode = null; // set via init()
+let _pollTimer = null;
+let _orders = []; // in-memory array, persisted to disk
+let _seenTxHashes = new Set(); // USDC tx hashes already processed
+let _unmatchedTxs = []; // [{hash, usdcValue, fromEthAddr, receivedAtMs}] — unmatched payments awaiting an order
+let _electricityPrice = null; // $/kWh, set via setElectricityPrice() from electron-main.js
+let _serverApiUrl = 'https://wattcoin.ee/api'; // default — GET /orders works without auth
+let _serverApiKey = null; // for POST /update-order — read from WattcoinMinerUserData/sale-api-key.txt
+let _serverSoldWtc = null; // last authoritative sold total computed from server orders
 let _serverBackfillAttempted = false; // one-time per process, avoids spamming server on every sync
 let _serverSyncPromise = null; // in-flight sync dedupe
-let _lastServerSyncAt = 0;     // throttle repeated sync requests
+let _lastServerSyncAt = 0; // throttle repeated sync requests
 const SERVER_SYNC_MIN_INTERVAL_MS = 20_000;
 let _publicSaleStatusPromise = null;
 let _lastPublicSaleStatusAt = 0;
 const PUBLIC_SALE_STATUS_MIN_INTERVAL_MS = 10_000;
 let _loggedOrdersUnauthorized = false;
-let _lastPollAt   = null;   // Date.now() of last Etherscan poll attempt
+let _lastPollAt = null; // Date.now() of last Etherscan poll attempt
 let _lastPollResult = null; // 'ok' | 'notok:<msg>' | 'error:<msg>' | 'timeout'
 let _printedQueuedSnapshot = false;
 let _knownQueuedOrderIds = new Set();
@@ -97,7 +97,9 @@ function _queueSummary(order) {
 
 function _logQueuedSnapshotOnce(serverOrders) {
   if (_printedQueuedSnapshot) return;
-  const queued = (serverOrders || []).filter(o => o && o.id && (o.status === 'queued' || o.status === 'delivery_pending'));
+  const queued = (serverOrders || []).filter(
+    (o) => o && o.id && (o.status === 'queued' || o.status === 'delivery_pending'),
+  );
   const queuedWtc = queued.reduce((sum, o) => sum + Math.max(0, Number(o.wtcAmount) || 0), 0);
   console.log(`[${_ts()}] [SaleQueue] queued buys at startup: ${queued.length} (${queuedWtc} WTC)`);
   for (const o of queued) {
@@ -112,7 +114,7 @@ function _logLocalQueuedSnapshotOnce() {
 }
 
 function _logNewQueuedOrders(serverOrders) {
-  for (const o of (serverOrders || [])) {
+  for (const o of serverOrders || []) {
     if (!o || !o.id) continue;
     if (o.status === 'queued' || o.status === 'delivery_pending') {
       if (!_knownQueuedOrderIds.has(o.id)) {
@@ -128,8 +130,8 @@ function _logNewQueuedOrders(serverOrders) {
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 function init(dataDir, wtcNode) {
-  _dataDir  = dataDir;
-  _wtcNode  = wtcNode;
+  _dataDir = dataDir;
+  _wtcNode = wtcNode;
   _loadOrders();
   _loadSeenHashes();
   _loadUnmatchedTxs();
@@ -139,20 +141,32 @@ function init(dataDir, wtcNode) {
 }
 
 function shutdown() {
-  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-  if (_reconcileTimer) { clearInterval(_reconcileTimer); _reconcileTimer = null; }
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+  }
+  if (_reconcileTimer) {
+    clearInterval(_reconcileTimer);
+    _reconcileTimer = null;
+  }
 }
 
 // ─── File paths ──────────────────────────────────────────────────────────────
 
-function _ordersPath()        { return path.join(_dataDir, 'sale-orders.json'); }
-function _seenHashesPath()    { return path.join(_dataDir, 'sale-seen-hashes.json'); }
-function _unmatchedTxsPath()  { return path.join(_dataDir, 'sale-unmatched-txs.json'); }
+function _ordersPath() {
+  return path.join(_dataDir, 'sale-orders.json');
+}
+function _seenHashesPath() {
+  return path.join(_dataDir, 'sale-seen-hashes.json');
+}
+function _unmatchedTxsPath() {
+  return path.join(_dataDir, 'sale-unmatched-txs.json');
+}
 
 function _readJson(filePath) {
   // Strip UTF-8 BOM if present (written by PowerShell Set-Content -Encoding UTF8)
   let text = fs.readFileSync(filePath, 'utf8');
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
   return JSON.parse(text);
 }
 
@@ -162,13 +176,15 @@ function _loadOrders() {
       const raw = _readJson(_ordersPath());
       _orders = Array.isArray(raw) ? raw : [];
     }
-  } catch (_) { _orders = []; }
+  } catch (_) {
+    _orders = [];
+  }
 }
 
 function _saveOrders() {
   try {
     const dest = _ordersPath();
-    const tmp  = dest + '.tmp';
+    const tmp = dest + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(_orders, null, 2), 'utf8');
     fs.renameSync(tmp, dest);
   } catch (_) {}
@@ -180,11 +196,15 @@ function _loadSeenHashes() {
       const raw = _readJson(_seenHashesPath());
       _seenTxHashes = new Set(Array.isArray(raw) ? raw : []);
     }
-  } catch (_) { _seenTxHashes = new Set(); }
+  } catch (_) {
+    _seenTxHashes = new Set();
+  }
 }
 
 function _saveSeenHashes() {
-  try { fs.writeFileSync(_seenHashesPath(), JSON.stringify([..._seenTxHashes]), 'utf8'); } catch (_) {}
+  try {
+    fs.writeFileSync(_seenHashesPath(), JSON.stringify([..._seenTxHashes]), 'utf8');
+  } catch (_) {}
 }
 
 function _loadUnmatchedTxs() {
@@ -193,11 +213,15 @@ function _loadUnmatchedTxs() {
       const raw = _readJson(_unmatchedTxsPath());
       _unmatchedTxs = Array.isArray(raw) ? raw : [];
     }
-  } catch (_) { _unmatchedTxs = []; }
+  } catch (_) {
+    _unmatchedTxs = [];
+  }
 }
 
 function _saveUnmatchedTxs() {
-  try { fs.writeFileSync(_unmatchedTxsPath(), JSON.stringify(_unmatchedTxs, null, 2), 'utf8'); } catch (_) {}
+  try {
+    fs.writeFileSync(_unmatchedTxsPath(), JSON.stringify(_unmatchedTxs, null, 2), 'utf8');
+  } catch (_) {}
 }
 
 // ─── Order CRUD ──────────────────────────────────────────────────────────────
@@ -218,10 +242,7 @@ async function placeSaleOrder({ wtcAddress, wtcAmount, usdcRequired, buyerEthAdd
 
   // Block a new order only if there's an unpaid pending_payment order for this address.
   // Queued orders are already paid and run in background — new purchases are allowed.
-  const existing = _orders.find(o =>
-    o.wtcAddress === wtcAddress &&
-    o.status === 'pending_payment'
-  );
+  const existing = _orders.find((o) => o.wtcAddress === wtcAddress && o.status === 'pending_payment');
   if (existing) {
     return {
       ok: true,
@@ -247,7 +268,7 @@ async function placeSaleOrder({ wtcAddress, wtcAmount, usdcRequired, buyerEthAdd
       return { ok: false, error: created.error || 'Failed to create server order' };
     }
 
-    const existingLocal = _orders.find(o => o.id === created.orderId);
+    const existingLocal = _orders.find((o) => o.id === created.orderId);
     if (existingLocal) {
       return {
         ok: true,
@@ -261,23 +282,25 @@ async function placeSaleOrder({ wtcAddress, wtcAmount, usdcRequired, buyerEthAdd
     }
 
     const mirroredOrder = {
-      id:               created.orderId,
+      id: created.orderId,
       wtcAddress,
-      wtcAmount:        Math.floor(wtcAmount),
-      usdcRequired:     Math.round((Number(created.usdcRequired) || usdcRequired) * 1e6) / 1e6,
-      buyerEthAddress:  buyerEthAddress ? buyerEthAddress.toLowerCase() : null,
-      status:           'pending_payment',
-      createdAtMs:      Date.now(),
-      matchedTxHash:    null,
-      fulfilledTxId:    null,
-      fulfilledAtMs:    null,
-      _fromServer:      true,
-      ownerProof:       created.ownerProof || null,
+      wtcAmount: Math.floor(wtcAmount),
+      usdcRequired: Math.round((Number(created.usdcRequired) || usdcRequired) * 1e6) / 1e6,
+      buyerEthAddress: buyerEthAddress ? buyerEthAddress.toLowerCase() : null,
+      status: 'pending_payment',
+      createdAtMs: Date.now(),
+      matchedTxHash: null,
+      fulfilledTxId: null,
+      fulfilledAtMs: null,
+      _fromServer: true,
+      ownerProof: created.ownerProof || null,
     };
 
     _orders.push(mirroredOrder);
     _saveOrders();
-    console.log(`[${_ts()}] [SaleQueue] mirrored server order ${mirroredOrder.id} created - ${mirroredOrder.wtcAmount} WTC for $${mirroredOrder.usdcRequired} USDC -> ${mirroredOrder.wtcAddress}`);
+    console.log(
+      `[${_ts()}] [SaleQueue] mirrored server order ${mirroredOrder.id} created - ${mirroredOrder.wtcAmount} WTC for $${mirroredOrder.usdcRequired} USDC -> ${mirroredOrder.wtcAddress}`,
+    );
     _retryUnmatched();
     return {
       ok: true,
@@ -289,22 +312,24 @@ async function placeSaleOrder({ wtcAddress, wtcAmount, usdcRequired, buyerEthAdd
 
   const orderId = crypto.randomBytes(12).toString('hex');
   const order = {
-    id:               orderId,
+    id: orderId,
     wtcAddress,
-    wtcAmount:        Math.floor(wtcAmount),
-    usdcRequired:     Math.round(usdcRequired * 1e6) / 1e6,  // 6 dp precision
-    buyerEthAddress:  buyerEthAddress ? buyerEthAddress.toLowerCase() : null,
-    status:           'pending_payment',     // pending_payment | queued | fulfilled | expired | failed
-    createdAtMs:      Date.now(),
-    matchedTxHash:    null,
-    fulfilledTxId:    null,
-    fulfilledAtMs:    null,
-    ownerProof:       null,
+    wtcAmount: Math.floor(wtcAmount),
+    usdcRequired: Math.round(usdcRequired * 1e6) / 1e6, // 6 dp precision
+    buyerEthAddress: buyerEthAddress ? buyerEthAddress.toLowerCase() : null,
+    status: 'pending_payment', // pending_payment | queued | fulfilled | expired | failed
+    createdAtMs: Date.now(),
+    matchedTxHash: null,
+    fulfilledTxId: null,
+    fulfilledAtMs: null,
+    ownerProof: null,
   };
 
   _orders.push(order);
   _saveOrders();
-  console.log(`[${_ts()}] [SaleQueue] order ${orderId} created - ${wtcAmount} WTC for $${usdcRequired} USDC -> ${wtcAddress}`);
+  console.log(
+    `[${_ts()}] [SaleQueue] order ${orderId} created - ${wtcAmount} WTC for $${usdcRequired} USDC -> ${wtcAddress}`,
+  );
   // Immediately try to match any unmatched USDC payments against this new order
   _retryUnmatched();
   return { ok: true, orderId, usdcRequired, ownerProof: null };
@@ -320,29 +345,29 @@ function _postServerPlaceOrder({ wtcAddress, wtcAmount, buyerEthAddress }) {
   const urlObj = new URL(`${_serverApiUrl}/place-order`);
   const options = {
     hostname: urlObj.hostname,
-    port:     urlObj.port || 443,
-    path:     urlObj.pathname,
-    method:   'POST',
-    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-    timeout:  10_000,
+    port: urlObj.port || 443,
+    path: urlObj.pathname,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    timeout: 10_000,
   };
 
   return new Promise((resolve) => {
     const req = https.request(options, (res) => {
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
           if (res.statusCode !== 200 || !body || !body.ok || !body.orderId) {
-            const err = (body && body.error) ? String(body.error) : `HTTP ${res.statusCode}`;
+            const err = body && body.error ? String(body.error) : `HTTP ${res.statusCode}`;
             return resolve({ ok: false, error: err });
           }
           resolve({
             ok: true,
             orderId: String(body.orderId),
             usdcRequired: Number(body.usdcRequired) || 0,
-            ownerProof: (body && typeof body.ownerProof === 'string') ? body.ownerProof : null,
+            ownerProof: body && typeof body.ownerProof === 'string' ? body.ownerProof : null,
           });
         } catch (_) {
           resolve({ ok: false, error: `HTTP ${res.statusCode}` });
@@ -366,14 +391,14 @@ function _postServerPlaceOrder({ wtcAddress, wtcAmount, buyerEthAddress }) {
  * Get all orders (for display / admin).
  */
 function getOrders() {
-  return _orders.map(o => ({ ...o }));
+  return _orders.map((o) => ({ ...o }));
 }
 
 /**
  * Get a single order by id.
  */
 function getOrder(orderId) {
-  const o = _orders.find(o => o.id === orderId);
+  const o = _orders.find((o) => o.id === orderId);
   return o ? { ...o } : null;
 }
 
@@ -383,8 +408,15 @@ function getOrder(orderId) {
 function getOrdersForAddress(addr) {
   if (!addr || typeof addr !== 'string') return [];
   return _orders
-    .filter(o => o.wtcAddress === addr && (o.status === 'pending_payment' || o.status === 'payment_submitted' || o.status === 'queued' || o.status === 'delivery_pending'))
-    .map(o => ({ ...o }));
+    .filter(
+      (o) =>
+        o.wtcAddress === addr &&
+        (o.status === 'pending_payment' ||
+          o.status === 'payment_submitted' ||
+          o.status === 'queued' ||
+          o.status === 'delivery_pending'),
+    )
+    .map((o) => ({ ...o }));
 }
 
 /**
@@ -396,7 +428,7 @@ function getPurchaseTotalForAddress(addr) {
   if (!addr || typeof addr !== 'string') return 0;
   const COUNTED = new Set(['fulfilled', 'queued', 'delivery_pending', 'payment_submitted']);
   return _orders
-    .filter(o => o.wtcAddress === addr && COUNTED.has(o.status))
+    .filter((o) => o.wtcAddress === addr && COUNTED.has(o.status))
     .reduce((sum, o) => sum + (typeof o.wtcAmount === 'number' ? o.wtcAmount : 0), 0);
 }
 
@@ -404,7 +436,7 @@ function getPurchaseTotalForAddress(addr) {
  * Cancel a pending_payment order (before payment arrives).
  */
 async function cancelOrder(orderId) {
-  const o = _orders.find(o => o.id === orderId);
+  const o = _orders.find((o) => o.id === orderId);
   if (!o) return { ok: false, error: 'Order not found' };
   const cancellable = ['pending_payment', 'payment_submitted', 'queued'];
   if (!cancellable.includes(o.status)) return { ok: false, error: `Cannot cancel order in status '${o.status}'` };
@@ -412,7 +444,9 @@ async function cancelOrder(orderId) {
   _saveOrders();
   // Notify server so _syncServerOrders won't re-sync it back as queued.
   if (_serverApiUrl) {
-    try { await _postServerCancelOrder(orderId, o.ownerProof || null); } catch (_) {}
+    try {
+      await _postServerCancelOrder(orderId, o.ownerProof || null);
+    } catch (_) {}
   }
   return { ok: true };
 }
@@ -425,16 +459,29 @@ function _postServerCancelOrder(orderId, ownerProof = null) {
   const urlObj = new URL(`${_serverApiUrl}/cancel-order`);
   const options = {
     hostname: urlObj.hostname,
-    port:     urlObj.port || 443,
-    path:     urlObj.pathname,
-    method:   'POST',
-    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...(_serverApiKey ? { 'X-Api-Key': _serverApiKey } : {}) },
-    timeout:  10_000,
+    port: urlObj.port || 443,
+    path: urlObj.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      ...(_serverApiKey ? { 'X-Api-Key': _serverApiKey } : {}),
+    },
+    timeout: 10_000,
   };
   return new Promise((resolve) => {
-    const req = https.request(options, (res) => { res.resume(); resolve(); });
-    req.on('error', (e) => { console.warn(`[${_ts()}] [SaleQueue] server cancel error:`, e && e.message); resolve(); });
-    req.on('timeout', () => { req.destroy(); resolve(); });
+    const req = https.request(options, (res) => {
+      res.resume();
+      resolve();
+    });
+    req.on('error', (e) => {
+      console.warn(`[${_ts()}] [SaleQueue] server cancel error:`, e && e.message);
+      resolve();
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve();
+    });
     req.write(payload);
     req.end();
   });
@@ -446,10 +493,10 @@ function _postServerCancelOrder(orderId, ownerProof = null) {
  * Etherscan polling will then match by exact tx hash instead of amount proximity.
  */
 function setOrderTxHash(orderId, txHash) {
-  const o = _orders.find(o => o.id === orderId && o.status === 'pending_payment');
+  const o = _orders.find((o) => o.id === orderId && o.status === 'pending_payment');
   if (!o) return { ok: false, error: 'Order not found or not in pending_payment state' };
   o.knownTxHash = typeof txHash === 'string' ? txHash.trim() : '';
-  o.status      = 'payment_submitted';
+  o.status = 'payment_submitted';
   _saveOrders();
   console.log(`[${_ts()}] [SaleQueue] order ${orderId} tx=${txHash} - marked as payment_submitted`);
   return { ok: true };
@@ -467,18 +514,18 @@ function setElectricityPrice(pricePerKwh) {
  */
 function _computeWtcFromUsdc(usdcAmount, elPrice, startPosition) {
   const ENERGY_KWH_PER_WTC = 20;
-  let budget   = usdcAmount;
+  let budget = usdcAmount;
   let wtcTotal = 0;
   let position = startPosition || 0;
   for (const tier of SALE_TIERS) {
     if (budget <= 0) break;
     if (position >= tier.end) continue;
-    const available   = tier.end - Math.max(tier.start, position);
+    const available = tier.end - Math.max(tier.start, position);
     const pricePerWtc = elPrice * ENERGY_KWH_PER_WTC * tier.fraction;
     const wtcFromTier = Math.min(budget / pricePerWtc, available);
-    wtcTotal  += wtcFromTier;
-    budget    -= wtcFromTier * pricePerWtc;
-    position  += wtcFromTier;
+    wtcTotal += wtcFromTier;
+    budget -= wtcFromTier * pricePerWtc;
+    position += wtcFromTier;
   }
   return Math.round(wtcTotal * 1e6) / 1e6;
 }
@@ -513,7 +560,7 @@ function getSoldWTC() {
   // 2. Matched orders — only count orders where USDC receipt is confirmed on-chain.
   // 'payment_submitted' is unconfirmed (buyer self-reported) and must NOT count as sold.
   const queuedWtc = _orders
-    .filter(o => o.status === 'queued' || o.status === 'delivery_pending')
+    .filter((o) => o.status === 'queued' || o.status === 'delivery_pending')
     .reduce((s, o) => s + o.wtcAmount, 0);
   return Math.max(0, Math.min(SALE_TOTAL, onChainSold + queuedWtc));
 }
@@ -524,8 +571,8 @@ function getSoldWTC() {
 function activeTierIdx() {
   const sold = getSoldWTC();
   if (sold === null) return 0;
-  if (sold < SALE_TIER_SIZE)        return 0;
-  if (sold < 2 * SALE_TIER_SIZE)    return 1;
+  if (sold < SALE_TIER_SIZE) return 0;
+  if (sold < 2 * SALE_TIER_SIZE) return 1;
   return 2;
 }
 
@@ -540,20 +587,20 @@ function computeUsdcRequired(wtcAmount, electricityPricePerKwh) {
   const sold = getSoldWTC() || 0;
 
   let remaining = wtcAmount;
-  let totalUsd  = 0;
-  let position  = sold;
+  let totalUsd = 0;
+  let position = sold;
 
   for (const tier of SALE_TIERS) {
     if (remaining <= 0) break;
     if (position >= tier.end) continue;
 
     const availableInTier = tier.end - Math.max(tier.start, position);
-    const usedFromTier    = Math.min(remaining, availableInTier);
-    const pricePerWtc     = electricityPricePerKwh * ENERGY_KWH_PER_WTC * tier.fraction;
+    const usedFromTier = Math.min(remaining, availableInTier);
+    const pricePerWtc = electricityPricePerKwh * ENERGY_KWH_PER_WTC * tier.fraction;
 
     totalUsd += usedFromTier * pricePerWtc;
     remaining -= usedFromTier;
-    position  += usedFromTier;
+    position += usedFromTier;
   }
 
   return totalUsd;
@@ -566,8 +613,8 @@ function computeUsdcRequired(wtcAmount, electricityPricePerKwh) {
  * Read-only order sync works without a key; write/update calls require a key.
  */
 function setServerApi(url, key) {
-  _serverApiUrl = (typeof url === 'string' && url) ? url.replace(/\/$/, '') : null;
-  _serverApiKey = (typeof key === 'string' && key) ? key : null;
+  _serverApiUrl = typeof url === 'string' && url ? url.replace(/\/$/, '') : null;
+  _serverApiKey = typeof key === 'string' && key ? key : null;
   _serverBackfillAttempted = false;
   if (_serverApiUrl) console.log(`[${_ts()}] [SaleQueue] server API set: ${_serverApiUrl}`);
 }
@@ -583,7 +630,7 @@ async function _syncServerOrders() {
   if (_serverSyncPromise) return _serverSyncPromise;
 
   const now = Date.now();
-  if ((now - _lastServerSyncAt) < SERVER_SYNC_MIN_INTERVAL_MS) {
+  if (now - _lastServerSyncAt < SERVER_SYNC_MIN_INTERVAL_MS) {
     return;
   }
 
@@ -601,7 +648,7 @@ async function _syncServerOrders() {
       const req = https.get(getUrl, { timeout: 10_000, headers: _reqHeaders }, (res) => {
         // Follow redirects (301/302/307/308)
         if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
-          res.resume();  // drain response
+          res.resume(); // drain response
           const next = new URL(res.headers.location, getUrl).href;
           console.log(`[${_ts()}] [SaleQueue] server sync redirect ${res.statusCode} -> ${next}`);
           return _doGet(next, redirectsLeft - 1);
@@ -610,7 +657,9 @@ async function _syncServerOrders() {
           res.resume();
           if (res.statusCode === 401 && !_serverApiKey) {
             if (!_loggedOrdersUnauthorized) {
-              console.log(`[${_ts()}] [SaleQueue] server /orders requires API key - queued server orders will not appear in this terminal on this client`);
+              console.log(
+                `[${_ts()}] [SaleQueue] server /orders requires API key - queued server orders will not appear in this terminal on this client`,
+              );
               _loggedOrdersUnauthorized = true;
             }
           } else {
@@ -619,12 +668,15 @@ async function _syncServerOrders() {
           return _finish();
         }
         const chunks = [];
-        res.on('data', c => chunks.push(c));
+        res.on('data', (c) => chunks.push(c));
         res.on('end', async () => {
           try {
             const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
             if (!body.ok || !Array.isArray(body.orders)) {
-              console.warn(`[${_ts()}] [SaleQueue] server sync: unexpected response`, JSON.stringify(body).slice(0, 200));
+              console.warn(
+                `[${_ts()}] [SaleQueue] server sync: unexpected response`,
+                JSON.stringify(body).slice(0, 200),
+              );
               return _finish();
             }
 
@@ -633,7 +685,7 @@ async function _syncServerOrders() {
             // 2) paid/delivered local app orders that are not present on server.
             // This prevents under-counting when app-originated orders haven't been
             // mirrored into the server order list yet.
-            const serverOrderIds = new Set(body.orders.filter(o => o && o.id).map(o => o.id));
+            const serverOrderIds = new Set(body.orders.filter((o) => o && o.id).map((o) => o.id));
 
             // One-time reconciliation for legacy local-only app orders.
             // Newer app versions write-through to server on creation, but this migrates
@@ -651,11 +703,13 @@ async function _syncServerOrders() {
             }
 
             const serverSold = body.orders
-              .filter(o => o && (o.status === 'queued' || o.status === 'delivery_pending' || o.status === 'fulfilled'))
+              .filter(
+                (o) => o && (o.status === 'queued' || o.status === 'delivery_pending' || o.status === 'fulfilled'),
+              )
               .reduce((sum, o) => sum + Math.max(0, Number(o.wtcAmount) || 0), 0);
 
             const localOnlySold = _orders
-              .filter(o => {
+              .filter((o) => {
                 if (!o || !o.id) return false;
                 if (serverOrderIds.has(o.id)) return false;
                 return o.status === 'queued' || o.status === 'delivery_pending' || o.status === 'fulfilled';
@@ -669,23 +723,27 @@ async function _syncServerOrders() {
             let changed = false;
             for (const so of body.orders) {
               if (!so.id) continue;
-              const local = _orders.find(o => o.id === so.id);
+              const local = _orders.find((o) => o.id === so.id);
 
               // ── Handle terminal server statuses when we have an unmatched tx ────────
               // fulfilled → WTC already delivered via another path; just clear the orphaned tx.
               // expired   → payment arrived late; rescue the order so WTC can be delivered.
-              const _unmatchedForOrder = () => _unmatchedTxs.find(utx =>
-                (so.buyerEthAddress && utx.fromEthAddr &&
-                  so.buyerEthAddress.toLowerCase() === utx.fromEthAddr.toLowerCase()) ||
-                (so.usdcRequired > 0 &&
-                  Math.abs(so.usdcRequired - utx.usdcValue) / so.usdcRequired <= 0.20)
-              );
+              const _unmatchedForOrder = () =>
+                _unmatchedTxs.find(
+                  (utx) =>
+                    (so.buyerEthAddress &&
+                      utx.fromEthAddr &&
+                      so.buyerEthAddress.toLowerCase() === utx.fromEthAddr.toLowerCase()) ||
+                    (so.usdcRequired > 0 && Math.abs(so.usdcRequired - utx.usdcValue) / so.usdcRequired <= 0.2),
+                );
 
               if (so.status === 'fulfilled') {
                 const matchingUtx = _unmatchedForOrder();
                 if (matchingUtx) {
-                  console.log(`[${_ts()}] [SaleQueue] order ${so.id} already fulfilled — clearing orphaned unmatched tx ${matchingUtx.hash}`);
-                  _unmatchedTxs = _unmatchedTxs.filter(u => u.hash !== matchingUtx.hash);
+                  console.log(
+                    `[${_ts()}] [SaleQueue] order ${so.id} already fulfilled — clearing orphaned unmatched tx ${matchingUtx.hash}`,
+                  );
+                  _unmatchedTxs = _unmatchedTxs.filter((u) => u.hash !== matchingUtx.hash);
                   _saveUnmatchedTxs();
                 }
                 // Still mirror/update local record so balance reads are accurate
@@ -695,13 +753,17 @@ async function _syncServerOrders() {
                   const rescuedStatus = 'pending_payment';
                   if (local) {
                     if (local.status !== 'queued' && local.status !== 'fulfilled') {
-                      console.log(`[${_ts()}] [SaleQueue] rescuing expired order ${so.id} (local: ${local.status}) — unmatched tx found`);
+                      console.log(
+                        `[${_ts()}] [SaleQueue] rescuing expired order ${so.id} (local: ${local.status}) — unmatched tx found`,
+                      );
                       local.status = rescuedStatus;
                       local._fromServer = true;
                       changed = true;
                     }
                   } else {
-                    console.log(`[${_ts()}] [SaleQueue] rescuing expired server order ${so.id} — unmatched tx found, mirroring as ${rescuedStatus}`);
+                    console.log(
+                      `[${_ts()}] [SaleQueue] rescuing expired server order ${so.id} — unmatched tx found, mirroring as ${rescuedStatus}`,
+                    );
                     _orders.push({ ...so, status: rescuedStatus, _fromServer: true });
                     changed = true;
                   }
@@ -711,22 +773,37 @@ async function _syncServerOrders() {
 
               if (local) {
                 // Active status rank (forward progression only for these)
-                const activeRank = { pending_payment: 0, payment_submitted: 1, queued: 2, delivery_pending: 3, fulfilled: 4 };
+                const activeRank = {
+                  pending_payment: 0,
+                  payment_submitted: 1,
+                  queued: 2,
+                  delivery_pending: 3,
+                  fulfilled: 4,
+                };
                 const serverRank = activeRank[so.status] ?? -1;
-                const localRank  = activeRank[local.status] ?? -1;
+                const localRank = activeRank[local.status] ?? -1;
 
                 // Server is authoritative: if local is expired/failed/cancelled but server still
                 // has an active status, reset local back so payment matching can proceed.
                 // Also allow server to roll back fulfilled→queued (e.g. after correcting a bad flush).
-                const localIsTerminal = local.status === 'expired' || local.status === 'failed' || local.status === 'cancelled';
-                const serverRollback  = local.status === 'fulfilled' && so.status === 'queued';
+                const localIsTerminal =
+                  local.status === 'expired' || local.status === 'failed' || local.status === 'cancelled';
+                const serverRollback = local.status === 'fulfilled' && so.status === 'queued';
                 if ((localIsTerminal || serverRollback) && serverRank >= 0) {
-                  console.log(`[${_ts()}] [SaleQueue] server sync: resetting ${so.id} from local ${local.status} back to server ${so.status}`);
+                  console.log(
+                    `[${_ts()}] [SaleQueue] server sync: resetting ${so.id} from local ${local.status} back to server ${so.status}`,
+                  );
                   local.status = so.status;
                   // Clear any stale fulfillment data on rollback
-                  if (serverRollback) { delete local.fulfilledTxId; delete local.fulfilledAtMs; }
+                  if (serverRollback) {
+                    delete local.fulfilledTxId;
+                    delete local.fulfilledAtMs;
+                  }
                   changed = true;
-                } else if (local.status !== so.status && (so.status === 'cancelled' || so.status === 'expired' || so.status === 'failed')) {
+                } else if (
+                  local.status !== so.status &&
+                  (so.status === 'cancelled' || so.status === 'expired' || so.status === 'failed')
+                ) {
                   console.log(`[${_ts()}] [SaleQueue] server sync: updating ${so.id} ${local.status} -> ${so.status}`);
                   local.status = so.status;
                   changed = true;
@@ -735,20 +812,45 @@ async function _syncServerOrders() {
                   local.status = so.status;
                   changed = true;
                 }
-                if (so.matchedTxHash  && !local.matchedTxHash)  { local.matchedTxHash  = so.matchedTxHash;  changed = true; }
-                if (so.knownTxHash    && !local.knownTxHash)    { local.knownTxHash    = so.knownTxHash;    changed = true; }
-                if (so.matchedAtMs    && !local.matchedAtMs)    { local.matchedAtMs    = so.matchedAtMs;    changed = true; }
-                if (so.fulfilledTxId  && !local.fulfilledTxId)  { local.fulfilledTxId  = so.fulfilledTxId;  changed = true; }
-                if (so.fulfilledAtMs  && !local.fulfilledAtMs)  { local.fulfilledAtMs  = so.fulfilledAtMs;  changed = true; }
+                if (so.matchedTxHash && !local.matchedTxHash) {
+                  local.matchedTxHash = so.matchedTxHash;
+                  changed = true;
+                }
+                if (so.knownTxHash && !local.knownTxHash) {
+                  local.knownTxHash = so.knownTxHash;
+                  changed = true;
+                }
+                if (so.matchedAtMs && !local.matchedAtMs) {
+                  local.matchedAtMs = so.matchedAtMs;
+                  changed = true;
+                }
+                if (so.fulfilledTxId && !local.fulfilledTxId) {
+                  local.fulfilledTxId = so.fulfilledTxId;
+                  changed = true;
+                }
+                if (so.fulfilledAtMs && !local.fulfilledAtMs) {
+                  local.fulfilledAtMs = so.fulfilledAtMs;
+                  changed = true;
+                }
                 // Always ensure _fromServer flag is set on mirrored orders
-                if (!local._fromServer) { local._fromServer = true; changed = true; }
+                if (!local._fromServer) {
+                  local._fromServer = true;
+                  changed = true;
+                }
                 continue;
               }
               // Not present locally — mirror it if it's an active order
-              if (so.status === 'pending_payment' || so.status === 'payment_submitted' || so.status === 'queued' || so.status === 'delivery_pending') {
+              if (
+                so.status === 'pending_payment' ||
+                so.status === 'payment_submitted' ||
+                so.status === 'queued' ||
+                so.status === 'delivery_pending'
+              ) {
                 _orders.push({ ...so, _fromServer: true });
                 changed = true;
-                console.log(`[${_ts()}] [SaleQueue] mirrored server order ${so.id} (${so.wtcAmount} WTC, ${so.status}) -> ${so.wtcAddress}`);
+                console.log(
+                  `[${_ts()}] [SaleQueue] mirrored server order ${so.id} (${so.wtcAmount} WTC, ${so.status}) -> ${so.wtcAddress}`,
+                );
               }
             }
             if (changed) _saveOrders();
@@ -758,8 +860,15 @@ async function _syncServerOrders() {
           _finish();
         });
       });
-      req.on('error', (e) => { console.warn(`[${_ts()}] [SaleQueue] server sync request error:`, e && e.message); _finish(); });
-      req.on('timeout', () => { req.destroy(); console.warn(`[${_ts()}] [SaleQueue] server sync timeout for ${getUrl}`); _finish(); });
+      req.on('error', (e) => {
+        console.warn(`[${_ts()}] [SaleQueue] server sync request error:`, e && e.message);
+        _finish();
+      });
+      req.on('timeout', () => {
+        req.destroy();
+        console.warn(`[${_ts()}] [SaleQueue] server sync timeout for ${getUrl}`);
+        _finish();
+      });
     };
     _doGet(url, 3);
   });
@@ -772,7 +881,7 @@ async function _refreshPublicSaleStatus() {
   if (_publicSaleStatusPromise) return _publicSaleStatusPromise;
 
   const now = Date.now();
-  if ((now - _lastPublicSaleStatusAt) < PUBLIC_SALE_STATUS_MIN_INTERVAL_MS) {
+  if (now - _lastPublicSaleStatusAt < PUBLIC_SALE_STATUS_MIN_INTERVAL_MS) {
     return;
   }
 
@@ -786,16 +895,16 @@ async function _refreshPublicSaleStatus() {
     const urlObj = new URL(`${_serverApiUrl}/sale-status`);
     const options = {
       hostname: urlObj.hostname,
-      port:     urlObj.port || 443,
-      path:     urlObj.pathname,
-      method:   'GET',
-      headers:  { 'User-Agent': 'wattcoin-miner/1.0' },
-      timeout:  10_000,
+      port: urlObj.port || 443,
+      path: urlObj.pathname,
+      method: 'GET',
+      headers: { 'User-Agent': 'wattcoin-miner/1.0' },
+      timeout: 10_000,
     };
 
     const req = https.request(options, (res) => {
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -808,7 +917,10 @@ async function _refreshPublicSaleStatus() {
     });
 
     req.on('error', () => finish());
-    req.on('timeout', () => { req.destroy(); finish(); });
+    req.on('timeout', () => {
+      req.destroy();
+      finish();
+    });
     req.end();
   });
 
@@ -819,8 +931,15 @@ async function _backfillLocalOrdersToServer(serverOrderIds) {
   if (!_serverApiUrl || !_serverApiKey) return 0;
   if (!(serverOrderIds instanceof Set)) return 0;
 
-  const migratableStatuses = new Set(['pending_payment', 'payment_submitted', 'queued', 'delivery_pending', 'fulfilled', 'failed']);
-  const localOnly = _orders.filter(o => o && o.id && !serverOrderIds.has(o.id) && migratableStatuses.has(o.status));
+  const migratableStatuses = new Set([
+    'pending_payment',
+    'payment_submitted',
+    'queued',
+    'delivery_pending',
+    'fulfilled',
+    'failed',
+  ]);
+  const localOnly = _orders.filter((o) => o && o.id && !serverOrderIds.has(o.id) && migratableStatuses.has(o.status));
   if (localOnly.length === 0) return 0;
 
   let pushed = 0;
@@ -861,17 +980,21 @@ function _upsertServerOrder(order) {
   const urlObj = new URL(`${_serverApiUrl}/upsert-order`);
   const options = {
     hostname: urlObj.hostname,
-    port:     urlObj.port || 443,
-    path:     urlObj.pathname,
-    method:   'POST',
-    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), 'X-Api-Key': _serverApiKey },
-    timeout:  10_000,
+    port: urlObj.port || 443,
+    path: urlObj.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      'X-Api-Key': _serverApiKey,
+    },
+    timeout: 10_000,
   };
 
   return new Promise((resolve) => {
     const req = https.request(options, (res) => {
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      res.on('data', (c) => chunks.push(c));
       res.on('end', async () => {
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -950,16 +1073,26 @@ function _postServerConfirmPayment(orderId, txHash, ownerProof = null) {
   const urlObj = new URL(`${_serverApiUrl}/confirm-payment`);
   const options = {
     hostname: urlObj.hostname,
-    port:     urlObj.port || 443,
-    path:     urlObj.pathname,
-    method:   'POST',
-    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...(_serverApiKey ? { 'X-Api-Key': _serverApiKey } : {}) },
-    timeout:  10_000,
+    port: urlObj.port || 443,
+    path: urlObj.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      ...(_serverApiKey ? { 'X-Api-Key': _serverApiKey } : {}),
+    },
+    timeout: 10_000,
   };
   return new Promise((resolve) => {
-    const req = https.request(options, (res) => { res.resume(); resolve(); });
+    const req = https.request(options, (res) => {
+      res.resume();
+      resolve();
+    });
     req.on('error', () => resolve());
-    req.on('timeout', () => { req.destroy(); resolve(); });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve();
+    });
     req.write(payload);
     req.end();
   });
@@ -972,24 +1105,38 @@ function _postServerConfirmPayment(orderId, txHash, ownerProof = null) {
 function _updateServerOrder(orderId, status, { matchedTxHash, fulfilledTxId, fulfilledAtMs } = {}) {
   if (!_serverApiUrl || !_serverApiKey) return Promise.resolve();
   const payload = JSON.stringify({
-    orderId, status,
+    orderId,
+    status,
     ...(matchedTxHash != null && { matchedTxHash }),
-    ...(fulfilledTxId  != null && { fulfilledTxId }),
-    ...(fulfilledAtMs  != null && { fulfilledAtMs }),
+    ...(fulfilledTxId != null && { fulfilledTxId }),
+    ...(fulfilledAtMs != null && { fulfilledAtMs }),
   });
   const urlObj = new URL(`${_serverApiUrl}/update-order`);
   const options = {
     hostname: urlObj.hostname,
-    port:     urlObj.port || 443,
-    path:     urlObj.pathname,
-    method:   'POST',
-    headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), 'X-Api-Key': _serverApiKey },
-    timeout:  10_000,
+    port: urlObj.port || 443,
+    path: urlObj.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+      'X-Api-Key': _serverApiKey,
+    },
+    timeout: 10_000,
   };
   return new Promise((resolve) => {
-    const req = https.request(options, (res) => { res.resume(); resolve(); });
-    req.on('error', (e) => { console.warn(`[${_ts()}] [SaleQueue] server update error:`, e && e.message); resolve(); });
-    req.on('timeout', () => { req.destroy(); resolve(); });
+    const req = https.request(options, (res) => {
+      res.resume();
+      resolve();
+    });
+    req.on('error', (e) => {
+      console.warn(`[${_ts()}] [SaleQueue] server update error:`, e && e.message);
+      resolve();
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve();
+    });
     req.write(payload);
     req.end();
   });
@@ -1026,7 +1173,9 @@ async function _pollUsdc() {
   // Retry unmatched payments FIRST — must not be blocked by server sync
   _retryUnmatched();
   // Sync any orders placed via the web wallet (server PHP API) into local store
-  try { await _syncServerOrders(); } catch (_) {}
+  try {
+    await _syncServerOrders();
+  } catch (_) {}
   // Retry again after server sync in case new orders were just mirrored
   _retryUnmatched();
   _retryUnmatched();
@@ -1036,23 +1185,24 @@ async function _pollUsdc() {
 
     let changed = false;
     for (const tx of transfers) {
-      const txHashNorm = String(tx && tx.hash || '').toLowerCase();
+      const txHashNorm = String((tx && tx.hash) || '').toLowerCase();
       if (_seenTxHashes.has(tx.hash)) {
         // Recovery path: if a pending order is still waiting on this known tx hash,
         // re-run matching even though the tx was already seen earlier.
-        const needsRetry = _orders.some(o =>
-          o &&
-          !o.matchedTxHash &&
-          (o.status === 'pending_payment' || o.status === 'payment_submitted') &&
-          o.knownTxHash &&
-          String(o.knownTxHash).toLowerCase() === txHashNorm
+        const needsRetry = _orders.some(
+          (o) =>
+            o &&
+            !o.matchedTxHash &&
+            (o.status === 'pending_payment' || o.status === 'payment_submitted') &&
+            o.knownTxHash &&
+            String(o.knownTxHash).toLowerCase() === txHashNorm,
         );
         if (!needsRetry) continue;
 
         if (tx.to.toLowerCase() !== SELLER_USDC_ADDRESS.toLowerCase()) continue;
         const seenUsdcValue = Number(tx.value) / 1e6;
         if (seenUsdcValue <= 0) continue;
-        const seenTxObservedAtMs = Number(tx.timeStamp) > 0 ? (Number(tx.timeStamp) * 1000) : Date.now();
+        const seenTxObservedAtMs = Number(tx.timeStamp) > 0 ? Number(tx.timeStamp) * 1000 : Date.now();
         if (_matchPayment(tx.hash, seenUsdcValue, tx.from, seenTxObservedAtMs)) {
           changed = true;
         }
@@ -1067,7 +1217,7 @@ async function _pollUsdc() {
       const usdcValue = Number(tx.value) / 1e6; // USDC has 6 decimals
       if (usdcValue <= 0) continue;
 
-      const txObservedAtMs = Number(tx.timeStamp) > 0 ? (Number(tx.timeStamp) * 1000) : Date.now();
+      const txObservedAtMs = Number(tx.timeStamp) > 0 ? Number(tx.timeStamp) * 1000 : Date.now();
       _matchPayment(tx.hash, usdcValue, tx.from, txObservedAtMs);
     }
 
@@ -1086,14 +1236,14 @@ async function _pollUsdc() {
 async function _fetchUsdcTransfers() {
   // Fetch the last 100 ERC-20 transfers to our address for USDC contract
   const params = new URLSearchParams({
-    chainid:         '1',
-    module:          'account',
-    action:          'tokentx',
+    chainid: '1',
+    module: 'account',
+    action: 'tokentx',
     contractaddress: USDC_CONTRACT,
-    address:         SELLER_USDC_ADDRESS,
-    sort:            'desc',
-    offset:          '100',
-    page:            '1',
+    address: SELLER_USDC_ADDRESS,
+    sort: 'desc',
+    offset: '100',
+    page: '1',
   });
   if (ETHERSCAN_API_KEY) params.set('apikey', ETHERSCAN_API_KEY);
 
@@ -1112,7 +1262,9 @@ async function _fetchUsdcTransfers() {
       return null;
     }
 
-    console.warn(`[${_ts()}] [SaleQueue] Etherscan transient failure (${result.pollResult}) - retry ${attempt + 1}/${ETHERSCAN_REQUEST_RETRIES}`);
+    console.warn(
+      `[${_ts()}] [SaleQueue] Etherscan transient failure (${result.pollResult}) - retry ${attempt + 1}/${ETHERSCAN_REQUEST_RETRIES}`,
+    );
     await _delay(ETHERSCAN_RETRY_DELAY_MS);
   }
 
@@ -1124,7 +1276,7 @@ function _fetchUsdcTransfersOnce(url) {
   return new Promise((resolve) => {
     const req = https.get(url, { timeout: 10_000, headers: { 'User-Agent': 'wattcoin-miner/1.0' } }, (res) => {
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
         try {
           const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -1160,7 +1312,13 @@ function _fetchUsdcTransfersOnce(url) {
 
 function _isRetryableEtherscanError(pollResult) {
   const value = String(pollResult || '').toLowerCase();
-  return value === 'timeout' || value.includes('socket hang up') || value.includes('econnreset') || value.includes('etimedout') || value.includes('timeout');
+  return (
+    value === 'timeout' ||
+    value.includes('socket hang up') ||
+    value.includes('econnreset') ||
+    value.includes('etimedout') ||
+    value.includes('timeout')
+  );
 }
 
 function _delay(ms) {
@@ -1176,7 +1334,12 @@ function _retryUnmatched() {
   let changed = false;
   const stillUnmatched = [];
   for (const utx of _unmatchedTxs) {
-    const matched = _matchPayment(utx.hash, utx.usdcValue, utx.fromEthAddr, utx.txObservedAtMs || utx.receivedAtMs || Date.now());
+    const matched = _matchPayment(
+      utx.hash,
+      utx.usdcValue,
+      utx.fromEthAddr,
+      utx.txObservedAtMs || utx.receivedAtMs || Date.now(),
+    );
     if (matched) {
       changed = true;
     } else {
@@ -1203,21 +1366,19 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
   const isPaymentSufficient = (order) => {
     const required = Number(order && order.usdcRequired);
     if (!Number.isFinite(required) || required <= 0) return false;
-    return (Number(usdcValue) + PAYMENT_EPSILON_USDC) >= required;
+    return Number(usdcValue) + PAYMENT_EPSILON_USDC >= required;
   };
 
   // A transfer hash can only fund one order. A knownTxHash on a still-pending
   // order is expected and must not block matching that same order.
-  const alreadyLinked = _orders.find(o =>
-    o && (
-      (o.matchedTxHash && String(o.matchedTxHash).toLowerCase() === txHashNorm) ||
-      (
-        o.knownTxHash &&
-        String(o.knownTxHash).toLowerCase() === txHashNorm &&
-        o.status !== 'pending_payment' &&
-        o.status !== 'payment_submitted'
-      )
-    )
+  const alreadyLinked = _orders.find(
+    (o) =>
+      o &&
+      ((o.matchedTxHash && String(o.matchedTxHash).toLowerCase() === txHashNorm) ||
+        (o.knownTxHash &&
+          String(o.knownTxHash).toLowerCase() === txHashNorm &&
+          o.status !== 'pending_payment' &&
+          o.status !== 'payment_submitted')),
   );
   if (alreadyLinked) {
     return false;
@@ -1227,13 +1388,11 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
   const _isTxTooOldForOrder = (o) => {
     const createdAtMs = Number(o && o.createdAtMs);
     if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) return false;
-    return txTimeMs < (createdAtMs - MATCH_TX_GRACE_MS);
+    return txTimeMs < createdAtMs - MATCH_TX_GRACE_MS;
   };
 
-  const pendingOrders = _orders.filter(o =>
-    o.status === 'pending_payment' || o.status === 'payment_submitted'
-  );
-  const eligiblePendingOrders = pendingOrders.filter(o => !_isTxTooOldForOrder(o));
+  const pendingOrders = _orders.filter((o) => o.status === 'pending_payment' || o.status === 'payment_submitted');
+  const eligiblePendingOrders = pendingOrders.filter((o) => !_isTxTooOldForOrder(o));
 
   // Fast path: no pending work means there is nothing to match.
   if (eligiblePendingOrders.length === 0) {
@@ -1241,20 +1400,18 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
   }
 
   // ── Step 1: Exact tx hash match (from confirmPayment call) ───────────────
-  const hashMatch = eligiblePendingOrders.find(o =>
-    o.knownTxHash && o.knownTxHash.toLowerCase() === txHashNorm
-  );
+  const hashMatch = eligiblePendingOrders.find((o) => o.knownTxHash && o.knownTxHash.toLowerCase() === txHashNorm);
   if (hashMatch) {
     if (!isPaymentSufficient(hashMatch)) {
       console.warn(
         `[${_ts()}] [SaleQueue] Rejecting underpaid tx for known order ${hashMatch.id}: ` +
-        `paid=${Number(usdcValue).toFixed(6)} required=${Number(hashMatch.usdcRequired).toFixed(6)} tx=${txHash}`
+          `paid=${Number(usdcValue).toFixed(6)} required=${Number(hashMatch.usdcRequired).toFixed(6)} tx=${txHash}`,
       );
       return false;
     }
-    hashMatch.status        = 'queued';
+    hashMatch.status = 'queued';
     hashMatch.matchedTxHash = txHash;
-    hashMatch.matchedAtMs   = Date.now();
+    hashMatch.matchedAtMs = Date.now();
     console.log(`[${_ts()}] [SaleQueue] queued buy added: ${_queueSummary(hashMatch)} tx=${txHash.slice(0, 14)}...`);
     _knownQueuedOrderIds.add(hashMatch.id);
     if (hashMatch._fromServer) _updateServerOrder(hashMatch.id, 'queued', { matchedTxHash: txHash });
@@ -1263,10 +1420,9 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
 
   // ── Step 2: ETH address match against pending orders ─────────────────────
   if (fromEthAddr) {
-    const ethCandidates = eligiblePendingOrders.filter(o =>
-      o.buyerEthAddress &&
-      o.buyerEthAddress.toLowerCase() === fromEthAddr.toLowerCase() &&
-      isPaymentSufficient(o)
+    const ethCandidates = eligiblePendingOrders.filter(
+      (o) =>
+        o.buyerEthAddress && o.buyerEthAddress.toLowerCase() === fromEthAddr.toLowerCase() && isPaymentSufficient(o),
     );
     let ethMatch = null;
     let ethBestDelta = Infinity;
@@ -1278,9 +1434,9 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
       }
     }
     if (ethMatch) {
-      ethMatch.status        = 'queued';
+      ethMatch.status = 'queued';
       ethMatch.matchedTxHash = txHash;
-      ethMatch.matchedAtMs   = Date.now();
+      ethMatch.matchedAtMs = Date.now();
       console.log(`[${_ts()}] [SaleQueue] queued buy added: ${_queueSummary(ethMatch)} tx=${txHash.slice(0, 14)}...`);
       _knownQueuedOrderIds.add(ethMatch.id);
       if (ethMatch._fromServer) _updateServerOrder(ethMatch.id, 'queued', { matchedTxHash: txHash });
@@ -1302,9 +1458,9 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
   }
 
   if (best) {
-    best.status        = 'queued';
+    best.status = 'queued';
     best.matchedTxHash = txHash;
-    best.matchedAtMs   = Date.now();
+    best.matchedAtMs = Date.now();
     console.log(`[${_ts()}] [SaleQueue] queued buy added: ${_queueSummary(best)} tx=${txHash.slice(0, 14)}...`);
     _knownQueuedOrderIds.add(best.id);
     if (best._fromServer) _updateServerOrder(best.id, 'queued', { matchedTxHash: txHash });
@@ -1314,19 +1470,18 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
   // ── Step 4: Link tx hash to an already-queued order with no matchedTxHash ─
   // Handles the case where the order got promoted to 'queued' via another channel
   // (e.g. manual admin action, server sync) before the Etherscan payment was linked.
-  const unlinkedQueued = _orders.filter(o =>
-    (o.status === 'queued' || o.status === 'payment_submitted') && !o.matchedTxHash
+  const unlinkedQueued = _orders.filter(
+    (o) => (o.status === 'queued' || o.status === 'payment_submitted') && !o.matchedTxHash,
   );
-  const eligibleUnlinkedQueued = unlinkedQueued.filter(o => !_isTxTooOldForOrder(o));
+  const eligibleUnlinkedQueued = unlinkedQueued.filter((o) => !_isTxTooOldForOrder(o));
   if (fromEthAddr && eligibleUnlinkedQueued.length > 0) {
-    const ethMatch2 = eligibleUnlinkedQueued.find(o =>
-      o.buyerEthAddress &&
-      o.buyerEthAddress.toLowerCase() === fromEthAddr.toLowerCase() &&
-      isPaymentSufficient(o)
+    const ethMatch2 = eligibleUnlinkedQueued.find(
+      (o) =>
+        o.buyerEthAddress && o.buyerEthAddress.toLowerCase() === fromEthAddr.toLowerCase() && isPaymentSufficient(o),
     );
     if (ethMatch2) {
       ethMatch2.matchedTxHash = txHash;
-      ethMatch2.matchedAtMs   = Date.now();
+      ethMatch2.matchedAtMs = Date.now();
       if (ethMatch2._fromServer) _updateServerOrder(ethMatch2.id, 'queued', { matchedTxHash: txHash });
       return true;
     }
@@ -1334,20 +1489,24 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
   for (const o of eligibleUnlinkedQueued) {
     if (isPaymentSufficient(o)) {
       o.matchedTxHash = txHash;
-      o.matchedAtMs   = Date.now();
+      o.matchedAtMs = Date.now();
       if (o._fromServer) _updateServerOrder(o.id, 'queued', { matchedTxHash: txHash });
       return true;
     }
   }
 
   // ── Nothing matched — buffer for retry ───────────────────────────────────
-  if (!_unmatchedTxs.find(u => u.hash === txHash)) {
+  if (!_unmatchedTxs.find((u) => u.hash === txHash)) {
     _unmatchedTxs.push({ hash: txHash, usdcValue, fromEthAddr, receivedAtMs: Date.now(), txObservedAtMs: txTimeMs });
     _saveUnmatchedTxs();
-    console.warn(`[${_ts()}] [SaleQueue] UNMATCHED $${usdcValue.toFixed(6)} from ${fromEthAddr} tx=${txHash} — buffered (${_unmatchedTxs.length} total)`);
+    console.warn(
+      `[${_ts()}] [SaleQueue] UNMATCHED $${usdcValue.toFixed(6)} from ${fromEthAddr} tx=${txHash} — buffered (${_unmatchedTxs.length} total)`,
+    );
     // Schedule a fast sync+retry in 30s in case a matching order arrives soon
     setTimeout(async () => {
-      try { await _syncServerOrders(); } catch (_) {}
+      try {
+        await _syncServerOrders();
+      } catch (_) {}
       _retryUnmatched();
     }, 30_000);
   }
@@ -1356,7 +1515,7 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
 
 // ─── Flush logic ─────────────────────────────────────────────────────────────
 
-let _flushBusy = false;  // reentrancy guard — prevents concurrent double-flushes
+let _flushBusy = false; // reentrancy guard — prevents concurrent double-flushes
 
 /**
  * Called automatically when a block is mined (regardless of queue size).
@@ -1369,29 +1528,36 @@ async function flushSaleQueue() {
     return;
   }
 
-  const batch = _orders.filter(o => o.status === 'queued');
+  const batch = _orders.filter((o) => o.status === 'queued');
   if (batch.length === 0) return;
 
   _flushBusy = true;
-  console.log(`[${_ts()}] [SaleQueue] Flushing ${batch.length} orders (${batch.reduce((s, o) => s + o.wtcAmount, 0)} WTC)`);
+  console.log(
+    `[${_ts()}] [SaleQueue] Flushing ${batch.length} orders (${batch.reduce((s, o) => s + o.wtcAmount, 0)} WTC)`,
+  );
 
   try {
     for (const order of batch) {
       try {
         const result = _wtcNode.send({
           fromAddress: SALE_WTC_ADDRESS,
-          toAddress:   order.wtcAddress,
-          amount:      order.wtcAmount,
+          toAddress: order.wtcAddress,
+          amount: order.wtcAmount,
         });
-        order.status        = 'delivery_pending';  // mempool tx created — needs a block to confirm
+        order.status = 'delivery_pending'; // mempool tx created — needs a block to confirm
         order.fulfilledTxId = result.txid;
         order.fulfilledAtMs = Date.now();
-        console.log(`[${_ts()}] [SaleQueue] Queued send ${order.wtcAmount} WTC -> ${order.wtcAddress} txid=${result.txid} (awaiting block confirmation)`);
+        console.log(
+          `[${_ts()}] [SaleQueue] Queued send ${order.wtcAmount} WTC -> ${order.wtcAddress} txid=${result.txid} (awaiting block confirmation)`,
+        );
       } catch (e) {
-        order.status      = 'failed';
-        order.failedAtMs  = Date.now();
-        order.failReason  = e && e.message ? e.message : 'unknown';
-        console.warn(`[${_ts()}] [SaleQueue] Failed to send ${order.wtcAmount} WTC -> ${order.wtcAddress}:`, order.failReason);
+        order.status = 'failed';
+        order.failedAtMs = Date.now();
+        order.failReason = e && e.message ? e.message : 'unknown';
+        console.warn(
+          `[${_ts()}] [SaleQueue] Failed to send ${order.wtcAmount} WTC -> ${order.wtcAddress}:`,
+          order.failReason,
+        );
         if (order._fromServer) _updateServerOrder(order.id, 'failed', {});
       }
     }
@@ -1410,7 +1576,7 @@ async function flushSaleQueue() {
  * that were dropped from the mempool (re-queues them).
  */
 function onBlockConfirmed() {
-  const pendingOrders = _orders.filter(o => o.status === 'delivery_pending');
+  const pendingOrders = _orders.filter((o) => o.status === 'delivery_pending');
   if (pendingOrders.length === 0) return;
   let changed = false;
   for (const order of pendingOrders) {
@@ -1423,12 +1589,20 @@ function onBlockConfirmed() {
       continue;
     }
     let txStatus = 'unknown';
-    try { txStatus = _wtcNode ? _wtcNode.getTxStatus(order.fulfilledTxId).status : 'unknown'; } catch (_) {}
+    try {
+      txStatus = _wtcNode ? _wtcNode.getTxStatus(order.fulfilledTxId).status : 'unknown';
+    } catch (_) {}
     if (txStatus === 'confirmed') {
       order.status = 'fulfilled';
       changed = true;
-      console.log(`[${_ts()}] [SaleQueue] Confirmed ${order.wtcAmount} WTC \u2192 ${order.wtcAddress} txid=${order.fulfilledTxId}`);
-      if (order._fromServer) _updateServerOrder(order.id, 'fulfilled', { fulfilledTxId: order.fulfilledTxId, fulfilledAtMs: order.fulfilledAtMs });
+      console.log(
+        `[${_ts()}] [SaleQueue] Confirmed ${order.wtcAmount} WTC \u2192 ${order.wtcAddress} txid=${order.fulfilledTxId}`,
+      );
+      if (order._fromServer)
+        _updateServerOrder(order.id, 'fulfilled', {
+          fulfilledTxId: order.fulfilledTxId,
+          fulfilledAtMs: order.fulfilledAtMs,
+        });
     } else if (txStatus === 'unknown') {
       // Tx was dropped from mempool (e.g. node restart) \u2014 re-queue for next flush
       order.status = 'queued';
@@ -1443,7 +1617,7 @@ function onBlockConfirmed() {
 }
 
 async function _maybeFlushByThreshold() {
-  const queuedWTC = _orders.filter(o => o.status === 'queued').reduce((s, o) => s + o.wtcAmount, 0);
+  const queuedWTC = _orders.filter((o) => o.status === 'queued').reduce((s, o) => s + o.wtcAmount, 0);
   if (queuedWTC >= FLUSH_THRESHOLD_WTC) {
     console.log(`[${_ts()}] [SaleQueue] Threshold reached (${queuedWTC} WTC) - triggering flush`);
     await flushSaleQueue();
@@ -1456,8 +1630,11 @@ function expireOldOrders() {
   const now = Date.now();
   let changed = false;
   for (const o of _orders) {
-    if ((o.status === 'pending_payment' || o.status === 'payment_submitted') && (now - o.createdAtMs) > PAYMENT_EXPIRY_MS) {
-      o.status    = 'expired';
+    if (
+      (o.status === 'pending_payment' || o.status === 'payment_submitted') &&
+      now - o.createdAtMs > PAYMENT_EXPIRY_MS
+    ) {
+      o.status = 'expired';
       o.expiredAtMs = now;
       changed = true;
       console.log(`[${_ts()}] [SaleQueue] Order ${o.id} expired (no payment within 24h)`);
@@ -1468,7 +1645,7 @@ function expireOldOrders() {
   // Prune unmatched TXs older than 48 hours — they can't be matched to expired orders
   const UNMATCHED_TTL_MS = 48 * 60 * 60 * 1000;
   const before = _unmatchedTxs.length;
-  _unmatchedTxs = _unmatchedTxs.filter(u => (now - (u.receivedAtMs || 0)) < UNMATCHED_TTL_MS);
+  _unmatchedTxs = _unmatchedTxs.filter((u) => now - (u.receivedAtMs || 0) < UNMATCHED_TTL_MS);
   if (_unmatchedTxs.length !== before) {
     _saveUnmatchedTxs();
     console.log(`[${_ts()}] [SaleQueue] Pruned ${before - _unmatchedTxs.length} stale unmatched TX(s)`);
@@ -1485,7 +1662,7 @@ function getLastPollStatus() {
 }
 
 function getUnmatchedTxs() {
-  return _unmatchedTxs.map(t => ({ ...t }));
+  return _unmatchedTxs.map((t) => ({ ...t }));
 }
 
 /**
@@ -1493,8 +1670,12 @@ function getUnmatchedTxs() {
  * Used by the IPC status handler so the Buy tab always reflects live server data.
  */
 async function refreshSoldWTC() {
-  try { await _refreshPublicSaleStatus(); } catch (_) {}
-  try { await _syncServerOrders(); } catch (_) {}
+  try {
+    await _refreshPublicSaleStatus();
+  } catch (_) {}
+  try {
+    await _syncServerOrders();
+  } catch (_) {}
   return getSoldWTC();
 }
 

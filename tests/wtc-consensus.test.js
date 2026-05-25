@@ -38,14 +38,14 @@ function makeChainStub() {
     },
     getHeight: () => height,
     getTip: () => tip,
-    getBlockByHash: (h) => blocks.find(b => b.hash === h) || null,
+    getBlockByHash: (h) => blocks.find((b) => b.hash === h) || null,
     append: (block) => {
       height = block.height;
       tip = block;
       blocks.push(block);
     },
-    nextBlockReward: () => height <= 2000 ? 500 : height <= 6000 ? 250 : 0,
-    rewardForHeight: (h) => h <= 2000 ? 500 : h <= 6000 ? 250 : 0,
+    nextBlockReward: () => (height <= 2000 ? 500 : height <= 6000 ? 250 : 0),
+    rewardForHeight: (h) => (h <= 2000 ? 500 : h <= 6000 ? 250 : 0),
   };
 }
 
@@ -70,7 +70,10 @@ function it(name, fn) {
     if (result && typeof result.then === 'function') {
       return result.then(
         () => console.log(`  ✓ ${name}`),
-        (e) => { console.error(`  ✗ ${name}: ${e.message}`); throw e; }
+        (e) => {
+          console.error(`  ✗ ${name}: ${e.message}`);
+          throw e;
+        },
       );
     }
     console.log(`  ✓ ${name}`);
@@ -99,7 +102,6 @@ function makeConsensus(opts = {}) {
 }
 
 describe('wtc-consensus — construction and initialization', () => {
-
   it('constructs with default state', () => {
     const c = makeConsensus();
     assert.ok(c instanceof Consensus);
@@ -119,11 +121,9 @@ describe('wtc-consensus — construction and initialization', () => {
     c.resetTracking();
     assert.strictEqual(c.getStatus().pendingProposals, 0);
   });
-
 });
 
 describe('wtc-consensus — proposeBlock with no peers', () => {
-
   it('commits block immediately when no peers', async () => {
     const chain = makeChainStub();
     const c = makeConsensus({ chain });
@@ -158,11 +158,9 @@ describe('wtc-consensus — proposeBlock with no peers', () => {
     assert.strictEqual(result.ok, false);
     assert.ok(result.reason);
   });
-
 });
 
 describe('wtc-consensus — receiveProposal', () => {
-
   it('accepts valid proposal and returns signed vote', async () => {
     const chain = makeChainStub();
     const kp = generateKeypair();
@@ -193,11 +191,9 @@ describe('wtc-consensus — receiveProposal', () => {
     const result = await c.receiveProposal(null, 'http://peer1');
     assert.strictEqual(result.ok, false);
   });
-
 });
 
 describe('wtc-consensus — receiveVote', () => {
-
   it('rejects vote for unknown proposal', () => {
     const c = makeConsensus();
     const result = c.receiveVote({ blockHash: 'unknown', voter: 'wtc1q', sig: '0'.repeat(130) });
@@ -211,11 +207,9 @@ describe('wtc-consensus — receiveVote', () => {
     const result = c.receiveVote({ blockHash: 'test-hash', voter: 'wtc1qfake', sig: 'bad-sig' });
     assert.strictEqual(result.ok, false);
   });
-
 });
 
 describe('wtc-consensus — validateBlock (internal)', () => {
-
   it('rejects non-object block', () => {
     const c = makeConsensus();
     const err = c._validateBlock(null);
@@ -238,11 +232,9 @@ describe('wtc-consensus — validateBlock (internal)', () => {
     });
     assert.ok(err);
   });
-
 });
 
 describe('wtc-consensus — quorum calculations', () => {
-
   it('voteWeight returns 1 when no energy contributions', () => {
     const c = makeConsensus();
     assert.strictEqual(c._voteWeight('wtc1qany'), 1);
@@ -250,7 +242,7 @@ describe('wtc-consensus — quorum calculations', () => {
 
   it('voteWeight returns energy contribution when available', () => {
     const c = makeConsensus({
-      getEnergyContributions: () => ({ 'wtc1qminer': 5000 }),
+      getEnergyContributions: () => ({ wtc1qminer: 5000 }),
     });
     assert.strictEqual(c._voteWeight('wtc1qminer'), 5000);
     assert.strictEqual(c._voteWeight('wtc1qunknown'), 0);
@@ -264,20 +256,18 @@ describe('wtc-consensus — quorum calculations', () => {
 
   it('_countQuorum: N>=2 peers needs ceil((N+1)*2/3)', () => {
     const c = makeConsensus();
-    assert.strictEqual(c._countQuorum(2), Math.ceil(3 * 2/3));
-    assert.strictEqual(c._countQuorum(5), Math.ceil(6 * 2/3));
-    assert.strictEqual(c._countQuorum(10), Math.ceil(11 * 2/3));
+    assert.strictEqual(c._countQuorum(2), Math.ceil((3 * 2) / 3));
+    assert.strictEqual(c._countQuorum(5), Math.ceil((6 * 2) / 3));
+    assert.strictEqual(c._countQuorum(10), Math.ceil((11 * 2) / 3));
   });
 
   it('_quorumWeight falls back to count-based when no contributions', () => {
     const c = makeConsensus({ getActivePeers: () => ['http://a', 'http://b'] });
-    assert.strictEqual(c._quorumWeight(), Math.ceil(3 * 2/3));
+    assert.strictEqual(c._quorumWeight(), Math.ceil((3 * 2) / 3));
   });
-
 });
 
 describe('wtc-consensus — getStatus and public accessors', () => {
-
   it('getStatus returns chain tip info', () => {
     const c = makeConsensus();
     const s = c.getStatus();
@@ -306,7 +296,6 @@ describe('wtc-consensus — getStatus and public accessors', () => {
     assert.ok(called);
     assert.ok(result.ok);
   });
-
 });
 
 if (require.main === module) {

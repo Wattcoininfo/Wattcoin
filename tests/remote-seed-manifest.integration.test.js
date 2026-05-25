@@ -21,9 +21,7 @@ function normalizePeerUrl(candidate) {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
     const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80));
     if (!Number.isInteger(port) || port <= 1023) return '';
-    const pathname = parsed.pathname && parsed.pathname !== '/'
-      ? parsed.pathname.replace(/\/+$/, '')
-      : '';
+    const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/+$/, '') : '';
     return `${parsed.protocol}//${parsed.hostname}:${port}${pathname}`;
   } catch (_) {
     return '';
@@ -63,10 +61,7 @@ async function run() {
           statusCode: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            seedPeers: [
-              { url: 'http://198.51.100.24:39310' },
-              { url: 'http://198.51.100.24:39310' },
-            ],
+            seedPeers: [{ url: 'http://198.51.100.24:39310' }, { url: 'http://198.51.100.24:39310' }],
           }),
         };
       },
@@ -86,7 +81,11 @@ async function run() {
       }),
     });
     const malformedPeers = await malformedManager.refreshRemoteSeedPeers({ enabled: true });
-    assert.deepStrictEqual(malformedPeers, ['http://198.51.100.24:39310'], 'malformed manifest should fall back to cached peers');
+    assert.deepStrictEqual(
+      malformedPeers,
+      ['http://198.51.100.24:39310'],
+      'malformed manifest should fall back to cached peers',
+    );
 
     const timeoutManager = createManager(baseDir, {
       runtimeConfig,
@@ -96,7 +95,11 @@ async function run() {
       },
     });
     const timeoutPeers = await timeoutManager.refreshRemoteSeedPeers({ enabled: true });
-    assert.deepStrictEqual(timeoutPeers, ['http://198.51.100.24:39310'], 'timeout should also fall back to cached peers');
+    assert.deepStrictEqual(
+      timeoutPeers,
+      ['http://198.51.100.24:39310'],
+      'timeout should also fall back to cached peers',
+    );
 
     const freshManager = createManager(baseDir, {
       runtimeConfig,
@@ -106,7 +109,11 @@ async function run() {
       },
     });
     const cachedPeers = freshManager.loadCachedRemoteSeedPeers();
-    assert.deepStrictEqual(cachedPeers, ['http://198.51.100.24:39310'], 'fresh manager should reuse cached remote peers from disk');
+    assert.deepStrictEqual(
+      cachedPeers,
+      ['http://198.51.100.24:39310'],
+      'fresh manager should reuse cached remote peers from disk',
+    );
 
     const effectiveSeedPeers = freshManager.buildEffectiveSeedPeers({
       network: 'wtc-mainnet',
@@ -117,7 +124,7 @@ async function run() {
     assert.deepStrictEqual(
       effectiveSeedPeers,
       ['http://62.65.200.145:39310', 'http://198.51.100.24:39310'],
-      'fresh-node bootstrap set should include cached remote backup peers'
+      'fresh-node bootstrap set should include cached remote backup peers',
     );
 
     const availability = new Map([
@@ -128,7 +135,7 @@ async function run() {
     assert.strictEqual(
       bootstrapPeer,
       'http://198.51.100.24:39310',
-      'fresh-node bootstrap should still have a reachable backup when the primary seed is unavailable'
+      'fresh-node bootstrap should still have a reachable backup when the primary seed is unavailable',
     );
 
     console.log('remote seed manifest integration tests passed');

@@ -27,18 +27,16 @@ function normalizeProbeReceiptSignature(signature) {
 function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
   if (!receipt || typeof receipt !== 'object') return null;
   const normalized = {
-    version:         Math.max(PROBE_RECEIPT_VERSION, Math.floor(toSafeNumber(receipt.version) || PROBE_RECEIPT_VERSION)),
-    probeId:         String(receipt.probeId || '').trim(),
+    version: Math.max(PROBE_RECEIPT_VERSION, Math.floor(toSafeNumber(receipt.version) || PROBE_RECEIPT_VERSION)),
+    probeId: String(receipt.probeId || '').trim(),
     verifierAddress: String(receipt.verifierAddress || '').trim(),
-    workerId:        String(receipt.workerId || '').trim(),
-    type:            String(receipt.type || '').trim(),
-    ok:              !!receipt.ok,
-    wallClockMs:     Math.max(0, Math.round(toSafeNumber(receipt.wallClockMs))),
-    ts:              Math.max(0, Math.round(toSafeNumber(receipt.ts))),
-    chainIndex:      Math.max(0, Math.round(toSafeNumber(receipt.chainIndex))),
-    chainHead:       receipt.chainHead === null || receipt.chainHead === undefined
-      ? null
-      : String(receipt.chainHead).trim(),
+    workerId: String(receipt.workerId || '').trim(),
+    type: String(receipt.type || '').trim(),
+    ok: !!receipt.ok,
+    wallClockMs: Math.max(0, Math.round(toSafeNumber(receipt.wallClockMs))),
+    ts: Math.max(0, Math.round(toSafeNumber(receipt.ts))),
+    chainIndex: Math.max(0, Math.round(toSafeNumber(receipt.chainIndex))),
+    chainHead: receipt.chainHead === null || receipt.chainHead === undefined ? null : String(receipt.chainHead).trim(),
   };
   if (includeSignature) {
     normalized.signature = normalizeProbeReceiptSignature(receipt.signature || receipt.sig || '');
@@ -108,9 +106,7 @@ function normalizeBlockProbeAttestation(block) {
   return {
     attestationVersion: BLOCK_ATTESTATION_VERSION,
     peerProbeVerified,
-    probeReceipt: peerProbeVerified
-      ? normalizeProbeReceipt(block && block.probeReceipt)
-      : null,
+    probeReceipt: peerProbeVerified ? normalizeProbeReceipt(block && block.probeReceipt) : null,
   };
 }
 

@@ -49,9 +49,7 @@ function createRoundLedger(options = {}) {
   function computeLedgerSig(obj) {
     const secret = typeof signingSecret === 'function' ? signingSecret() : signingSecret;
     if (!secret) return null;
-    return crypto.createHmac('sha256', Buffer.from(secret, 'utf8'))
-      .update(JSON.stringify(obj))
-      .digest('hex');
+    return crypto.createHmac('sha256', Buffer.from(secret, 'utf8')).update(JSON.stringify(obj)).digest('hex');
   }
 
   function ensureDir() {
@@ -104,7 +102,10 @@ function createRoundLedger(options = {}) {
       if (!state.currentRound.contributionsWh || typeof state.currentRound.contributionsWh !== 'object') {
         state.currentRound.contributionsWh = {};
       }
-      if (!state.currentRound.contributionUpdatedAtMs || typeof state.currentRound.contributionUpdatedAtMs !== 'object') {
+      if (
+        !state.currentRound.contributionUpdatedAtMs ||
+        typeof state.currentRound.contributionUpdatedAtMs !== 'object'
+      ) {
         state.currentRound.contributionUpdatedAtMs = {};
       }
       if (!Array.isArray(state.rounds)) state.rounds = [];
@@ -216,7 +217,7 @@ function createRoundLedger(options = {}) {
     }
 
     state.currentRound.contributionsWh[key] = Number(nextTotal.toFixed(8));
-  state.currentRound.contributionUpdatedAtMs[key] = normalizedUpdatedAtMs > 0 ? normalizedUpdatedAtMs : Date.now();
+    state.currentRound.contributionUpdatedAtMs[key] = normalizedUpdatedAtMs > 0 ? normalizedUpdatedAtMs : Date.now();
     save();
     return {
       ok: true,
@@ -229,8 +230,7 @@ function createRoundLedger(options = {}) {
 
   function getCurrentRoundSnapshot() {
     const contributionsWh = { ...(state.currentRound.contributionsWh || {}) };
-    const totalWh = Object.values(contributionsWh)
-      .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+    const totalWh = Object.values(contributionsWh).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
     return {
       id: Number(state.currentRound.id) || 0,
       startedAtMs: Number(state.currentRound.startedAtMs) || 0,
@@ -270,9 +270,7 @@ function createRoundLedger(options = {}) {
       if (!round || typeof round !== 'object') continue;
       if (round.maturedAtHeight) continue;
       if ((Number(round.matureAtHeight) || 0) > height) continue;
-      const shares = round.sharesByAddress && typeof round.sharesByAddress === 'object'
-        ? round.sharesByAddress
-        : {};
+      const shares = round.sharesByAddress && typeof round.sharesByAddress === 'object' ? round.sharesByAddress : {};
       for (const [address, amountRaw] of Object.entries(shares)) {
         const amount = Math.max(0, Number(amountRaw) || 0);
         if (amount <= 0) continue;
@@ -310,9 +308,8 @@ function createRoundLedger(options = {}) {
     const rewardCoins = Number.isFinite(Number(params.rewardCoins))
       ? Math.max(0, Number(params.rewardCoins))
       : rewardForRoundIndex(roundIndex);
-    const suppliedContributions = params && params.contributionsWh && typeof params.contributionsWh === 'object'
-      ? params.contributionsWh
-      : null;
+    const suppliedContributions =
+      params && params.contributionsWh && typeof params.contributionsWh === 'object' ? params.contributionsWh : null;
     const contributions = suppliedContributions
       ? { ...suppliedContributions }
       : { ...(state.currentRound.contributionsWh || {}) };

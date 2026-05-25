@@ -26,8 +26,8 @@
  * and subsequently distributed manually by the team.
  */
 
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
 const { txHash, verifySignature } = require('./wtc-address');
@@ -40,29 +40,29 @@ const NFT_COLLECTION = (() => {
   const tokens = [];
   for (let i = 1; i <= 10; i++) {
     tokens.push({
-      nftId:  `vhpn-${i}`,
-      tier:   'gold',
+      nftId: `vhpn-${i}`,
+      tier: 'gold',
       shares: 5,
-      name:   `Wattcoin Vortex Gold #${i}`,
-      image:  'Vortex NFT Gold.jpg',
+      name: `Wattcoin Vortex Gold #${i}`,
+      image: 'Vortex NFT Gold.jpg',
     });
   }
   for (let i = 11; i <= 30; i++) {
     tokens.push({
-      nftId:  `vhpn-${i}`,
-      tier:   'silver',
+      nftId: `vhpn-${i}`,
+      tier: 'silver',
       shares: 3,
-      name:   `Wattcoin Vortex Silver #${i}`,
-      image:  'Vortex NFT Silver.jpg',
+      name: `Wattcoin Vortex Silver #${i}`,
+      image: 'Vortex NFT Silver.jpg',
     });
   }
   for (let i = 31; i <= 60; i++) {
     tokens.push({
-      nftId:  `vhpn-${i}`,
-      tier:   'bronze',
+      nftId: `vhpn-${i}`,
+      tier: 'bronze',
       shares: 1,
-      name:   `Wattcoin Vortex Bronze #${i}`,
-      image:  'Vortex NFT Bronze.jpg',
+      name: `Wattcoin Vortex Bronze #${i}`,
+      image: 'Vortex NFT Bronze.jpg',
     });
   }
   return tokens;
@@ -75,7 +75,7 @@ class NftStore {
    * @param {{ dataDir: string, signingSecret: string }} opts
    */
   constructor({ dataDir, signingSecret }) {
-    this._file   = path.join(dataDir, 'wtc-nfts.json');
+    this._file = path.join(dataDir, 'wtc-nfts.json');
     this._secret = signingSecret;
     this._tokens = {};
     this._nonces = {};
@@ -93,13 +93,13 @@ class NftStore {
     for (const def of NFT_COLLECTION) {
       if (this._tokens[def.nftId]) continue;
       this._tokens[def.nftId] = {
-        owner:          MINTER_ADDRESS,
+        owner: MINTER_ADDRESS,
         mintedAtHeight: 0,
         metadata: {
-          name:   def.name,
-          tier:   def.tier,
+          name: def.name,
+          tier: def.tier,
           shares: def.shares,
-          image:  def.image,
+          image: def.image,
           mintedAtHeight: 0,
         },
       };
@@ -111,8 +111,7 @@ class NftStore {
   // ─── Persistence ────────────────────────────────────────────────────────────
 
   _hmac(data) {
-    return crypto.createHmac('sha256', this._secret)
-      .update(JSON.stringify(data)).digest('hex');
+    return crypto.createHmac('sha256', this._secret).update(JSON.stringify(data)).digest('hex');
   }
 
   _load() {
@@ -135,12 +134,10 @@ class NftStore {
     try {
       fs.mkdirSync(path.dirname(this._file), { recursive: true });
       const data = { tokens: this._tokens, nonces: this._nonces };
-      fs.writeFileSync(
-        this._file,
-        JSON.stringify({ ...data, _sig: this._hmac(data) }, null, 2),
-        'utf8'
-      );
-    } catch (_) { /* non-fatal */ }
+      fs.writeFileSync(this._file, JSON.stringify({ ...data, _sig: this._hmac(data) }, null, 2), 'utf8');
+    } catch (_) {
+      /* non-fatal */
+    }
   }
 
   // ─── NFT nonces ─────────────────────────────────────────────────────────────
@@ -164,7 +161,7 @@ class NftStore {
   applyBlock(block) {
     let changed = false;
 
-    for (const tx of (block.transactions || [])) {
+    for (const tx of block.transactions || []) {
       if (!tx || !tx.type) continue;
 
       if (tx.type === 'nft_mint') {
@@ -181,19 +178,24 @@ class NftStore {
           continue;
         }
         // NFT must belong to the defined collection
-        const def = NFT_COLLECTION.find(e => e.nftId === tx.nftId);
+        const def = NFT_COLLECTION.find((e) => e.nftId === tx.nftId);
         if (!def) {
           console.warn(`[NftStore] nft_mint ${tx.nftId} skipped: not in collection`);
           continue;
         }
 
-        const metadata = { name: def.name, tier: def.tier, shares: def.shares, image: def.image, mintedAtHeight: block.height };
+        const metadata = {
+          name: def.name,
+          tier: def.tier,
+          shares: def.shares,
+          image: def.image,
+          mintedAtHeight: block.height,
+        };
 
         this._tokens[tx.nftId] = { owner: tx.to, metadata, mintedAtHeight: block.height };
         this._bumpNonce(tx.from);
         changed = true;
         console.log(`[NftStore] minted ${tx.nftId} (${metadata.name || tx.nftId}) → ${tx.to.slice(0, 16)}...`);
-
       } else if (tx.type === 'nft_transfer') {
         if (!tx.nftId || !tx.from || !tx.to) {
           console.warn(`[NftStore] nft_transfer ${tx.id || '?'} skipped: missing fields`);
@@ -227,7 +229,7 @@ class NftStore {
     this._tokens = {};
     this._nonces = {};
     this._ensureCollectionMinted();
-    for (const block of (blocks || [])) {
+    for (const block of blocks || []) {
       this.applyBlock(block);
     }
     this._save();
@@ -257,17 +259,17 @@ class NftStore {
 
   /** Returns the full collection state (all 60 tokens with current owner or null). */
   getAllNfts() {
-    return NFT_COLLECTION.map(def => {
+    return NFT_COLLECTION.map((def) => {
       const token = this._tokens[def.nftId];
       return {
-        nftId:          def.nftId,
-        tier:           def.tier,
-        shares:         def.shares,
-        name:           def.name,
-        image:          def.image,
-        owner:          token ? token.owner : null,
+        nftId: def.nftId,
+        tier: def.tier,
+        shares: def.shares,
+        name: def.name,
+        image: def.image,
+        owner: token ? token.owner : null,
         mintedAtHeight: token ? token.mintedAtHeight : null,
-        minted:         !!token,
+        minted: !!token,
       };
     });
   }
@@ -304,8 +306,8 @@ class NftStore {
 
     if (tx.type === 'nft_mint') {
       if (tx.from !== MINTER_ADDRESS) return false;
-      if (this._tokens[tx.nftId]) return false;  // already minted
-      if (!NFT_COLLECTION.find(e => e.nftId === tx.nftId)) return false;  // not in collection
+      if (this._tokens[tx.nftId]) return false; // already minted
+      if (!NFT_COLLECTION.find((e) => e.nftId === tx.nftId)) return false; // not in collection
     }
 
     if (tx.type === 'nft_transfer') {
@@ -315,7 +317,12 @@ class NftStore {
 
     try {
       const sigInput = JSON.stringify({
-        id: tx.id, type: tx.type, nftId: tx.nftId, from: tx.from, to: tx.to, nonce: tx.nonce,
+        id: tx.id,
+        type: tx.type,
+        nftId: tx.nftId,
+        from: tx.from,
+        to: tx.to,
+        nonce: tx.nonce,
       });
       return verifySignature(txHash(sigInput), tx.sig, tx.from);
     } catch (_) {
@@ -335,7 +342,7 @@ class NftStore {
    * @returns {{ minted: string[], skipped: string[] }}
    */
   directMintCollection(toAddress) {
-    const minted  = [];
+    const minted = [];
     const skipped = [];
     for (const def of NFT_COLLECTION) {
       if (this._tokens[def.nftId]) {
@@ -343,13 +350,13 @@ class NftStore {
         continue;
       }
       this._tokens[def.nftId] = {
-        owner:          toAddress,
-        mintedAtHeight: 0,   // 0 = direct / genesis mint
+        owner: toAddress,
+        mintedAtHeight: 0, // 0 = direct / genesis mint
         metadata: {
-          name:   def.name,
-          tier:   def.tier,
+          name: def.name,
+          tier: def.tier,
           shares: def.shares,
-          image:  def.image,
+          image: def.image,
           mintedAtHeight: 0,
         },
       };
