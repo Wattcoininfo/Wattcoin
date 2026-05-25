@@ -55,9 +55,6 @@ class Mempool {
     if (this._txs.has(tx.id)) {
       return { ok: false, code: 'DUPLICATE', message: `tx ${tx.id.slice(0, 12)} already in pool` };
     }
-    if (this._txs.size >= MEMPOOL_MAX_SIZE) {
-      return { ok: false, code: 'POOL_FULL', message: 'mempool is full' };
-    }
 
     // ── NFT transactions bypass coin amount/fee validation ────────────────
     if (tx.type === 'nft_mint' || tx.type === 'nft_transfer') {
@@ -81,6 +78,11 @@ class Mempool {
       }
       if (typeof tx.timestamp !== 'number' || !Number.isFinite(tx.timestamp)) {
         return { ok: false, code: 'INVALID_TIME', message: 'timestamp required' };
+      }
+      if (this._txs.size >= MEMPOOL_MAX_SIZE) {
+        if (!this._evictLowestFee(tx.fee || 0)) {
+          return { ok: false, code: 'POOL_FULL', message: 'mempool is full, fee too low' };
+        }
       }
       this._txs.set(tx.id, { ...tx, addedAt: Date.now() });
       return { ok: true };
@@ -117,9 +119,35 @@ class Mempool {
     if (!tx.sig || typeof tx.sig !== 'object') {
       return { ok: false, code: 'MISSING_SIG', message: 'signature object required' };
     }
+    if (this._txs.size >= MEMPOOL_MAX_SIZE) {
+      if (!this._evictLowestFee(tx.fee)) {
+        return { ok: false, code: 'POOL_FULL', message: 'mempool is full, fee too low' };
+      }
+    }
 
     this._txs.set(tx.id, { ...tx, addedAt: Date.now() });
     return { ok: true };
+  }
+
+  /**
+   * Evict the lowest-fee transaction to make room for a higher-fee one.
+   * Returns true if eviction succeeded, false if the new fee is too low.
+   */
+  _evictLowestFee(newFee) {
+    let lowestId = null;
+    let lowestFee = Infinity;
+    for (const [id, existing] of this._txs) {
+      const f = existing.fee || 0;
+      if (f < lowestFee) {
+        lowestFee = f;
+        lowestId = id;
+      }
+    }
+    if (newFee > lowestFee) {
+      this._txs.delete(lowestId);
+      return true;
+    }
+    return false;
   }
 
   /** Remove a single transaction by ID. */

@@ -94,9 +94,8 @@ async function run() {
     try {
       const victim = generateKeypair();
       const attacker = generateKeypair();
-      const node = makeNode('sig', dir);
       writeGenesis(dir, victim.address);
-      node._initGenesis && node._chain && null; // genesis already created in constructor
+      const node = makeNode('sig', dir);
 
       // Attacker builds a raw tx claiming victim as sender
       const nonce = node._accounts.getBalance(victim.address).nonce;
