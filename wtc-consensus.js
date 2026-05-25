@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 /**
  * wtc-consensus.js — Proof-of-Energy BFT consensus
@@ -54,10 +55,11 @@ class Consensus {
    *   getActivePeers: () => string[],
    *   requestPeerJson: (baseUrl: string, method: string, path: string, body?: any) => Promise<any>,
    *   privateKey:     Buffer,
-  *   allowPartialQuorumCommit?: boolean,
+   *   allowPartialQuorumCommit?: boolean,
+   *   getEnergyContributions?: () => { [address: string]: number },
    * }} opts
    */
-  constructor({ chain, accounts, mempool, getActivePeers, requestPeerJson, privateKey, allowPartialQuorumCommit = true, nfts = null }) {
+  constructor({ chain, accounts, mempool, getActivePeers, requestPeerJson, privateKey, allowPartialQuorumCommit = true, nfts = null, getEnergyContributions }) {
     this._chain    = chain;
     this._accounts = accounts;
     this._mempool  = mempool;
@@ -66,9 +68,10 @@ class Consensus {
     this._rpc      = requestPeerJson;
     this._privKey  = privateKey;    // Buffer — secp256k1 private key
     this._allowPartialQuorumCommit = !!allowPartialQuorumCommit;
+    this._getEnergyContributions = typeof getEnergyContributions === 'function' ? getEnergyContributions : () => ({});
 
     this._localAddr = '';           // set by setLocalAddress()
-    this._pending   = new Map();    // blockHash → { block, votes: Map(addr → sigHex) }
+    this._pending   = new Map();    // blockHash → { block, votes: Map(addr → sigHex), voteWeight: Number }
     this._committed = new Set();    // committed block hashes (dedup guard)
   }
 
@@ -105,7 +108,8 @@ class Consensus {
     // Self-vote
     const selfSig = this._signBlock(block);
     const votes   = new Map([[proposer, selfSig]]);
-    this._pending.set(block.hash, { block, votes });
+    const voteWeight = this._voteWeight(proposer);
+    this._pending.set(block.hash, { block, votes, voteWeight });
 
     // Broadcast to peers and collect votes in parallel
     const peers = this._peers();
@@ -113,22 +117,27 @@ class Consensus {
       await this._broadcastAndCollect(block, votes, peers);
     }
 
-    // Commit (with or without full quorum — energy proof guarantees safety)
-    const quorum = this._quorumSize(peers.length);
-    if (votes.size < quorum) {
+    // Compute total weight from all collected votes (proposer + peers)
+    const totalWeight = Array.from(votes.keys()).reduce((w, addr) => w + this._voteWeight(addr), 0);
+    const entry = this._pending.get(block.hash);
+    if (entry) entry.voteWeight = totalWeight;
+
+    // Commit (with or without full energy quorum)
+    const quorumWeight = this._quorumWeight();
+    if (totalWeight < quorumWeight) {
       if (!this._allowPartialQuorumCommit) {
         return {
           ok: false,
           code: 'QUORUM_NOT_REACHED',
-          reason: `quorum not reached: ${votes.size}/${quorum}`,
+          reason: `quorum not reached: weight ${totalWeight}/${quorumWeight}`,
           collectedVotes: votes.size,
-          requiredVotes: quorum,
+          requiredWeight: quorumWeight,
           height: block.height,
           hash: block.hash,
         };
       }
       console.warn(
-        `[Consensus] Committing block ${block.height} with ${votes.size}/${quorum} votes (partial quorum)`
+        `[Consensus] Committing block ${block.height} with weight ${totalWeight}/${quorumWeight} (partial quorum, ${votes.size} votes)`
       );
     }
 
@@ -166,6 +175,7 @@ class Consensus {
     this._pending.set(block.hash, {
       block,
       votes: new Map([[this._localAddr, sig]]),
+      voteWeight: this._voteWeight(this._localAddr),
     });
     return { ok: true, signer: this._localAddr, sig };
   }
@@ -186,16 +196,17 @@ class Consensus {
     }
 
     entry.votes.set(voter, sig);
+    entry.voteWeight = (entry.voteWeight || 0) + this._voteWeight(voter);
 
-    const quorum = this._quorumSize(this._peers().length);
-    if (entry.votes.size >= quorum) {
+    const quorumWeight = this._quorumWeight();
+    if (entry.voteWeight >= quorumWeight) {
       // Commit asynchronously to avoid blocking the HTTP response
       setImmediate(() => {
         this._commit(entry.block, entry.votes).catch(() => {});
       });
     }
 
-    return { ok: true, votes: entry.votes.size };
+    return { ok: true, votes: entry.votes.size, voteWeight: entry.voteWeight };
   }
 
   /**
@@ -235,11 +246,38 @@ class Consensus {
   // ─── Internal helpers ─────────────────────────────────────────────────────
 
   /**
-   * Required quorum votes:
+   * Vote weight for a given address, based on its contributed energy in the
+   * current round.  Falls back to weight=1 (count-based) when no energy
+   * tracking is available.
+   */
+  _voteWeight(address) {
+    const contributions = this._getEnergyContributions();
+    const keys = Object.keys(contributions);
+    if (keys.length === 0) return 1;
+    return Number(contributions[address]) || 0;
+  }
+
+  /**
+   * Quorum weight threshold — sum of all participants' contributed energy
+   * × 2/3.  Falls back to a count-based quorum when no energy tracking
+   * data is available.
+   */
+  _quorumWeight() {
+    const contributions = this._getEnergyContributions();
+    const entries = Object.entries(contributions);
+    if (entries.length === 0) {
+      return this._countQuorum(this._peers().length);
+    }
+    const totalWh = entries.reduce((s, [, v]) => s + (Number(v) || 0), 0);
+    return Math.max(1, Math.ceil(totalWh * QUORUM_FRACTION));
+  }
+
+  /**
+   * Legacy count-based quorum (used as fallback when energy data absent):
    *   0-1 known peers → 1 vote (self-sufficient)
    *   N >= 2 peers    → ceil((N+1) × 2/3)
    */
-  _quorumSize(knownPeers) {
+  _countQuorum(knownPeers) {
     if (knownPeers <= 1) return 1;
     return Math.ceil((knownPeers + 1) * QUORUM_FRACTION);
   }
@@ -328,6 +366,26 @@ class Consensus {
     const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer });
     if (!attestationCheck.ok) {
       return attestationCheck.reason;
+    }
+
+    // Validate every transaction signature in the block.
+    // The local proposer always calls _isTxValid before including a tx, but
+    // a peer-supplied proposal may contain forged transactions.  Signature
+    // verification prevents inclusion of arbitrary/spoofed transfers.
+    if (Array.isArray(block.transactions)) {
+      for (let i = 0; i < block.transactions.length; i++) {
+        const tx = block.transactions[i];
+        if (!tx || typeof tx !== 'object') return `invalid tx at index ${i}`;
+        // NFT transaction semantics are validated by NftStore at applyBlock time.
+        // Signature verification still applies: NFT txns are signed the same way.
+        if (!tx.from || !tx.to || !tx.sig) return `tx ${i} missing from/to/sig`;
+        if (typeof tx.sig.r !== 'string' || typeof tx.sig.s !== 'string') return `tx ${i} invalid sig format`;
+        const sigInput = JSON.stringify({
+          id: tx.id, from: tx.from, to: tx.to,
+          amount: tx.amount, fee: tx.fee, nonce: tx.nonce,
+        });
+        if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) return `tx ${i} signature mismatch`;
+      }
     }
 
     return null;  // valid

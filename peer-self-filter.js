@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 
 function isSelfPeerUrlCandidate(candidate, { selfAdvertisedUrls = [], listenPort = 0, localHosts = [] } = {}) {

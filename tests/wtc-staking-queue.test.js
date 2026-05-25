@@ -51,10 +51,13 @@ async function silenceLogsAsync(fn) {
  * Returns a mock wtcNode with configurable pool balance and send behaviour.
  * node._calls contains the arguments of every send() invocation.
  */
-function makeMockNode({ poolWtc = 1_000_000, sendTxid = 'mock-txid', sendThrows = null } = {}) {
+function makeMockNode({ poolWtc = 1_000_000, stakerWtc = null, sendTxid = 'mock-txid', sendThrows = null } = {}) {
   const calls = [];
   return {
-    getBalance: (_addr) => ({ confirmed: poolWtc, unmatured: 0 }),
+    getBalance: (_addr) => {
+      if (_addr === 'wtc1q-alice' && stakerWtc !== null) return { confirmed: stakerWtc, unmatured: 0 };
+      return { confirmed: poolWtc, unmatured: 0 };
+    },
     send: (opts) => {
       calls.push({ ...opts });
       if (sendThrows) throw new Error(sendThrows);
@@ -555,7 +558,7 @@ async function testFlushPaysMultipleStakers() {
 
 async function testFlushSkipsWhenPoolBalanceIsZero() {
   const dir = makeTmpDir();
-  const node = makeMockNode({ poolWtc: 0 });
+  const node = makeMockNode({ poolWtc: 0, stakerWtc: 10_000 });
   const warnMsgs = [];
   silenceLogs(() => {
     initQueue(dir, node);
@@ -582,7 +585,7 @@ async function testFlushSkipsWhenPoolBalanceIsZero() {
 async function testFlushMarksFailedWhenPoolInsufficient() {
   const dir = makeTmpDir();
   // Pool has 500 WTC but reward for 100 000 staked @ 10% APY = 10 000
-  const node = makeMockNode({ poolWtc: 500 });
+  const node = makeMockNode({ poolWtc: 500, stakerWtc: 100_000 });
   silenceLogs(() => {
     initQueue(dir, node);
     sq.stakeWtc({ fromAddress: 'wtc1q-alice', wtcAmount: 100_000 });

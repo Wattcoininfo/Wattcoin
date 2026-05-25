@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /counter-api/
+Disallow: /elec-price-api/
+Disallow: /sale-api/
+Disallow: /artifacts/
+Disallow: /build/
+Disallow: /node_modules/
+
+Sitemap: https://wattcoin.ee/sitemap.xml

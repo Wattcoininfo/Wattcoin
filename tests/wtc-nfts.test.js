@@ -80,68 +80,59 @@ function testCollectionNftIdFormat() {
   }
 }
 
-// ─── Empty store ─────────────────────────────────────────────────────────────
+// ─── Pre-populated collection ────────────────────────────────────────────────
 
-function testFreshStoreIsEmpty() {
+function testFreshStoreHasAllNftsMinted() {
   const dir = makeTmpDir();
   const store = makeStore(dir);
-  assert.strictEqual(store.getAllNfts().filter(n => n.minted).length, 0, 'new store has no minted tokens');
-  assert.strictEqual(store.getNft('vhpn-1'), null, 'getNft on unminted returns null');
-  assert.deepStrictEqual(store.getNftsForAddress(ALICE.address), [], 'no tokens for fresh address');
+  const all = store.getAllNfts();
+  assert.strictEqual(all.filter(n => n.minted).length, 60, 'all 60 tokens pre-minted');
+  assert.ok(all.every(n => n.owner === MINTER_ADDRESS), 'all owned by MINTER_ADDRESS');
+  assert.ok(all.every(n => n.mintedAtHeight === 0), 'all minted at height 0');
   assert.strictEqual(store.getNonce(ALICE.address), 0, 'nonce starts at 0');
 }
 
 // ─── directMintCollection ────────────────────────────────────────────────────
 
-function testDirectMintCollection() {
+function testDirectMintCollectionSkipsAll() {
   const dir = makeTmpDir();
   const store = makeStore(dir);
   let result;
   silenceLogs(() => { result = store.directMintCollection(ALICE.address); });
+  assert.strictEqual(result.minted.length, 0, 'no new mints — all 60 pre-exist');
+  assert.strictEqual(result.skipped.length, 60, 'all 60 tokens skipped');
 
-  assert.strictEqual(result.minted.length, 60, 'should mint all 60 tokens');
-  assert.strictEqual(result.skipped.length, 0, 'no tokens skipped on first mint');
-
-  // All tokens now owned by ALICE
+  // Ownership unchanged — still MINTER_ADDRESS
   const allNfts = store.getAllNfts();
-  assert.ok(allNfts.every(n => n.owner === ALICE.address), 'all tokens owned by recipient');
-  assert.ok(allNfts.every(n => n.minted), 'all tokens show as minted');
+  assert.ok(allNfts.every(n => n.owner === MINTER_ADDRESS), 'MINTER_ADDRESS still owner');
 }
 
-function testDirectMintCollectionSkipsExisting() {
+function testDirectMintCollectionSecondCallAlsoSkips() {
   const dir = makeTmpDir();
   const store = makeStore(dir);
-  silenceLogs(() => store.directMintCollection(ALICE.address));
-
-  let result2;
-  silenceLogs(() => { result2 = store.directMintCollection(BOB.address); });
-
-  assert.strictEqual(result2.minted.length, 0, 'second direct mint should mint nothing');
-  assert.strictEqual(result2.skipped.length, 60, 'all 60 tokens skipped on second call');
-
-  // Ownership unchanged
-  assert.ok(store.getAllNfts().every(n => n.owner === ALICE.address), 'original owner preserved');
+  let r1, r2;
+  silenceLogs(() => { r1 = store.directMintCollection(ALICE.address); });
+  silenceLogs(() => { r2 = store.directMintCollection(BOB.address); });
+  assert.strictEqual(r1.skipped.length, 60, 'first call skips 60');
+  assert.strictEqual(r2.skipped.length, 60, 'second call skips 60');
+  assert.strictEqual(r1.minted.length, 0, 'first call mints 0');
+  assert.strictEqual(r2.minted.length, 0, 'second call mints 0');
 }
 
 // ─── applyBlock — nft_mint ───────────────────────────────────────────────────
 
-function testApplyBlockMintsSingleToken() {
+function testApplyBlockMintOfPrePopulatedTokenIsSkipped() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
-  // Use MINTER_ADDRESS as `from` in the tx; ownership check is on tx.from === MINTER_ADDRESS
-  // We apply the block directly (applyBlock doesn't verify sigs; sig validation is in validateTx)
   const tx = {
     id: 'tx-mint-1', type: 'nft_mint',
     nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0,
   };
-  silenceLogs(() => store.applyBlock({ height: 5, transactions: [tx] }));
-
-  const token = store.getNft('vhpn-1');
-  assert.ok(token, 'token should exist after mint');
-  assert.strictEqual(token.owner, ALICE.address, 'owner should be recipient');
-  assert.strictEqual(token.mintedAtHeight, 5, 'mintedAtHeight set from block');
-  assert.strictEqual(token.metadata.tier, 'gold', 'metadata resolved from collection');
-  assert.strictEqual(token.metadata.shares, 5, 'shares resolved from collection');
+  const warns = captureWarns(() => {
+    silenceLogs(() => store.applyBlock({ height: 5, transactions: [tx] }));
+  });
+  assert.ok(warns.some(w => w.includes('already exists')), 'pre-minted token should warn already exists');
+  assert.strictEqual(store.getNft('vhpn-1').owner, MINTER_ADDRESS, 'owner unchanged');
 }
 
 function testApplyBlockMintUnauthorizedMinterSkipped() {
@@ -149,27 +140,23 @@ function testApplyBlockMintUnauthorizedMinterSkipped() {
   const store = makeStore(dir);
   const tx = {
     id: 'tx-bad-mint', type: 'nft_mint',
-    nftId: 'vhpn-1', from: ALICE.address, to: BOB.address, nonce: 0,
+    nftId: 'vhpn-61', from: ALICE.address, to: BOB.address, nonce: 0,
   };
   const warns = captureWarns(() => {
     silenceLogs(() => store.applyBlock({ height: 1, transactions: [tx] }));
   });
   assert.ok(warns.some(w => w.includes('unauthorized minter')), 'unauthorized minter should warn');
-  assert.strictEqual(store.getNft('vhpn-1'), null, 'token must not be created');
+  assert.strictEqual(store.getNft('vhpn-61'), null, 'token must not be created');
 }
 
-function testApplyBlockMintDuplicateSkipped() {
+function testApplyBlockTransferFromMinter() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
-  const tx = { id: 'tx-mint-1', type: 'nft_mint', nftId: 'vhpn-2', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 };
-  silenceLogs(() => store.applyBlock({ height: 1, transactions: [tx] }));
-
-  const tx2 = { id: 'tx-mint-2', type: 'nft_mint', nftId: 'vhpn-2', from: MINTER_ADDRESS, to: BOB.address, nonce: 1 };
-  const warns = captureWarns(() => {
-    silenceLogs(() => store.applyBlock({ height: 2, transactions: [tx2] }));
-  });
-  assert.ok(warns.some(w => w.includes('already exists')), 'duplicate mint should warn');
-  assert.strictEqual(store.getNft('vhpn-2').owner, ALICE.address, 'original owner preserved');
+  silenceLogs(() => store.applyBlock({ height: 3, transactions: [{
+    id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-2', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0,
+  }]}));
+  assert.strictEqual(store.getNft('vhpn-2').owner, ALICE.address, 'transfer from MINTER succeeds');
+  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 1, 'minter nonce bumped');
 }
 
 // ─── applyBlock — nft_transfer ───────────────────────────────────────────────
@@ -177,16 +164,17 @@ function testApplyBlockMintDuplicateSkipped() {
 function testApplyBlockTransfer() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
-  // Mint to ALICE first
+
+  // Transfer from MINTER_ADDRESS (pre-minted owner) to ALICE
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-3', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t1', type: 'nft_transfer', nftId: 'vhpn-3', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
-  // Transfer to BOB
+  // Transfer ALICE → BOB
   silenceLogs(() => store.applyBlock({
     height: 2,
-    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-3', from: ALICE.address, to: BOB.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t2', type: 'nft_transfer', nftId: 'vhpn-3', from: ALICE.address, to: BOB.address, nonce: 0 }],
   }));
 
   assert.strictEqual(store.getNft('vhpn-3').owner, BOB.address, 'owner should be BOB after transfer');
@@ -195,15 +183,17 @@ function testApplyBlockTransfer() {
 function testApplyBlockTransferWrongOwnerSkipped() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
+
+  // First, transfer from MINTER to ALICE
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-4', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t1', type: 'nft_transfer', nftId: 'vhpn-4', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
   const warns = captureWarns(() => {
     silenceLogs(() => store.applyBlock({
       height: 2,
-      transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-4', from: BOB.address, to: BOB.address, nonce: 0 }],
+      transactions: [{ id: 'tx-t2', type: 'nft_transfer', nftId: 'vhpn-4', from: BOB.address, to: BOB.address, nonce: 0 }],
     }));
   });
   assert.ok(warns.some(w => w.includes('not the owner')), 'wrong-owner transfer should warn');
@@ -222,27 +212,30 @@ function testApplyBlockTransferNotFound() {
   assert.ok(warns.some(w => w.includes('token not found')), 'transfer of unminted token should warn');
 }
 
-// ─── nonces ──────────────────────────────────────────────────────────────────
-
-function testNonceIncrementOnMint() {
+function testApplyBlockTransferNotFound() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
-  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 0);
-  silenceLogs(() => store.applyBlock({
-    height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
-  }));
-  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 1, 'nonce bumped after mint');
+  const warns = captureWarns(() => {
+    silenceLogs(() => store.applyBlock({
+      height: 1,
+      transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-99', from: ALICE.address, to: BOB.address, nonce: 0 }],
+    }));
+  });
+  assert.ok(warns.some(w => w.includes('token not found')), 'transfer of unminted token should warn');
 }
+
+// ─── nonces ──────────────────────────────────────────────────────────────────
 
 function testNonceIncrementOnTransfer() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
+  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 0);
   silenceLogs(() => {
-    store.applyBlock({ height: 1, transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-6', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }] });
-    store.applyBlock({ height: 2, transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-6', from: ALICE.address, to: BOB.address, nonce: 0 }] });
+    store.applyBlock({ height: 1, transactions: [{ id: 'tx-t1', type: 'nft_transfer', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }] });
+    store.applyBlock({ height: 2, transactions: [{ id: 'tx-t2', type: 'nft_transfer', nftId: 'vhpn-5', from: ALICE.address, to: BOB.address, nonce: 0 }] });
   });
-  assert.strictEqual(store.getNonce(ALICE.address), 1, 'sender nonce bumped after transfer');
+  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 1, 'minter nonce bumped after first transfer');
+  assert.strictEqual(store.getNonce(ALICE.address), 1, 'alice nonce bumped after second transfer');
   assert.strictEqual(store.getNonce(BOB.address),   0, 'recipient nonce unchanged');
 }
 
@@ -251,21 +244,24 @@ function testNonceIncrementOnTransfer() {
 function testRebuildFromBlocks() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
+  // Pre-populated tokens exist at height 0. Transfer some via blocks.
   const blocks = [
     { height: 1, transactions: [
-      { id: 'tx-m1', type: 'nft_mint', nftId: 'vhpn-7', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 },
-      { id: 'tx-m2', type: 'nft_mint', nftId: 'vhpn-8', from: MINTER_ADDRESS, to: ALICE.address, nonce: 1 },
+      { id: 'tx-t1', type: 'nft_transfer', nftId: 'vhpn-7', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 },
+      { id: 'tx-t2', type: 'nft_transfer', nftId: 'vhpn-8', from: MINTER_ADDRESS, to: ALICE.address, nonce: 1 },
     ]},
     { height: 2, transactions: [
-      { id: 'tx-t1', type: 'nft_transfer', nftId: 'vhpn-7', from: ALICE.address, to: BOB.address, nonce: 0 },
+      { id: 'tx-t3', type: 'nft_transfer', nftId: 'vhpn-7', from: ALICE.address, to: BOB.address, nonce: 0 },
     ]},
   ];
   silenceLogs(() => store.rebuildFromBlocks(blocks));
 
   assert.strictEqual(store.getNft('vhpn-7').owner, BOB.address,   'vhpn-7 transferred to BOB');
   assert.strictEqual(store.getNft('vhpn-8').owner, ALICE.address, 'vhpn-8 stays with ALICE');
-  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 2, 'minter nonce = 2 after 2 mints');
+  assert.strictEqual(store.getNonce(MINTER_ADDRESS), 2, 'minter nonce = 2 after 2 transfers');
   assert.strictEqual(store.getNonce(ALICE.address),  1, 'alice nonce = 1 after 1 transfer');
+  // All 60 still exist
+  assert.strictEqual(store.getAllNfts().filter(n => n.minted).length, 60, 'all 60 preserved after rebuild');
 }
 
 // ─── getNftsForAddress ────────────────────────────────────────────────────────
@@ -275,9 +271,9 @@ function testGetNftsForAddress() {
   const store = makeStore(dir);
   silenceLogs(() => {
     store.applyBlock({ height: 1, transactions: [
-      { id: 'tx-m1', type: 'nft_mint', nftId: 'vhpn-11', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 },
-      { id: 'tx-m2', type: 'nft_mint', nftId: 'vhpn-12', from: MINTER_ADDRESS, to: ALICE.address, nonce: 1 },
-      { id: 'tx-m3', type: 'nft_mint', nftId: 'vhpn-31', from: MINTER_ADDRESS, to: BOB.address,   nonce: 2 },
+      { id: 'tx-t1', type: 'nft_transfer', nftId: 'vhpn-11', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 },
+      { id: 'tx-t2', type: 'nft_transfer', nftId: 'vhpn-12', from: MINTER_ADDRESS, to: ALICE.address, nonce: 1 },
+      { id: 'tx-t3', type: 'nft_transfer', nftId: 'vhpn-31', from: MINTER_ADDRESS, to: BOB.address,   nonce: 2 },
     ]});
   });
 
@@ -292,16 +288,16 @@ function testGetNftsForAddress() {
 
 // ─── computeStateHash ────────────────────────────────────────────────────────
 
-function testStateHashChangesOnMint() {
+function testStateHashChangesOnTransfer() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
   const h1 = store.computeStateHash();
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
   const h2 = store.computeStateHash();
-  assert.notStrictEqual(h1, h2, 'state hash should change after a mint');
+  assert.notStrictEqual(h1, h2, 'state hash should change after a transfer');
 }
 
 function testStateHashDeterministic() {
@@ -309,7 +305,7 @@ function testStateHashDeterministic() {
   const dir2 = makeTmpDir();
   const s1 = makeStore(dir1);
   const s2 = makeStore(dir2);
-  const tx = { id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-2', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 };
+  const tx = { id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-2', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 };
   silenceLogs(() => {
     s1.applyBlock({ height: 3, transactions: [tx] });
     s2.applyBlock({ height: 3, transactions: [tx] });
@@ -324,12 +320,14 @@ function testPersistenceRoundTrip() {
   const store = makeStore(dir);
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
   const reloaded = makeStore(dir);
   assert.strictEqual(reloaded.getNft('vhpn-1').owner, ALICE.address, 'state survives reload');
   assert.strictEqual(reloaded.getNonce(MINTER_ADDRESS), 1, 'nonce survives reload');
+  // All 60 still present after reload
+  assert.strictEqual(reloaded.getAllNfts().filter(n => n.minted).length, 60, 'all 60 preserved');
 }
 
 function testHmacTamperDetected() {
@@ -337,7 +335,7 @@ function testHmacTamperDetected() {
   const store = makeStore(dir);
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
   // Tamper with the file
@@ -349,45 +347,29 @@ function testHmacTamperDetected() {
   const warns = captureWarns(() => makeStore(dir));
   assert.ok(warns.some(w => w.includes('HMAC mismatch')), 'tampered file should warn about HMAC mismatch');
 
-  // Store resets to empty on tamper
-  const fresh = captureWarns(() => {});
+  // On tamper, store discards persisted state and falls back to pre-populated collection
   const reloaded = makeStore(dir);
-  assert.strictEqual(reloaded.getNft('vhpn-1'), null, 'tampered state discarded — starts fresh');
+  assert.strictEqual(reloaded.getNft('vhpn-1').owner, MINTER_ADDRESS, 'tampered state discarded — pre-populated collection loaded');
 }
 
-function testMissingFileLoadsEmpty() {
+function testMissingFileGetsPrePopulatedCollection() {
   const dir = makeTmpDir();
   // No file written — just instantiate
   const store = makeStore(dir);
-  assert.strictEqual(store.getNft('vhpn-1'), null, 'missing file → empty state');
+  assert.ok(store.getNft('vhpn-1'), 'missing file → pre-populated collection loaded');
+  assert.strictEqual(store.getNft('vhpn-1').owner, MINTER_ADDRESS, 'pre-populated token owned by MINTER');
   assert.strictEqual(store.getNonce(ALICE.address), 0);
 }
 
 // ─── validateTx ──────────────────────────────────────────────────────────────
 
-function testValidateTxMintValid() {
-  const dir   = makeTmpDir();
-  const store = makeStore(dir);
-
-  // We need MINTER_ADDRESS to have a real keypair for signing.
-  // generateKeypair() creates a random address; for validateTx we use a test minter keypair.
-  const minter = generateKeypair();
-  // Override: build a tx with `from` = minter.address (not the real MINTER_ADDRESS)
-  // Instead, test with a custom store that has the minter address equal to the test keypair.
-  // Simpler: test validateTx with transfer (doesn't require MINTER_ADDRESS check on sig).
-  // For mint validation, directly test the nonce/missing-field guards.
-  const tx = NftStore.buildMintTx({ nftId: 'vhpn-1', from: minter.address, to: ALICE.address, nonce: 0 });
-  // No sig — should fail
-  assert.strictEqual(store.validateTx(tx), false, 'unsigned tx must not validate');
-}
-
 function testValidateTxTransferValid() {
   const dir   = makeTmpDir();
   const store = makeStore(dir);
-  // Mint via applyBlock so token exists and alice is owner
+  // Token is pre-minted to MINTER_ADDRESS — transfer to ALICE
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
   const tx = signedTransferTx('vhpn-5', ALICE.address, ALICE.privateKey, BOB.address, 0);
@@ -399,7 +381,7 @@ function testValidateTxTransferWrongNonce() {
   const store = makeStore(dir);
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
   const tx = signedTransferTx('vhpn-5', ALICE.address, ALICE.privateKey, BOB.address, 99);
@@ -411,12 +393,28 @@ function testValidateTxTransferNotOwner() {
   const store = makeStore(dir);
   silenceLogs(() => store.applyBlock({
     height: 1,
-    transactions: [{ id: 'tx-m', type: 'nft_mint', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
+    transactions: [{ id: 'tx-t', type: 'nft_transfer', nftId: 'vhpn-5', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 }],
   }));
 
   // BOB tries to transfer a token he doesn't own
   const tx = signedTransferTx('vhpn-5', BOB.address, BOB.privateKey, ALICE.address, 0);
   assert.strictEqual(store.validateTx(tx), false, 'non-owner transfer must not validate');
+}
+
+function testValidateTxMintOfCollectionTokenRejected() {
+  const dir   = makeTmpDir();
+  const store = makeStore(dir);
+  // Mint of a collection token — already pre-minted
+  const tx = NftStore.buildMintTx({ nftId: 'vhpn-1', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 });
+  assert.strictEqual(store.validateTx(tx), false, 'mint of pre-minted collection token rejected');
+}
+
+function testValidateTxMintOutsideCollectionRejected() {
+  const dir   = makeTmpDir();
+  const store = makeStore(dir);
+  // Mint of a non-collection ID is rejected even from MINTER_ADDRESS
+  const tx = NftStore.buildMintTx({ nftId: 'vhpn-99', from: MINTER_ADDRESS, to: ALICE.address, nonce: 0 });
+  assert.strictEqual(store.validateTx(tx), false, 'mint of non-collection token rejected');
 }
 
 function testValidateTxMissingFields() {
@@ -456,38 +454,38 @@ function run() {
   testCollectionShareTotals();
   testCollectionNftIdFormat();
 
-  testFreshStoreIsEmpty();
+  testFreshStoreHasAllNftsMinted();
 
-  testDirectMintCollection();
-  testDirectMintCollectionSkipsExisting();
+  testDirectMintCollectionSkipsAll();
+  testDirectMintCollectionSecondCallAlsoSkips();
 
-  testApplyBlockMintsSingleToken();
+  testApplyBlockMintOfPrePopulatedTokenIsSkipped();
   testApplyBlockMintUnauthorizedMinterSkipped();
-  testApplyBlockMintDuplicateSkipped();
+  testApplyBlockTransferFromMinter();
 
   testApplyBlockTransfer();
   testApplyBlockTransferWrongOwnerSkipped();
   testApplyBlockTransferNotFound();
 
-  testNonceIncrementOnMint();
   testNonceIncrementOnTransfer();
 
   testRebuildFromBlocks();
 
   testGetNftsForAddress();
 
-  testStateHashChangesOnMint();
+  testStateHashChangesOnTransfer();
   testStateHashDeterministic();
 
   testPersistenceRoundTrip();
   testHmacTamperDetected();
-  testMissingFileLoadsEmpty();
+  testMissingFileGetsPrePopulatedCollection();
 
-  testValidateTxMintValid();
   testValidateTxTransferValid();
   testValidateTxTransferWrongNonce();
   testValidateTxTransferNotOwner();
   testValidateTxMissingFields();
+  testValidateTxMintOfCollectionTokenRejected();
+  testValidateTxMintOutsideCollectionRejected();
 
   testBuildMintTxShape();
   testBuildTransferTxShape();

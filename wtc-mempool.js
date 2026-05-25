@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 /**
  * wtc-mempool.js — Pending transaction pool
@@ -20,14 +21,22 @@
 const crypto = require('crypto');
 
 const MEMPOOL_MAX_SIZE = 5000;
-const MAX_TX_AGE_MS = 24 * 60 * 60_000;
+const MEMPOOL_NFT_MAX_SLOTS = 4000; // reserve 20% of slots for coin txs
 const MAX_FUTURE_DRIFT_MS = 2 * 60_000;
 const MIN_RELAY_FEE = 0.01;
 const MIN_RELAY_AMOUNT = 0.0001;
-
 class Mempool {
   constructor() {
     this._txs = new Map();  // id → tx
+  }
+
+  /** Count how many NFT transactions are currently in the pool. */
+  _nftCount() {
+    let count = 0;
+    for (const tx of this._txs.values()) {
+      if (tx.type === 'nft_mint' || tx.type === 'nft_transfer') count++;
+    }
+    return count;
   }
 
   // ─── Write operations ─────────────────────────────────────────────────────
@@ -52,6 +61,9 @@ class Mempool {
 
     // ── NFT transactions bypass coin amount/fee validation ────────────────
     if (tx.type === 'nft_mint' || tx.type === 'nft_transfer') {
+      if (this._nftCount() >= MEMPOOL_NFT_MAX_SLOTS) {
+        return { ok: false, code: 'NFT_POOL_FULL', message: `NFT slot limit reached (${MEMPOOL_NFT_MAX_SLOTS})` };
+      }
       if (!tx.nftId || typeof tx.nftId !== 'string') {
         return { ok: false, code: 'INVALID_NFT', message: 'nftId required for NFT transactions' };
       }
@@ -102,9 +114,6 @@ class Mempool {
     if (tx.timestamp > now + MAX_FUTURE_DRIFT_MS) {
       return { ok: false, code: 'TIME_IN_FUTURE', message: 'timestamp too far in the future' };
     }
-    if (tx.timestamp < now - MAX_TX_AGE_MS) {
-      return { ok: false, code: 'TIME_TOO_OLD',   message: 'transaction too old' };
-    }
     if (!tx.sig || typeof tx.sig !== 'object') {
       return { ok: false, code: 'MISSING_SIG',    message: 'signature object required' };
     }
@@ -137,17 +146,6 @@ class Mempool {
     return [...this._txs.values()]
       .sort((a, b) => (b.fee || 0) - (a.fee || 0))
       .slice(0, maxCount);
-  }
-
-  /**
-   * Drop transactions older than maxAgeMs (default: 10 minutes).
-   * Should be called periodically to keep pool from growing unbounded.
-   */
-  prune(maxAgeMs = 10 * 60_000) {
-    const cutoff = Date.now() - maxAgeMs;
-    for (const [id, tx] of this._txs) {
-      if (tx.addedAt < cutoff) this._txs.delete(id);
-    }
   }
 
   // ─── Factory ──────────────────────────────────────────────────────────────

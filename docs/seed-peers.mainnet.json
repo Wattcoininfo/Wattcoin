@@ -7,6 +7,7 @@
   "seedPeers": [
     {
       "url": "http://85.253.84.88:39310",
+      "ipB64": "ODUuMjUzLjg0Ljg4OjM5MzEw",
       "provider": "seed-host-85-253-84-88",
       "region": "eu",
       "label": "Seed host 85.253.84.88",

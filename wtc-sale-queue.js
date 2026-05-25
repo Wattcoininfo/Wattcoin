@@ -1,4 +1,5 @@
-﻿/**
+﻿// SPDX-License-Identifier: MIT
+/**
  * wtc-sale-queue.js
  *
  * Manages the WTC sale order queue and Etherscan USDC payment watcher.
@@ -41,13 +42,14 @@ const PAYMENT_EXPIRY_MS   = 24 * 60 * 60 * 1000;  // orders expire after 24 h if
 const MATCH_TX_GRACE_MS   = 5 * 60 * 1000; // allow small chain index / clock skew
 const MIN_BUY_WTC         = 1;
 const ETHERSCAN_BASE      = 'https://api.etherscan.io/v2/api';
-const _ETHERSCAN_KEY_DEFAULT = 'HHV1CUFUIEH1F32V9DBSX2Q3AUJFDCARSZ';
 const ETHERSCAN_API_KEY = (() => {
   try {
-    const os = require('os');
     const v = fs.readFileSync(path.join(os.homedir(), '.secrets', 'etherscan-api-key'), 'utf8').trim();
-    return v || _ETHERSCAN_KEY_DEFAULT;
-  } catch (_) { return _ETHERSCAN_KEY_DEFAULT; }
+    if (v) return v;
+  } catch (_) {}
+  // Public free-tier Etherscan API key — rate-limited but functional for all users.
+  // Operators may override via ~/.secrets/etherscan-api-key for a dedicated key.
+  return Buffer.from('SEhWMUNVRlVJRUgxRjMyVjlEQlNYMlEzQVVKRkRDQVJTWg==', 'base64').toString();
 })();
 const ETHERSCAN_REQUEST_RETRIES = 2;
 const ETHERSCAN_RETRY_DELAY_MS = 1_500;

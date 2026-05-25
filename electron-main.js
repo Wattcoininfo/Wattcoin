@@ -76,7 +76,7 @@ const {
 } = require('./probe-attestation');
 const saleQueue    = require('./wtc-sale-queue');
 const stakingQueue = require('./wtc-staking-queue');
-const { isValidAddress: isValidWtcAddress } = require('./wtc-address');
+const { isValidAddress: isValidWtcAddress, verifyWalletMessagePureJS } = require('./wtc-address');
 const { rewardForHeight } = require('./wtc-chain');
 
 const BACKUP_FILE_EXTENSION = 'wcbak';
@@ -3124,127 +3124,7 @@ async function verifyIdentityWithWalletSignature(identity = {}, expectedMessage 
   return { ok: false, code: 'IDENTITY_SIGNATURE_INVALID', reason: 'wallet signature verification failed' };
 }
 
-// ── Pure JS secp256k1 message verification ───────────────────────────────────
-// Verifies a Wattcoin/Bitcoin wallet message signature without requiring the
-// local node to be running.  Uses BigInt secp256k1 arithmetic + Node.js built-in
-// crypto (SHA-256, RIPEMD-160) — zero additional dependencies.
-//
-// Message magic: "Bitcoin Signed Message:\n"  (unchanged in Wattcoin fork)
-// Address prefixes: mainnet=0x00, testnet/regtest=0x6F
-// Signature format: base64(recFlag[1] + r[32] + s[32]), recFlag âˆˆ {27..34}
-// ─────────────────────────────────────────────────────────────────────────────
-const _SEC_P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
-const _SEC_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-const _SEC_GX = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
-const _SEC_GY = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
-
-function _secModP(v) { return ((v % _SEC_P) + _SEC_P) % _SEC_P; }
-function _secModN(v) { return ((v % _SEC_N) + _SEC_N) % _SEC_N; }
-function _secModPow(b, e, m) {
-  let r = 1n; b = b % m;
-  while (e > 0n) { if (e & 1n) r = r * b % m; e >>= 1n; b = b * b % m; }
-  return r;
-}
-// Modular inverse mod P via Fermat (P is prime)
-function _secInvP(a) { return _secModPow(_secModP(a), _SEC_P - 2n, _SEC_P); }
-// Modular inverse mod N via Fermat (N is prime)
-function _secInvN(a) { return _secModPow(_secModN(a), _SEC_N - 2n, _SEC_N); }
-
-// Jacobian point arithmetic (infinity = [0n, 1n, 0n])
-function _secPtDouble([X, Y, Z]) {
-  if (Y === 0n || Z === 0n) return [0n, 1n, 0n];
-  const A = _secModP(X * X), B = _secModP(Y * Y), C = _secModP(B * B);
-  const D = _secModP(2n * (_secModP((X + B) * (X + B)) - A - C));
-  const E = _secModP(3n * A);
-  const X2 = _secModP(E * E - 2n * D);
-  const Y2 = _secModP(E * (D - X2) - 8n * C);
-  return [X2, Y2, _secModP(2n * Y * Z)];
-}
-function _secPtAdd(P, Q) {
-  if (P[2] === 0n) return Q; if (Q[2] === 0n) return P;
-  const [X1, Y1, Z1] = P, [X2, Y2, Z2] = Q;
-  const Z1Z1 = _secModP(Z1 * Z1), Z2Z2 = _secModP(Z2 * Z2);
-  const U1 = _secModP(X1 * Z2Z2), U2 = _secModP(X2 * Z1Z1);
-  const S1 = _secModP(Y1 * Z2 * Z2Z2), S2 = _secModP(Y2 * Z1 * Z1Z1);
-  const H = _secModP(U2 - U1), R = _secModP(S2 - S1);
-  if (H === 0n) return R === 0n ? _secPtDouble(P) : [0n, 1n, 0n];
-  const H2 = _secModP(H * H), H3 = _secModP(H2 * H);
-  const X3 = _secModP(R * R - H3 - 2n * U1 * H2);
-  return [X3, _secModP(R * (U1 * H2 - X3) - S1 * H3), _secModP(H * Z1 * Z2)];
-}
-function _secPtMul(scalar, [Px, Py]) {
-  let R = [0n, 1n, 0n], Q = [Px, Py, 1n];
-  scalar = _secModN(scalar);
-  while (scalar > 0n) { if (scalar & 1n) R = _secPtAdd(R, Q); Q = _secPtDouble(Q); scalar >>= 1n; }
-  return R;
-}
-function _secJacToAff([X, Y, Z]) {
-  if (Z === 0n) return null;
-  const iz = _secInvP(Z), iz2 = _secModP(iz * iz);
-  return [_secModP(X * iz2), _secModP(Y * iz2 * iz)];
-}
-
-// Recover public key from compact (r, s, recid) ECDSA signature + message hash
-function _secRecover(msgHash, r, s, recid) {
-  const x = r + (recid & 2 ? _SEC_N : 0n);
-  if (x >= _SEC_P) return null;
-  const y2 = _secModP(x * x % _SEC_P * x + 7n);
-  let y = _secModPow(y2, (_SEC_P + 1n) / 4n, _SEC_P);
-  if (_secModP(y * y) !== y2) return null;
-  if ((y & 1n) !== BigInt(recid & 1)) y = _secModP(_SEC_P - y);
-  const rInv = _secInvN(r);
-  const k1 = _secModN(rInv * s);
-  const k2 = _secModN(_SEC_N - _secModN(rInv * BigInt('0x' + msgHash.toString('hex'))));
-  return _secJacToAff(_secPtAdd(_secPtMul(k1, [x, y]), _secPtMul(k2, [_SEC_GX, _SEC_GY])));
-}
-
-function _encodeVarint(n) {
-  if (n < 0xfd) return Buffer.from([n]);
-  const b = Buffer.alloc(n <= 0xffff ? 3 : 5);
-  if (n <= 0xffff) { b[0] = 0xfd; b.writeUInt16LE(n, 1); } else { b[0] = 0xfe; b.writeUInt32LE(n, 1); }
-  return b;
-}
-
-function _msgHashForVerify(message) {
-  const magic = 'Bitcoin Signed Message:\n';
-  const msgBuf = Buffer.from(message, 'utf8');
-  const full = Buffer.concat([Buffer.from([magic.length]), Buffer.from(magic), _encodeVarint(msgBuf.length), msgBuf]);
-  return crypto.createHash('sha256').update(crypto.createHash('sha256').update(full).digest()).digest();
-}
-
-const _BASE58_ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-function _base58Encode(bytes) {
-  let n = BigInt('0x' + (bytes.length ? bytes.toString('hex') : '00'));
-  let s = '';
-  while (n > 0n) { s = _BASE58_ALPHA[Number(n % 58n)] + s; n /= 58n; }
-  for (const b of bytes) { if (b !== 0) break; s = '1' + s; }
-  return s;
-}
-
-function verifyWalletMessagePureJS(address, signature, message) {
-  try {
-    const sigBuf = Buffer.from(signature, 'base64');
-    if (sigBuf.length !== 65) return false;
-    const flag = sigBuf[0];
-    if (flag < 27 || flag > 34) return false;
-    const recid = (flag - 27) & 3;
-    const r = BigInt('0x' + sigBuf.slice(1, 33).toString('hex'));
-    const s = BigInt('0x' + sigBuf.slice(33, 65).toString('hex'));
-    const msgHash = _msgHashForVerify(message);
-    const pt = _secRecover(msgHash, r, s, recid);
-    if (!pt) return false;
-    const prefix = (pt[1] & 1n) === 0n ? 0x02 : 0x03;
-    const pubkey = Buffer.concat([Buffer.from([prefix]), Buffer.from(pt[0].toString(16).padStart(64, '0'), 'hex')]);
-    const h160 = crypto.createHash('ripemd160').update(crypto.createHash('sha256').update(pubkey).digest()).digest();
-    const network = getActiveNetwork();
-    const vByte = (network === 'mainnet') ? 0x00 : 0x6f;
-    const versioned = Buffer.concat([Buffer.from([vByte]), h160]);
-    const checksum = crypto.createHash('sha256').update(crypto.createHash('sha256').update(versioned).digest()).digest().slice(0, 4);
-    return _base58Encode(Buffer.concat([versioned, checksum])) === address;
-  } catch (_) {
-    return false;
-  }
-}
+// verifyWalletMessagePureJS moved to wtc-address.js
 
 // Verifies a remotely-supplied wallet signature for HTTP ledger endpoints.
 // Unlike verifyIdentityWithWalletSignature this does NOT check wallet ownership
@@ -3276,7 +3156,7 @@ async function verifyContributionSignature(address, signature, message, expected
   }
   // Pure JS verification — works offline, no node dependency.
   try {
-    const valid = verifyWalletMessagePureJS(address, signature, message);
+    const valid = verifyWalletMessagePureJS(address, signature, message, getActiveNetwork());
     if (valid) return { ok: true };
     // Pure JS says invalid — try RPC as a secondary check in case of network/address edge case.
   } catch (pureJsErr) {
@@ -4905,6 +4785,60 @@ function getDeviceIdentitySecret() {
   return '';
 }
 
+/**
+ * Get or create the wallet encryption key.
+ * The key is a 32-byte value stored in the OS secure store (safeStorage).
+ * On platforms where safeStorage is unavailable, falls back to a machine-derived
+ * AES-256 key (same pattern as attestation-state encryption).
+ */
+let _walletEncryptionKey = null;
+
+function getOrCreateWalletEncryptionKey() {
+  if (_walletEncryptionKey) return _walletEncryptionKey;
+  const keyFile = path.join(getDataDir(), 'wallet-key.enc');
+  try {
+    if (fs.existsSync(keyFile)) {
+      const stored = fs.readFileSync(keyFile);
+      if (safeStorage.isEncryptionAvailable()) {
+        const keyHex = safeStorage.decryptString(stored);
+        if (keyHex && keyHex.length === 64) {
+          _walletEncryptionKey = Buffer.from(keyHex, 'hex');
+          return _walletEncryptionKey;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // Generate a new key
+  const newKey = crypto.randomBytes(32);
+  const keyHex = newKey.toString('hex');
+
+  // Primary: store via safeStorage
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      const enc = safeStorage.encryptString(keyHex);
+      fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+      fs.writeFileSync(keyFile, enc);
+      _walletEncryptionKey = newKey;
+      return _walletEncryptionKey;
+    } catch (_) {}
+  }
+
+  // Fallback: derive from device-identity secret (same pattern as attestation fallback)
+  try {
+    const deviceSecret = getDeviceIdentitySecret();
+    if (deviceSecret && deviceSecret.length >= 32) {
+      const fbKey = crypto.createHash('sha256').update(deviceSecret + ':wallet-encryption').digest();
+      _walletEncryptionKey = fbKey;
+      return _walletEncryptionKey;
+    }
+  } catch (_) {}
+
+  // Last resort — random key, lost on restart (wallet will be re-created). Still better than plaintext.
+  _walletEncryptionKey = newKey;
+  return _walletEncryptionKey;
+}
+
 function loadOrCreateDeviceIdentity() {
   if (_deviceIdentity) return _deviceIdentity;
   const filePath = getDeviceIdentityFilePath();
@@ -6044,7 +5978,17 @@ function loadBundledSeedPeers() {
         ? parsed.seedPeers
         : (Array.isArray(parsed && parsed.peers) ? parsed.peers : []);
       const peers = peerEntries
-        .map((peer) => normalizePeerUrl((peer && peer.url) || peer || ''))
+        .map((peer) => {
+          const rawUrl = (peer && peer.url) || peer || '';
+          // If the entry has a base64-encoded IP, decode it and build the URL
+          if (peer && peer.ipB64 && typeof peer.ipB64 === 'string') {
+            try {
+              const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
+              if (decoded) return normalizePeerUrl(`http://${decoded}`);
+            } catch (_) {}
+          }
+          return normalizePeerUrl(rawUrl);
+        })
         .filter((peer) => peer && !isDeprecatedPeerUrl(peer));
       bundledSeedPeersCache = peers;
       console.log(`[Bootstrap] Loaded ${peers.length} bundled peers from ${candidate}`);
@@ -7678,6 +7622,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
         dataDir:         getWalletDataDir(),
         signingSecret:   wtcSecret || crypto.randomBytes(32).toString('hex'),
         peerIdentity:    String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
+        walletKey:       getOrCreateWalletEncryptionKey(),
         getActivePeers:  () => getActivePeers(getLedgerNetworkSettings()),
         getConnectedPeerCount: () => getActiveReverseTunnelPeerConnectionCount(),
         getPeerTargets:  () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
@@ -7687,6 +7632,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
         onPeerTip:       (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
         allowPartialQuorumCommit: !(getLedgerNetworkSettings().enabled && getLedgerNetworkSettings().mode === 'peer'),
         isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
+        getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
       });
       try {
         const restoredPrimary = wtcNode.getPrimaryAddress();
@@ -7972,10 +7918,6 @@ function createWindow() {
   // In dev mode we also allow localhost:5173 for the Vite dev server.
   const devMode = process.env.NODE_ENV === 'development';
   const externalApiHosts = [
-    'https://www.techpowerup.com',
-    'https://api.duckduckgo.com',
-    'https://www.reddit.com',
-    'https://www.notebookcheck.net',
   ].join(' ');
   const connectSrc = devMode
     ? `'self' http://localhost:5173 ws://localhost:5173 ${externalApiHosts}`
@@ -8192,6 +8134,7 @@ app.whenReady().then(async () => {
       dataDir:         getWalletDataDir(),
       signingSecret:   wtcSecret || crypto.randomBytes(32).toString('hex'),
       peerIdentity:    String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
+      walletKey:       getOrCreateWalletEncryptionKey(),
       getActivePeers:  () => getActivePeers(getLedgerNetworkSettings()),
       getConnectedPeerCount: () => getActiveReverseTunnelPeerConnectionCount(),
       getPeerTargets:  () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
@@ -8201,6 +8144,7 @@ app.whenReady().then(async () => {
       onPeerTip:       (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
       allowPartialQuorumCommit: !(getLedgerNetworkSettings().enabled && getLedgerNetworkSettings().mode === 'peer'),
       isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
+      getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
     });
     refreshCoordinatorIdentityKey();
   } catch (e) {
@@ -8432,13 +8376,14 @@ if (app.isPackaged) {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  // The dev cert ("Wattcoin Dev Root CA") is not in Windows' global Trusted
-  // Root store on user machines.  electron-updater's default PowerShell
-  // Get-AuthenticodeSignature check returns Status=NotTrusted (4) and rejects
-  // the downloaded installer with ERR_UPDATER_INVALID_SIGNATURE whenever
-  // publisherName is present in app-update.yml.  Override the verifier to
-  // skip publisher checks entirely for this self-signed cert scenario.
-  autoUpdater._verifyUpdateCodeSignature = () => Promise.resolve(null);
+  // Dev builds use a self-signed cert ("Wattcoin Dev Root CA") which is not in
+  // Windows' Trusted Root store, so Get-AuthenticodeSignature returns NotTrusted
+  // and rejects the update.  Set WATTCOIN_WINDOWS_SIGNING_ON_HOLD=1 in dev to
+  // skip publisher-name verification.  In production the installer is signed with
+  // a trusted cert, so autoUpdater's built-in verification runs normally.
+  if (process.env.WATTCOIN_WINDOWS_SIGNING_ON_HOLD === '1') {
+    autoUpdater._verifyUpdateCodeSignature = () => Promise.resolve(null);
+  }
 
   autoUpdater.on('before-quit-for-update', () => {
     updateInstallInProgress = true;

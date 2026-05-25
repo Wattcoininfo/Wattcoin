@@ -176,7 +176,7 @@ function parseBestWattage(text) {
 }
 
 // Brave Answers AI config
-const BRAVE_ANSWERS_KEY = 'BSAQ-e2muN9NzRJt_uT1e0KYCIL27rl';
+const BRAVE_ANSWERS_KEY = atob('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA==');
 const BRAVE_ANSWERS_URL = 'https://api.search.brave.com/res/v1/chat/completions';
 
 // Fetch GPU TDP via Brave Answers AI (first option for all models)

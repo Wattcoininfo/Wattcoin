@@ -285,8 +285,8 @@ function getBenchmarkCapabilities() {
     },
     gpu: {
       supported: false,
-      status: 'not-implemented',
-      note: 'GPU proof benchmarking not implemented.',
+      status: 'renderer-only',
+      note: 'GPU probe runs in the Electron renderer (WebGL) — not available in Node.js backend.',
     },
   };
 }
@@ -322,7 +322,7 @@ async function runBackendBenchmark(_request = {}) {
       gpuProvider: 'none',
       gpuProofHash: '',
       gpuProofWorkload: 'none',
-      gpuProofError: '',
+      gpuProofError: '',  // renderer-only; GPU probes use the probe system, not backend benchmarks
       cpuSamples: cpuMem.cpuSamples,
       logicalCoresHint: os.cpus().length,
       cpuSpeedOpsPerSec: cpuSpeed.opsPerSec,

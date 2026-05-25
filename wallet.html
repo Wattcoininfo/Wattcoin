@@ -3,7 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Wattcoin — My Wallet</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <title>Wattcoin — My Wallet | Energy-Backed Cryptocurrency</title>
+  <meta name="description" content="Wattcoin: The Mission — an energy-backed cryptocurrency secured by Proof-of-Energy. Access your WTC wallet, check balances, stake tokens, and manage Vortex NFTs." />
+  <meta name="keywords" content="Wattcoin, WTC, Proof of Energy, crypto wallet, WTC wallet, energy-backed cryptocurrency, staking, Vortex NFT" />
+  <link rel="canonical" href="https://wattcoin.ee/wallet.html" />
+  <meta property="og:title" content="Wattcoin — My Wallet" />
+  <meta property="og:description" content="Wattcoin: The Mission — an energy-backed cryptocurrency secured by Proof-of-Energy. Access your WTC wallet, stake, and manage Vortex NFTs." />
+  <meta property="og:url" content="https://wattcoin.ee/wallet.html" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Wattcoin — My Wallet" />
+  <meta name="twitter:description" content="Wattcoin: The Mission — an energy-backed cryptocurrency secured by Proof-of-Energy. Access your WTC wallet, stake, and manage Vortex NFTs." />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Wattcoin Wallet",
+    "url": "https://wattcoin.ee/wallet.html",
+    "description": "Wattcoin web wallet — check balances, stake WTC, manage Vortex NFTs, and purchase WTC via USDC.",
+    "applicationCategory": "CryptocurrencyWallet",
+    "operatingSystem": "All",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.6.1/elliptic.min.js" integrity="sha384-mLWWynM6lf+SHL7Gy7zGDmR3PbMQPSoWu1GPg86kR0iRbdoDrZpUzFu2CbfOC8ar" crossorigin="anonymous"></script>
   <link rel="icon" type="image/x-icon" href="assets/icons/icon.ico" />
   <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -190,7 +219,7 @@
 </div>
 
 <footer>
-  WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.267 &nbsp;&mdash;&nbsp; <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp; <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a> &nbsp;&mdash;&nbsp; <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a> &nbsp;&mdash;&nbsp; MAY 2026
+  WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.274 &nbsp;&mdash;&nbsp; <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp; <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a> &nbsp;&mdash;&nbsp; <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a> &nbsp;&mdash;&nbsp; MAY 2026
   <br><span id="wallet-visit-count" style="font-size:10px;color:#3a5a3a"></span>
 </footer>
 
@@ -233,25 +262,12 @@ function ripemd160(data) {
   [h0,h1,h2,h3,h4].forEach((h,i)=>ov.setUint32(i*4,h,true));return out;
 }
 
-// ── secp256k1 (pure BigInt) ──────────────────────────────────────────────────
-const _P=0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
-const _N=0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-const _Gx=0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
-const _Gy=0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
-const mp=v=>((v%_P)+_P)%_P;
-const pm=(b,e,m)=>{let r=1n;b=b%m;while(e>0n){if(e&1n)r=r*b%m;e>>=1n;b=b*b%m;}return r;}
-function ptD([X,Y,Z]){if(Y===0n||Z===0n)return[0n,1n,0n];const A=mp(X*X),B=mp(Y*Y),C=mp(B*B),D=mp(2n*(mp((X+B)*(X+B))-A-C)),E=mp(3n*A),X2=mp(E*E-2n*D);return[X2,mp(E*(D-X2)-8n*C),mp(2n*Y*Z)];}
-function ptA(PA,PB){if(PA[2]===0n)return PB;if(PB[2]===0n)return PA;const[X1,Y1,Z1]=PA,[X2,Y2,Z2]=PB,z1z1=mp(Z1*Z1),z2z2=mp(Z2*Z2),U1=mp(X1*z2z2),U2=mp(X2*z1z1),S1=mp(Y1*Z2*z2z2),S2=mp(Y2*Z1*z1z1),H=mp(U2-U1),R=mp(S2-S1);if(H===0n)return R===0n?ptD(PA):[0n,1n,0n];const H2=mp(H*H),H3=mp(H2*H),X3=mp(R*R-H3-2n*U1*H2);return[X3,mp(R*(U1*H2-X3)-S1*H3),mp(H*Z1*Z2)];}
-function ptM(k,[Px,Py]){let R=[0n,1n,0n],Q=[Px,Py,1n];k=((k%_N)+_N)%_N;while(k>0n){if(k&1n)R=ptA(R,Q);Q=ptD(Q);k>>=1n;}return R;}
-function j2a([X,Y,Z]){if(Z===0n)return null;const iz=pm(Z,_P-2n,_P),iz2=mp(iz*iz);return[mp(X*iz2),mp(Y*iz2*iz)];}
+// ── secp256k1 (elliptic — battle-tested) ────────────────────────────────────
+const _ec=new elliptic.ec('secp256k1');
 function bh(buf){return Array.from(buf).map(b=>b.toString(16).padStart(2,'0')).join('');}
 function privToPub(priv){
-  const k=BigInt('0x'+bh(priv));
-  if(k<=0n||k>=_N)throw new Error('Invalid private key');
-  const pt=j2a(ptM(k,[_Gx,_Gy]));if(!pt)throw new Error('Point at infinity');
-  const out=new Uint8Array(33);out[0]=(pt[1]&1n)===0n?0x02:0x03;
-  const xh=pt[0].toString(16).padStart(64,'0');
-  for(let i=0;i<32;i++)out[i+1]=parseInt(xh.slice(i*2,i*2+2),16);return out;
+  const kp=_ec.keyFromPrivate(priv);
+  return new Uint8Array(kp.getPublic(true,'array'));
 }
 
 // ── bech32m ──────────────────────────────────────────────────────────────────
@@ -275,16 +291,11 @@ function isValidWtcAddr(addr){
   const bytes=bcv(pl.slice(1),5,8,false);return !!(bytes&&bytes.length===20);
 }
 
-// ── Key generation (async — Web Crypto for entropy + SHA-256) ────────────────
+// ── Key generation (elliptic) ────────────────────────────────────────────────
 async function generateKeypair() {
-  let priv;
-  for(let i=0;i<32;i++){
-    const c=crypto.getRandomValues(new Uint8Array(32));
-    const k=BigInt('0x'+bh(c));
-    if(k>0n&&k<_N){priv=c;break;}
-  }
-  if(!priv)throw new Error('RNG failure');
-  const pub=privToPub(priv);
+  const kp=_ec.genKeyPair();
+  const priv=new Uint8Array(kp.getPrivate('array'));
+  const pub=new Uint8Array(kp.getPublic(true,'array'));
   const sha=await crypto.subtle.digest('SHA-256',pub);
   const h160=ripemd160(new Uint8Array(sha));
   return{privateKey:bh(priv),publicKey:bh(pub),address:encodeWtcAddr(h160)};

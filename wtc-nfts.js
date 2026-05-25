@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 /**
  * wtc-nfts.js — Wattcoin Vortex NFT state for the WTC native chain
@@ -76,9 +77,35 @@ class NftStore {
   constructor({ dataDir, signingSecret }) {
     this._file   = path.join(dataDir, 'wtc-nfts.json');
     this._secret = signingSecret;
-    this._tokens = {};  // nftId → { owner, metadata, mintedAtHeight }
-    this._nonces = {};  // address → number  (NFT-specific nonce, separate from WTC nonce)
+    this._tokens = {};
+    this._nonces = {};
     this._load();
+    this._ensureCollectionMinted();
+  }
+
+  /**
+   * Guarantee all 60 collection tokens exist in _tokens, minted to
+   * MINTER_ADDRESS at height 0.  The persisted file is authoritative
+   * when present — this is a fallback for fresh nodes or corrupted data.
+   */
+  _ensureCollectionMinted() {
+    let added = false;
+    for (const def of NFT_COLLECTION) {
+      if (this._tokens[def.nftId]) continue;
+      this._tokens[def.nftId] = {
+        owner:          MINTER_ADDRESS,
+        mintedAtHeight: 0,
+        metadata: {
+          name:   def.name,
+          tier:   def.tier,
+          shares: def.shares,
+          image:  def.image,
+          mintedAtHeight: 0,
+        },
+      };
+      added = true;
+    }
+    if (added) this._save();
   }
 
   // ─── Persistence ────────────────────────────────────────────────────────────
@@ -94,8 +121,7 @@ class NftStore {
       const raw = JSON.parse(fs.readFileSync(this._file, 'utf8'));
       const { _sig: savedSig, ...data } = raw;
       if (savedSig !== this._hmac(data)) {
-        console.warn('[NftStore] HMAC mismatch — starting fresh (file may have been tampered)');
-        return;
+        throw new Error('[NftStore] HMAC mismatch — wtc-nfts.json has been tampered');
       }
       this._tokens = data.tokens || {};
       this._nonces = data.nonces || {};
@@ -153,12 +179,14 @@ class NftStore {
           console.warn(`[NftStore] nft_mint ${tx.nftId} skipped: already exists`);
           continue;
         }
-
-        // Resolve canonical metadata from collection definition
+        // NFT must belong to the defined collection
         const def = NFT_COLLECTION.find(e => e.nftId === tx.nftId);
-        const metadata = def
-          ? { name: def.name, tier: def.tier, shares: def.shares, image: def.image, mintedAtHeight: block.height }
-          : { ...(tx.metadata || {}), mintedAtHeight: block.height };
+        if (!def) {
+          console.warn(`[NftStore] nft_mint ${tx.nftId} skipped: not in collection`);
+          continue;
+        }
+
+        const metadata = { name: def.name, tier: def.tier, shares: def.shares, image: def.image, mintedAtHeight: block.height };
 
         this._tokens[tx.nftId] = { owner: tx.to, metadata, mintedAtHeight: block.height };
         this._bumpNonce(tx.from);
@@ -197,6 +225,7 @@ class NftStore {
   rebuildFromBlocks(blocks) {
     this._tokens = {};
     this._nonces = {};
+    this._ensureCollectionMinted();
     for (const block of (blocks || [])) {
       this.applyBlock(block);
     }
@@ -218,7 +247,11 @@ class NftStore {
         result.push({ nftId, owner: token.owner, metadata: token.metadata, mintedAtHeight: token.mintedAtHeight });
       }
     }
-    return result.sort((a, b) => a.nftId.localeCompare(b.nftId, undefined, { numeric: true }));
+    return result.sort((a, b) => {
+      const na = parseInt(a.nftId.replace(/\D/g, ''), 10) || 0;
+      const nb = parseInt(b.nftId.replace(/\D/g, ''), 10) || 0;
+      return na < nb ? -1 : na > nb ? 1 : 0;
+    });
   }
 
   /** Returns the full collection state (all 60 tokens with current owner or null). */
@@ -244,7 +277,11 @@ class NftStore {
    */
   computeStateHash() {
     const entries = Object.entries(this._tokens)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => {
+        const na = parseInt(a.replace(/\D/g, ''), 10) || 0;
+        const nb = parseInt(b.replace(/\D/g, ''), 10) || 0;
+        return na < nb ? -1 : na > nb ? 1 : 0;
+      })
       .map(([id, t]) => [id, t.owner, t.mintedAtHeight]);
     return crypto.createHash('sha256').update(JSON.stringify(entries)).digest('hex');
   }
@@ -267,6 +304,7 @@ class NftStore {
     if (tx.type === 'nft_mint') {
       if (tx.from !== MINTER_ADDRESS) return false;
       if (this._tokens[tx.nftId]) return false;  // already minted
+      if (!NFT_COLLECTION.find(e => e.nftId === tx.nftId)) return false;  // not in collection
     }
 
     if (tx.type === 'nft_transfer') {

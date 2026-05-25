@@ -1,4 +1,5 @@
-﻿'use strict';
+﻿// SPDX-License-Identifier: MIT
+'use strict';
 /**
  * wtc-chain.js — Block structure, chain persistence, and reward schedule
  *
@@ -51,7 +52,7 @@ const GENESIS_PREMINE    = 1_000_000;  // tier 0 — premined at height 0
  *   tier 1:  2,000 blocks × 500 WTC  = 1,000,000 WTC
  *   tier 2:  4,000 blocks × 250 WTC  = 1,000,000 WTC
  *   ...
- *   tier 20: ~2.1M blocks × ~0.95 WTC
+ *   tier 20: ~2.1M blocks × ~0.00095 WTC
  */
 function rewardForHeight(height) {
   if (height <= 0) return 0;

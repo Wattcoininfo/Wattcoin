@@ -90,11 +90,10 @@ async function run() {
       throw new Error('simulated NFT rebuild failure');
     };
 
-    // Call _applyCandidateChain — the internal helper used by both syncWithPeers
-    // and handlePushBlocks.  It has no try-catch around the NFT rebuild call.
-    let caughtError = null;
+    // Call _applyCandidateChain — no longer throws; returns { ok, reason } with accounts rolled back.
+    let result;
     try {
-      nodeA._applyCandidateChain(candidate, {
+      result = nodeA._applyCandidateChain(candidate, {
         localHeight: 0,
         peer:        'node-b',
         ancestor:    0,
@@ -102,30 +101,26 @@ async function run() {
         mode:        'push',
       });
     } catch (e) {
-      caughtError = e;
+      assert.fail('_applyCandidateChain should not throw when NFT rebuild fails after rollback fix');
     }
 
-    assert.ok(caughtError,
-      '_applyCandidateChain should propagate the NFT rebuild exception');
-    assert.match(caughtError.message, /simulated NFT rebuild failure/,
-      'thrown error should be the one from the patched NFT store');
+    assert.strictEqual(result.ok, false,
+      '_applyCandidateChain should return ok:false when NFT rebuild fails');
+    assert.match(result.reason, /simulated NFT rebuild failure/,
+      'reason should mention simulated NFT rebuild failure');
 
     // Chain must NOT have advanced — _chain.replaceWithBlocks comes after the NFT
     // rebuild call and was never reached.
     assert.strictEqual(nodeA.getHeight(), 0,
       'chain height must still be 0 because replaceWithBlocks was never reached');
 
-    // Accounts HAVE been rebuilt from the candidate — _accounts.rebuildFromBlocks
-    // succeeded before the NFT throw.  The miner's block-reward credit (500 WTC)
-    // now exists in node A's in-memory account state even though the chain is
-    // still at height 0.
+    // Accounts are now ROLLED BACK to their original state thanks to the snapshot
+    // restoration added in the rollback fix.
     const balanceAfter = nodeA.getBalance(minerAddr);
-    assert.notStrictEqual(balanceAfter, balanceBefore,
-      'RISK CONFIRMED: accounts rebuilt from candidate before NFT failure; ' +
-      `miner balance changed ${balanceBefore} → ${balanceAfter} ` +
-      'while chain is still at height 0 — no rollback restores accounts');
+    assert.deepStrictEqual(balanceAfter, balanceBefore,
+      'accounts should be restored to pre-candidate state after NFT rebuild rollback');
 
-    console.log('[PASS] chain-apply-rollback: state inconsistency confirmed and documented', {
+    console.log('[PASS] chain-apply-rollback: NFT rebuild failure correctly rolled back accounts', {
       chainHeight:  nodeA.getHeight(),
       balanceBefore,
       balanceAfter,

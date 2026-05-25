@@ -82,84 +82,63 @@ function testSameFeeOrderingDivergence() {
   console.log('[PASS] mempool: same-fee ordering divergence confirmed', { orderA, orderB });
 }
 
-// ── Test 2: prune() never called automatically ────────────────────────────────
+// ── Test 2: txs survive indefinitely (no time-based eviction) ────────────────
 
-function testPruneNotAutoCalled() {
+function testNoTimeBasedEviction() {
   const pool = new Mempool();
 
-  // Add a legitimate transaction, then back-date its addedAt to 15 minutes ago.
-  // (prune() default maxAgeMs is 10 minutes, so this tx is past the cutoff.)
-  assert.strictEqual(pool.add(coinTx('stale-tx', 0.01, 0)).ok, true);
-  pool._txs.get('stale-tx').addedAt = Date.now() - 15 * 60_000;
+  // A tx stays in the pool past the old 10-minute prune window.
+  assert.strictEqual(pool.add(coinTx('survivor-tx', 0.01, 0)).ok, true);
+  pool._txs.get('survivor-tx').addedAt = Date.now() - 15 * 60_000;
 
-  // Without calling prune(), the stale tx remains in the pool indefinitely.
-  assert.strictEqual(pool.has('stale-tx'), true,
-    'stale tx should still be present before prune() is called — prune is not automatic');
+  // No prune() exists — tx survives until explicitly removed.
+  assert.strictEqual(pool.has('survivor-tx'), true,
+    'tx should survive past old prune window (no time-based eviction)');
   assert.strictEqual(pool.size(), 1);
 
-  // Explicit prune() removes it.
-  pool.prune();
-  assert.strictEqual(pool.has('stale-tx'), false,
-    'stale tx should be gone after explicit prune()');
+  // Only explicit remove/removeAll evicts it.
+  pool.remove('survivor-tx');
+  assert.strictEqual(pool.has('survivor-tx'), false,
+    'tx removed after explicit remove()');
   assert.strictEqual(pool.size(), 0);
 
-  // Demonstrate the actual risk: fill a pool with stale txs so new ones are blocked,
-  // then show that only explicit prune() can unblock it.
-  const fullPool = new Mempool();
-  const FILL = 10; // small number to keep the test fast; the dynamic is the same at 5000
-  for (let i = 0; i < FILL; i++) {
-    const res = fullPool.add(coinTx(`stale-${i}`, 0.01, i));
-    assert.strictEqual(res.ok, true);
-    fullPool._txs.get(`stale-${i}`).addedAt = Date.now() - 15 * 60_000;
-  }
-
-  // A new tx is accepted because the pool is below MAX_SIZE (5000).
-  // The RISK is that at MAX_SIZE the pool becomes read-only without auto-prune.
-  // Verify: after explicit prune, fresh txs are accepted cleanly.
-  fullPool.prune();
-  assert.strictEqual(fullPool.size(), 0, 'all stale txs should be cleared by explicit prune()');
-  const fresh = fullPool.add(coinTx('fresh-after-prune', 0.01, 99));
-  assert.strictEqual(fresh.ok, true,
-    'fresh tx should be accepted once stale txs are evicted by explicit prune()');
-
-  console.log('[PASS] mempool: prune() is not automatic — explicit call required to evict stale txs');
+  console.log('[PASS] mempool: no time-based eviction — txs survive until explicitly removed');
 }
 
-// ── Test 3: NFT flood starves coin transfers ──────────────────────────────────
+// ── Test 3: NFT slot cap protects coin transfers ──────────────────────────────
 
-function testNftFloodStarvesCoinTransfers() {
-  const pool    = new Mempool();
-  const MAX     = 5000; // MEMPOOL_MAX_SIZE
+function testNftSlotCapProtectsCoinTransfers() {
+  const pool       = new Mempool();
+  const NFT_MAX    = 4000; // MEMPOOL_NFT_MAX_SLOTS
 
-  // A single attacker fills all 5 000 slots with zero-fee NFT txs.
-  // Each NFT tx only requires a valid nftId — no fee, no amount.
-  for (let i = 0; i < MAX; i++) {
+  // Attacker fills NFT slots (80% of pool).
+  for (let i = 0; i < NFT_MAX; i++) {
     const res = pool.add(nftTx(`flood-${i}`, i));
-    assert.strictEqual(res.ok, true, `NFT flood tx ${i} should be accepted (no fee guard)`);
+    assert.strictEqual(res.ok, true, `NFT flood tx ${i} should be accepted`);
   }
-  assert.strictEqual(pool.size(), MAX, 'pool should be at capacity after NFT flood');
+  assert.strictEqual(pool.size(), NFT_MAX, 'pool should have exactly NFT_MAX txs');
 
-  // A legitimate coin transfer is now hard-rejected.
-  const coinRes = pool.add(coinTx('victim-transfer', 1.0, 0));
-  assert.strictEqual(coinRes.ok, false,
-    'coin transfer should be rejected when pool is full');
-  assert.strictEqual(coinRes.code, 'POOL_FULL',
-    'RISK CONFIRMED: NFT flood fills the pool — coin transfers get POOL_FULL');
+  // Further NFT txs are rejected with NFT_POOL_FULL.
+  const overflowNft = pool.add(nftTx('overflow-nft', NFT_MAX));
+  assert.strictEqual(overflowNft.ok, false);
+  assert.strictEqual(overflowNft.code, 'NFT_POOL_FULL',
+    'NFT beyond cap rejected with NFT_POOL_FULL');
 
-  // Even another NFT tx is rejected at this point.
-  const nftExtra = pool.add(nftTx('overflow-nft', 99999));
-  assert.strictEqual(nftExtra.ok, false);
-  assert.strictEqual(nftExtra.code, 'POOL_FULL');
+  // Coin transfer is still accepted — 1000 reserved slots protect it.
+  const coinRes = pool.add(coinTx('legitimate-transfer', 1.0, 0));
+  assert.strictEqual(coinRes.ok, true,
+    'coin transfer accepted even after NFT cap hit — reserved slots work');
+  assert.strictEqual(pool.size(), NFT_MAX + 1);
 
-  console.log('[PASS] mempool: NFT flood starves coin transfers — POOL_FULL after zero-fee flood');
+  console.log('[PASS] mempool: NFT slot cap protects coin transfers — 1000 slots always available');
 }
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
 function run() {
   testSameFeeOrderingDivergence();
-  testPruneNotAutoCalled();
-  testNftFloodStarvesCoinTransfers();
+  testNoTimeBasedEviction();
+  testNftSlotCapProtectsCoinTransfers();
   console.log('all mempool risk tests passed');
 }
 

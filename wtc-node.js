@@ -1,4 +1,5 @@
-﻿'use strict';
+﻿// SPDX-License-Identifier: MIT
+'use strict';
 /**
  * wtc-node.js — Unified WTC native-chain API
  *
@@ -50,6 +51,7 @@ const {
 } = require('./wtc-address');
 
 const WALLET_FILE       = 'wtc-wallet.json';
+const PENDING_TXS_FILE  = 'wtc-pending-txs.json';
 const GENESIS_CFG_FILE  = 'wtc-genesis.json';
 const GENESIS_PREMINE   = 1_000_000;
 const CHAIN_PROTOCOL_VERSION = 1;
@@ -60,10 +62,12 @@ const PEER_READINESS_PROBE_CONCURRENCY = 5;
 // ─────────────────────────────────────────────────────────────────────────────
 
 class WtcNode {
+  static PEER_BACKOFF_DIAGNOSTIC_MS = 5 * 60_000; // log stuck-peers reminder every 5 min
   // Track consecutive failures for each peer
   static PEER_FAILURE_BACKOFF_MS = 30_000; // 30 s backoff — peers typically recover within seconds
   static PEER_FAILURE_THRESHOLD = 5; // backoff only after 5 consecutive failures
   _peerFailureCounts = new Map(); // peerUrl -> { count, lastFail }
+  _lastBackoffLog = new Map();    // peerUrl -> last log timestamp
 
   _isPeerInFailureBackoff(peerUrl, now = Date.now()) {
     const fail = this._peerFailureCounts.get(peerUrl);
@@ -88,9 +92,10 @@ class WtcNode {
   /**
    * @param {{ dataDir: string, signingSecret: string }} opts
    */
-  constructor({ dataDir, signingSecret, peerIdentity = '' }) {
+  constructor({ dataDir, signingSecret, peerIdentity = '', walletKey }) {
     this._dataDir  = dataDir;
     this._secret   = signingSecret || crypto.randomBytes(32).toString('hex');
+    this._walletKey = Buffer.isBuffer(walletKey) && walletKey.length === 32 ? walletKey : null;
     this._peerIdentity = typeof peerIdentity === 'string' ? peerIdentity.trim() : '';
     this._isSelfPeerUrl = null;
 
@@ -102,16 +107,86 @@ class WtcNode {
 
     this._wallet     = this._loadOrCreateWallet();
     this._syncInProgress = false;
+
+    this._pendingTxs = [];          // persisted pending txs that survive restart
+    this._loadPendingTxs();
+
+    // Periodic diagnostics: log peers stuck in failure backoff every 5 minutes
+    this._backoffDiagTimer = setInterval(() => this._logBackoffDiagnostics(), WtcNode.PEER_BACKOFF_DIAGNOSTIC_MS);
+    this._backoffDiagTimer.unref();
+  }
+
+  /** Log a periodic reminder for peers still in failure backoff. */
+  _logBackoffDiagnostics() {
+    const now = Date.now();
+    for (const [peerUrl, fail] of this._peerFailureCounts) {
+      if (fail.count < WtcNode.PEER_FAILURE_THRESHOLD) continue;
+      const lastLog = this._lastBackoffLog.get(peerUrl) || 0;
+      if (now - lastLog < WtcNode.PEER_BACKOFF_DIAGNOSTIC_MS) continue;
+      this._lastBackoffLog.set(peerUrl, now);
+      console.warn(`[WtcNode] Peer ${peerUrl} still in failure backoff (${fail.count} consecutive failures, last fail ${new Date(fail.lastFail).toISOString()})`);
+    }
+  }
+
+  _pendingTxsPath() { return path.join(this._dataDir, PENDING_TXS_FILE); }
+
+  _loadPendingTxs() {
+    try {
+      const raw = fs.readFileSync(this._pendingTxsPath(), 'utf8');
+      const parsed = JSON.parse(raw);
+      this._pendingTxs = Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      this._pendingTxs = [];
+    }
+  }
+
+  _savePendingTxs() {
+    try {
+      fs.mkdirSync(path.dirname(this._pendingTxsPath()), { recursive: true });
+      const tmp = this._pendingTxsPath() + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(this._pendingTxs), 'utf8');
+      fs.renameSync(tmp, this._pendingTxsPath());
+    } catch (e) {
+      console.warn('[WtcNode] Failed to save pending txs:', e.message);
+    }
+  }
+
+  _addPendingTx(tx) {
+    const exists = this._pendingTxs.some(t => t.id === tx.id);
+    if (exists) return;
+    this._pendingTxs.push(tx);
+    this._savePendingTxs();
+  }
+
+  _removePendingTx(txid) {
+    const before = this._pendingTxs.length;
+    this._pendingTxs = this._pendingTxs.filter(t => t.id !== txid);
+    if (this._pendingTxs.length !== before) this._savePendingTxs();
+  }
+
+  _retryPendingTxs() {
+    let retried = 0;
+    for (const tx of this._pendingTxs) {
+      const result = this._mempool.add(tx);
+      if (result.ok) {
+        retried++;
+      } else {
+        console.warn(`[WtcNode] Pending tx ${tx.id.slice(0, 12)} dropped: ${result.message}`);
+      }
+    }
+    if (retried > 0) {
+      console.log(`[WtcNode] Re-added ${retried} pending tx(s) to mempool`);
+    }
   }
 
   /**
    * Finish initialization with peer-network helpers.
    * Must be called once after Electron app.whenReady().
    *
-  * @param {{ getActivePeers: () => string[], getPeerTargets?: () => string[], getTrustedPeerTargets?: () => string[], requestPeerJson: Function, onPeerTip?: Function, allowPartialQuorumCommit?: boolean, getConnectedPeerCount?: Function }} opts
+   * @param {{ getActivePeers: () => string[], getPeerTargets?: () => string[], getTrustedPeerTargets?: () => string[], requestPeerJson: Function, onPeerTip?: Function, allowPartialQuorumCommit?: boolean, getConnectedPeerCount?: Function, getEnergyContributions?: () => object }} opts
    * @returns {WtcNode} this (for chaining)
    */
-  init({ getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit = true, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount }) {
+  init({ getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit = true, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount, getEnergyContributions }) {
     const privBuf = Buffer.from(this._wallet.primaryKey.privateKey, 'hex');
 
     this._consensus = new Consensus({
@@ -123,6 +198,7 @@ class WtcNode {
       requestPeerJson,
       privateKey:     privBuf,
       allowPartialQuorumCommit,
+      getEnergyContributions,
     });
     this._isLiveLocalTunnelPeer = typeof isLiveLocalTunnelPeer === 'function' ? isLiveLocalTunnelPeer : null;
     this._isSelfPeerUrl = typeof isSelfPeerUrl === 'function' ? isSelfPeerUrl : null;
@@ -143,6 +219,8 @@ class WtcNode {
     // genesis are also reset (not just height-0 installs).
     this._verifyGenesisIntegrity();
 
+    this._retryPendingTxs();
+
     console.log(
       `[WtcNode] Ready - height=${this._chain.getHeight()}` +
       ` address=${this._wallet.primaryKey.address}`
@@ -159,8 +237,20 @@ class WtcNode {
     try {
       if (fs.existsSync(fp)) {
         const raw = JSON.parse(fs.readFileSync(fp, 'utf8'));
-        if (raw && Array.isArray(raw.keys) && raw.keys.length > 0) {
-          // Ensure wallet has a primaryKey pointer
+        if (raw && raw.encrypted && this._walletKey) {
+          const decipher = crypto.createDecipheriv(
+            'aes-256-gcm',
+            this._walletKey,
+            Buffer.from(raw.iv, 'hex')
+          );
+          decipher.setAuthTag(Buffer.from(raw.tag, 'hex'));
+          const decrypted = decipher.update(raw.ciphertext, 'hex', 'utf8') + decipher.final('utf8');
+          const parsed = JSON.parse(decrypted);
+          if (parsed && Array.isArray(parsed.keys) && parsed.keys.length > 0) {
+            if (!parsed.primaryKey) parsed.primaryKey = parsed.keys[0];
+            return parsed;
+          }
+        } else if (raw && Array.isArray(raw.keys) && raw.keys.length > 0) {
           if (!raw.primaryKey) raw.primaryKey = raw.keys[0];
           return raw;
         }
@@ -177,7 +267,19 @@ class WtcNode {
   _saveWallet(wallet) {
     try {
       fs.mkdirSync(path.dirname(this._walletPath()), { recursive: true });
-      fs.writeFileSync(this._walletPath(), JSON.stringify(wallet, null, 2), 'utf8');
+      let data = JSON.stringify(wallet, null, 2);
+      if (this._walletKey) {
+        const iv = crypto.randomBytes(12);
+        const cipher = crypto.createCipheriv('aes-256-gcm', this._walletKey, iv);
+        const encrypted = Buffer.concat([cipher.update(data, 'utf8'), cipher.final()]);
+        const tag = cipher.getAuthTag();
+        data = JSON.stringify({
+          encrypted: true, version: 1,
+          iv: iv.toString('hex'), tag: tag.toString('hex'),
+          ciphertext: encrypted.toString('hex'),
+        });
+      }
+      fs.writeFileSync(this._walletPath(), data, 'utf8');
     } catch (e) {
       console.error('[WtcNode] Failed to save wallet:', e.message);
     }
@@ -603,6 +705,11 @@ class WtcNode {
       throw new Error(reason);
     }
 
+    const committedTxIds = (committed.transactions || []).map(t => t.id);
+    for (const txid of committedTxIds) {
+      this._removePendingTx(txid);
+    }
+
     return {
       ok:      true,
       height:  committed.height,
@@ -667,7 +774,7 @@ class WtcNode {
     const kp = this._wallet.keys.find(k => k.address === address);
     if (!kp) throw new Error(`Address ${address} not in wallet`);
     const privBuf = Buffer.from(kp.privateKey, 'hex');
-    const sig     = sign(txHash(message), privBuf);
+    const sig     = sign(txHash('\x18Wattcoin Signed Message:\n' + message), privBuf);
     return { address, message, signature: `${sig.r}${sig.s}${String(sig.v).padStart(2, '0')}` };
   }
 
@@ -680,7 +787,7 @@ class WtcNode {
       const r = signature.slice(0, 64);
       const s = signature.slice(64, 128);
       const v = parseInt(signature.slice(128), 10);
-      return verifySignature(txHash(message), { r, s, v }, address);
+      return verifySignature(txHash('\x18Wattcoin Signed Message:\n' + message), { r, s, v }, address);
     } catch (_) {
       return false;
     }
@@ -1018,6 +1125,7 @@ class WtcNode {
       );
     }
 
+    const accountsSnapshot = this._accounts.snapshot();
     const rebuildResult = this._accounts.rebuildFromBlocks(candidate, {
       allowLegacyStateRootMismatch: true,
     });
@@ -1030,7 +1138,12 @@ class WtcNode {
         `during ${mode} chain rebuild from ${String(peer || '')}; first at height ${legacyStateRootMismatches[0].height}`
       );
     }
-    this._nfts.rebuildFromBlocks(candidate);
+    try {
+      this._nfts.rebuildFromBlocks(candidate);
+    } catch (e) {
+      this._accounts.restoreSnapshot(accountsSnapshot);
+      return { ok: false, reason: `NFT rebuild failed after accounts rebuild — rolled back: ${e.message}` };
+    }
     this._chain.replaceWithBlocks(candidate);
     if (this._consensus && typeof this._consensus.resetTracking === 'function') {
       this._consensus.resetTracking();
@@ -1329,6 +1442,7 @@ class WtcNode {
 
     const result = this._mempool.add(tx);
     if (!result.ok) throw new Error(result.message);
+    this._addPendingTx(tx);
 
     return { ok: true, txid: tx.id, nftId, from: fromAddress, to: toAddress };
   }
@@ -1360,6 +1474,7 @@ class WtcNode {
 
     const result = this._mempool.add(tx);
     if (!result.ok) throw new Error(result.message);
+    this._addPendingTx(tx);
 
     return { ok: true, txid: tx.id, nftId, to };
   }
@@ -1396,6 +1511,7 @@ class WtcNode {
       const result = this._mempool.add(tx);
       if (result.ok) {
         minted.push(def.nftId);
+        this._addPendingTx(tx);
       } else {
         console.warn(`[WtcNode] mintNftBatch: failed to add ${def.nftId} to mempool: ${result.message}`);
       }
@@ -1441,9 +1557,9 @@ class WtcNode {
  * }} opts
  * @returns {WtcNode}
  */
-function createWtcNode({ dataDir, signingSecret, peerIdentity = '', getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit = true, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount }) {
-  const node = new WtcNode({ dataDir, signingSecret, peerIdentity });
-  node.init({ getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount });
+function createWtcNode({ dataDir, signingSecret, peerIdentity = '', walletKey, getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit = true, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount, getEnergyContributions }) {
+  const node = new WtcNode({ dataDir, signingSecret, peerIdentity, walletKey });
+  node.init({ getActivePeers, getPeerTargets, getTrustedPeerTargets, requestPeerJson, onPeerTip, allowPartialQuorumCommit, isLiveLocalTunnelPeer, isSelfPeerUrl, getConnectedPeerCount, getEnergyContributions });
   return node;
 }
 

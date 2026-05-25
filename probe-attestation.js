@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 
 const { txHash, verifySignature, isValidAddress } = require('./wtc-address');

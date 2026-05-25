@@ -1,7 +1,17 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{THE_REQUEST} /index\.html [NC]
+  RewriteRule ^(.*)index\.html$ /$1 [R=301,L]
+</IfModule>
+
 <IfModule mod_headers.c>
   <FilesMatch "^(index\.html|wattcoin-whitepaper\.html)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
+  </FilesMatch>
+
+  <FilesMatch "^index\.html$">
+    Header set Link '<https://wattcoin.ee/>; rel="canonical"'
   </FilesMatch>
 </IfModule>

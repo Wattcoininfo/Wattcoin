@@ -1,4 +1,5 @@
-﻿'use strict';
+﻿// SPDX-License-Identifier: MIT
+'use strict';
 /**
  * wtc-accounts.js — Account state for the WTC native chain
  *
@@ -181,7 +182,7 @@ class Accounts {
    */
   stateHash() {
     const entries = Object.entries(this._bal)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
       .map(([addr, a]) => [
         addr,
         a.confirmed,
@@ -196,6 +197,12 @@ class Accounts {
    */
   snapshot() {
     return JSON.parse(JSON.stringify(this._bal));
+  }
+
+  /** Restore account state from a prior snapshot (deep copy). */
+  restoreSnapshot(snap) {
+    this._bal = JSON.parse(JSON.stringify(snap));
+    this._save();
   }
 
   /**
@@ -227,7 +234,7 @@ class Accounts {
 
     const stateHashFor = () => {
       const entries = Object.entries(next)
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
         .map(([addr, a]) => [
           addr,
           a.confirmed,

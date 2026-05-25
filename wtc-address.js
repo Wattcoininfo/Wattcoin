@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 /**
  * wtc-address.js — Wattcoin native address module
@@ -8,7 +9,7 @@
  *
  * Derivation:
  *   32-byte private key (random)
- *   → secp256k1 → 33-byte compressed public key
+ *   → secp256k1 (elliptic) → 33-byte compressed public key
  *   → SHA-256 → RIPEMD-160 → 20-byte hash160
  *   → bech32m_encode("wtc", v0, hash160) → "wtc1q..."
  *
@@ -16,89 +17,8 @@
  */
 
 const crypto = require('crypto');
-
-// ─────────────────────────────────────────────────────────────────────────────
-// secp256k1 field arithmetic (pure BigInt — mirrors electron-main.js)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const _P  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2Fn;
-const _N  = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
-const _Gx = 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798n;
-const _Gy = 0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8n;
-
-function _modP(v) { return ((v % _P) + _P) % _P; }
-function _modN(v) { return ((v % _N) + _N) % _N; }
-
-function _powMod(base, exp, mod) {
-  let r = 1n;
-  base = base % mod;
-  while (exp > 0n) {
-    if (exp & 1n) r = r * base % mod;
-    exp >>= 1n;
-    base = base * base % mod;
-  }
-  return r;
-}
-
-function _invP(a) { return _powMod(_modP(a), _P - 2n, _P); }
-function _invN(a) { return _powMod(_modN(a), _N - 2n, _N); }
-
-// Jacobian coordinates — infinity represented as [0n, 1n, 0n]
-function _ptDouble([X, Y, Z]) {
-  if (Y === 0n || Z === 0n) return [0n, 1n, 0n];
-  const A = _modP(X * X), B = _modP(Y * Y), C = _modP(B * B);
-  const D = _modP(2n * (_modP((X + B) * (X + B)) - A - C));
-  const E = _modP(3n * A);
-  const X2 = _modP(E * E - 2n * D);
-  const Y2 = _modP(E * (D - X2) - 8n * C);
-  return [X2, Y2, _modP(2n * Y * Z)];
-}
-
-function _ptAdd(PA, PB) {
-  if (PA[2] === 0n) return PB;
-  if (PB[2] === 0n) return PA;
-  const [X1, Y1, Z1] = PA, [X2, Y2, Z2] = PB;
-  const Z1Z1 = _modP(Z1 * Z1), Z2Z2 = _modP(Z2 * Z2);
-  const U1 = _modP(X1 * Z2Z2), U2 = _modP(X2 * Z1Z1);
-  const S1 = _modP(Y1 * Z2 * Z2Z2), S2 = _modP(Y2 * Z1 * Z1Z1);
-  const H = _modP(U2 - U1), R = _modP(S2 - S1);
-  if (H === 0n) return R === 0n ? _ptDouble(PA) : [0n, 1n, 0n];
-  const H2 = _modP(H * H), H3 = _modP(H2 * H);
-  const X3 = _modP(R * R - H3 - 2n * U1 * H2);
-  return [X3, _modP(R * (U1 * H2 - X3) - S1 * H3), _modP(H * Z1 * Z2)];
-}
-
-function _ptMul(k, [Px, Py]) {
-  let R = [0n, 1n, 0n], Q = [Px, Py, 1n];
-  k = _modN(k);
-  while (k > 0n) {
-    if (k & 1n) R = _ptAdd(R, Q);
-    Q = _ptDouble(Q);
-    k >>= 1n;
-  }
-  return R;
-}
-
-function _jacToAff([X, Y, Z]) {
-  if (Z === 0n) return null;
-  const iz = _invP(Z), iz2 = _modP(iz * iz);
-  return [_modP(X * iz2), _modP(Y * iz2 * iz)];
-}
-
-// Recover a public key (affine) from an ECDSA signature + message hash.
-function _recoverPublicKey(hash32, r, s, recid) {
-  const x = r + (recid & 2 ? _N : 0n);
-  if (x >= _P) return null;
-  const y2 = _modP(x * x % _P * x + 7n);
-  let y = _powMod(y2, (_P + 1n) / 4n, _P);
-  if (_modP(y * y) !== y2) return null;
-  if ((y & 1n) !== BigInt(recid & 1)) y = _modP(_P - y);
-  const rInv = _invN(r);
-  const hash = BigInt('0x' + hash32.toString('hex'));
-  const u1 = _modN(_N - _modN(rInv * hash));
-  const u2 = _modN(rInv * s);
-  return _jacToAff(_ptAdd(_ptMul(u1, [_Gx, _Gy]), _ptMul(u2, [x, y])));
-}
+const EC = require('elliptic').ec;
+const ec = new EC('secp256k1');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Key operations
@@ -108,15 +28,8 @@ function _recoverPublicKey(hash32, r, s, recid) {
  * Derive a 33-byte compressed secp256k1 public key from a 32-byte private key.
  */
 function privateKeyToPublicKey(privKeyBuf) {
-  const k = BigInt('0x' + privKeyBuf.toString('hex'));
-  if (k <= 0n || k >= _N) throw new Error('Invalid private key: out of range');
-  const pt = _jacToAff(_ptMul(k, [_Gx, _Gy]));
-  if (!pt) throw new Error('Invalid private key: point at infinity');
-  const prefix = (pt[1] & 1n) === 0n ? 0x02 : 0x03;
-  return Buffer.concat([
-    Buffer.from([prefix]),
-    Buffer.from(pt[0].toString(16).padStart(64, '0'), 'hex'),
-  ]);
+  const key = ec.keyFromPrivate(privKeyBuf);
+  return Buffer.from(key.getPublic(true, 'hex'), 'hex');
 }
 
 /**
@@ -200,7 +113,7 @@ function encodeAddress(hash160Buf) {
   }
   const words = _convertBits([...hash160Buf], 8, 5, true);
   if (!words) throw new Error('encodeAddress: convertBits failed');
-  const data = [0, ...words]; // 0 = witness version (P2WPKH-style)
+  const data = [0, ...words];
   const checksum = _bech32mChecksum(_HRP, data);
   return _HRP + '1' + [...data, ...checksum].map(d => _CHARSET[d]).join('');
 }
@@ -225,8 +138,8 @@ function decodeAddressToHash160(addr) {
     data.push(_CHARSET_REV[c]);
   }
   if (!_bech32mVerify(hrp, data)) return null;
-  const payload = data.slice(0, -6); // remove 6-char checksum
-  if (payload.length < 1 || payload[0] !== 0) return null; // witness version must be 0
+  const payload = data.slice(0, -6);
+  if (payload.length < 1 || payload[0] !== 0) return null;
   const bytes = _convertBits(payload.slice(1), 5, 8, false);
   if (!bytes || bytes.length !== 20) return null;
   return Buffer.from(bytes);
@@ -274,18 +187,13 @@ function addressFromPrivateKey(privKeyBuf) {
  *   address     "wtc1q..." (44 chars)
  */
 function generateKeypair() {
-  let privKeyBuf;
-  for (let attempt = 0; attempt < 32; attempt++) {
-    const candidate = crypto.randomBytes(32);
-    const k = BigInt('0x' + candidate.toString('hex'));
-    if (k > 0n && k < _N) { privKeyBuf = candidate; break; }
-  }
-  if (!privKeyBuf) throw new Error('generateKeypair: RNG failure (32 attempts)');
-  const pubKeyBuf = privateKeyToPublicKey(privKeyBuf);
+  const key = ec.genKeyPair();
+  const privHex = key.getPrivate('hex').padStart(64, '0');
+  const pubHex = key.getPublic(true, 'hex');
   return {
-    privateKey: privKeyBuf.toString('hex'),
-    publicKey:  pubKeyBuf.toString('hex'),
-    address:    encodeAddress(hash160(pubKeyBuf)),
+    privateKey: privHex,
+    publicKey: pubHex,
+    address: encodeAddress(hash160(Buffer.from(pubHex, 'hex'))),
   };
 }
 
@@ -307,27 +215,13 @@ function sign(hash32, privKey) {
   const privBuf = typeof privKey === 'string' ? Buffer.from(privKey, 'hex') : privKey;
   if (!Buffer.isBuffer(hash32) || hash32.length !== 32) throw new Error('sign: hash must be 32 bytes');
   if (!Buffer.isBuffer(privBuf) || privBuf.length !== 32) throw new Error('sign: privKey must be 32 bytes');
-  const d    = BigInt('0x' + privBuf.toString('hex'));
-  const hash = BigInt('0x' + hash32.toString('hex'));
-  for (let attempt = 0; attempt < 64; attempt++) {
-    const k = BigInt('0x' + crypto.randomBytes(32).toString('hex'));
-    if (k <= 0n || k >= _N) continue;
-    const Rpt = _jacToAff(_ptMul(k, [_Gx, _Gy]));
-    if (!Rpt) continue;
-    const r = _modN(Rpt[0]);
-    if (r === 0n) continue;
-    const s = _modN(_invN(k) * _modN(hash + r * d));
-    if (s === 0n) continue;
-    // Normalise to low-s (canonical form)
-    const sLow = s > _N / 2n ? _modN(_N - s) : s;
-    const v    = Number(Rpt[1] & 1n) ^ (s !== sLow ? 1 : 0);
-    return {
-      r: r.toString(16).padStart(64, '0'),
-      s: sLow.toString(16).padStart(64, '0'),
-      v,
-    };
-  }
-  throw new Error('sign: failed to generate valid nonce after 64 attempts');
+  const key = ec.keyFromPrivate(privBuf);
+  const sig = key.sign(hash32, { canonical: true });
+  return {
+    r: sig.r.toString(16, 64),
+    s: sig.s.toString(16, 64),
+    v: sig.recoveryParam,
+  };
 }
 
 /**
@@ -342,22 +236,14 @@ function sign(hash32, privKey) {
 function verifySignature(hash32, sig, address) {
   try {
     if (!Buffer.isBuffer(hash32) || hash32.length !== 32) return false;
-    const r = BigInt('0x' + String(sig && sig.r || ''));
-    const s = BigInt('0x' + String(sig && sig.s || ''));
-    if (r <= 0n || r >= _N || s <= 0n || s >= _N) return false;
-    if (s > _N / 2n) return false; // reject non-canonical high-s
     const expectedH160 = decodeAddressToHash160(address);
     if (!expectedH160) return false;
-    // Try both recovery ids — v tells us the right one, but we check both for robustness
     for (let recid = 0; recid <= 1; recid++) {
-      const pt = _recoverPublicKey(hash32, r, s, recid);
-      if (!pt) continue;
-      const prefix = (pt[1] & 1n) === 0n ? 0x02 : 0x03;
-      const pubKey = Buffer.concat([
-        Buffer.from([prefix]),
-        Buffer.from(pt[0].toString(16).padStart(64, '0'), 'hex'),
-      ]);
-      if (hash160(pubKey).equals(expectedH160)) return true;
+      try {
+        const recovered = ec.recoverPubKey(hash32, sig, recid);
+        const pubKey = Buffer.from(recovered.encode('hex', true), 'hex');
+        if (hash160(pubKey).equals(expectedH160)) return true;
+      } catch (_) { continue; }
     }
     return false;
   } catch (_) {
@@ -379,19 +265,69 @@ function txHash(data) {
     .digest();
 }
 
+// ── Bitcoin Signed Message verification ──────────────────────────────────────
+function _encodeVarint(n) {
+  if (n < 0xfd) return Buffer.from([n]);
+  const b = Buffer.alloc(n <= 0xffff ? 3 : 5);
+  if (n <= 0xffff) { b[0] = 0xfd; b.writeUInt16LE(n, 1); } else { b[0] = 0xfe; b.writeUInt32LE(n, 1); }
+  return b;
+}
+
+function _msgHashForVerify(message) {
+  const magic = 'Bitcoin Signed Message:\n';
+  const msgBuf = Buffer.from(message, 'utf8');
+  const full = Buffer.concat([Buffer.from([magic.length]), Buffer.from(magic), _encodeVarint(msgBuf.length), msgBuf]);
+  return crypto.createHash('sha256').update(crypto.createHash('sha256').update(full).digest()).digest();
+}
+
+const _BASE58_ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function _base58Encode(bytes) {
+  let n = BigInt('0x' + (bytes.length ? bytes.toString('hex') : '00'));
+  let s = '';
+  while (n > 0n) { s = _BASE58_ALPHA[Number(n % 58n)] + s; n /= 58n; }
+  for (const b of bytes) { if (b !== 0) break; s = '1' + s; }
+  return s;
+}
+
+/**
+ * Verify a Bitcoin-style signed message against a base58 address.
+ * Signature format: base64(flag[1] + r[32] + s[32]), flag ∈ {27..34}
+ * Message magic: "Bitcoin Signed Message:\n"
+ * Address prefixes: mainnet=0x00, testnet/regtest=0x6F
+ */
+function verifyWalletMessagePureJS(address, signature, message, network) {
+  try {
+    const sigBuf = Buffer.from(signature, 'base64');
+    if (sigBuf.length !== 65) return false;
+    const flag = sigBuf[0];
+    if (flag < 27 || flag > 34) return false;
+    const recid = (flag - 27) & 3;
+    const msgHash = _msgHashForVerify(message);
+    const sigObj = { r: sigBuf.slice(1, 33).toString('hex'), s: sigBuf.slice(33, 65).toString('hex') };
+    const point = ec.recoverPubKey(msgHash, sigObj, recid);
+    if (!point) return false;
+    const pubkey = Buffer.from(point.encodeCompressed());
+    const h160 = crypto.createHash('ripemd160').update(crypto.createHash('sha256').update(pubkey).digest()).digest();
+    const vByte = ((network || 'wtc-mainnet') === 'mainnet') ? 0x00 : 0x6f;
+    const versioned = Buffer.concat([Buffer.from([vByte]), h160]);
+    const checksum = crypto.createHash('sha256').update(crypto.createHash('sha256').update(versioned).digest()).digest().slice(0, 4);
+    return _base58Encode(Buffer.concat([versioned, checksum])) === address;
+  } catch (_) {
+    return false;
+  }
+}
+
 module.exports = {
-  // Keypair & address generation
   generateKeypair,
   addressFromPrivateKey,
   addressFromPublicKey,
   encodeAddress,
   decodeAddressToHash160,
   isValidAddress,
-  // Signing
   sign,
   verifySignature,
   txHash,
-  // Lower-level (used by chain modules)
   privateKeyToPublicKey,
   hash160,
+  verifyWalletMessagePureJS,
 };

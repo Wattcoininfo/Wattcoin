@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 
 async function maybeRegisterReachableRequester(req, settings, source = 'peer-contact', {

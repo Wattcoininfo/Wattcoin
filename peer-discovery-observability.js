@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 
 function buildPeerDiscoverySnapshot({ settings, discoveredEntries, staleThresholdMs, isPeerUrlBanned, nowMs = Date.now(), transformUrl }) {

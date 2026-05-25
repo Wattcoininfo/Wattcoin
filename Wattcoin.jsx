@@ -426,7 +426,7 @@ export default function Wattcoin() {
             Watt<span style={{ color: "#4ade80" }}>coin</span>
           </h1>
           <p style={{ fontFamily: "'DM Mono', monospace", fontSize: 12, color: "#4ade80", letterSpacing: "0.16em", marginBottom: 16, textTransform: "uppercase" }}>
-            Hardware-Aware Deterministic Proof-of-Verified-Work
+            Proof-of-Energy
           </p>
           <p style={{ fontSize: 18, fontWeight: 700, color: "#e8f5e8", letterSpacing: "0.04em", marginBottom: 12 }}>
             Energy-Backed. Physically Grounded. Fairly Mined.
@@ -619,7 +619,7 @@ export default function Wattcoin() {
             <FadeIn delay={0.1}>
               <div>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: "#7aaa7a", marginBottom: 20 }}>
-                  Wattcoin (WTC) introduces <strong style={{ color: "#e8f5e8" }}>Hardware-Aware Deterministic Proof-of-Verified-Work (HA-DPoVW)</strong> — a consensus mechanism where every miner pays the exact same energy cost per coin, regardless of hardware type or efficiency. A GPU miner and a CPU miner both spend <strong style={{ color: "#4ade80" }}>20 kWh</strong> to earn one WTC in Tier 1 — hardware only determines how many operations that requires.
+                  Wattcoin (WTC) introduces <strong style={{ color: "#e8f5e8" }}>Proof-of-Energy (PoE)</strong> — a consensus mechanism where every miner pays the exact same energy cost per coin, regardless of hardware type or efficiency. A GPU miner and a CPU miner both spend <strong style={{ color: "#4ade80" }}>20 kWh</strong> to earn one WTC in Tier 1 — hardware only determines how many operations that requires.
                 </p>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: "#7aaa7a", marginBottom: 20 }}>
                   Energy consumption is derived from hardware specifications scaled by the miner's configured duty-cycle load: <strong style={{ color: "#e8f5e8" }}>Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</strong>. Benchmark proofs — CPU hash, memory walk, GPU pixel hash — measure actual computation throughput to validate the hardware claim. Any ledger peer independently re-derives each expected proof using the same deterministic algorithm. No specialised hardware is required on the verifier side.
@@ -1084,7 +1084,7 @@ export default function Wattcoin() {
                 </thead>
                 <tbody>
                   {[
-                    ["Consensus",          "Probabilistic PoW", "Staking",       "Competitive PoSW", "HA-DPoVW"],
+                    ["Consensus",          "Probabilistic PoW", "Staking",       "Competitive PoSW", "PoE"],
                     ["Hardware awareness", "None",              "None",          "None",             "Full — per-hardware tasks"],
                     ["Energy per coin",    "Variable (ASICs)", "N/A",           "Variable",         "Equal for all hardware"],
                     ["Genesis supply",     "None (Satoshi ~1M early mined)", "~72M ETH ICO pre-sale", "Team/investor allocation", "1,000,000 WTC pre-mined"],

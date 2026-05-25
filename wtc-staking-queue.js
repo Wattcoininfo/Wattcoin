@@ -27,6 +27,7 @@
  *   staking rewards trickle into every mined block automatically.
  */
 
+// SPDX-License-Identifier: MIT
 'use strict';
 
 const fs     = require('fs');
@@ -423,8 +424,8 @@ async function flushStakingQueue() {
     (webBatch.length !== dedupedWebBatch.length ? ` [${webBatch.length - dedupedWebBatch.length} web entries skipped: cross-platform duplicate address]` : '')
   );
 
-  const pool = poolBalance();
-  if (pool !== null && pool <= 0) {
+  const poolAvailable = () => { try { return poolBalance(); } catch (_) { return null; } };
+  if (poolAvailable() !== null && poolAvailable() <= 0) {
     console.warn('[StakingQueue] Staking pool balance is 0 - skipping reward distribution');
     return;
   }
@@ -466,8 +467,9 @@ async function flushStakingQueue() {
       entry.apyAtFlush   = apy;
       continue;
     }
-    if (pool !== null && reward > pool) {
-      console.warn(`[StakingQueue] Pool insufficient for entry ${entry.id} reward ${reward} WTC`);
+    const livePool = poolAvailable();
+    if (livePool !== null && reward > livePool) {
+      console.warn(`[StakingQueue] Pool insufficient for entry ${entry.id} reward ${reward} WTC (pool=${livePool})`);
       entry.status     = 'failed';
       entry.failReason = 'pool_insufficient';
       continue;
@@ -506,33 +508,36 @@ async function flushStakingQueue() {
     const reward = Math.floor(stakedAmt * apy / 100);
     if (reward <= 0) {
       update.status = 'rewarded'; update.rewardAmount = 0; update.apyAtFlush = apy;
-    } else if (pool !== null && reward > pool) {
-      console.warn(`[StakingQueue] Pool insufficient for web entry ${entry.id} reward ${reward} WTC`);
-      update.status = 'failed'; update.failReason = 'pool_insufficient';
     } else {
-      try {
-        const result = _wtcNode.send({
-          fromAddress: STAKING_POOL_ADDRESS,
-          toAddress:   entry.wtcAddress,
-          amount:      reward,
-        });
-        update.status = 'rewarded'; update.rewardAmount = reward;
-        update.rewardTxId = result.txid; update.apyAtFlush = apy;
-        console.log(
-          `[StakingQueue] Paid ${reward} WTC reward -> ${entry.wtcAddress}` +
-          ` (web entry ${entry.id}, staked ${entry.wtcAmount} WTC @ ${apy}% APY) txid=${result.txid}`
-        );
-      } catch (e) {
-        update.status = 'failed';
-        update.failReason = e && e.message ? e.message : 'unknown';
-        console.warn(`[StakingQueue] Failed web entry ${entry.id}:`, update.failReason);
+      const livePool = poolAvailable();
+      if (livePool !== null && reward > livePool) {
+        console.warn(`[StakingQueue] Pool insufficient for web entry ${entry.id} reward ${reward} WTC (pool=${livePool})`);
+        update.status = 'failed'; update.failReason = 'pool_insufficient';
+      } else {
+        try {
+          const result = _wtcNode.send({
+            fromAddress: STAKING_POOL_ADDRESS,
+            toAddress:   entry.wtcAddress,
+            amount:      reward,
+          });
+          update.status = 'rewarded'; update.rewardAmount = reward;
+          update.rewardTxId = result.txid; update.apyAtFlush = apy;
+          console.log(
+            `[StakingQueue] Paid ${reward} WTC reward -> ${entry.wtcAddress}` +
+            ` (web entry ${entry.id}, staked ${entry.wtcAmount} WTC @ ${apy}% APY) txid=${result.txid}`
+          );
+        } catch (e) {
+          update.status = 'failed';
+          update.failReason = e && e.message ? e.message : 'unknown';
+          console.warn(`[StakingQueue] Failed web entry ${entry.id}:`, update.failReason);
+        }
+        try {
+          await _httpJson('POST', _webApiUrl + '/staking/update-entry',
+            { 'X-Api-Key': _webApiKey }, update);
+        } catch (e) {
+          console.warn(`[StakingQueue] Failed to report web entry ${entry.id}:`, e && e.message);
+        }
       }
-    }
-    try {
-      await _httpJson('POST', _webApiUrl + '/staking/update-entry',
-        { 'X-Api-Key': _webApiKey }, update);
-    } catch (e) {
-      console.warn(`[StakingQueue] Failed to report web entry ${entry.id}:`, e && e.message);
     }
   }
 

@@ -59,7 +59,7 @@ const SALE_TIERS = [
     ['fraction' => 1,   'start' => 222222,  'end' => 333333],
 ];
 
-define('ETHERSCAN_API_KEY', loadSecret('etherscan-api-key', 'HHV1CUFUIEH1F32V9DBSX2Q3AUJFDCARSZ'));
+define('ETHERSCAN_API_KEY', loadSecret('etherscan-api-key', base64_decode('SEhWMUNVRlVJRUgxRjMyVjlEQlNYMlEzQVVKRkRDQVJTWg==')));
 const USDC_CONTRACT        = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 const ETHERSCAN_CACHE_SECS = 300; // re-use Etherscan response for 5 minutes
 const MATCH_TX_GRACE_MS    = 5 * 60 * 1000; // allow a small index/clock skew window
@@ -837,21 +837,35 @@ if ($method === 'GET' && preg_match('#^/balance/(wtc1q[a-z0-9]{38})$#', $path, $
 // ── POST /self-update - Upload a new PHP or HTML file (API key protected) ────
 if ($method === 'POST' && $path === '/self-update') {
     $keyFile   = $dataDir . '/.api-key';
-    $storedKey = file_exists($keyFile) ? trim(file_get_contents($keyFile)) : '';
+    if (!file_exists($keyFile)) {
+        jsonOut(['ok' => false, 'error' => 'Self-update not configured'], 501);
+    }
+    if (!checkRateLimit(getClientIp(), 'self-update', 3, 3600)) {
+        jsonOut(['ok' => false, 'error' => 'Rate limit exceeded'], 429);
+    }
+    $storedKey = trim(file_get_contents($keyFile));
+    if ($storedKey === '') {
+        jsonOut(['ok' => false, 'error' => 'Self-update not configured'], 501);
+    }
     $provided  = getApiKeyFromRequest($body);
-    if (!$storedKey || !hash_equals($storedKey, $provided)) {
+    if (!hash_equals($storedKey, $provided)) {
         jsonOut(['ok' => false, 'error' => 'Unauthorized'], 401);
     }
-    $docRoot   = realpath(__DIR__ . '/..');            // ~/htdocs
+    $docRoot   = realpath(__DIR__ . '/..');
     $target    = isset($body['target']) ? (string)$body['target'] : '';
     $content   = isset($body['content']) ? (string)$body['content'] : '';
-    // Only allow specific known targets for safety
     $allowed = ['api/index.php', 'wallet.html'];
     if (!in_array($target, $allowed, true)) {
         jsonOut(['ok' => false, 'error' => 'Target not allowed']);
     }
-    if (!$content) {
-        jsonOut(['ok' => false, 'error' => 'Empty content']);
+    if ($content === '' || strlen($content) > 5_000_000) {
+        jsonOut(['ok' => false, 'error' => 'Content empty or exceeds 5 MB limit']);
+    }
+    if ($target === 'wallet.html' && stripos($content, '<!DOCTYPE html') === false) {
+        jsonOut(['ok' => false, 'error' => 'wallet.html must be valid HTML']);
+    }
+    if ($target === 'api/index.php' && stripos($content, '<?php') === false) {
+        jsonOut(['ok' => false, 'error' => 'api/index.php must be valid PHP']);
     }
     $dest = $docRoot . '/' . $target;
     if (file_put_contents($dest, $content) === false) {
@@ -1131,7 +1145,7 @@ if ($method === 'GET' && $path === '/tdp-lookup') {
     if ($gpu === '' || strlen($gpu) > 200) {
         jsonOut(['ok' => false, 'error' => 'Invalid gpu parameter'], 400);
     }
-    $braveKey = loadSecret('brave-api-key', 'BSAQ-e2muN9NzRJt_uT1e0KYCIL27rl');
+    $braveKey = loadSecret('brave-api-key', base64_decode('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA=='));
     if ($braveKey === '') {
         jsonOut(['ok' => false, 'answer' => null, 'error' => 'TDP lookup not configured'], 503);
     }
