@@ -837,11 +837,15 @@ export default function AppTabs() {
                 setProbeLog([]);
                 try {
                   localStorage.removeItem(LOG_STORAGE_KEY);
-                } catch (_) { /* istanbul ignore next */ }
+                } catch (_) {
+                  /* istanbul ignore next */
+                }
                 try {
                   const hw = window.wattcoinHardware;
                   if (hw && hw.invoke) hw.invoke('wattcoin-save-probe-log', []);
-                } catch (_) { /* istanbul ignore next */ }
+                } catch (_) {
+                  /* istanbul ignore next */
+                }
               }}
               onClearSearchCache={async () => {
                 try {
@@ -871,7 +875,9 @@ export default function AppTabs() {
                     localStorage.removeItem('wattcoin-online-tdp-v2');
                     localStorage.removeItem('wattcoin-online-cpu-tdp-v2');
                     localStorage.removeItem('wattcoin-online-laptop-power-v8');
-                  } catch (_) { /* istanbul ignore next */ }
+                  } catch (_) {
+                    /* istanbul ignore next */
+                  }
                   setHardwareLookupResetNonce((value) => value + 1);
                   const nextAllowedMs =
                     result && result.nextClearAllowedAtMs
@@ -927,7 +933,9 @@ export default function AppTabs() {
                     localStorage.removeItem('wattcoin-online-tdp-v2');
                     localStorage.removeItem('wattcoin-online-cpu-tdp-v2');
                     localStorage.removeItem('wattcoin-online-laptop-power-v8');
-                  } catch (_) { /* istanbul ignore next */ }
+                  } catch (_) {
+                    /* istanbul ignore next */
+                  }
                   setHardwareLookupResetNonce((value) => value + 1);
                   // Activate cooldown in UI immediately after a successful reset.
                   const nextAllowedMs =
@@ -1109,7 +1117,9 @@ function WalletAddressDisplay({ selectedWalletAddress, walletSyncState, onAddres
     setAddressNicknames(updated);
     try {
       localStorage.setItem('wattcoin-address-nicknames', JSON.stringify(updated));
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }
   function startEditingNickname() {
     setNicknameInput(addressNicknames[address] || '');
@@ -2410,12 +2420,16 @@ function StakingView({ selectedWalletAddress, walletBalance, queuedWtc = 0 }) {
     try {
       const s = await window.wattcoinHardware.invoke('wattcoin-staking-status');
       if (s.ok) setStatus(s);
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     if (address) {
       try {
         const r = await window.wattcoinHardware.invoke('wattcoin-staking-get-my-entries', address);
         if (r.ok) setMyEntries(r.entries || []);
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
   }, [address]);
 
@@ -3976,37 +3990,42 @@ function WalletTab({
   }, []);
 
   // ── Poll order status after placing ──────────────────────────────────────
-  const startOrderPoll = useCallback((id, callbacks = {}) => {
-    if (orderPollRef.iv) clearInterval(orderPollRef.iv);
-    orderPollRef.iv = setInterval(async () => {
-      try {
-        const r = await window.wattcoinHardware.invoke('wattcoin-sale-get-order', id);
-        if (r && r.ok && r.order) {
-          setOrderStatus(r.order);
-          if (r.order.status === 'queued' || r.order.status === 'delivery_pending') {
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            setOrderId(null);
-            setOrderStatus(null);
-            setQueuedSaleOrders((prev) => prev.filter((o) => o.id !== id));
-            if (callbacks.onConfirmed) callbacks.onConfirmed();
-          } else if (r.order.status === 'fulfilled') {
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            if (callbacks.onFulfilled) callbacks.onFulfilled();
-          } else if (r.order.status === 'failed') {
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            if (callbacks.onFailed) callbacks.onFailed();
-          } else if (r.order.status === 'expired') {
-            clearInterval(orderPollRef.iv);
-            orderPollRef.iv = null;
-            if (callbacks.onExpired) callbacks.onExpired();
+  const startOrderPoll = useCallback(
+    (id, callbacks = {}) => {
+      if (orderPollRef.iv) clearInterval(orderPollRef.iv);
+      orderPollRef.iv = setInterval(async () => {
+        try {
+          const r = await window.wattcoinHardware.invoke('wattcoin-sale-get-order', id);
+          if (r && r.ok && r.order) {
+            setOrderStatus(r.order);
+            if (r.order.status === 'queued' || r.order.status === 'delivery_pending') {
+              clearInterval(orderPollRef.iv);
+              orderPollRef.iv = null;
+              setOrderId(null);
+              setOrderStatus(null);
+              setQueuedSaleOrders((prev) => prev.filter((o) => o.id !== id));
+              if (callbacks.onConfirmed) callbacks.onConfirmed();
+            } else if (r.order.status === 'fulfilled') {
+              clearInterval(orderPollRef.iv);
+              orderPollRef.iv = null;
+              if (callbacks.onFulfilled) callbacks.onFulfilled();
+            } else if (r.order.status === 'failed') {
+              clearInterval(orderPollRef.iv);
+              orderPollRef.iv = null;
+              if (callbacks.onFailed) callbacks.onFailed();
+            } else if (r.order.status === 'expired') {
+              clearInterval(orderPollRef.iv);
+              orderPollRef.iv = null;
+              if (callbacks.onExpired) callbacks.onExpired();
+            }
           }
+        } catch (_) {
+          /* istanbul ignore next */
         }
-      } catch (_) { /* istanbul ignore next */ }
-    }, 10_000);
-  }, [orderPollRef]);
+      }, 10_000);
+    },
+    [orderPollRef],
+  );
 
   React.useEffect(() => {
     try {
@@ -4972,7 +4991,9 @@ function WalletTab({
             try {
               const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-block', { height });
               if (res && res.ok) setExplorerSelectedBlockData(res.block);
-            } catch (_) { /* istanbul ignore next */ }
+            } catch (_) {
+              /* istanbul ignore next */
+            }
             setExplorerBlockBusy(false);
           }}
         />

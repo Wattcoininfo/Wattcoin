@@ -402,7 +402,7 @@ async function run() {
         stateRoot: '',
         votes: {},
       };
-    const { computeBlockHash: _computeBlockHash } = require('../wtc-chain');
+      const { computeBlockHash: _computeBlockHash } = require('../wtc-chain');
       fakeBlock.hash = _computeBlockHash(fakeBlock);
 
       const result = await node.handleProposal(fakeBlock, 'http://attacker:39310');

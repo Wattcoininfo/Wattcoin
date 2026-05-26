@@ -75,7 +75,9 @@ function getAppDisplayVersion() {
   let packageVersion = '';
   try {
     packageVersion = String(require('./package.json').version || '').trim();
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 
   if (!app.isPackaged) {
     return packageVersion || '?';
@@ -323,7 +325,9 @@ function loadHwAuthState() {
             }
           }
         }
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
     if (!recovered) {
       // Genuinely new install -- let the renderer seed the legacy localStorage value.
@@ -381,6 +385,8 @@ function isUnusableGpuIdentity(value) {
   if (/^unknown/i.test(s)) return true;
   if (/^0x[0-9a-f]+$/i.test(s)) return true;
   if (/^[0-9\s,./-]+$/.test(s)) return true;
+  if (/Microsoft Basic (Render|Display) Driver/i.test(s)) return true;
+  if (/Microsoft Hyper-V/i.test(s)) return true;
   return !/[a-z]/i.test(s);
 }
 
@@ -420,6 +426,9 @@ async function resolveOsHardwareIdentity() {
       /* non-fatal */
     }
   }
+
+  // Filter out software/fallback renderers that are not real physical GPUs.
+  gpuModels = gpuModels.filter((g) => !isUnusableGpuIdentity(g));
 
   // Chassis / device-type detection via systeminformation (main-process only).
   let chassisType = '';
@@ -677,7 +686,9 @@ function saveHwFingerprint(data) {
 function clearHwFingerprint() {
   try {
     fs.unlinkSync(getHwFingerprintPath());
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function normalizeGpuFingerprintValue(gpuModels) {
@@ -696,8 +707,12 @@ function formatHardwareChangeList(previousDescriptor, nextDescriptor) {
     changes.push(`CPU: ${previousCpu || 'unknown'} -> ${nextCpu || 'unknown'}`);
   }
 
-  const previousGpu = normalizeGpuFingerprintValue(previousDescriptor && previousDescriptor.gpuModels);
-  const nextGpu = normalizeGpuFingerprintValue(nextDescriptor && nextDescriptor.gpuModels);
+  const previousGpu = normalizeGpuFingerprintValue(previousDescriptor && previousDescriptor.gpuModels).filter(
+    (g) => !isUnusableGpuIdentity(g),
+  );
+  const nextGpu = normalizeGpuFingerprintValue(nextDescriptor && nextDescriptor.gpuModels).filter(
+    (g) => !isUnusableGpuIdentity(g),
+  );
   if (previousGpu.join(' | ') !== nextGpu.join(' | ')) {
     changes.push(`GPU: ${previousGpu.join(', ') || 'unknown'} -> ${nextGpu.join(', ') || 'unknown'}`);
   }
@@ -769,7 +784,9 @@ function saveBenchmarkHistory(history) {
 function clearBenchmarkHistory() {
   try {
     fs.unlinkSync(getBenchmarkHistoryPath());
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 // Append a new sample to a rolling window, rejecting clear outliers.
@@ -1154,7 +1171,9 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
     try {
       const cached = new URL(autoDetectedPublicPeerUrl);
       if (Number(cached.port) === Number(settings.listenPort)) return autoDetectedPublicPeerUrl;
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     autoDetectedPublicPeerUrl = '';
   }
   if (autoDetectedPublicPeerLookupPromise) return autoDetectedPublicPeerLookupPromise;
@@ -1171,7 +1190,9 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
         if (!peerUrl) continue;
         autoDetectedPublicPeerUrl = peerUrl;
         return peerUrl;
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
     return previousUrl || '';
   })().finally(() => {
@@ -1224,7 +1245,9 @@ function getLocalPeerHosts() {
         }
       }
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   return hosts;
 }
 
@@ -1250,7 +1273,9 @@ function getLocalPeerIpv4InterfaceEntries() {
         });
       }
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   return entries;
 }
 
@@ -1392,7 +1417,9 @@ function scheduleDiscoveredSeedPeerCacheSave() {
       }
       fs.mkdirSync(path.dirname(getDiscoveredSeedPeerCachePath()), { recursive: true });
       fs.writeFileSync(getDiscoveredSeedPeerCachePath(), JSON.stringify({ peers }, null, 2), 'utf8');
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }, 250);
 }
 
@@ -1836,7 +1863,9 @@ function buildReverseTunnelCoordinatorCandidates(settings = getLedgerNetworkSett
       if (!isPublicPeerHost(parsed.hostname)) continue;
       if (parsed.pathname && parsed.pathname !== '/') continue;
       candidates.push(normalizePeerUrl(peerUrl));
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }
   return Array.from(new Set(candidates.filter(Boolean)));
 }
@@ -1900,10 +1929,14 @@ function destroyReverseTunnelSession(session, reason = 'closed') {
   failReverseTunnelPendingRequestsForSession(session, `Reverse tunnel ${reason}.`);
   try {
     clearInterval(session.pingTimer);
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   try {
     session.socket.close();
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function getReverseTunnelPeerIdentity(req) {
@@ -2038,7 +2071,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
       console.log(`[ReverseTunnel] Rejecting self-connecting tunnel from ${peerIdentity}`);
       try {
         socket.close();
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
       return;
     }
     if (peerIdentity) {
@@ -2059,7 +2094,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         if (socket.readyState !== WebSocket.OPEN) return;
         try {
           socket.send(JSON.stringify({ type: 'ping', nowMs: Date.now() }));
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
       }, REVERSE_TUNNEL_PING_INTERVAL_MS),
     };
     reverseTunnelSessions.set(tunnelId, session);
@@ -2103,7 +2140,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
     } catch (_) {
       try {
         socket.destroy();
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
   });
 }
@@ -2119,7 +2158,9 @@ function stopReverseTunnelCoordinator() {
   if (reverseTunnelWss) {
     try {
       reverseTunnelWss.close();
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     reverseTunnelWss = null;
   }
 }
@@ -2143,7 +2184,9 @@ function stopManagedReverseTunnelClient() {
   if (reverseTunnelClientState.socket) {
     try {
       reverseTunnelClientState.socket.close();
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     reverseTunnelClientState.socket = null;
   }
 }
@@ -2240,7 +2283,9 @@ async function forwardReverseTunnelRequestToLocalNode(socket, message) {
   });
   try {
     socket.send(JSON.stringify({ type: 'http-response', requestId, ...responsePayload }));
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function handleManagedReverseTunnelMessage(socket, rawMessage) {
@@ -2255,7 +2300,9 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
   if (message.type === 'ping') {
     try {
       socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     return;
   }
   if (message.type === 'tunnel-ready') {
@@ -2337,7 +2384,9 @@ function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerN
       if (socket.readyState !== WebSocket.OPEN) return;
       try {
         socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }, REVERSE_TUNNEL_PING_INTERVAL_MS);
   });
   socket.on('message', (message) => handleManagedReverseTunnelMessage(socket, message));
@@ -2404,7 +2453,9 @@ function ensureManagedReverseTunnelClient(settings = getLedgerNetworkSettings())
       });
       return;
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   writeStartupTrace('reverse-tunnel.enabled', {
     coordinatorUrl: obfuscatePublicPeerUrl(coordinatorUrl),
   });
@@ -2426,11 +2477,15 @@ function getPeerPrivacySecret() {
   try {
     const secret = getDeviceIdentitySecret();
     if (secret) return resolvePeerPrivacySecret(secret);
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   try {
     const identity = loadOrCreateDeviceIdentity();
     return resolvePeerPrivacySecret(getDeviceIdentitySecret(), identity && identity.deviceId);
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   return '';
 }
 
@@ -2653,7 +2708,9 @@ function loadPolicyAnchorState() {
         scannedAtMs: Number(parsed.scannedAtMs) || 0,
       };
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function _savePolicyAnchorState() {
@@ -2661,7 +2718,9 @@ function _savePolicyAnchorState() {
     const fp = getPolicyAnchorCacheFilePath();
     fs.mkdirSync(path.dirname(fp), { recursive: true });
     fs.writeFileSync(fp, JSON.stringify(policyAnchorState, null, 2), 'utf8');
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function getAttestationDbFilePath() {
@@ -5005,7 +5064,9 @@ function getDeviceIdentitySecret() {
       _deviceIdentitySecret = raw.secret;
       return _deviceIdentitySecret;
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   return '';
 }
 
@@ -5031,7 +5092,9 @@ function getOrCreateWalletEncryptionKey() {
         }
       }
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 
   // Generate a new key
   const newKey = crypto.randomBytes(32);
@@ -5045,7 +5108,9 @@ function getOrCreateWalletEncryptionKey() {
       fs.writeFileSync(keyFile, enc);
       _walletEncryptionKey = newKey;
       return _walletEncryptionKey;
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }
 
   // Fallback: derive from device-identity secret (same pattern as attestation fallback)
@@ -5059,7 +5124,9 @@ function getOrCreateWalletEncryptionKey() {
       _walletEncryptionKey = fbKey;
       return _walletEncryptionKey;
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 
   // Last resort — random key, lost on restart (wallet will be re-created). Still better than plaintext.
   _walletEncryptionKey = newKey;
@@ -5076,7 +5143,9 @@ function loadOrCreateDeviceIdentity() {
       const raw = fs.readFileSync(filePath, 'utf8');
       identity = JSON.parse(raw);
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 
   if (!identity || !identity.secret || typeof identity.secret !== 'string') {
     const secret = crypto.randomBytes(32).toString('hex');
@@ -5616,7 +5685,9 @@ document.getElementById('btn-ext').addEventListener('click',pay);
       setTimeout(() => {
         try {
           server.close();
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
       }, 3000);
     });
     server.listen(0, '127.0.0.1', () => {
@@ -5681,25 +5752,22 @@ ipcMain.handle('wattcoin-sale-compute-price', async (_event, { wtcAmount, electr
 });
 
 // Place an order (buyer is the logged-in WTC address)
-ipcMain.handle(
-  'wattcoin-sale-place-order',
-  (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
-    // Basic input sanitisation
-    const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
-    const amount = Number(wtcAmount);
-    const usdc = Number(usdcRequired);
+ipcMain.handle('wattcoin-sale-place-order', (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
+  // Basic input sanitisation
+  const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
+  const amount = Number(wtcAmount);
+  const usdc = Number(usdcRequired);
 
-    if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
-      return { ok: false, error: 'Invalid WTC address' };
-    }
-    return saleQueue.placeSaleOrder({
-      wtcAddress: addr,
-      wtcAmount: amount,
-      usdcRequired: usdc,
-      buyerEthAddress: typeof buyerEthAddress === 'string' ? buyerEthAddress.trim() : null,
-    });
-  },
-);
+  if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
+    return { ok: false, error: 'Invalid WTC address' };
+  }
+  return saleQueue.placeSaleOrder({
+    wtcAddress: addr,
+    wtcAmount: amount,
+    usdcRequired: usdc,
+    buyerEthAddress: typeof buyerEthAddress === 'string' ? buyerEthAddress.trim() : null,
+  });
+});
 
 // Get a specific order status
 ipcMain.handle('wattcoin-sale-get-order', (_event, orderId) => {
@@ -6260,7 +6328,9 @@ function loadBundledSeedPeers() {
             try {
               const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
               if (decoded) return normalizePeerUrl(`http://${decoded}`);
-            } catch (_) { /* istanbul ignore next */ }
+            } catch (_) {
+              /* istanbul ignore next */
+            }
           }
           return normalizePeerUrl(rawUrl);
         })
@@ -6984,7 +7054,9 @@ async function discoverPeersOnLocalSubnets(httpPort, settings = getLedgerNetwork
             peerIdentity: String((tip && tip.peerIdentity) || '').trim(),
           });
           found += 1;
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
       }
     });
     await Promise.all(workers);
@@ -7042,7 +7114,9 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
         const peerUrl = selectDiscoveryPeerUrl(beaconCandidates) || directLanPeerUrl;
         rememberDiscoveredPeer(peerUrl, { source: 'beacon', seenAtMs: Date.now() });
       }
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   });
 
   sock.on('error', (err) => {
@@ -7074,7 +7148,9 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
       }
       sock.setMulticastTTL(1);
       sock.setMulticastLoopback(true); // receive own beacons (useful for single-machine testing)
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     console.log(
       `[PeerDiscovery] Listening for peers on UDP ${PEER_DISCOVERY_PORT}${joinedGroups > 0 ? ` across ${joinedGroups} interface(s)` : ''}`,
     );
@@ -7115,7 +7191,9 @@ function stopPeerDiscovery() {
   if (peerDiscoverySocket) {
     try {
       peerDiscoverySocket.close();
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     peerDiscoverySocket = null;
   }
   peerLocalSubnetDiscoveryPromise = null;
@@ -7991,7 +8069,9 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
     }
     try {
       stopHardwareLoad();
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     await fsp.mkdir(walletDir, { recursive: true });
     await fsp.writeFile(walletFilePath, walletDat);
     try {
@@ -8023,7 +8103,9 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
         const restoredPrimary = wtcNode.getPrimaryAddress();
         walletAddressCache = { address: restoredPrimary || '', at: restoredPrimary ? Date.now() : 0 };
         if (restoredPrimary) setCoordinatorIdentityKey(restoredPrimary);
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     } catch (reinitErr) {
       console.error('[RestoreBackup] Failed to re-init WTC node:', reinitErr && reinitErr.message);
     }
@@ -8435,7 +8517,9 @@ app.whenReady().then(() => {
     if (_hist.jitterSamples.length >= 2) {
       hwAuthority.rollingJitterMean = _hist.jitterSamples.reduce((a, b) => a + b, 0) / _hist.jitterSamples.length;
     }
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   // Generate unique per-machine RPC credentials on first launch.
   // The bundled config ships with defaults (user/pass); if we still see those,
   // create a local override file in the user-data dir with random credentials.
@@ -8448,7 +8532,9 @@ app.whenReady().then(() => {
       let localCfg = {};
       try {
         localCfg = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
       const currentUser = String(localCfg.rpcUser || getRuntimeConfig().rpcUser || '');
       const currentPass = String(localCfg.rpcPassword || getRuntimeConfig().rpcPassword || '');
       const currentToken = String(localCfg.ledgerNetworkAuthToken || getRuntimeConfig().ledgerNetworkAuthToken || '');
@@ -8505,7 +8591,9 @@ app.whenReady().then(() => {
   // is always available before the first renderer IPC call arrives.
   try {
     loadOrCreateDeviceIdentity();
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   try {
     persistDevPeerPrivacyRecoveryKey();
   } catch (e) {
@@ -8807,7 +8895,9 @@ if (app.isPackaged) {
     wins.forEach((w) => {
       try {
         w.webContents.send('wattcoin-update-downloaded', { version: info.version });
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     });
   });
 
@@ -8830,10 +8920,14 @@ if (app.isPackaged) {
     wins.forEach((win) => {
       try {
         win.removeAllListeners('close');
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
       try {
         win.close();
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     });
 
     setImmediate(() => {

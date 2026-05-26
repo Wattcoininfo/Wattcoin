@@ -185,7 +185,9 @@ function checkHasKnownPrivateLanPeer(
       ) {
         return true;
       }
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }
   return false;
 }

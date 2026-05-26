@@ -47,7 +47,9 @@ const ETHERSCAN_API_KEY = (() => {
   try {
     const v = fs.readFileSync(path.join(os.homedir(), '.secrets', 'etherscan-api-key'), 'utf8').trim();
     if (v) return v;
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   // Public free-tier Etherscan API key — rate-limited but functional for all users.
   // Operators may override via ~/.secrets/etherscan-api-key for a dedicated key.
   return Buffer.from('SEhWMUNVRlVJRUgxRjMyVjlEQlNYMlEzQVVKRkRDQVJTWg==', 'base64').toString();
@@ -187,7 +189,9 @@ function _saveOrders() {
     const tmp = dest + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(_orders, null, 2), 'utf8');
     fs.renameSync(tmp, dest);
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function _loadSeenHashes() {
@@ -204,7 +208,9 @@ function _loadSeenHashes() {
 function _saveSeenHashes() {
   try {
     fs.writeFileSync(_seenHashesPath(), JSON.stringify([..._seenTxHashes]), 'utf8');
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 function _loadUnmatchedTxs() {
@@ -221,7 +227,9 @@ function _loadUnmatchedTxs() {
 function _saveUnmatchedTxs() {
   try {
     fs.writeFileSync(_unmatchedTxsPath(), JSON.stringify(_unmatchedTxs, null, 2), 'utf8');
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
 }
 
 // ─── Order CRUD ──────────────────────────────────────────────────────────────
@@ -446,7 +454,9 @@ async function cancelOrder(orderId) {
   if (_serverApiUrl) {
     try {
       await _postServerCancelOrder(orderId, o.ownerProof || null);
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }
   return { ok: true };
 }
@@ -555,7 +565,9 @@ function getSoldWTC() {
       const bal = _wtcNode.getBalance(SALE_WTC_ADDRESS);
       const remaining = (bal.confirmed || 0) + (bal.unmatured || 0);
       onChainSold = Math.max(0, SALE_TOTAL - Math.min(SALE_TOTAL, remaining));
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }
   // 2. Matched orders — only count orders where USDC receipt is confirmed on-chain.
   // 'payment_submitted' is unconfirmed (buyer self-reported) and must NOT count as sold.
@@ -911,7 +923,9 @@ function _refreshPublicSaleStatus() {
           if (res.statusCode === 200 && body && body.ok) {
             _serverSoldWtc = Math.max(0, Math.min(SALE_TOTAL, Number(body.sold) || 0));
           }
-          } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         finish();
       });
     });
@@ -1160,7 +1174,9 @@ function _startPoller() {
     try {
       await _syncServerOrders();
       _retryUnmatched();
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
   }, 60_000);
 
   // NOTE: No periodic flush timer. Queued orders are flushed ONLY:
@@ -1175,7 +1191,9 @@ async function _pollUsdc() {
   // Sync any orders placed via the web wallet (server PHP API) into local store
   try {
     await _syncServerOrders();
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   // Retry again after server sync in case new orders were just mirrored
   _retryUnmatched();
   _retryUnmatched();
@@ -1506,7 +1524,9 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
     setTimeout(async () => {
       try {
         await _syncServerOrders();
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
       _retryUnmatched();
     }, 30_000);
   }
@@ -1591,7 +1611,9 @@ function onBlockConfirmed() {
     let txStatus = 'unknown';
     try {
       txStatus = _wtcNode ? _wtcNode.getTxStatus(order.fulfilledTxId).status : 'unknown';
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     if (txStatus === 'confirmed') {
       order.status = 'fulfilled';
       changed = true;
@@ -1672,10 +1694,14 @@ function getUnmatchedTxs() {
 async function refreshSoldWTC() {
   try {
     await _refreshPublicSaleStatus();
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   try {
     await _syncServerOrders();
-  } catch (_) { /* istanbul ignore next */ }
+  } catch (_) {
+    /* istanbul ignore next */
+  }
   return getSoldWTC();
 }
 

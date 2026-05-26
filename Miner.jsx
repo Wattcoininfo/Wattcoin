@@ -1001,7 +1001,9 @@ async function runWebGLBenchmark() {
     try {
       document.body.appendChild(domCanvas);
       domAttached = true;
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     const gl = domCanvas.getContext('webgl2');
     if (!gl) return { error: 'GPU-E5: no webgl2 context' };
     return await _bench(gl, SIZE);
@@ -1012,7 +1014,9 @@ async function runWebGLBenchmark() {
     if (domAttached && domCanvas) {
       try {
         document.body.removeChild(domCanvas);
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
   }
 }
@@ -1041,7 +1045,9 @@ function runGpuProbe(seed, size, shaderIterations) {
     try {
       document.body.appendChild(canvas);
       attached = true;
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
 
     // Prefer WebGL2 for the integer-shader path (item 3).
     const gl2 = canvas.getContext('webgl2');
@@ -1170,7 +1176,9 @@ function runGpuProbe(seed, size, shaderIterations) {
     if (attached && canvas && canvas.parentNode) {
       try {
         canvas.parentNode.removeChild(canvas);
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
   }
 }
@@ -1206,7 +1214,9 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
     try {
       document.body.appendChild(canvas);
       attached = true;
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
 
     const gl = canvas.getContext('webgl2');
     if (!gl) return null; // integer shader requires WebGL2 for Node-verifiability
@@ -1352,7 +1362,7 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
           const syncB = new Uint8Array(SYNC_W * SYNC_H * 4);
           const gpuSyncB = function () {
             gl.readPixels(0, 0, SYNC_W, SYNC_H, gl.RGBA, gl.UNSIGNED_BYTE, syncB);
-          }
+          };
           // Warmup: 5 frames with per-frame sync
           for (let i = 0; i < 5; i++) {
             gl.uniform1f(uSeedB, i * 0.001);
@@ -1391,7 +1401,9 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
         gl.deleteShader(vsB);
         gl.deleteShader(fsB);
       }
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
 
     return { proofHash: (h >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed), gpuScore, benchError };
   } catch (e) {
@@ -1401,7 +1413,9 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
     if (attached && canvas && canvas.parentNode) {
       try {
         canvas.parentNode.removeChild(canvas);
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
   }
 }
@@ -2100,7 +2114,9 @@ export default function Miner({
         }
         return fresh;
       }
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     return {};
   });
 
@@ -2121,7 +2137,9 @@ export default function Miner({
         }
         return fresh;
       }
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     return {};
   });
 
@@ -2227,7 +2245,9 @@ export default function Miner({
                   setTrustScore(seeded.trustScore);
                   trustScoreRef.current = seeded.trustScore;
                 }
-              } catch (_) { /* istanbul ignore next */ }
+              } catch (_) {
+                /* istanbul ignore next */
+              }
             } else {
               if (typeof auth.trustScore === 'number') {
                 setTrustScore(auth.trustScore);
@@ -2240,7 +2260,9 @@ export default function Miner({
             }
           }
         }
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2275,7 +2297,9 @@ export default function Miner({
           }
           void holdResult;
         }
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
 
       if (mining) {
         setMining(false);
@@ -2331,7 +2355,9 @@ export default function Miner({
           if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
             await window.wattcoinHardware.setHardwareLoad(benchLoadPct);
           }
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         // Wait for the full 3-second hardware load ramp to complete before measuring.
         await new Promise((r) => setTimeout(r, 3200));
       } else if (isBaselineBench && wasMiningAtStart && benchLoadPct > 0) {
@@ -2640,7 +2666,9 @@ export default function Miner({
                 })
                 .catch(() => null);
             }
-          } catch (_) { /* istanbul ignore next */ }
+          } catch (_) {
+            /* istanbul ignore next */
+          }
         }
 
         // GPU proof: single deterministic integer-shader render keyed by challengeSeed.
@@ -2693,10 +2721,14 @@ export default function Miner({
                       })
                       .catch(() => null);
                   }
-                } catch (_) { /* istanbul ignore next */ }
+                } catch (_) {
+                  /* istanbul ignore next */
+                }
               }
             }
-          } catch (_) { /* istanbul ignore next */ }
+          } catch (_) {
+            /* istanbul ignore next */
+          }
         }
 
         // Startup and slider-stop benchmarks define new baselines — no drift check.
@@ -2947,7 +2979,9 @@ export default function Miner({
               }
             }
           }
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
 
         const elapsedMs = performance.now() - startedAt;
         const trustAfter = trustScoreRef.current;
@@ -2965,7 +2999,9 @@ export default function Miner({
               bgMemDutyPct = Math.max(0, Math.min(100, (Number(hwState.memDuty) || 0) * 100));
             }
           }
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         const totalCpuWorkOpsPerSec = cpuOpsPerSec + bgCpuOpsPerSec;
         const totalMemWorkMBps = memoryMBps + bgMemMBps;
         const gpuDutyPct = Math.max(0, Math.min(100, gpuMeasuredDutyRef.current * 100));
@@ -3101,7 +3137,9 @@ export default function Miner({
             } else if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
               await window.wattcoinHardware.setHardwareLoad(0);
             }
-          } catch (_) { /* istanbul ignore next */ }
+          } catch (_) {
+            /* istanbul ignore next */
+          }
         }
       }
     },
@@ -3134,105 +3172,108 @@ export default function Miner({
   // Simulation mining logic removed
 
   // Mine a single real block attempt.
-  const mineOneRealBlock = React.useCallback(async (blockEnergyWh = 0) => {
-    if (!(window.wattcoinHardware && window.wattcoinHardware.mineBlock)) {
-      console.error('[MinerSimulator] Mining API unavailable - window.wattcoinHardware.mineBlock not found');
-      setRealMineStatus('Mining API unavailable');
-      return false;
-    }
-    if (realMineBusy) return false;
-
-    setRealMineBusy(true);
-    setRealMineStatus('Mining block...');
-    try {
-      console.log('[MinerSimulator] Starting mining attempt with address:', miningAddress);
-      // Attach the most recent benchmark proof so the OP_RETURN commitment includes
-      // (cpuSpeedInitialSeed, cpuSpeedProof) — any peer can re-run the computation
-      // from that seed and confirm the proof hash independently.
-      const proofData = benchmarkProofRef.current
-        ? {
-            ...benchmarkProofRef.current,
-            energyWh: blockEnergyWh,
-            proofTs: Date.now(),
-            miningAddress: miningAddress || '',
-            peerProbeVerified: peerProbeVerifiedRef.current, // item 4
-            probeReceipt: probeReceiptRef.current, // item 5
-            probeChain: {
-              // chained-probe continuity record
-              chainHead: probeChainRef.current.chainHead,
-              chainIndex: probeChainRef.current.chainIndex,
-              chainBroken: probeChainRef.current.chainBroken,
-            },
-          }
-        : null;
-      // Reset per-round probe state after capturing for this block.
-      peerProbeVerifiedRef.current = false;
-      probeReceiptRef.current = null;
-      // Chain continuity persists across blocks (chainHead/chainIndex stay intact).
-      // Only reset the 'broken' flag so each new round is assessed independently.
-      probeChainRef.current = { ...probeChainRef.current, chainBroken: false };
-      let result = await window.wattcoinHardware.mineBlock(miningAddress || undefined, proofData);
-      console.log('[MinerSimulator] Mining result:', result);
-
-      // If selected address path fails, retry once without forcing address.
-      if (result && result.error && miningAddress) {
-        console.log('[MinerSimulator] Retrying without forcing address due to error:', result.error);
-        result = await window.wattcoinHardware.mineBlock(undefined, proofData);
-        console.log('[MinerSimulator] Retry result:', result);
+  const mineOneRealBlock = React.useCallback(
+    async (blockEnergyWh = 0) => {
+      if (!(window.wattcoinHardware && window.wattcoinHardware.mineBlock)) {
+        console.error('[MinerSimulator] Mining API unavailable - window.wattcoinHardware.mineBlock not found');
+        setRealMineStatus('Mining API unavailable');
+        return false;
       }
+      if (realMineBusy) return false;
 
-      if (result && result.address) {
-        const blockHash = result && result.blockHash ? String(result.blockHash).trim() : '';
-        const walletName = result && result.walletName ? String(result.walletName).trim() : 'wattminer';
-        setRealMineStatus(blockHash ? `Block mined: ${blockHash}` : `Block mined to ${result.address}`);
-        if (typeof onBlockMined === 'function') {
-          try {
-            await onBlockMined({
-              blockHash,
-              address: result.address,
-              walletName,
-              // Proof fields for Tier 4c coordinator re-verification (item 1).
-              cpuSpeedInitialSeed: benchmarkProofRef.current
-                ? Number(benchmarkProofRef.current.cpuSpeedInitialSeed) || 0
-                : 0,
-              cpuSpeedProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.cpuSpeedProof || '') : '',
-              memProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.memProof || '') : '',
-              proofIssues: benchmarkProofRef.current ? benchmarkState.issues || [] : [],
-              proofCommitment: result.proofCommitment || null,
-              peerProbeVerified: !!(proofData && proofData.peerProbeVerified), // item 4
-              probeReceipt: proofData && proofData.probeReceipt ? proofData.probeReceipt : null, // item 5
-              probeChain: proofData && proofData.probeChain ? proofData.probeChain : null, // Tier 4e coverage ratio
-            });
-          } catch (_) {
-            // Keep mining even if immediate balance refresh fails.
-          }
+      setRealMineBusy(true);
+      setRealMineStatus('Mining block...');
+      try {
+        console.log('[MinerSimulator] Starting mining attempt with address:', miningAddress);
+        // Attach the most recent benchmark proof so the OP_RETURN commitment includes
+        // (cpuSpeedInitialSeed, cpuSpeedProof) — any peer can re-run the computation
+        // from that seed and confirm the proof hash independently.
+        const proofData = benchmarkProofRef.current
+          ? {
+              ...benchmarkProofRef.current,
+              energyWh: blockEnergyWh,
+              proofTs: Date.now(),
+              miningAddress: miningAddress || '',
+              peerProbeVerified: peerProbeVerifiedRef.current, // item 4
+              probeReceipt: probeReceiptRef.current, // item 5
+              probeChain: {
+                // chained-probe continuity record
+                chainHead: probeChainRef.current.chainHead,
+                chainIndex: probeChainRef.current.chainIndex,
+                chainBroken: probeChainRef.current.chainBroken,
+              },
+            }
+          : null;
+        // Reset per-round probe state after capturing for this block.
+        peerProbeVerifiedRef.current = false;
+        probeReceiptRef.current = null;
+        // Chain continuity persists across blocks (chainHead/chainIndex stay intact).
+        // Only reset the 'broken' flag so each new round is assessed independently.
+        probeChainRef.current = { ...probeChainRef.current, chainBroken: false };
+        let result = await window.wattcoinHardware.mineBlock(miningAddress || undefined, proofData);
+        console.log('[MinerSimulator] Mining result:', result);
+
+        // If selected address path fails, retry once without forcing address.
+        if (result && result.error && miningAddress) {
+          console.log('[MinerSimulator] Retrying without forcing address due to error:', result.error);
+          result = await window.wattcoinHardware.mineBlock(undefined, proofData);
+          console.log('[MinerSimulator] Retry result:', result);
         }
-        setLog((log) => [
-          {
-            time: now(),
-            msg: blockHash
-              ? `Real block mined: hash=${blockHash}, address=${result.address}`
-              : `Real block mined: address=${result.address}`,
-            type: 'block',
-          },
-          ...log,
-        ]);
-        return true;
-      } else {
-        const errMsg = result && result.error ? result.error : 'Unknown error';
+
+        if (result && result.address) {
+          const blockHash = result && result.blockHash ? String(result.blockHash).trim() : '';
+          const walletName = result && result.walletName ? String(result.walletName).trim() : 'wattminer';
+          setRealMineStatus(blockHash ? `Block mined: ${blockHash}` : `Block mined to ${result.address}`);
+          if (typeof onBlockMined === 'function') {
+            try {
+              await onBlockMined({
+                blockHash,
+                address: result.address,
+                walletName,
+                // Proof fields for Tier 4c coordinator re-verification (item 1).
+                cpuSpeedInitialSeed: benchmarkProofRef.current
+                  ? Number(benchmarkProofRef.current.cpuSpeedInitialSeed) || 0
+                  : 0,
+                cpuSpeedProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.cpuSpeedProof || '') : '',
+                memProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.memProof || '') : '',
+                proofIssues: benchmarkProofRef.current ? benchmarkState.issues || [] : [],
+                proofCommitment: result.proofCommitment || null,
+                peerProbeVerified: !!(proofData && proofData.peerProbeVerified), // item 4
+                probeReceipt: proofData && proofData.probeReceipt ? proofData.probeReceipt : null, // item 5
+                probeChain: proofData && proofData.probeChain ? proofData.probeChain : null, // Tier 4e coverage ratio
+              });
+            } catch (_) {
+              // Keep mining even if immediate balance refresh fails.
+            }
+          }
+          setLog((log) => [
+            {
+              time: now(),
+              msg: blockHash
+                ? `Real block mined: hash=${blockHash}, address=${result.address}`
+                : `Real block mined: address=${result.address}`,
+              type: 'block',
+            },
+            ...log,
+          ]);
+          return true;
+        } else {
+          const errMsg = result && result.error ? result.error : 'Unknown error';
+          setRealMineStatus(`Mining failed: ${errMsg}`);
+          setLog((log) => [{ time: now(), msg: `Mining failed: ${errMsg}`, type: 'error' }, ...log]);
+          return false;
+        }
+      } catch (e) {
+        const errMsg = e && e.message ? e.message : 'Unknown error';
         setRealMineStatus(`Mining failed: ${errMsg}`);
         setLog((log) => [{ time: now(), msg: `Mining failed: ${errMsg}`, type: 'error' }, ...log]);
         return false;
+      } finally {
+        setRealMineBusy(false);
       }
-    } catch (e) {
-      const errMsg = e && e.message ? e.message : 'Unknown error';
-      setRealMineStatus(`Mining failed: ${errMsg}`);
-      setLog((log) => [{ time: now(), msg: `Mining failed: ${errMsg}`, type: 'error' }, ...log]);
-      return false;
-    } finally {
-      setRealMineBusy(false);
-    }
-  }, [miningAddress, onBlockMined, setLog, setRealMineStatus, setRealMineBusy, benchmarkState, now, realMineBusy]);
+    },
+    [miningAddress, onBlockMined, setLog, setRealMineStatus, setRealMineBusy, benchmarkState, now, realMineBusy],
+  );
 
   // Fetch hardware info at startup if not already found, or if deviceType is still unknown
   React.useEffect(() => {
@@ -3246,7 +3287,9 @@ export default function Miner({
           setHardware(hw);
           try {
             sessionStorage.setItem('wattcoinHardware', JSON.stringify(hw));
-          } catch (_) { /* istanbul ignore next */ }
+          } catch (_) {
+            /* istanbul ignore next */
+          }
         }
       } catch (_) {
         // Hardware detection failed — keep existing state; will retry on next render cycle.
@@ -3415,7 +3458,7 @@ export default function Miner({
       if (rafId) cancelAnimationFrame(rafId);
       if (timeoutId) clearTimeout(timeoutId);
     };
-  // cpuTDPTable/gpuTDPTable are stable useMemo — omitted to avoid TDZ (declared later)
+    // cpuTDPTable/gpuTDPTable are stable useMemo — omitted to avoid TDZ (declared later)
   }, [hardware, isActive, dynamicCPUTDPCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Startup benchmark runs after hardware recognition AND online TDP fetches are complete.
@@ -3740,7 +3783,9 @@ export default function Miner({
           if (newEntries.length === 0) return prev;
           return [...newEntries, ...prev].sort((a, b) => b.ts - a.ts).slice(0, 150);
         });
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     }
 
     mergeBackendHistory();
@@ -3752,681 +3797,687 @@ export default function Miner({
   // Show 0W until a real estimate is available
   let powerW = 0;
   // Exact TDP tables (expand as needed)
-  const cpuTDPTable = React.useMemo(() => ({
-    // ── Intel Core 14th Gen (Raptor Lake Refresh) — PL2 sustained all-core ─
-    'Intel(R) Core(TM) i9-14900KS': 253,
-    'Intel(R) Core(TM) i9-14900K': 253,
-    'Intel(R) Core(TM) i9-14900KF': 253,
-    'Intel(R) Core(TM) i9-14900': 65,
-    'Intel(R) Core(TM) i9-14900F': 65,
-    'Intel(R) Core(TM) i9-14900T': 35,
-    'Intel(R) Core(TM) i7-14700K': 192,
-    'Intel(R) Core(TM) i7-14700KF': 192,
-    'Intel(R) Core(TM) i7-14700': 65,
-    'Intel(R) Core(TM) i7-14700F': 65,
-    'Intel(R) Core(TM) i7-14700T': 35,
-    'Intel(R) Core(TM) i5-14600K': 181,
-    'Intel(R) Core(TM) i5-14600KF': 181,
-    'Intel(R) Core(TM) i5-14600': 65,
-    'Intel(R) Core(TM) i5-14500': 65,
-    'Intel(R) Core(TM) i5-14400': 65,
-    'Intel(R) Core(TM) i5-14400F': 65,
-    'Intel(R) Core(TM) i5-14400T': 35,
-    'Intel(R) Core(TM) i3-14100': 60,
-    'Intel(R) Core(TM) i3-14100F': 58,
-    'Intel(R) Core(TM) i3-14100T': 35,
-    // ── Intel Core 13th Gen (Raptor Lake) — PL2 sustained all-core ─────────
-    'Intel(R) Core(TM) i9-13900KS': 253,
-    'Intel(R) Core(TM) i9-13900K': 253,
-    'Intel(R) Core(TM) i9-13900KF': 253,
-    'Intel(R) Core(TM) i9-13900': 65,
-    'Intel(R) Core(TM) i9-13900F': 65,
-    'Intel(R) Core(TM) i9-13900T': 35,
-    'Intel(R) Core(TM) i7-13700K': 192,
-    'Intel(R) Core(TM) i7-13700KF': 192,
-    'Intel(R) Core(TM) i7-13700': 65,
-    'Intel(R) Core(TM) i7-13700F': 65,
-    'Intel(R) Core(TM) i7-13700T': 35,
-    'Intel(R) Core(TM) i5-13600K': 181,
-    'Intel(R) Core(TM) i5-13600KF': 181,
-    'Intel(R) Core(TM) i5-13600': 65,
-    'Intel(R) Core(TM) i5-13500': 65,
-    'Intel(R) Core(TM) i5-13400': 65,
-    'Intel(R) Core(TM) i5-13400F': 65,
-    'Intel(R) Core(TM) i5-13400T': 35,
-    'Intel(R) Core(TM) i3-13100': 60,
-    'Intel(R) Core(TM) i3-13100F': 58,
-    'Intel(R) Core(TM) i3-13100T': 35,
-    'Intel(R) Core(TM) i3-13300': 60,
-    // ── Intel Core 12th Gen (Alder Lake) — PL2 sustained all-core ──────────
-    'Intel(R) Core(TM) i9-12900KS': 241,
-    'Intel(R) Core(TM) i9-12900K': 241,
-    'Intel(R) Core(TM) i9-12900KF': 241,
-    'Intel(R) Core(TM) i9-12900': 65,
-    'Intel(R) Core(TM) i9-12900F': 65,
-    'Intel(R) Core(TM) i9-12900T': 35,
-    'Intel(R) Core(TM) i7-12700K': 190,
-    'Intel(R) Core(TM) i7-12700KF': 190,
-    'Intel(R) Core(TM) i7-12700': 65,
-    'Intel(R) Core(TM) i7-12700F': 65,
-    'Intel(R) Core(TM) i7-12700T': 35,
-    'Intel(R) Core(TM) i5-12600K': 150,
-    'Intel(R) Core(TM) i5-12600KF': 150,
-    'Intel(R) Core(TM) i5-12600': 65,
-    'Intel(R) Core(TM) i5-12500': 65,
-    'Intel(R) Core(TM) i5-12400': 65,
-    'Intel(R) Core(TM) i5-12400F': 65,
-    'Intel(R) Core(TM) i5-12400T': 35,
-    'Intel(R) Core(TM) i3-12300': 60,
-    'Intel(R) Core(TM) i3-12100': 60,
-    'Intel(R) Core(TM) i3-12100F': 58,
-    'Intel(R) Core(TM) i3-12100T': 35,
-    // ── Intel Core 11th Gen (Rocket Lake) — PL2 sustained all-core ─────────
-    'Intel(R) Core(TM) i9-11900K': 250,
-    'Intel(R) Core(TM) i9-11900KF': 250,
-    'Intel(R) Core(TM) i9-11900': 65,
-    'Intel(R) Core(TM) i9-11900F': 65,
-    'Intel(R) Core(TM) i9-11900T': 35,
-    'Intel(R) Core(TM) i7-11700K': 250,
-    'Intel(R) Core(TM) i7-11700KF': 250,
-    'Intel(R) Core(TM) i7-11700': 65,
-    'Intel(R) Core(TM) i7-11700F': 65,
-    'Intel(R) Core(TM) i7-11700T': 35,
-    'Intel(R) Core(TM) i5-11600K': 154,
-    'Intel(R) Core(TM) i5-11600KF': 154,
-    'Intel(R) Core(TM) i5-11600': 65,
-    'Intel(R) Core(TM) i5-11500': 65,
-    'Intel(R) Core(TM) i5-11500T': 35,
-    'Intel(R) Core(TM) i5-11400': 65,
-    'Intel(R) Core(TM) i5-11400F': 65,
-    'Intel(R) Core(TM) i5-11400T': 35,
-    // ── Intel Core 10th Gen (Comet Lake) — PL2 sustained all-core ──────────
-    'Intel(R) Core(TM) i9-10900KS': 250,
-    'Intel(R) Core(TM) i9-10900K': 250,
-    'Intel(R) Core(TM) i9-10900KF': 250,
-    'Intel(R) Core(TM) i9-10900': 65,
-    'Intel(R) Core(TM) i9-10900F': 65,
-    'Intel(R) Core(TM) i9-10900T': 35,
-    'Intel(R) Core(TM) i9-10850K': 250,
-    'Intel(R) Core(TM) i7-10700K': 229,
-    'Intel(R) Core(TM) i7-10700KF': 229,
-    'Intel(R) Core(TM) i7-10700': 65,
-    'Intel(R) Core(TM) i7-10700F': 65,
-    'Intel(R) Core(TM) i7-10700T': 35,
-    'Intel(R) Core(TM) i5-10600K': 182,
-    'Intel(R) Core(TM) i5-10600KF': 182,
-    'Intel(R) Core(TM) i5-10600': 65,
-    'Intel(R) Core(TM) i5-10500': 65,
-    'Intel(R) Core(TM) i5-10500T': 35,
-    'Intel(R) Core(TM) i5-10400': 65,
-    'Intel(R) Core(TM) i5-10400F': 65,
-    'Intel(R) Core(TM) i5-10400T': 35,
-    'Intel(R) Core(TM) i3-10320': 65,
-    'Intel(R) Core(TM) i3-10300': 65,
-    'Intel(R) Core(TM) i3-10105': 65,
-    'Intel(R) Core(TM) i3-10105F': 65,
-    'Intel(R) Core(TM) i3-10100': 65,
-    'Intel(R) Core(TM) i3-10100F': 65,
-    // ── Intel Core 9th Gen (Coffee Lake Refresh) — PL2 sustained all-core ──
-    'Intel(R) Core(TM) i9-9900KS': 212,
-    'Intel(R) Core(TM) i9-9900K': 212,
-    'Intel(R) Core(TM) i9-9900KF': 212,
-    'Intel(R) Core(TM) i9-9900': 65,
-    'Intel(R) Core(TM) i7-9700K': 180,
-    'Intel(R) Core(TM) i7-9700KF': 180,
-    'Intel(R) Core(TM) i7-9700': 65,
-    'Intel(R) Core(TM) i7-9700F': 65,
-    'Intel(R) Core(TM) i5-9600K': 152,
-    'Intel(R) Core(TM) i5-9600KF': 152,
-    'Intel(R) Core(TM) i5-9600': 65,
-    'Intel(R) Core(TM) i5-9500': 65,
-    'Intel(R) Core(TM) i5-9500F': 65,
-    'Intel(R) Core(TM) i5-9400': 65,
-    'Intel(R) Core(TM) i5-9400F': 65,
-    'Intel(R) Core(TM) i3-9350K': 91,
-    'Intel(R) Core(TM) i3-9300': 62,
-    'Intel(R) Core(TM) i3-9100': 65,
-    'Intel(R) Core(TM) i3-9100F': 65,
-    // ── Intel Core 8th Gen (Coffee Lake) — PL2 sustained all-core ──────────
-    'Intel(R) Core(TM) i7-8700K': 180,
-    'Intel(R) Core(TM) i7-8700': 65,
-    'Intel(R) Core(TM) i5-8600K': 152,
-    'Intel(R) Core(TM) i5-8600': 65,
-    'Intel(R) Core(TM) i5-8500': 65,
-    'Intel(R) Core(TM) i5-8400': 65,
-    'Intel(R) Core(TM) i3-8350K': 91,
-    'Intel(R) Core(TM) i3-8300': 62,
-    'Intel(R) Core(TM) i3-8100': 65,
-    // ── Intel Core Ultra 200S (Arrow Lake, desktop) — PL2 sustained ────────
-    'Intel(R) Core(TM) Ultra 9 285K': 250,
-    'Intel(R) Core(TM) Ultra 7 265K': 225,
-    'Intel(R) Core(TM) Ultra 7 265KF': 225,
-    'Intel(R) Core(TM) Ultra 5 245K': 159,
-    'Intel(R) Core(TM) Ultra 5 245KF': 159,
-    // ── Intel Core Ultra 100H/U (Meteor Lake, mobile) ─────────────────────
-    'Intel(R) Core(TM) Ultra 9 185H': 45,
-    'Intel(R) Core(TM) Ultra 7 165H': 45,
-    'Intel(R) Core(TM) Ultra 7 155H': 45,
-    'Intel(R) Core(TM) Ultra 5 135H': 45,
-    'Intel(R) Core(TM) Ultra 5 125H': 45,
-    'Intel(R) Core(TM) Ultra 7 165U': 15,
-    'Intel(R) Core(TM) Ultra 7 155U': 15,
-    'Intel(R) Core(TM) Ultra 5 135U': 15,
-    // ── Intel 13th Gen Mobile (HX / H / U) ────────────────────────────────
-    'Intel(R) Core(TM) i9-13950HX': 55,
-    'Intel(R) Core(TM) i9-13900HX': 55,
-    'Intel(R) Core(TM) i9-13900H': 45,
-    'Intel(R) Core(TM) i7-13700HX': 55,
-    'Intel(R) Core(TM) i7-13700H': 45,
-    'Intel(R) Core(TM) i5-13600H': 45,
-    'Intel(R) Core(TM) i5-13500H': 45,
-    'Intel(R) Core(TM) i5-13450H': 45,
-    'Intel(R) Core(TM) i7-1365U': 15,
-    'Intel(R) Core(TM) i7-1355U': 15,
-    'Intel(R) Core(TM) i5-1345U': 15,
-    'Intel(R) Core(TM) i5-1335U': 15,
-    'Intel(R) Core(TM) i3-1315U': 15,
-    // ── Intel 12th Gen Mobile ─────────────────────────────────────────────
-    'Intel(R) Core(TM) i9-12950HX': 55,
-    'Intel(R) Core(TM) i9-12900HK': 45,
-    'Intel(R) Core(TM) i9-12900H': 45,
-    'Intel(R) Core(TM) i7-12700H': 45,
-    'Intel(R) Core(TM) i7-12650H': 45,
-    'Intel(R) Core(TM) i5-12500H': 45,
-    'Intel(R) Core(TM) i5-12450H': 45,
-    'Intel(R) Core(TM) i7-1280P': 28,
-    'Intel(R) Core(TM) i7-1270P': 28,
-    'Intel(R) Core(TM) i5-1240P': 28,
-    'Intel(R) Core(TM) i7-1255U': 15,
-    'Intel(R) Core(TM) i5-1235U': 15,
-    // ── Intel 11th Gen Mobile ─────────────────────────────────────────────
-    'Intel(R) Core(TM) i9-11980HK': 45,
-    'Intel(R) Core(TM) i9-11900H': 45,
-    'Intel(R) Core(TM) i7-11800H': 45,
-    'Intel(R) Core(TM) i5-11500H': 45,
-    'Intel(R) Core(TM) i7-1185G7': 28,
-    'Intel(R) Core(TM) i7-1165G7': 28,
-    'Intel(R) Core(TM) i5-1135G7': 28,
-    'Intel(R) Core(TM) i3-1125G4': 28,
-    'Intel(R) Core(TM) i3-1115G4': 15,
-    // ── Intel 10th Gen Mobile ─────────────────────────────────────────────
-    'Intel(R) Core(TM) i7-10875H': 45,
-    'Intel(R) Core(TM) i7-10750H': 45,
-    'Intel(R) Core(TM) i5-10500H': 45,
-    'Intel(R) Core(TM) i5-10300H': 45,
-    'Intel(R) Core(TM) i7-1065G7': 15,
-    'Intel(R) Core(TM) i5-1035G1': 15,
-    'Intel(R) Core(TM) i3-1005G1': 15,
-    // ── Intel Xeon ────────────────────────────────────────────────────────
-    'Intel(R) Xeon(R) w9-3595X': 350,
-    'Intel(R) Xeon(R) w9-3575X': 300,
-    'Intel(R) Xeon(R) w7-3465X': 300,
-    'Intel(R) Xeon(R) w7-2495X': 225,
-    'Intel(R) Xeon(R) W-3175X': 255,
-    'Intel(R) Xeon(R) W-2295': 165,
-    'Intel(R) Xeon(R) W-2255': 165,
-    'Intel(R) Xeon(R) W-2245': 155,
-    'Intel(R) Xeon(R) Gold 6258R': 205,
-    'Intel(R) Xeon(R) Gold 6248R': 205,
-    'Intel(R) Xeon(R) Gold 6154': 200,
-    'Intel(R) Xeon(R) Silver 4310': 120,
-    'Intel(R) Xeon(R) Silver 4210R': 100,
-    'Intel(R) Xeon(R) Silver 4210': 85,
-    'Intel(R) Xeon(R) E5-2699 v4': 145,
-    'Intel(R) Xeon(R) E5-2690 v4': 135,
-    'Intel(R) Xeon(R) E5-2680 v4': 120,
-    'Intel(R) Xeon(R) E5-2670 v3': 120,
-    // ── AMD Ryzen 9000 Series (Zen 5, AM5) — PPT (actual all-core power) ──
-    'AMD Ryzen 9 9950X': 230,
-    'AMD Ryzen 9 9900X': 162,
-    'AMD Ryzen 7 9800X3D': 162,
-    'AMD Ryzen 7 9700X': 88,
-    'AMD Ryzen 5 9600X': 88,
-    'AMD Ryzen 5 9600': 65,
-    // ── AMD Ryzen 7000 Series (Zen 4, AM5) — PPT (actual all-core power) ──
-    'AMD Ryzen 9 7950X': 230,
-    'AMD Ryzen 9 7950X3D': 162,
-    'AMD Ryzen 9 7900X': 230,
-    'AMD Ryzen 9 7900X3D': 162,
-    'AMD Ryzen 9 7900': 88,
-    'AMD Ryzen 7 7800X3D': 162,
-    'AMD Ryzen 7 7700X': 142,
-    'AMD Ryzen 7 7700': 88,
-    'AMD Ryzen 5 7600X': 142,
-    'AMD Ryzen 5 7600': 88,
-    'AMD Ryzen 5 7500F': 88,
-    // ── AMD Ryzen 5000 Series (Zen 3, AM4) ────────────────────────────────
-    'AMD Ryzen 9 5950X': 142,
-    'AMD Ryzen 9 5900X': 142,
-    'AMD Ryzen 9 5900': 88,
-    'AMD Ryzen 9 5900HX': 45,
-    'AMD Ryzen 7 5800X3D': 88,
-    'AMD Ryzen 7 5800X': 142,
-    'AMD Ryzen 7 5800': 88,
-    'AMD Ryzen 7 5800H': 45,
-    'AMD Ryzen 7 5700X': 88,
-    'AMD Ryzen 7 5700G': 88,
-    'AMD Ryzen 5 5600X': 88,
-    'AMD Ryzen 5 5600': 88,
-    'AMD Ryzen 5 5600G': 88,
-    'AMD Ryzen 5 5600H': 45,
-    'AMD Ryzen 5 5500': 88,
-    'AMD Ryzen 3 5300G': 88,
-    'AMD Ryzen 3 5100': 88,
-    // ── AMD Ryzen 3000 Series (Zen 2, AM4) ────────────────────────────────
-    'AMD Ryzen 9 3950X': 142,
-    'AMD Ryzen 9 3900XT': 142,
-    'AMD Ryzen 9 3900X': 142,
-    'AMD Ryzen 9 3900': 88,
-    'AMD Ryzen 7 3800XT': 142,
-    'AMD Ryzen 7 3800X': 142,
-    'AMD Ryzen 7 3700X': 88,
-    'AMD Ryzen 5 3600XT': 128,
-    'AMD Ryzen 5 3600X': 128,
-    'AMD Ryzen 5 3600': 88,
-    'AMD Ryzen 5 3500X': 88,
-    'AMD Ryzen 5 3500': 88,
-    'AMD Ryzen 3 3300X': 88,
-    'AMD Ryzen 3 3100': 88,
-    // ── AMD Ryzen 2000 Series (Zen+, AM4) ─────────────────────────────────
-    'AMD Ryzen 7 2700X': 128,
-    'AMD Ryzen 7 2700': 88,
-    'AMD Ryzen 5 2600X': 110,
-    'AMD Ryzen 5 2600': 88,
-    'AMD Ryzen 3 2300X': 88,
-    'AMD Ryzen 3 2200G': 88,
-    // ── AMD Threadripper ──────────────────────────────────────────────────
-    'AMD Ryzen Threadripper PRO 7995WX': 350,
-    'AMD Ryzen Threadripper PRO 7985WX': 350,
-    'AMD Ryzen Threadripper PRO 7975WX': 350,
-    'AMD Ryzen Threadripper PRO 5995WX': 280,
-    'AMD Ryzen Threadripper PRO 5975WX': 280,
-    'AMD Ryzen Threadripper PRO 5965WX': 280,
-    'AMD Ryzen Threadripper 3990X': 280,
-    'AMD Ryzen Threadripper 3970X': 280,
-    'AMD Ryzen Threadripper 3960X': 280,
-    'AMD Ryzen Threadripper 2990WX': 250,
-    'AMD Ryzen Threadripper 2970WX': 250,
-    'AMD Ryzen Threadripper 2950X': 180,
-    'AMD Ryzen Threadripper 2920X': 180,
-    // ── AMD EPYC ──────────────────────────────────────────────────────────
-    'AMD EPYC 9654': 360,
-    'AMD EPYC 9554': 360,
-    'AMD EPYC 9454': 290,
-    'AMD EPYC 9354': 280,
-    'AMD EPYC 7763': 280,
-    'AMD EPYC 7742': 225,
-    'AMD EPYC 7713': 225,
-    'AMD EPYC 7663': 240,
-    'AMD EPYC 7601': 180,
-    'AMD EPYC 7551': 180,
-    'AMD EPYC 7543': 225,
-    'AMD EPYC 7502': 180,
-    'AMD EPYC 7401': 170,
-    'AMD EPYC 7301': 155,
-    // ── Apple Silicon ─────────────────────────────────────────────────────
-    'Apple M1': 20,
-    'Apple M1 Pro': 30,
-    'Apple M1 Max': 60,
-    'Apple M1 Ultra': 60,
-    'Apple M2': 22,
-    'Apple M2 Pro': 35,
-    'Apple M2 Max': 60,
-    'Apple M2 Ultra': 60,
-    'Apple M3': 22,
-    'Apple M3 Pro': 35,
-    'Apple M3 Max': 92,
-    'Apple M4': 20,
-    'Apple M4 Pro': 31,
-    'Apple M4 Max': 50,
-    // ── Intel Core 7th Gen (Kaby Lake) ────────────────────────────────────
-    'Intel(R) Core(TM) i7-7700K': 91,
-    'Intel(R) Core(TM) i7-7700': 65,
-    'Intel(R) Core(TM) i7-7700T': 35,
-    'Intel(R) Core(TM) i5-7600K': 91,
-    'Intel(R) Core(TM) i5-7600': 65,
-    'Intel(R) Core(TM) i5-7500': 65,
-    'Intel(R) Core(TM) i5-7400': 65,
-    'Intel(R) Core(TM) i5-7400T': 35,
-    'Intel(R) Core(TM) i3-7350K': 60,
-    'Intel(R) Core(TM) i3-7300': 51,
-    'Intel(R) Core(TM) i3-7100': 51,
-    'Intel(R) Core(TM) i3-7100T': 35,
-    'Intel(R) Core(TM) i7-7700HQ': 45,
-    'Intel(R) Core(TM) i7-7500U': 15,
-    'Intel(R) Core(TM) i5-7300HQ': 45,
-    'Intel(R) Core(TM) i5-7200U': 15,
-    'Intel(R) Core(TM) i3-7100U': 15,
-    // ── Intel Core 6th Gen (Skylake) ───────────────────────────────────────
-    'Intel(R) Core(TM) i7-6700K': 91,
-    'Intel(R) Core(TM) i7-6700': 65,
-    'Intel(R) Core(TM) i7-6700T': 35,
-    'Intel(R) Core(TM) i5-6600K': 91,
-    'Intel(R) Core(TM) i5-6600': 65,
-    'Intel(R) Core(TM) i5-6500': 65,
-    'Intel(R) Core(TM) i5-6400': 65,
-    'Intel(R) Core(TM) i5-6400T': 35,
-    'Intel(R) Core(TM) i3-6300': 51,
-    'Intel(R) Core(TM) i3-6100': 51,
-    'Intel(R) Core(TM) i3-6100T': 35,
-    'Intel(R) Core(TM) i7-6700HQ': 45,
-    'Intel(R) Core(TM) i7-6500U': 15,
-    'Intel(R) Core(TM) i5-6300HQ': 45,
-    'Intel(R) Core(TM) i5-6200U': 15,
-    'Intel(R) Core(TM) i3-6100U': 15,
-    // ── Intel Core 5th Gen (Broadwell) ────────────────────────────────────
-    'Intel(R) Core(TM) i7-5775C': 65,
-    'Intel(R) Core(TM) i5-5675C': 65,
-    'Intel(R) Core(TM) i7-5700HQ': 47,
-    'Intel(R) Core(TM) i7-5500U': 15,
-    'Intel(R) Core(TM) i5-5300U': 15,
-    'Intel(R) Core(TM) i3-5005U': 15,
-    // ── Intel Core 4th Gen (Haswell) ──────────────────────────────────────
-    'Intel(R) Core(TM) i7-4790K': 88,
-    'Intel(R) Core(TM) i7-4790': 84,
-    'Intel(R) Core(TM) i7-4770K': 84,
-    'Intel(R) Core(TM) i7-4770': 84,
-    'Intel(R) Core(TM) i7-4770T': 45,
-    'Intel(R) Core(TM) i5-4690K': 88,
-    'Intel(R) Core(TM) i5-4690': 84,
-    'Intel(R) Core(TM) i5-4670K': 84,
-    'Intel(R) Core(TM) i5-4670': 84,
-    'Intel(R) Core(TM) i5-4590': 84,
-    'Intel(R) Core(TM) i5-4570': 84,
-    'Intel(R) Core(TM) i5-4460': 84,
-    'Intel(R) Core(TM) i3-4370': 54,
-    'Intel(R) Core(TM) i3-4160': 54,
-    'Intel(R) Core(TM) i3-4130': 54,
-    'Intel(R) Core(TM) i7-4720HQ': 47,
-    'Intel(R) Core(TM) i7-4700MQ': 47,
-    'Intel(R) Core(TM) i7-4500U': 15,
-    'Intel(R) Core(TM) i5-4300U': 15,
-    'Intel(R) Core(TM) i3-4010U': 15,
-    // ── Intel Core 3rd Gen (Ivy Bridge) ───────────────────────────────────
-    'Intel(R) Core(TM) i7-3770K': 77,
-    'Intel(R) Core(TM) i7-3770': 77,
-    'Intel(R) Core(TM) i7-3770T': 45,
-    'Intel(R) Core(TM) i5-3570K': 77,
-    'Intel(R) Core(TM) i5-3570': 77,
-    'Intel(R) Core(TM) i5-3570T': 45,
-    'Intel(R) Core(TM) i5-3470': 77,
-    'Intel(R) Core(TM) i5-3450': 77,
-    'Intel(R) Core(TM) i3-3240': 55,
-    'Intel(R) Core(TM) i3-3225': 55,
-    'Intel(R) Core(TM) i3-3220': 55,
-    'Intel(R) Core(TM) i7-3720QM': 45,
-    'Intel(R) Core(TM) i7-3630QM': 45,
-    'Intel(R) Core(TM) i5-3320M': 35,
-    'Intel(R) Core(TM) i5-3210M': 35,
-    'Intel(R) Core(TM) i3-3110M': 35,
-    // ── Intel Core 2nd Gen (Sandy Bridge) ─────────────────────────────────
-    'Intel(R) Core(TM) i7-2700K': 95,
-    'Intel(R) Core(TM) i7-2600K': 95,
-    'Intel(R) Core(TM) i7-2600': 95,
-    'Intel(R) Core(TM) i7-2600S': 65,
-    'Intel(R) Core(TM) i5-2500K': 95,
-    'Intel(R) Core(TM) i5-2500': 95,
-    'Intel(R) Core(TM) i5-2400': 95,
-    'Intel(R) Core(TM) i5-2310': 95,
-    'Intel(R) Core(TM) i3-2120': 65,
-    'Intel(R) Core(TM) i3-2100': 65,
-    'Intel(R) Core(TM) i7-2630QM': 45,
-    'Intel(R) Core(TM) i5-2520M': 35,
-    'Intel(R) Core(TM) i5-2410M': 35,
-    'Intel(R) Core(TM) i3-2310M': 35,
-    // ── Intel Xeon E3 (v1-v4) ─────────────────────────────────────────────
-    'Intel(R) Xeon(R) E3-1280 v5': 80,
-    'Intel(R) Xeon(R) E3-1270 v5': 80,
-    'Intel(R) Xeon(R) E3-1240 v5': 80,
-    'Intel(R) Xeon(R) E3-1230 v5': 80,
-    'Intel(R) Xeon(R) E3-1280 v3': 84,
-    'Intel(R) Xeon(R) E3-1270 v3': 80,
-    'Intel(R) Xeon(R) E3-1240 v3': 80,
-    'Intel(R) Xeon(R) E3-1230 v3': 80,
-    'Intel(R) Xeon(R) E3-1220 v3': 80,
-    'Intel(R) Xeon(R) E3-1275 v2': 77,
-    'Intel(R) Xeon(R) E3-1245 v2': 77,
-    'Intel(R) Xeon(R) E3-1225 v2': 77,
-    // ── Intel Pentium / Celeron (Desktop) ─────────────────────────────────
-    'Intel(R) Pentium(R) Gold G7400': 46,
-    'Intel(R) Pentium(R) Gold G6605': 58,
-    'Intel(R) Pentium(R) Gold G6400': 58,
-    'Intel(R) Pentium(R) Gold G5620': 54,
-    'Intel(R) Pentium(R) Gold G5600': 54,
-    'Intel(R) Pentium(R) Gold G5400': 54,
-    'Intel(R) Pentium(R) G4560': 54,
-    'Intel(R) Pentium(R) G4400': 54,
-    'Intel(R) Pentium(R) G3258': 53,
-    'Intel(R) Pentium(R) G3220': 53,
-    'Intel(R) Celeron(R) G6900': 46,
-    'Intel(R) Celeron(R) G5905': 58,
-    'Intel(R) Celeron(R) G4900': 54,
-    'Intel(R) Celeron(R) G3900': 51,
-    // ── AMD Ryzen 1000 Series (Zen 1, AM4) ────────────────────────────────
-    'AMD Ryzen 7 1800X': 95,
-    'AMD Ryzen 7 1700X': 95,
-    'AMD Ryzen 7 1700': 65,
-    'AMD Ryzen 5 1600X': 95,
-    'AMD Ryzen 5 1600': 65,
-    'AMD Ryzen 5 1500X': 65,
-    'AMD Ryzen 5 1400': 65,
-    'AMD Ryzen 3 1300X': 65,
-    'AMD Ryzen 3 1200': 65,
-    // ── AMD FX Series (Vishera / Piledriver, AM3+) ────────────────────────
-    'AMD FX-9590': 220,
-    'AMD FX-9370': 220,
-    'AMD FX-8370': 125,
-    'AMD FX-8350': 125,
-    'AMD FX-8320E': 95,
-    'AMD FX-8320': 125,
-    'AMD FX-8300': 95,
-    'AMD FX-6350': 125,
-    'AMD FX-6300': 95,
-    'AMD FX-4350': 125,
-    'AMD FX-4300': 95,
-    // ── AMD A-Series APU (FM2+) ───────────────────────────────────────────
-    'AMD A10-7890K': 95,
-    'AMD A10-7870K': 95,
-    'AMD A10-7850K': 95,
-    'AMD A10-7800': 65,
-    'AMD A8-7670K': 95,
-    'AMD A8-7650K': 65,
-    'AMD A6-7470K': 65,
-    'AMD A6-7400K': 65,
-    // ── AMD Phenom II (AM3) ───────────────────────────────────────────────
-    'AMD Phenom(tm) II X6 1100T': 125,
-    'AMD Phenom(tm) II X6 1090T': 125,
-    'AMD Phenom(tm) II X4 980': 125,
-    'AMD Phenom(tm) II X4 970': 125,
-    'AMD Phenom(tm) II X4 965': 125,
-    'AMD Phenom(tm) II X4 955': 125,
-    'AMD Phenom(tm) II X4 945': 95,
-  }), []);
-  const gpuTDPTable = React.useMemo(() => ({
-    // ── NVIDIA GeForce RTX 50 Series ──────────────────────────────────────
-    'NVIDIA GeForce RTX 5090': 575,
-    'NVIDIA GeForce RTX 5080': 360,
-    'NVIDIA GeForce RTX 5070 Ti': 300,
-    'NVIDIA GeForce RTX 5070': 250,
-    'NVIDIA GeForce RTX 5060 Ti': 180,
-    'NVIDIA GeForce RTX 5060': 150,
-    // ── NVIDIA GeForce RTX 40 Series ──────────────────────────────────────
-    'NVIDIA GeForce RTX 4090': 450,
-    'NVIDIA GeForce RTX 4080 SUPER': 320,
-    'NVIDIA GeForce RTX 4080': 320,
-    'NVIDIA GeForce RTX 4070 Ti SUPER': 285,
-    'NVIDIA GeForce RTX 4070 Ti': 285,
-    'NVIDIA GeForce RTX 4070 SUPER': 220,
-    'NVIDIA GeForce RTX 4070': 200,
-    'NVIDIA GeForce RTX 4060 Ti': 160,
-    'NVIDIA GeForce RTX 4060': 115,
-    'NVIDIA GeForce RTX 4050': 115,
-    // ── NVIDIA GeForce RTX 30 Series ──────────────────────────────────────
-    'NVIDIA GeForce RTX 3090 Ti': 450,
-    'NVIDIA GeForce RTX 3090': 350,
-    'NVIDIA GeForce RTX 3080 Ti': 350,
-    'NVIDIA GeForce RTX 3080 12GB': 350,
-    'NVIDIA GeForce RTX 3080 10GB': 320,
-    'NVIDIA GeForce RTX 3080': 320,
-    'NVIDIA GeForce RTX 3070 Ti': 290,
-    'NVIDIA GeForce RTX 3070': 220,
-    'NVIDIA GeForce RTX 3060 Ti': 200,
-    'NVIDIA GeForce RTX 3060 12GB': 170,
-    'NVIDIA GeForce RTX 3060': 170,
-    'NVIDIA GeForce RTX 3050 OEM': 90,
-    'NVIDIA GeForce RTX 3050': 130,
-    // ── NVIDIA GeForce RTX 20 Series ──────────────────────────────────────
-    'NVIDIA GeForce RTX 2080 Ti': 250,
-    'NVIDIA GeForce RTX 2080 SUPER': 250,
-    'NVIDIA GeForce RTX 2080': 215,
-    'NVIDIA GeForce RTX 2070 SUPER': 215,
-    'NVIDIA GeForce RTX 2070': 175,
-    'NVIDIA GeForce RTX 2060 SUPER': 175,
-    'NVIDIA GeForce RTX 2060': 160,
-    // ── NVIDIA GeForce GTX 16 Series ──────────────────────────────────────
-    'NVIDIA GeForce GTX 1660 Ti': 120,
-    'NVIDIA GeForce GTX 1660 SUPER': 125,
-    'NVIDIA GeForce GTX 1660': 120,
-    'NVIDIA GeForce GTX 1650 SUPER': 100,
-    'NVIDIA GeForce GTX 1650': 75,
-    // ── NVIDIA GeForce GTX 10 Series ──────────────────────────────────────
-    'NVIDIA GeForce GTX 1080 Ti': 250,
-    'NVIDIA GeForce GTX 1080': 180,
-    'NVIDIA GeForce GTX 1070 Ti': 180,
-    'NVIDIA GeForce GTX 1070': 150,
-    'NVIDIA GeForce GTX 1060 6GB': 120,
-    'NVIDIA GeForce GTX 1060 3GB': 120,
-    'NVIDIA GeForce GTX 1060': 120,
-    'NVIDIA GeForce GTX 1050 Ti': 75,
-    'NVIDIA GeForce GTX 1050': 75,
-    'NVIDIA GeForce GTX 1030': 30,
-    // ── NVIDIA GeForce GTX 9 Series ───────────────────────────────────────
-    'NVIDIA GeForce GTX 980 Ti': 250,
-    'NVIDIA GeForce GTX 980': 165,
-    'NVIDIA GeForce GTX 970': 145,
-    'NVIDIA GeForce GTX 960': 120,
-    'NVIDIA GeForce GTX 950': 90,
-    // ── NVIDIA RTX Workstation / Professional ─────────────────────────────
-    'NVIDIA RTX 6000 Ada': 300,
-    'NVIDIA RTX 5000 Ada': 250,
-    'NVIDIA RTX 4500 Ada': 210,
-    'NVIDIA RTX 4000 Ada': 130,
-    'NVIDIA RTX 2000 Ada': 70,
-    'NVIDIA RTX A6000': 300,
-    'NVIDIA RTX A5000': 230,
-    'NVIDIA RTX A4000': 140,
-    'NVIDIA RTX A2000': 70,
-    'NVIDIA Quadro RTX 8000': 295,
-    'NVIDIA Quadro RTX 6000': 295,
-    'NVIDIA Quadro RTX 5000': 230,
-    'NVIDIA Quadro RTX 4000': 160,
-    // ── AMD Radeon RX 9000 Series (RDNA 4) ───────────────────────────────
-    'AMD Radeon RX 9070 XT': 304,
-    'AMD Radeon RX 9070': 220,
-    // ── AMD Radeon RX 7000 Series (RDNA 3) ───────────────────────────────
-    'AMD Radeon RX 7900 XTX': 355,
-    'AMD Radeon RX 7900 XT': 315,
-    'AMD Radeon RX 7900 GRE': 260,
-    'AMD Radeon RX 7800 XT': 263,
-    'AMD Radeon RX 7700 XT': 245,
-    'AMD Radeon RX 7600 XT': 190,
-    'AMD Radeon RX 7600': 165,
-    'AMD Radeon RX 7500 XT': 100,
-    // ── AMD Radeon RX 6000 Series (RDNA 2) ───────────────────────────────
-    'AMD Radeon RX 6950 XT': 335,
-    'AMD Radeon RX 6900 XT': 300,
-    'AMD Radeon RX 6800 XT': 300,
-    'AMD Radeon RX 6800': 250,
-    'AMD Radeon RX 6750 XT': 250,
-    'AMD Radeon RX 6700 XT': 230,
-    'AMD Radeon RX 6700': 175,
-    'AMD Radeon RX 6650 XT': 180,
-    'AMD Radeon RX 6600 XT': 160,
-    'AMD Radeon RX 6600': 132,
-    'AMD Radeon RX 6500 XT': 107,
-    'AMD Radeon RX 6400': 53,
-    // ── AMD Radeon RX 5000 Series (RDNA 1) ───────────────────────────────
-    'AMD Radeon RX 5700 XT': 225,
-    'AMD Radeon RX 5700': 180,
-    'AMD Radeon RX 5600 XT': 150,
-    'AMD Radeon RX 5500 XT': 130,
-    // ── AMD Radeon Vega / GCN ─────────────────────────────────────────────
-    'AMD Radeon RX Vega 64': 295,
-    'AMD Radeon RX Vega 56': 210,
-    'AMD Radeon VII': 300,
-    'AMD Radeon RX 590': 225,
-    'AMD Radeon RX 580': 185,
-    'AMD Radeon RX 570': 150,
-    'AMD Radeon RX 480': 150,
-    'AMD Radeon RX 470': 120,
-    // ── AMD Radeon PRO Workstation ────────────────────────────────────────
-    'AMD Radeon PRO W7900': 295,
-    'AMD Radeon PRO W7800': 260,
-    'AMD Radeon PRO W6800': 250,
-    'AMD Radeon PRO W6600': 130,
-    'AMD Radeon PRO W6400': 50,
-    // ── Intel Arc ────────────────────────────────────────────────────────
-    'Intel Arc A770': 225,
-    'Intel Arc A750': 225,
-    'Intel Arc A580': 185,
-    'Intel Arc A380': 75,
-    'Intel Arc A310': 30,
-    'Intel Arc B580': 190,
-    'Intel Arc B570': 150,
-    // ── NVIDIA GeForce GTX 700 Series (Kepler) ────────────────────────────
-    'NVIDIA GeForce GTX 780 Ti': 250,
-    'NVIDIA GeForce GTX 780': 250,
-    'NVIDIA GeForce GTX 770': 230,
-    'NVIDIA GeForce GTX 760': 170,
-    'NVIDIA GeForce GTX 750 Ti': 60,
-    'NVIDIA GeForce GTX 750': 55,
-    // ── NVIDIA GeForce GTX 600 Series (Kepler) ────────────────────────────
-    'NVIDIA GeForce GTX 690': 300,
-    'NVIDIA GeForce GTX 680': 195,
-    'NVIDIA GeForce GTX 670': 170,
-    'NVIDIA GeForce GTX 660 Ti': 150,
-    'NVIDIA GeForce GTX 660': 140,
-    'NVIDIA GeForce GTX 650 Ti': 110,
-    'NVIDIA GeForce GTX 650': 64,
-    // ── NVIDIA GeForce GTX 500 Series (Fermi) ─────────────────────────────
-    'NVIDIA GeForce GTX 590': 365,
-    'NVIDIA GeForce GTX 580': 244,
-    'NVIDIA GeForce GTX 570': 219,
-    'NVIDIA GeForce GTX 560 Ti': 170,
-    'NVIDIA GeForce GTX 560': 150,
-    'NVIDIA GeForce GTX 550 Ti': 116,
-    // ── AMD Radeon RX 400 Series (Polaris) ───────────────────────────────
-    'AMD Radeon RX 460': 75,
-    // ── AMD Radeon R9 / R7 / R5 (GCN 1â€“3) ───────────────────────────────
-    'AMD Radeon R9 Fury X': 275,
-    'AMD Radeon R9 Fury': 275,
-    'AMD Radeon R9 Nano': 175,
-    'AMD Radeon R9 390X': 275,
-    'AMD Radeon R9 390': 275,
-    'AMD Radeon R9 380X': 190,
-    'AMD Radeon R9 380': 190,
-    'AMD Radeon R9 290X': 290,
-    'AMD Radeon R9 290': 275,
-    'AMD Radeon R9 285': 190,
-    'AMD Radeon R9 280X': 250,
-    'AMD Radeon R9 280': 200,
-    'AMD Radeon R9 270X': 180,
-    'AMD Radeon R9 270': 150,
-    'AMD Radeon R7 370': 110,
-    'AMD Radeon R7 360': 80,
-    'AMD Radeon R7 265': 150,
-    'AMD Radeon R7 260X': 95,
-    'AMD Radeon R5 230': 19,
-    // ── AMD Radeon HD 7000 Series (GCN 1) ─────────────────────────────────
-    'AMD Radeon HD 7990': 375,
-    'AMD Radeon HD 7970': 250,
-    'AMD Radeon HD 7950': 200,
-    'AMD Radeon HD 7870': 175,
-    'AMD Radeon HD 7850': 130,
-    'AMD Radeon HD 7790': 100,
-    'AMD Radeon HD 7770': 80,
-    'AMD Radeon HD 7750': 55,
-  }), []);
+  const cpuTDPTable = React.useMemo(
+    () => ({
+      // ── Intel Core 14th Gen (Raptor Lake Refresh) — PL2 sustained all-core ─
+      'Intel(R) Core(TM) i9-14900KS': 253,
+      'Intel(R) Core(TM) i9-14900K': 253,
+      'Intel(R) Core(TM) i9-14900KF': 253,
+      'Intel(R) Core(TM) i9-14900': 65,
+      'Intel(R) Core(TM) i9-14900F': 65,
+      'Intel(R) Core(TM) i9-14900T': 35,
+      'Intel(R) Core(TM) i7-14700K': 192,
+      'Intel(R) Core(TM) i7-14700KF': 192,
+      'Intel(R) Core(TM) i7-14700': 65,
+      'Intel(R) Core(TM) i7-14700F': 65,
+      'Intel(R) Core(TM) i7-14700T': 35,
+      'Intel(R) Core(TM) i5-14600K': 181,
+      'Intel(R) Core(TM) i5-14600KF': 181,
+      'Intel(R) Core(TM) i5-14600': 65,
+      'Intel(R) Core(TM) i5-14500': 65,
+      'Intel(R) Core(TM) i5-14400': 65,
+      'Intel(R) Core(TM) i5-14400F': 65,
+      'Intel(R) Core(TM) i5-14400T': 35,
+      'Intel(R) Core(TM) i3-14100': 60,
+      'Intel(R) Core(TM) i3-14100F': 58,
+      'Intel(R) Core(TM) i3-14100T': 35,
+      // ── Intel Core 13th Gen (Raptor Lake) — PL2 sustained all-core ─────────
+      'Intel(R) Core(TM) i9-13900KS': 253,
+      'Intel(R) Core(TM) i9-13900K': 253,
+      'Intel(R) Core(TM) i9-13900KF': 253,
+      'Intel(R) Core(TM) i9-13900': 65,
+      'Intel(R) Core(TM) i9-13900F': 65,
+      'Intel(R) Core(TM) i9-13900T': 35,
+      'Intel(R) Core(TM) i7-13700K': 192,
+      'Intel(R) Core(TM) i7-13700KF': 192,
+      'Intel(R) Core(TM) i7-13700': 65,
+      'Intel(R) Core(TM) i7-13700F': 65,
+      'Intel(R) Core(TM) i7-13700T': 35,
+      'Intel(R) Core(TM) i5-13600K': 181,
+      'Intel(R) Core(TM) i5-13600KF': 181,
+      'Intel(R) Core(TM) i5-13600': 65,
+      'Intel(R) Core(TM) i5-13500': 65,
+      'Intel(R) Core(TM) i5-13400': 65,
+      'Intel(R) Core(TM) i5-13400F': 65,
+      'Intel(R) Core(TM) i5-13400T': 35,
+      'Intel(R) Core(TM) i3-13100': 60,
+      'Intel(R) Core(TM) i3-13100F': 58,
+      'Intel(R) Core(TM) i3-13100T': 35,
+      'Intel(R) Core(TM) i3-13300': 60,
+      // ── Intel Core 12th Gen (Alder Lake) — PL2 sustained all-core ──────────
+      'Intel(R) Core(TM) i9-12900KS': 241,
+      'Intel(R) Core(TM) i9-12900K': 241,
+      'Intel(R) Core(TM) i9-12900KF': 241,
+      'Intel(R) Core(TM) i9-12900': 65,
+      'Intel(R) Core(TM) i9-12900F': 65,
+      'Intel(R) Core(TM) i9-12900T': 35,
+      'Intel(R) Core(TM) i7-12700K': 190,
+      'Intel(R) Core(TM) i7-12700KF': 190,
+      'Intel(R) Core(TM) i7-12700': 65,
+      'Intel(R) Core(TM) i7-12700F': 65,
+      'Intel(R) Core(TM) i7-12700T': 35,
+      'Intel(R) Core(TM) i5-12600K': 150,
+      'Intel(R) Core(TM) i5-12600KF': 150,
+      'Intel(R) Core(TM) i5-12600': 65,
+      'Intel(R) Core(TM) i5-12500': 65,
+      'Intel(R) Core(TM) i5-12400': 65,
+      'Intel(R) Core(TM) i5-12400F': 65,
+      'Intel(R) Core(TM) i5-12400T': 35,
+      'Intel(R) Core(TM) i3-12300': 60,
+      'Intel(R) Core(TM) i3-12100': 60,
+      'Intel(R) Core(TM) i3-12100F': 58,
+      'Intel(R) Core(TM) i3-12100T': 35,
+      // ── Intel Core 11th Gen (Rocket Lake) — PL2 sustained all-core ─────────
+      'Intel(R) Core(TM) i9-11900K': 250,
+      'Intel(R) Core(TM) i9-11900KF': 250,
+      'Intel(R) Core(TM) i9-11900': 65,
+      'Intel(R) Core(TM) i9-11900F': 65,
+      'Intel(R) Core(TM) i9-11900T': 35,
+      'Intel(R) Core(TM) i7-11700K': 250,
+      'Intel(R) Core(TM) i7-11700KF': 250,
+      'Intel(R) Core(TM) i7-11700': 65,
+      'Intel(R) Core(TM) i7-11700F': 65,
+      'Intel(R) Core(TM) i7-11700T': 35,
+      'Intel(R) Core(TM) i5-11600K': 154,
+      'Intel(R) Core(TM) i5-11600KF': 154,
+      'Intel(R) Core(TM) i5-11600': 65,
+      'Intel(R) Core(TM) i5-11500': 65,
+      'Intel(R) Core(TM) i5-11500T': 35,
+      'Intel(R) Core(TM) i5-11400': 65,
+      'Intel(R) Core(TM) i5-11400F': 65,
+      'Intel(R) Core(TM) i5-11400T': 35,
+      // ── Intel Core 10th Gen (Comet Lake) — PL2 sustained all-core ──────────
+      'Intel(R) Core(TM) i9-10900KS': 250,
+      'Intel(R) Core(TM) i9-10900K': 250,
+      'Intel(R) Core(TM) i9-10900KF': 250,
+      'Intel(R) Core(TM) i9-10900': 65,
+      'Intel(R) Core(TM) i9-10900F': 65,
+      'Intel(R) Core(TM) i9-10900T': 35,
+      'Intel(R) Core(TM) i9-10850K': 250,
+      'Intel(R) Core(TM) i7-10700K': 229,
+      'Intel(R) Core(TM) i7-10700KF': 229,
+      'Intel(R) Core(TM) i7-10700': 65,
+      'Intel(R) Core(TM) i7-10700F': 65,
+      'Intel(R) Core(TM) i7-10700T': 35,
+      'Intel(R) Core(TM) i5-10600K': 182,
+      'Intel(R) Core(TM) i5-10600KF': 182,
+      'Intel(R) Core(TM) i5-10600': 65,
+      'Intel(R) Core(TM) i5-10500': 65,
+      'Intel(R) Core(TM) i5-10500T': 35,
+      'Intel(R) Core(TM) i5-10400': 65,
+      'Intel(R) Core(TM) i5-10400F': 65,
+      'Intel(R) Core(TM) i5-10400T': 35,
+      'Intel(R) Core(TM) i3-10320': 65,
+      'Intel(R) Core(TM) i3-10300': 65,
+      'Intel(R) Core(TM) i3-10105': 65,
+      'Intel(R) Core(TM) i3-10105F': 65,
+      'Intel(R) Core(TM) i3-10100': 65,
+      'Intel(R) Core(TM) i3-10100F': 65,
+      // ── Intel Core 9th Gen (Coffee Lake Refresh) — PL2 sustained all-core ──
+      'Intel(R) Core(TM) i9-9900KS': 212,
+      'Intel(R) Core(TM) i9-9900K': 212,
+      'Intel(R) Core(TM) i9-9900KF': 212,
+      'Intel(R) Core(TM) i9-9900': 65,
+      'Intel(R) Core(TM) i7-9700K': 180,
+      'Intel(R) Core(TM) i7-9700KF': 180,
+      'Intel(R) Core(TM) i7-9700': 65,
+      'Intel(R) Core(TM) i7-9700F': 65,
+      'Intel(R) Core(TM) i5-9600K': 152,
+      'Intel(R) Core(TM) i5-9600KF': 152,
+      'Intel(R) Core(TM) i5-9600': 65,
+      'Intel(R) Core(TM) i5-9500': 65,
+      'Intel(R) Core(TM) i5-9500F': 65,
+      'Intel(R) Core(TM) i5-9400': 65,
+      'Intel(R) Core(TM) i5-9400F': 65,
+      'Intel(R) Core(TM) i3-9350K': 91,
+      'Intel(R) Core(TM) i3-9300': 62,
+      'Intel(R) Core(TM) i3-9100': 65,
+      'Intel(R) Core(TM) i3-9100F': 65,
+      // ── Intel Core 8th Gen (Coffee Lake) — PL2 sustained all-core ──────────
+      'Intel(R) Core(TM) i7-8700K': 180,
+      'Intel(R) Core(TM) i7-8700': 65,
+      'Intel(R) Core(TM) i5-8600K': 152,
+      'Intel(R) Core(TM) i5-8600': 65,
+      'Intel(R) Core(TM) i5-8500': 65,
+      'Intel(R) Core(TM) i5-8400': 65,
+      'Intel(R) Core(TM) i3-8350K': 91,
+      'Intel(R) Core(TM) i3-8300': 62,
+      'Intel(R) Core(TM) i3-8100': 65,
+      // ── Intel Core Ultra 200S (Arrow Lake, desktop) — PL2 sustained ────────
+      'Intel(R) Core(TM) Ultra 9 285K': 250,
+      'Intel(R) Core(TM) Ultra 7 265K': 225,
+      'Intel(R) Core(TM) Ultra 7 265KF': 225,
+      'Intel(R) Core(TM) Ultra 5 245K': 159,
+      'Intel(R) Core(TM) Ultra 5 245KF': 159,
+      // ── Intel Core Ultra 100H/U (Meteor Lake, mobile) ─────────────────────
+      'Intel(R) Core(TM) Ultra 9 185H': 45,
+      'Intel(R) Core(TM) Ultra 7 165H': 45,
+      'Intel(R) Core(TM) Ultra 7 155H': 45,
+      'Intel(R) Core(TM) Ultra 5 135H': 45,
+      'Intel(R) Core(TM) Ultra 5 125H': 45,
+      'Intel(R) Core(TM) Ultra 7 165U': 15,
+      'Intel(R) Core(TM) Ultra 7 155U': 15,
+      'Intel(R) Core(TM) Ultra 5 135U': 15,
+      // ── Intel 13th Gen Mobile (HX / H / U) ────────────────────────────────
+      'Intel(R) Core(TM) i9-13950HX': 55,
+      'Intel(R) Core(TM) i9-13900HX': 55,
+      'Intel(R) Core(TM) i9-13900H': 45,
+      'Intel(R) Core(TM) i7-13700HX': 55,
+      'Intel(R) Core(TM) i7-13700H': 45,
+      'Intel(R) Core(TM) i5-13600H': 45,
+      'Intel(R) Core(TM) i5-13500H': 45,
+      'Intel(R) Core(TM) i5-13450H': 45,
+      'Intel(R) Core(TM) i7-1365U': 15,
+      'Intel(R) Core(TM) i7-1355U': 15,
+      'Intel(R) Core(TM) i5-1345U': 15,
+      'Intel(R) Core(TM) i5-1335U': 15,
+      'Intel(R) Core(TM) i3-1315U': 15,
+      // ── Intel 12th Gen Mobile ─────────────────────────────────────────────
+      'Intel(R) Core(TM) i9-12950HX': 55,
+      'Intel(R) Core(TM) i9-12900HK': 45,
+      'Intel(R) Core(TM) i9-12900H': 45,
+      'Intel(R) Core(TM) i7-12700H': 45,
+      'Intel(R) Core(TM) i7-12650H': 45,
+      'Intel(R) Core(TM) i5-12500H': 45,
+      'Intel(R) Core(TM) i5-12450H': 45,
+      'Intel(R) Core(TM) i7-1280P': 28,
+      'Intel(R) Core(TM) i7-1270P': 28,
+      'Intel(R) Core(TM) i5-1240P': 28,
+      'Intel(R) Core(TM) i7-1255U': 15,
+      'Intel(R) Core(TM) i5-1235U': 15,
+      // ── Intel 11th Gen Mobile ─────────────────────────────────────────────
+      'Intel(R) Core(TM) i9-11980HK': 45,
+      'Intel(R) Core(TM) i9-11900H': 45,
+      'Intel(R) Core(TM) i7-11800H': 45,
+      'Intel(R) Core(TM) i5-11500H': 45,
+      'Intel(R) Core(TM) i7-1185G7': 28,
+      'Intel(R) Core(TM) i7-1165G7': 28,
+      'Intel(R) Core(TM) i5-1135G7': 28,
+      'Intel(R) Core(TM) i3-1125G4': 28,
+      'Intel(R) Core(TM) i3-1115G4': 15,
+      // ── Intel 10th Gen Mobile ─────────────────────────────────────────────
+      'Intel(R) Core(TM) i7-10875H': 45,
+      'Intel(R) Core(TM) i7-10750H': 45,
+      'Intel(R) Core(TM) i5-10500H': 45,
+      'Intel(R) Core(TM) i5-10300H': 45,
+      'Intel(R) Core(TM) i7-1065G7': 15,
+      'Intel(R) Core(TM) i5-1035G1': 15,
+      'Intel(R) Core(TM) i3-1005G1': 15,
+      // ── Intel Xeon ────────────────────────────────────────────────────────
+      'Intel(R) Xeon(R) w9-3595X': 350,
+      'Intel(R) Xeon(R) w9-3575X': 300,
+      'Intel(R) Xeon(R) w7-3465X': 300,
+      'Intel(R) Xeon(R) w7-2495X': 225,
+      'Intel(R) Xeon(R) W-3175X': 255,
+      'Intel(R) Xeon(R) W-2295': 165,
+      'Intel(R) Xeon(R) W-2255': 165,
+      'Intel(R) Xeon(R) W-2245': 155,
+      'Intel(R) Xeon(R) Gold 6258R': 205,
+      'Intel(R) Xeon(R) Gold 6248R': 205,
+      'Intel(R) Xeon(R) Gold 6154': 200,
+      'Intel(R) Xeon(R) Silver 4310': 120,
+      'Intel(R) Xeon(R) Silver 4210R': 100,
+      'Intel(R) Xeon(R) Silver 4210': 85,
+      'Intel(R) Xeon(R) E5-2699 v4': 145,
+      'Intel(R) Xeon(R) E5-2690 v4': 135,
+      'Intel(R) Xeon(R) E5-2680 v4': 120,
+      'Intel(R) Xeon(R) E5-2670 v3': 120,
+      // ── AMD Ryzen 9000 Series (Zen 5, AM5) — PPT (actual all-core power) ──
+      'AMD Ryzen 9 9950X': 230,
+      'AMD Ryzen 9 9900X': 162,
+      'AMD Ryzen 7 9800X3D': 162,
+      'AMD Ryzen 7 9700X': 88,
+      'AMD Ryzen 5 9600X': 88,
+      'AMD Ryzen 5 9600': 65,
+      // ── AMD Ryzen 7000 Series (Zen 4, AM5) — PPT (actual all-core power) ──
+      'AMD Ryzen 9 7950X': 230,
+      'AMD Ryzen 9 7950X3D': 162,
+      'AMD Ryzen 9 7900X': 230,
+      'AMD Ryzen 9 7900X3D': 162,
+      'AMD Ryzen 9 7900': 88,
+      'AMD Ryzen 7 7800X3D': 162,
+      'AMD Ryzen 7 7700X': 142,
+      'AMD Ryzen 7 7700': 88,
+      'AMD Ryzen 5 7600X': 142,
+      'AMD Ryzen 5 7600': 88,
+      'AMD Ryzen 5 7500F': 88,
+      // ── AMD Ryzen 5000 Series (Zen 3, AM4) ────────────────────────────────
+      'AMD Ryzen 9 5950X': 142,
+      'AMD Ryzen 9 5900X': 142,
+      'AMD Ryzen 9 5900': 88,
+      'AMD Ryzen 9 5900HX': 45,
+      'AMD Ryzen 7 5800X3D': 88,
+      'AMD Ryzen 7 5800X': 142,
+      'AMD Ryzen 7 5800': 88,
+      'AMD Ryzen 7 5800H': 45,
+      'AMD Ryzen 7 5700X': 88,
+      'AMD Ryzen 7 5700G': 88,
+      'AMD Ryzen 5 5600X': 88,
+      'AMD Ryzen 5 5600': 88,
+      'AMD Ryzen 5 5600G': 88,
+      'AMD Ryzen 5 5600H': 45,
+      'AMD Ryzen 5 5500': 88,
+      'AMD Ryzen 3 5300G': 88,
+      'AMD Ryzen 3 5100': 88,
+      // ── AMD Ryzen 3000 Series (Zen 2, AM4) ────────────────────────────────
+      'AMD Ryzen 9 3950X': 142,
+      'AMD Ryzen 9 3900XT': 142,
+      'AMD Ryzen 9 3900X': 142,
+      'AMD Ryzen 9 3900': 88,
+      'AMD Ryzen 7 3800XT': 142,
+      'AMD Ryzen 7 3800X': 142,
+      'AMD Ryzen 7 3700X': 88,
+      'AMD Ryzen 5 3600XT': 128,
+      'AMD Ryzen 5 3600X': 128,
+      'AMD Ryzen 5 3600': 88,
+      'AMD Ryzen 5 3500X': 88,
+      'AMD Ryzen 5 3500': 88,
+      'AMD Ryzen 3 3300X': 88,
+      'AMD Ryzen 3 3100': 88,
+      // ── AMD Ryzen 2000 Series (Zen+, AM4) ─────────────────────────────────
+      'AMD Ryzen 7 2700X': 128,
+      'AMD Ryzen 7 2700': 88,
+      'AMD Ryzen 5 2600X': 110,
+      'AMD Ryzen 5 2600': 88,
+      'AMD Ryzen 3 2300X': 88,
+      'AMD Ryzen 3 2200G': 88,
+      // ── AMD Threadripper ──────────────────────────────────────────────────
+      'AMD Ryzen Threadripper PRO 7995WX': 350,
+      'AMD Ryzen Threadripper PRO 7985WX': 350,
+      'AMD Ryzen Threadripper PRO 7975WX': 350,
+      'AMD Ryzen Threadripper PRO 5995WX': 280,
+      'AMD Ryzen Threadripper PRO 5975WX': 280,
+      'AMD Ryzen Threadripper PRO 5965WX': 280,
+      'AMD Ryzen Threadripper 3990X': 280,
+      'AMD Ryzen Threadripper 3970X': 280,
+      'AMD Ryzen Threadripper 3960X': 280,
+      'AMD Ryzen Threadripper 2990WX': 250,
+      'AMD Ryzen Threadripper 2970WX': 250,
+      'AMD Ryzen Threadripper 2950X': 180,
+      'AMD Ryzen Threadripper 2920X': 180,
+      // ── AMD EPYC ──────────────────────────────────────────────────────────
+      'AMD EPYC 9654': 360,
+      'AMD EPYC 9554': 360,
+      'AMD EPYC 9454': 290,
+      'AMD EPYC 9354': 280,
+      'AMD EPYC 7763': 280,
+      'AMD EPYC 7742': 225,
+      'AMD EPYC 7713': 225,
+      'AMD EPYC 7663': 240,
+      'AMD EPYC 7601': 180,
+      'AMD EPYC 7551': 180,
+      'AMD EPYC 7543': 225,
+      'AMD EPYC 7502': 180,
+      'AMD EPYC 7401': 170,
+      'AMD EPYC 7301': 155,
+      // ── Apple Silicon ─────────────────────────────────────────────────────
+      'Apple M1': 20,
+      'Apple M1 Pro': 30,
+      'Apple M1 Max': 60,
+      'Apple M1 Ultra': 60,
+      'Apple M2': 22,
+      'Apple M2 Pro': 35,
+      'Apple M2 Max': 60,
+      'Apple M2 Ultra': 60,
+      'Apple M3': 22,
+      'Apple M3 Pro': 35,
+      'Apple M3 Max': 92,
+      'Apple M4': 20,
+      'Apple M4 Pro': 31,
+      'Apple M4 Max': 50,
+      // ── Intel Core 7th Gen (Kaby Lake) ────────────────────────────────────
+      'Intel(R) Core(TM) i7-7700K': 91,
+      'Intel(R) Core(TM) i7-7700': 65,
+      'Intel(R) Core(TM) i7-7700T': 35,
+      'Intel(R) Core(TM) i5-7600K': 91,
+      'Intel(R) Core(TM) i5-7600': 65,
+      'Intel(R) Core(TM) i5-7500': 65,
+      'Intel(R) Core(TM) i5-7400': 65,
+      'Intel(R) Core(TM) i5-7400T': 35,
+      'Intel(R) Core(TM) i3-7350K': 60,
+      'Intel(R) Core(TM) i3-7300': 51,
+      'Intel(R) Core(TM) i3-7100': 51,
+      'Intel(R) Core(TM) i3-7100T': 35,
+      'Intel(R) Core(TM) i7-7700HQ': 45,
+      'Intel(R) Core(TM) i7-7500U': 15,
+      'Intel(R) Core(TM) i5-7300HQ': 45,
+      'Intel(R) Core(TM) i5-7200U': 15,
+      'Intel(R) Core(TM) i3-7100U': 15,
+      // ── Intel Core 6th Gen (Skylake) ───────────────────────────────────────
+      'Intel(R) Core(TM) i7-6700K': 91,
+      'Intel(R) Core(TM) i7-6700': 65,
+      'Intel(R) Core(TM) i7-6700T': 35,
+      'Intel(R) Core(TM) i5-6600K': 91,
+      'Intel(R) Core(TM) i5-6600': 65,
+      'Intel(R) Core(TM) i5-6500': 65,
+      'Intel(R) Core(TM) i5-6400': 65,
+      'Intel(R) Core(TM) i5-6400T': 35,
+      'Intel(R) Core(TM) i3-6300': 51,
+      'Intel(R) Core(TM) i3-6100': 51,
+      'Intel(R) Core(TM) i3-6100T': 35,
+      'Intel(R) Core(TM) i7-6700HQ': 45,
+      'Intel(R) Core(TM) i7-6500U': 15,
+      'Intel(R) Core(TM) i5-6300HQ': 45,
+      'Intel(R) Core(TM) i5-6200U': 15,
+      'Intel(R) Core(TM) i3-6100U': 15,
+      // ── Intel Core 5th Gen (Broadwell) ────────────────────────────────────
+      'Intel(R) Core(TM) i7-5775C': 65,
+      'Intel(R) Core(TM) i5-5675C': 65,
+      'Intel(R) Core(TM) i7-5700HQ': 47,
+      'Intel(R) Core(TM) i7-5500U': 15,
+      'Intel(R) Core(TM) i5-5300U': 15,
+      'Intel(R) Core(TM) i3-5005U': 15,
+      // ── Intel Core 4th Gen (Haswell) ──────────────────────────────────────
+      'Intel(R) Core(TM) i7-4790K': 88,
+      'Intel(R) Core(TM) i7-4790': 84,
+      'Intel(R) Core(TM) i7-4770K': 84,
+      'Intel(R) Core(TM) i7-4770': 84,
+      'Intel(R) Core(TM) i7-4770T': 45,
+      'Intel(R) Core(TM) i5-4690K': 88,
+      'Intel(R) Core(TM) i5-4690': 84,
+      'Intel(R) Core(TM) i5-4670K': 84,
+      'Intel(R) Core(TM) i5-4670': 84,
+      'Intel(R) Core(TM) i5-4590': 84,
+      'Intel(R) Core(TM) i5-4570': 84,
+      'Intel(R) Core(TM) i5-4460': 84,
+      'Intel(R) Core(TM) i3-4370': 54,
+      'Intel(R) Core(TM) i3-4160': 54,
+      'Intel(R) Core(TM) i3-4130': 54,
+      'Intel(R) Core(TM) i7-4720HQ': 47,
+      'Intel(R) Core(TM) i7-4700MQ': 47,
+      'Intel(R) Core(TM) i7-4500U': 15,
+      'Intel(R) Core(TM) i5-4300U': 15,
+      'Intel(R) Core(TM) i3-4010U': 15,
+      // ── Intel Core 3rd Gen (Ivy Bridge) ───────────────────────────────────
+      'Intel(R) Core(TM) i7-3770K': 77,
+      'Intel(R) Core(TM) i7-3770': 77,
+      'Intel(R) Core(TM) i7-3770T': 45,
+      'Intel(R) Core(TM) i5-3570K': 77,
+      'Intel(R) Core(TM) i5-3570': 77,
+      'Intel(R) Core(TM) i5-3570T': 45,
+      'Intel(R) Core(TM) i5-3470': 77,
+      'Intel(R) Core(TM) i5-3450': 77,
+      'Intel(R) Core(TM) i3-3240': 55,
+      'Intel(R) Core(TM) i3-3225': 55,
+      'Intel(R) Core(TM) i3-3220': 55,
+      'Intel(R) Core(TM) i7-3720QM': 45,
+      'Intel(R) Core(TM) i7-3630QM': 45,
+      'Intel(R) Core(TM) i5-3320M': 35,
+      'Intel(R) Core(TM) i5-3210M': 35,
+      'Intel(R) Core(TM) i3-3110M': 35,
+      // ── Intel Core 2nd Gen (Sandy Bridge) ─────────────────────────────────
+      'Intel(R) Core(TM) i7-2700K': 95,
+      'Intel(R) Core(TM) i7-2600K': 95,
+      'Intel(R) Core(TM) i7-2600': 95,
+      'Intel(R) Core(TM) i7-2600S': 65,
+      'Intel(R) Core(TM) i5-2500K': 95,
+      'Intel(R) Core(TM) i5-2500': 95,
+      'Intel(R) Core(TM) i5-2400': 95,
+      'Intel(R) Core(TM) i5-2310': 95,
+      'Intel(R) Core(TM) i3-2120': 65,
+      'Intel(R) Core(TM) i3-2100': 65,
+      'Intel(R) Core(TM) i7-2630QM': 45,
+      'Intel(R) Core(TM) i5-2520M': 35,
+      'Intel(R) Core(TM) i5-2410M': 35,
+      'Intel(R) Core(TM) i3-2310M': 35,
+      // ── Intel Xeon E3 (v1-v4) ─────────────────────────────────────────────
+      'Intel(R) Xeon(R) E3-1280 v5': 80,
+      'Intel(R) Xeon(R) E3-1270 v5': 80,
+      'Intel(R) Xeon(R) E3-1240 v5': 80,
+      'Intel(R) Xeon(R) E3-1230 v5': 80,
+      'Intel(R) Xeon(R) E3-1280 v3': 84,
+      'Intel(R) Xeon(R) E3-1270 v3': 80,
+      'Intel(R) Xeon(R) E3-1240 v3': 80,
+      'Intel(R) Xeon(R) E3-1230 v3': 80,
+      'Intel(R) Xeon(R) E3-1220 v3': 80,
+      'Intel(R) Xeon(R) E3-1275 v2': 77,
+      'Intel(R) Xeon(R) E3-1245 v2': 77,
+      'Intel(R) Xeon(R) E3-1225 v2': 77,
+      // ── Intel Pentium / Celeron (Desktop) ─────────────────────────────────
+      'Intel(R) Pentium(R) Gold G7400': 46,
+      'Intel(R) Pentium(R) Gold G6605': 58,
+      'Intel(R) Pentium(R) Gold G6400': 58,
+      'Intel(R) Pentium(R) Gold G5620': 54,
+      'Intel(R) Pentium(R) Gold G5600': 54,
+      'Intel(R) Pentium(R) Gold G5400': 54,
+      'Intel(R) Pentium(R) G4560': 54,
+      'Intel(R) Pentium(R) G4400': 54,
+      'Intel(R) Pentium(R) G3258': 53,
+      'Intel(R) Pentium(R) G3220': 53,
+      'Intel(R) Celeron(R) G6900': 46,
+      'Intel(R) Celeron(R) G5905': 58,
+      'Intel(R) Celeron(R) G4900': 54,
+      'Intel(R) Celeron(R) G3900': 51,
+      // ── AMD Ryzen 1000 Series (Zen 1, AM4) ────────────────────────────────
+      'AMD Ryzen 7 1800X': 95,
+      'AMD Ryzen 7 1700X': 95,
+      'AMD Ryzen 7 1700': 65,
+      'AMD Ryzen 5 1600X': 95,
+      'AMD Ryzen 5 1600': 65,
+      'AMD Ryzen 5 1500X': 65,
+      'AMD Ryzen 5 1400': 65,
+      'AMD Ryzen 3 1300X': 65,
+      'AMD Ryzen 3 1200': 65,
+      // ── AMD FX Series (Vishera / Piledriver, AM3+) ────────────────────────
+      'AMD FX-9590': 220,
+      'AMD FX-9370': 220,
+      'AMD FX-8370': 125,
+      'AMD FX-8350': 125,
+      'AMD FX-8320E': 95,
+      'AMD FX-8320': 125,
+      'AMD FX-8300': 95,
+      'AMD FX-6350': 125,
+      'AMD FX-6300': 95,
+      'AMD FX-4350': 125,
+      'AMD FX-4300': 95,
+      // ── AMD A-Series APU (FM2+) ───────────────────────────────────────────
+      'AMD A10-7890K': 95,
+      'AMD A10-7870K': 95,
+      'AMD A10-7850K': 95,
+      'AMD A10-7800': 65,
+      'AMD A8-7670K': 95,
+      'AMD A8-7650K': 65,
+      'AMD A6-7470K': 65,
+      'AMD A6-7400K': 65,
+      // ── AMD Phenom II (AM3) ───────────────────────────────────────────────
+      'AMD Phenom(tm) II X6 1100T': 125,
+      'AMD Phenom(tm) II X6 1090T': 125,
+      'AMD Phenom(tm) II X4 980': 125,
+      'AMD Phenom(tm) II X4 970': 125,
+      'AMD Phenom(tm) II X4 965': 125,
+      'AMD Phenom(tm) II X4 955': 125,
+      'AMD Phenom(tm) II X4 945': 95,
+    }),
+    [],
+  );
+  const gpuTDPTable = React.useMemo(
+    () => ({
+      // ── NVIDIA GeForce RTX 50 Series ──────────────────────────────────────
+      'NVIDIA GeForce RTX 5090': 575,
+      'NVIDIA GeForce RTX 5080': 360,
+      'NVIDIA GeForce RTX 5070 Ti': 300,
+      'NVIDIA GeForce RTX 5070': 250,
+      'NVIDIA GeForce RTX 5060 Ti': 180,
+      'NVIDIA GeForce RTX 5060': 150,
+      // ── NVIDIA GeForce RTX 40 Series ──────────────────────────────────────
+      'NVIDIA GeForce RTX 4090': 450,
+      'NVIDIA GeForce RTX 4080 SUPER': 320,
+      'NVIDIA GeForce RTX 4080': 320,
+      'NVIDIA GeForce RTX 4070 Ti SUPER': 285,
+      'NVIDIA GeForce RTX 4070 Ti': 285,
+      'NVIDIA GeForce RTX 4070 SUPER': 220,
+      'NVIDIA GeForce RTX 4070': 200,
+      'NVIDIA GeForce RTX 4060 Ti': 160,
+      'NVIDIA GeForce RTX 4060': 115,
+      'NVIDIA GeForce RTX 4050': 115,
+      // ── NVIDIA GeForce RTX 30 Series ──────────────────────────────────────
+      'NVIDIA GeForce RTX 3090 Ti': 450,
+      'NVIDIA GeForce RTX 3090': 350,
+      'NVIDIA GeForce RTX 3080 Ti': 350,
+      'NVIDIA GeForce RTX 3080 12GB': 350,
+      'NVIDIA GeForce RTX 3080 10GB': 320,
+      'NVIDIA GeForce RTX 3080': 320,
+      'NVIDIA GeForce RTX 3070 Ti': 290,
+      'NVIDIA GeForce RTX 3070': 220,
+      'NVIDIA GeForce RTX 3060 Ti': 200,
+      'NVIDIA GeForce RTX 3060 12GB': 170,
+      'NVIDIA GeForce RTX 3060': 170,
+      'NVIDIA GeForce RTX 3050 OEM': 90,
+      'NVIDIA GeForce RTX 3050': 130,
+      // ── NVIDIA GeForce RTX 20 Series ──────────────────────────────────────
+      'NVIDIA GeForce RTX 2080 Ti': 250,
+      'NVIDIA GeForce RTX 2080 SUPER': 250,
+      'NVIDIA GeForce RTX 2080': 215,
+      'NVIDIA GeForce RTX 2070 SUPER': 215,
+      'NVIDIA GeForce RTX 2070': 175,
+      'NVIDIA GeForce RTX 2060 SUPER': 175,
+      'NVIDIA GeForce RTX 2060': 160,
+      // ── NVIDIA GeForce GTX 16 Series ──────────────────────────────────────
+      'NVIDIA GeForce GTX 1660 Ti': 120,
+      'NVIDIA GeForce GTX 1660 SUPER': 125,
+      'NVIDIA GeForce GTX 1660': 120,
+      'NVIDIA GeForce GTX 1650 SUPER': 100,
+      'NVIDIA GeForce GTX 1650': 75,
+      // ── NVIDIA GeForce GTX 10 Series ──────────────────────────────────────
+      'NVIDIA GeForce GTX 1080 Ti': 250,
+      'NVIDIA GeForce GTX 1080': 180,
+      'NVIDIA GeForce GTX 1070 Ti': 180,
+      'NVIDIA GeForce GTX 1070': 150,
+      'NVIDIA GeForce GTX 1060 6GB': 120,
+      'NVIDIA GeForce GTX 1060 3GB': 120,
+      'NVIDIA GeForce GTX 1060': 120,
+      'NVIDIA GeForce GTX 1050 Ti': 75,
+      'NVIDIA GeForce GTX 1050': 75,
+      'NVIDIA GeForce GTX 1030': 30,
+      // ── NVIDIA GeForce GTX 9 Series ───────────────────────────────────────
+      'NVIDIA GeForce GTX 980 Ti': 250,
+      'NVIDIA GeForce GTX 980': 165,
+      'NVIDIA GeForce GTX 970': 145,
+      'NVIDIA GeForce GTX 960': 120,
+      'NVIDIA GeForce GTX 950': 90,
+      // ── NVIDIA RTX Workstation / Professional ─────────────────────────────
+      'NVIDIA RTX 6000 Ada': 300,
+      'NVIDIA RTX 5000 Ada': 250,
+      'NVIDIA RTX 4500 Ada': 210,
+      'NVIDIA RTX 4000 Ada': 130,
+      'NVIDIA RTX 2000 Ada': 70,
+      'NVIDIA RTX A6000': 300,
+      'NVIDIA RTX A5000': 230,
+      'NVIDIA RTX A4000': 140,
+      'NVIDIA RTX A2000': 70,
+      'NVIDIA Quadro RTX 8000': 295,
+      'NVIDIA Quadro RTX 6000': 295,
+      'NVIDIA Quadro RTX 5000': 230,
+      'NVIDIA Quadro RTX 4000': 160,
+      // ── AMD Radeon RX 9000 Series (RDNA 4) ───────────────────────────────
+      'AMD Radeon RX 9070 XT': 304,
+      'AMD Radeon RX 9070': 220,
+      // ── AMD Radeon RX 7000 Series (RDNA 3) ───────────────────────────────
+      'AMD Radeon RX 7900 XTX': 355,
+      'AMD Radeon RX 7900 XT': 315,
+      'AMD Radeon RX 7900 GRE': 260,
+      'AMD Radeon RX 7800 XT': 263,
+      'AMD Radeon RX 7700 XT': 245,
+      'AMD Radeon RX 7600 XT': 190,
+      'AMD Radeon RX 7600': 165,
+      'AMD Radeon RX 7500 XT': 100,
+      // ── AMD Radeon RX 6000 Series (RDNA 2) ───────────────────────────────
+      'AMD Radeon RX 6950 XT': 335,
+      'AMD Radeon RX 6900 XT': 300,
+      'AMD Radeon RX 6800 XT': 300,
+      'AMD Radeon RX 6800': 250,
+      'AMD Radeon RX 6750 XT': 250,
+      'AMD Radeon RX 6700 XT': 230,
+      'AMD Radeon RX 6700': 175,
+      'AMD Radeon RX 6650 XT': 180,
+      'AMD Radeon RX 6600 XT': 160,
+      'AMD Radeon RX 6600': 132,
+      'AMD Radeon RX 6500 XT': 107,
+      'AMD Radeon RX 6400': 53,
+      // ── AMD Radeon RX 5000 Series (RDNA 1) ───────────────────────────────
+      'AMD Radeon RX 5700 XT': 225,
+      'AMD Radeon RX 5700': 180,
+      'AMD Radeon RX 5600 XT': 150,
+      'AMD Radeon RX 5500 XT': 130,
+      // ── AMD Radeon Vega / GCN ─────────────────────────────────────────────
+      'AMD Radeon RX Vega 64': 295,
+      'AMD Radeon RX Vega 56': 210,
+      'AMD Radeon VII': 300,
+      'AMD Radeon RX 590': 225,
+      'AMD Radeon RX 580': 185,
+      'AMD Radeon RX 570': 150,
+      'AMD Radeon RX 480': 150,
+      'AMD Radeon RX 470': 120,
+      // ── AMD Radeon PRO Workstation ────────────────────────────────────────
+      'AMD Radeon PRO W7900': 295,
+      'AMD Radeon PRO W7800': 260,
+      'AMD Radeon PRO W6800': 250,
+      'AMD Radeon PRO W6600': 130,
+      'AMD Radeon PRO W6400': 50,
+      // ── Intel Arc ────────────────────────────────────────────────────────
+      'Intel Arc A770': 225,
+      'Intel Arc A750': 225,
+      'Intel Arc A580': 185,
+      'Intel Arc A380': 75,
+      'Intel Arc A310': 30,
+      'Intel Arc B580': 190,
+      'Intel Arc B570': 150,
+      // ── NVIDIA GeForce GTX 700 Series (Kepler) ────────────────────────────
+      'NVIDIA GeForce GTX 780 Ti': 250,
+      'NVIDIA GeForce GTX 780': 250,
+      'NVIDIA GeForce GTX 770': 230,
+      'NVIDIA GeForce GTX 760': 170,
+      'NVIDIA GeForce GTX 750 Ti': 60,
+      'NVIDIA GeForce GTX 750': 55,
+      // ── NVIDIA GeForce GTX 600 Series (Kepler) ────────────────────────────
+      'NVIDIA GeForce GTX 690': 300,
+      'NVIDIA GeForce GTX 680': 195,
+      'NVIDIA GeForce GTX 670': 170,
+      'NVIDIA GeForce GTX 660 Ti': 150,
+      'NVIDIA GeForce GTX 660': 140,
+      'NVIDIA GeForce GTX 650 Ti': 110,
+      'NVIDIA GeForce GTX 650': 64,
+      // ── NVIDIA GeForce GTX 500 Series (Fermi) ─────────────────────────────
+      'NVIDIA GeForce GTX 590': 365,
+      'NVIDIA GeForce GTX 580': 244,
+      'NVIDIA GeForce GTX 570': 219,
+      'NVIDIA GeForce GTX 560 Ti': 170,
+      'NVIDIA GeForce GTX 560': 150,
+      'NVIDIA GeForce GTX 550 Ti': 116,
+      // ── AMD Radeon RX 400 Series (Polaris) ───────────────────────────────
+      'AMD Radeon RX 460': 75,
+      // ── AMD Radeon R9 / R7 / R5 (GCN 1â€“3) ───────────────────────────────
+      'AMD Radeon R9 Fury X': 275,
+      'AMD Radeon R9 Fury': 275,
+      'AMD Radeon R9 Nano': 175,
+      'AMD Radeon R9 390X': 275,
+      'AMD Radeon R9 390': 275,
+      'AMD Radeon R9 380X': 190,
+      'AMD Radeon R9 380': 190,
+      'AMD Radeon R9 290X': 290,
+      'AMD Radeon R9 290': 275,
+      'AMD Radeon R9 285': 190,
+      'AMD Radeon R9 280X': 250,
+      'AMD Radeon R9 280': 200,
+      'AMD Radeon R9 270X': 180,
+      'AMD Radeon R9 270': 150,
+      'AMD Radeon R7 370': 110,
+      'AMD Radeon R7 360': 80,
+      'AMD Radeon R7 265': 150,
+      'AMD Radeon R7 260X': 95,
+      'AMD Radeon R5 230': 19,
+      // ── AMD Radeon HD 7000 Series (GCN 1) ─────────────────────────────────
+      'AMD Radeon HD 7990': 375,
+      'AMD Radeon HD 7970': 250,
+      'AMD Radeon HD 7950': 200,
+      'AMD Radeon HD 7870': 175,
+      'AMD Radeon HD 7850': 130,
+      'AMD Radeon HD 7790': 100,
+      'AMD Radeon HD 7770': 80,
+      'AMD Radeon HD 7750': 55,
+    }),
+    [],
+  );
 
   // Online TDP lookup (Brave Answers AI): fire for all GPU models not yet cached.
   // Skip entirely for laptops — their power is modelled as one whole-unit thermal envelope
@@ -4457,7 +4508,9 @@ export default function Miner({
           const next = { ...prev, [model]: entry };
           try {
             localStorage.setItem(ONLINE_TDP_CACHE_KEY, JSON.stringify(next));
-          } catch (_) { /* istanbul ignore next */ }
+          } catch (_) {
+            /* istanbul ignore next */
+          }
           return next;
         });
         if (tdp !== null) {
@@ -4498,7 +4551,9 @@ export default function Miner({
           const next = { ...prev, [cpuKey]: entry };
           try {
             localStorage.setItem(ONLINE_CPU_TDP_CACHE_KEY, JSON.stringify(next));
-          } catch (_) { /* istanbul ignore next */ }
+          } catch (_) {
+            /* istanbul ignore next */
+          }
           return next;
         });
         if (tdp !== null) {
@@ -4551,7 +4606,9 @@ export default function Miner({
           }
         }
       }
-    } catch (_) { /* istanbul ignore next */ }
+    } catch (_) {
+      /* istanbul ignore next */
+    }
     setTdpFetchingCount((n) => n + 1);
     (async () => {
       try {
@@ -4559,7 +4616,9 @@ export default function Miner({
         const entry = { tdp, ts: Date.now() };
         try {
           localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry));
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         if (tdp !== null) {
           setLaptopLivePowerW(tdp);
           // Reset benchmark cap so the next benchmark re-establishes from the live TDP base.
@@ -5072,7 +5131,9 @@ export default function Miner({
       if (w > 0) {
         try {
           localStorage.setItem(HARDWARE_CARD_WIDTH_KEY, String(w));
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         setSavedHwCardWidth(w);
       }
     }, 300);
@@ -5226,7 +5287,9 @@ export default function Miner({
               bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (round so far: ${fmtEnergy(roundWh)})`;
           }
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         setLog((log) => [
           {
             time: now(),
@@ -5249,7 +5312,9 @@ export default function Miner({
               bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (contributed ${fmtEnergy(roundWh)} this round)`;
           }
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
         setLog((log) => [
           {
             time: now(),
@@ -5328,7 +5393,9 @@ export default function Miner({
             return;
           }
         }
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
 
       // Accumulate available mining energy from power over elapsed time.
       energyBudgetWhRef.current += (effectivePowerW * elapsedSeconds) / 3600;
@@ -5674,7 +5741,9 @@ export default function Miner({
         setHardwareHoldUntilMs(0);
         try {
           localStorage.removeItem(HW_HOLD_STORAGE_KEY);
-        } catch (_) { /* istanbul ignore next */ }
+        } catch (_) {
+          /* istanbul ignore next */
+        }
       }
     };
     tick();
@@ -5739,7 +5808,9 @@ export default function Miner({
             ok: Boolean(res.lastSyncOk),
           });
         }
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     };
     fetch();
     const id = setInterval(fetch, 10000);
@@ -5759,7 +5830,9 @@ export default function Miner({
       try {
         const res = await hw.invoke('wattcoin-get-wallet-readiness');
         if (!cancelled && res) setChainReadiness(res);
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     };
     fetchReadiness();
     const id = setInterval(fetchReadiness, 10000);
@@ -5780,7 +5853,9 @@ export default function Miner({
         if (!cancelled && res && res.ok) {
           setSharedRoundTotalWh(Math.max(0, Number(res.totalWh) || 0));
         }
-      } catch (_) { /* istanbul ignore next */ }
+      } catch (_) {
+        /* istanbul ignore next */
+      }
     };
     fetchRoundSummary();
     const id = setInterval(fetchRoundSummary, 5000);

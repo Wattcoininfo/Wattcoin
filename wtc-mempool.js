@@ -74,7 +74,14 @@ class Mempool {
       if (!tx.sig || typeof tx.sig !== 'object') {
         return { ok: false, code: 'MISSING_SIG', message: 'signature required' };
       }
-      const sigInput = JSON.stringify({ id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce });
+      const sigInput = JSON.stringify({
+        id: tx.id,
+        from: tx.from,
+        to: tx.to,
+        amount: tx.amount,
+        fee: tx.fee,
+        nonce: tx.nonce,
+      });
       if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) {
         return { ok: false, code: 'INVALID_SIG', message: 'signature verification failed' };
       }
@@ -124,7 +131,14 @@ class Mempool {
     if (!tx.sig || typeof tx.sig !== 'object') {
       return { ok: false, code: 'MISSING_SIG', message: 'signature object required' };
     }
-    const sigInput = JSON.stringify({ id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce });
+    const sigInput = JSON.stringify({
+      id: tx.id,
+      from: tx.from,
+      to: tx.to,
+      amount: tx.amount,
+      fee: tx.fee,
+      nonce: tx.nonce,
+    });
     if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) {
       return { ok: false, code: 'INVALID_SIG', message: 'signature verification failed' };
     }

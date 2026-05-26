@@ -861,10 +861,10 @@ export default function Wattcoin() {
       <Section id="vortex">
         <div style={container}>
           <SectionTitle number={2} title="Vortex Hydro Turbine" />
-            <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40, maxWidth: 680 }}>
-              Wattcoin&apos;s first physical energy asset. A real-world hydro turbine whose verified output anchors the coin to
-              tangible, renewable electricity production.
-            </p>
+          <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40, maxWidth: 680 }}>
+            Wattcoin&apos;s first physical energy asset. A real-world hydro turbine whose verified output anchors the
+            coin to tangible, renewable electricity production.
+          </p>
 
           {/* Asset */}
           <div
@@ -891,8 +891,8 @@ export default function Wattcoin() {
               A <strong style={{ color: '#e8f5e8' }}>60 kW Vortex Gravity Hydro Turbine</strong> will be installed and
               commissioned. Vortex turbines are low-impact, continuous-output hydro units — no dam required, minimal
               ecological footprint, and capable of near-24/7 baseload generation. At 60 kW capacity, the turbine
-              produces real, metered, verifiable electricity that feeds directly into Wattcoin&apos;s energy-backed value
-              model.
+              produces real, metered, verifiable electricity that feeds directly into Wattcoin&apos;s energy-backed
+              value model.
             </p>
           </div>
 
@@ -966,8 +966,8 @@ export default function Wattcoin() {
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 20 }}>
               Participants who hold WTC from the coin sale gain access to the{' '}
-              <strong style={{ color: '#e8f5e8' }}>Early Adopter Energy Pool</strong> — a share of the turbine&apos;s net
-              energy revenue, distributed on-chain proportionally to holdings.
+              <strong style={{ color: '#e8f5e8' }}>Early Adopter Energy Pool</strong> — a share of the turbine&apos;s
+              net energy revenue, distributed on-chain proportionally to holdings.
             </p>
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
               <thead>
@@ -1137,7 +1137,7 @@ export default function Wattcoin() {
           <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#e8f5e8', marginBottom: 20 }}>
             Why Electricity Prices Trend Upward
           </h3>
-            <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 24 }}>
+          <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 24 }}>
             WTC&apos;s cost floor is structurally linked to global electricity prices. Four independent forces push
             electricity prices higher over time:
           </p>
@@ -1215,8 +1215,8 @@ export default function Wattcoin() {
                   determines how many operations that requires.
                 </p>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 20 }}>
-                  Energy consumption is derived from hardware specifications scaled by the miner&apos;s configured duty-cycle
-                  load:{' '}
+                  Energy consumption is derived from hardware specifications scaled by the miner&apos;s configured
+                  duty-cycle load:{' '}
                   <strong style={{ color: '#e8f5e8' }}>
                     Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)
                   </strong>
@@ -1363,7 +1363,7 @@ export default function Wattcoin() {
                 lineHeight: 2,
               }}
             >
-               <div style={{ color: '#3d5c3d' }}>{'// Energy per coin at tier n (n ≥ 1)'}</div>
+              <div style={{ color: '#3d5c3d' }}>{'// Energy per coin at tier n (n ≥ 1)'}</div>
               <div>E(n) = 20,000 Wh × 2^(n−1)</div>
               <div style={{ color: '#3d5c3d', marginTop: 8 }}>{'// Operations per coin'}</div>
               <div>ops(n) = E(n) × 3,600 / η</div>
@@ -1394,11 +1394,12 @@ export default function Wattcoin() {
           <SectionTitle number={6} title="Hardware Registry" />
           <FadeIn delay={0.1}>
             <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 32 }}>
-              Benchmark proofs determine each hardware type&apos;s efficiency η (Joules per operation). Power of usage is
-              calculated via algorithm that specifically calculates your hardware&apos;s power consumption and is scaled by
-              the miner&apos;s configured duty-cycle load. Benchmark proofs calibrate the estimate against measured
-              throughput — if the hardware underperforms, its credited power is reduced proportionally. Energy in Wh is
-              computed as power × load% × elapsed time, and verified by ledger peers through computation probes.
+              Benchmark proofs determine each hardware type&apos;s efficiency η (Joules per operation). Power of usage
+              is calculated via algorithm that specifically calculates your hardware&apos;s power consumption and is
+              scaled by the miner&apos;s configured duty-cycle load. Benchmark proofs calibrate the estimate against
+              measured throughput — if the hardware underperforms, its credited power is reduced proportionally. Energy
+              in Wh is computed as power × load% × elapsed time, and verified by ledger peers through computation
+              probes.
             </p>
           </FadeIn>
           <FadeIn delay={0.15}>
@@ -2183,9 +2184,9 @@ export default function Wattcoin() {
               </li>
               <li>
                 <strong style={{ color: '#e8f5e8' }}>Non-stacking entitlement.</strong> Holding multiple NFTs of the
-                same tier does not multiply that tier&apos;s entitlement — each address qualifies for the tier benefit of its{' '}
-                <em>highest-tier</em> NFT only. Additional tokens of equal or lower tier carry the same single-tier
-                entitlement and do not stack.
+                same tier does not multiply that tier&apos;s entitlement — each address qualifies for the tier benefit
+                of its <em>highest-tier</em> NFT only. Additional tokens of equal or lower tier carry the same
+                single-tier entitlement and do not stack.
               </li>
               <li>
                 <strong style={{ color: '#e8f5e8' }}>One NFT earned per wallet.</strong> Each wallet address earns at
@@ -2711,8 +2712,8 @@ export default function Wattcoin() {
           <SectionTitle number={16} title="Roadmap" />
           <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40 }}>
             Four phases from launch to a full-stack energy-backed monetary system. Each phase is anchored to verifiable
-            on-chain milestones, not promises. Phase 1 now includes the Vortex hydro turbine initiative — Wattcoin&apos;s
-            first real-world physical energy asset.
+            on-chain milestones, not promises. Phase 1 now includes the Vortex hydro turbine initiative —
+            Wattcoin&apos;s first real-world physical energy asset.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
             {[

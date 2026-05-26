@@ -464,11 +464,22 @@ class Chain {
       if (Array.isArray(b.transactions)) {
         for (let j = 0; j < b.transactions.length; j++) {
           const tx = b.transactions[j];
-          if (!tx || typeof tx !== 'object') return { ok: false, reason: `invalid tx at index ${j} in block ${b.height}` };
-          if (!tx.from || !tx.to || !tx.sig) return { ok: false, reason: `tx ${j} missing from/to/sig in block ${b.height}` };
-          if (typeof tx.sig.r !== 'string' || typeof tx.sig.s !== 'string') return { ok: false, reason: `tx ${j} invalid sig format in block ${b.height}` };
-          const sigInput = JSON.stringify({ id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce });
-          if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) return { ok: false, reason: `tx ${j} signature mismatch in block ${b.height}` };
+          if (!tx || typeof tx !== 'object')
+            return { ok: false, reason: `invalid tx at index ${j} in block ${b.height}` };
+          if (!tx.from || !tx.to || !tx.sig)
+            return { ok: false, reason: `tx ${j} missing from/to/sig in block ${b.height}` };
+          if (typeof tx.sig.r !== 'string' || typeof tx.sig.s !== 'string')
+            return { ok: false, reason: `tx ${j} invalid sig format in block ${b.height}` };
+          const sigInput = JSON.stringify({
+            id: tx.id,
+            from: tx.from,
+            to: tx.to,
+            amount: tx.amount,
+            fee: tx.fee,
+            nonce: tx.nonce,
+          });
+          if (!wtcVerify(txHash(sigInput), tx.sig, tx.from))
+            return { ok: false, reason: `tx ${j} signature mismatch in block ${b.height}` };
         }
       }
     }
