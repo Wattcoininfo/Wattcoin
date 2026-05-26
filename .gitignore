@@ -80,6 +80,9 @@ wattcoin-beta-config.local-*.json
 # Test coverage reports (generated artifacts)
 coverage/
 
+# Drill evidence / upgrade test outputs (regenerated on demand)
+artifacts/
+
 # Temporary test output files
 *_out.txt
 tmp-test-out.txt
