@@ -5902,6 +5902,112 @@ ipcMain.handle('wattcoin-nft-transfer', (_event, { nftId, fromAddress, toAddress
   }
 });
 
+// ── Governance IPC handlers ──────────────────────────────────────────────────────────
+
+ipcMain.handle('wattcoin-governance-list', (_event) => {
+  try {
+    if (!wtcNode) return { ok: false, proposals: [] };
+    return { ok: true, proposals: wtcNode.getGovernanceProposals() };
+  } catch (e) {
+    return { ok: false, proposals: [], error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-governance-get-vote', (_event, pipId, address) => {
+  try {
+    if (!wtcNode) return { ok: false, vote: null };
+    return { ok: true, vote: wtcNode.getGovernanceVote(pipId, address) };
+  } catch (e) {
+    return { ok: false, vote: null, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-governance-get-tallies', (_event, pipId) => {
+  try {
+    if (!wtcNode) return { ok: false, tallies: { for: 0, against: 0, totalPower: 0 } };
+    return { ok: true, tallies: wtcNode.getGovernanceTallies(pipId) };
+  } catch (e) {
+    return { ok: false, tallies: { for: 0, against: 0, totalPower: 0 }, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
+  try {
+    if (!wtcNode) return { ok: false, error: 'Node not ready' };
+
+    // Auto-determine creator address and NFT — never trust the renderer.
+    const addrs = wtcNode.getAddresses();
+    let creator = addrs[0] || '';
+    let creatorNftId = '';
+    let creatorTier = 'bronze';
+    for (const addr of addrs) {
+      const nfts = wtcNode.getNftsForAddress(addr);
+      if (nfts && nfts.length > 0) {
+        creator = addr;
+        // Pick the highest-tier NFT
+        const best = wtcNode.getGovernanceVotingPower(addr);
+        // Find the specific NFT ID for the best tier
+        for (const nft of nfts) {
+          const t = (nft.metadata && nft.metadata.tier) || 'bronze';
+          if (t === best.bestTier) {
+            creatorNftId = nft.nftId;
+            creatorTier = best.bestTier;
+            break;
+          }
+        }
+        break;
+      }
+    }
+
+    const votingDurationWeeks = Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 10)));
+    const pipId = wtcNode.generateGovernancePipId();
+    const enriched = {
+      title: proposal.title,
+      description: proposal.description || '',
+      creator,
+      creatorNftId,
+      creatorTier,
+      pipId,
+      createdAt: Date.now(),
+      votingDurationWeeks,
+    };
+    const result = wtcNode.addGovernanceProposal(enriched);
+    if (!result.ok) return result;
+    return { ok: true, pipId };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-governance-vote', (_event, pipId, voteData) => {
+  try {
+    if (!wtcNode) return { ok: false, error: 'Node not ready' };
+
+    // Step 1: compute real voting power from NFT store (never trust self-reported)
+    const vp = wtcNode.getGovernanceVotingPower(voteData.voter);
+    if (!vp.hasNft) return { ok: false, error: `${voteData.voter.slice(0, 12)}... does not own any Vortex NFTs` };
+
+    // Step 2: sign the vote WITH the computed power so the power is
+    // cryptographically committed and can't be tampered with in transit.
+    const timestamp = Date.now();
+    const message = `${pipId}|${voteData.voter}|${voteData.vote}|${vp.bestPower}|${timestamp}`;
+    const signed = wtcNode.signMessage(voteData.voter, message);
+
+    // Step 3: store vote with signature and verified power
+    const result = wtcNode.addGovernanceVote(pipId, {
+      voter: voteData.voter,
+      vote: voteData.vote,
+      power: vp.bestPower,
+      nftTier: vp.bestTier,
+      timestamp,
+      signature: signed.signature,
+    });
+    return result;
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
 ipcMain.handle('wattcoin-explorer-get-blocks', (_event, { offset = 0, limit = 20 } = {}) => {
   try {
     if (!wtcNode) return { ok: false, blocks: [], total: 0 };
@@ -7251,6 +7357,103 @@ function broadcastSettlementToPeers(round) {
   }
 }
 
+// ── Governance P2P gossip ─────────────────────────────────────────────────────
+
+/** Cache of peer governance capability: Map<peerUrl, { hasNfts, cachedAtMs }> */
+function _nodeHasGovernanceNfts() {
+  if (!wtcNode) return false;
+  const addrs = wtcNode.getAddresses();
+  for (const addr of addrs) {
+    const nfts = wtcNode.getNftsForAddress(addr);
+    if (nfts && nfts.length > 0) return true;
+  }
+  return false;
+}
+
+/** Fetch governance snapshots from all peers and merge locally.
+ *  Only runs on NFT-holding nodes — non-NFT nodes never receive governance data. */
+async function syncGovernanceFromPeers() {
+  if (!wtcNode) return;
+  if (!_nodeHasGovernanceNfts()) return;
+  // Close any expired proposals before syncing
+  wtcNode.closeExpiredProposals();
+  const settings = getLedgerNetworkSettings();
+  if (!settings.enabled) return;
+  const peers = getActivePeers(settings);
+  if (!peers || peers.length === 0) return;
+
+  const results = await Promise.allSettled(
+    peers.map((peerUrl) =>
+      requestPeerJson(peerUrl, 'GET', '/api/v1/governance/snapshot', undefined, undefined, {
+        trackReachability: false,
+        suppressPeerDiscovery: true,
+        source: 'governance-pull',
+        timeoutMs: 10000,
+      }).catch(() => null),
+    ),
+  );
+
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status !== 'fulfilled') continue;
+    const snapshot = results[i].value;
+    if (!snapshot || !snapshot.ok || !Array.isArray(snapshot.proposals)) continue;
+
+    for (const proposal of snapshot.proposals) {
+      // Merge proposal metadata
+      const propResult = wtcNode.addGovernanceProposal({
+        pipId: proposal.pipId,
+        title: proposal.title,
+        description: proposal.description || '',
+        creator: proposal.creator || '',
+        createdAt: proposal.createdAt || Date.now(),
+        creatorNftId: proposal.creatorNftId || '',
+        creatorTier: proposal.creatorTier || 'bronze',
+        votingDurationWeeks: Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 10))),
+      });
+
+      // Merge votes if the proposal was new or we already have it
+      if (propResult.ok && proposal.votes) {
+        for (const voterAddr of Object.keys(proposal.votes)) {
+          const v = proposal.votes[voterAddr];
+          if (!v || !v.signature) continue;
+
+          // Verify the vote signature — includes power so it can't be tampered with in transit.
+          const msg = `${proposal.pipId}|${v.voter}|${v.vote}|${v.power}|${v.timestamp}`;
+          if (!wtcNode.verifyMessage(v.voter, v.signature, msg)) continue;
+
+          // Trust the power from the snapshot (source peer computed it from
+          // their NFT store at vote time) to avoid race conditions where
+          // the local NFT store hasn't synced the voter's NFTs yet.
+          wtcNode.addGovernanceVote(proposal.pipId, {
+            voter: v.voter,
+            vote: v.vote,
+            power: v.power,
+            nftTier: v.nftTier,
+            timestamp: v.timestamp,
+            signature: v.signature,
+            _skipNftCheck: true,
+          });
+        }
+      }
+    }
+  }
+}
+
+/** Schedule periodic governance sync. */
+let _govSyncInterval = null;
+function startGovernanceSync() {
+  stopGovernanceSync();
+  // Initial sync after a short delay to let the node settle
+  setTimeout(() => syncGovernanceFromPeers().catch(() => {}), 5000);
+  _govSyncInterval = setInterval(() => syncGovernanceFromPeers().catch(() => {}), 30_000);
+}
+function stopGovernanceSync() {
+  if (_govSyncInterval) {
+    clearInterval(_govSyncInterval);
+    _govSyncInterval = null;
+  }
+}
+
 function startLedgerNetworkServer() {
   if (ledgerNetworkServer) return;
   const settings = getLedgerNetworkSettings();
@@ -7331,6 +7534,42 @@ function startLedgerNetworkServer() {
           }
         }
         sendJson(res, 200, verdict);
+        return;
+      }
+
+      // ── Governance capability probe ──────────────────────────────────────────
+      if (req.method === 'GET' && reqUrl.pathname === '/api/v1/governance/capability') {
+        const rl = await enforceEndpointRateLimit('governance-capability', requesterIdentity);
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
+        sendJson(res, 200, { ok: true, hasNfts: _nodeHasGovernanceNfts() });
+        return;
+      }
+
+      // ── Governance snapshot (pull-based sync) ────────────────────────────
+      if (req.method === 'GET' && reqUrl.pathname === '/api/v1/governance/snapshot') {
+        const rl = await enforceEndpointRateLimit('governance-snapshot', requesterIdentity);
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, error: 'Node not ready' });
+          return;
+        }
+        // Only serve to peers that hold NFTs
+        if (!_nodeHasGovernanceNfts()) {
+          sendJson(res, 200, { ok: true, proposals: [], skipped: 'no-nft' });
+          return;
+        }
+        try {
+          const proposals = wtcNode.getGovernanceProposals();
+          sendJson(res, 200, { ok: true, proposals });
+        } catch (e) {
+          sendJson(res, 500, { ok: false, error: String(e && e.message) });
+        }
         return;
       }
 
@@ -7618,6 +7857,7 @@ function startLedgerNetworkServer() {
 }
 
 function stopLedgerNetworkServer() {
+  stopGovernanceSync();
   stopRemoteSeedPeerRefresh();
   stopAutoPublicPeerUrlRefresh();
   stopPeerDiscovery();
@@ -8093,6 +8333,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
         isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
         getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
       });
+      startGovernanceSync();
       try {
         const restoredPrimary = wtcNode.getPrimaryAddress();
         walletAddressCache = { address: restoredPrimary || '', at: restoredPrimary ? Date.now() : 0 };
@@ -8644,6 +8885,7 @@ app.whenReady().then(() => {
       isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
       getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
     });
+    startGovernanceSync();
     refreshCoordinatorIdentityKey();
   } catch (e) {
     console.error('[WtcNode] Failed to initialize:', e && e.message ? e.message : e);

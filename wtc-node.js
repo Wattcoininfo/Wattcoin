@@ -42,6 +42,7 @@ const { Chain } = require('./wtc-chain');
 const { Mempool } = require('./wtc-mempool');
 const { Consensus } = require('./wtc-consensus');
 const { NftStore, NFT_COLLECTION, MINTER_ADDRESS } = require('./wtc-nfts');
+const { GovernanceStore } = require('./wtc-governance');
 const { generateKeypair, isValidAddress, txHash, sign, verifySignature } = require('./wtc-address');
 
 const WALLET_FILE = 'wtc-wallet.json';
@@ -97,8 +98,9 @@ class WtcNode {
     this._chain = new Chain({ dataDir, signingSecret: this._secret });
     this._mempool = new Mempool();
     this._nfts = new NftStore({ dataDir, signingSecret: this._secret });
-    this._consensus = null; // set during init()
+    this._governance = new GovernanceStore({ dataDir, signingSecret: this._secret });
 
+    this._consensus = null; // set during init()
     this._wallet = this._loadOrCreateWallet();
     this._syncInProgress = false;
 
@@ -203,6 +205,7 @@ class WtcNode {
       accounts: this._accounts,
       mempool: this._mempool,
       nfts: this._nfts,
+      governance: this._governance,
       getActivePeers,
       requestPeerJson,
       privateKey: privBuf,
@@ -1429,6 +1432,9 @@ class WtcNode {
     if (tx.type === 'nft_mint' || tx.type === 'nft_transfer') {
       return this._nfts.validateTx(tx);
     }
+    if (tx.type === 'governance_result') {
+      return this._governance.validateTx(tx);
+    }
     const balance = this._accounts.getBalance(tx.from);
     if (balance.confirmed < tx.amount + (tx.fee || 0)) return false;
     if (balance.nonce > tx.nonce) return false;
@@ -1606,6 +1612,230 @@ class WtcNode {
     const dest = typeof toAddress === 'string' && toAddress.trim() ? toAddress.trim() : MINTER_ADDRESS;
     const result = this._nfts.directMintCollection(dest);
     return { ok: true, ...result };
+  }
+
+  // ─── Governance ──────────────────────────────────────────────────────────
+
+  /** Return all known proposals (newest first). */
+  getGovernanceProposals() {
+    return this._governance.getProposals();
+  }
+
+  /** Return a single proposal. */
+  getGovernanceProposal(pipId) {
+    return this._governance.getProposal(pipId);
+  }
+
+  /** Get a voter's vote on a proposal. */
+  getGovernanceVote(pipId, address) {
+    return this._governance.getVoterVote(pipId, address);
+  }
+
+  /** Get vote tallies for a proposal. */
+  getGovernanceTallies(pipId) {
+    return this._governance.getVoteTallies(pipId);
+  }
+
+  /**
+   * Add a proposal from the local user or a peer gossip.
+   * Returns { ok, pipId, isNew }.
+   */
+  addGovernanceProposal({
+    pipId,
+    title,
+    description,
+    creator,
+    createdAt,
+    creatorNftId,
+    creatorTier,
+    votingDurationWeeks,
+  }) {
+    return this._governance.addProposal({
+      pipId,
+      title,
+      description,
+      creator,
+      createdAt,
+      creatorNftId,
+      creatorTier,
+      votingDurationWeeks,
+    });
+  }
+
+  /**
+   * Add a vote from the local user or a peer gossip.
+   * Returns { ok, isNew, changed, quorum }.
+   * If quorum is reached, a governance_result tx is built and submitted to the mempool.
+   */
+  /** Compute the highest-tier voting power for an address from the NFT store. */
+  _getVotingPower(voter) {
+    const nfts = this._nfts.getNftsForAddress(voter);
+    if (!nfts || nfts.length === 0) return { hasNft: false, bestTier: 'bronze', bestPower: 1 };
+    let bestTier = 'bronze';
+    let bestPower = 1;
+    const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
+    const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
+    for (const nft of nfts) {
+      const tier = (nft.metadata && nft.metadata.tier) || 'bronze';
+      const rank = TIER_RANK[tier] || 0;
+      if (rank > (TIER_RANK[bestTier] || 0)) {
+        bestTier = tier;
+        bestPower = VOTE_WEIGHTS[tier] || 1;
+      }
+    }
+    return { hasNft: true, bestTier, bestPower };
+  }
+
+  addGovernanceVote(pipId, { voter, power, nftTier, vote, signature, timestamp: voteTimestamp, _skipNftCheck }) {
+    let bestTier = nftTier || 'bronze';
+    let bestPower = typeof power === 'number' && power > 0 ? power : 1;
+
+    if (!_skipNftCheck) {
+      // Security: verify actual NFT holdings and compute real voting power.
+      // Self-reported power/nftTier are NEVER trusted (unless _skipNftCheck is set,
+      // which only happens during snapshot sync from a trusted NFT-holding peer).
+      const vp = this._getVotingPower(voter);
+      if (!vp.hasNft) {
+        return { ok: false, error: `${voter.slice(0, 12)}... does not own any Vortex NFTs` };
+      }
+      bestTier = vp.bestTier;
+      bestPower = vp.bestPower;
+    }
+
+    const result = this._governance.addVote(pipId, {
+      voter,
+      power: bestPower,
+      nftTier: bestTier,
+      vote,
+      signature,
+      timestamp: voteTimestamp,
+    });
+    if (!result.ok) return result;
+
+    const quorum = this._governance.checkQuorum(pipId);
+    if (quorum.ok) {
+      const p = this._governance.getProposal(pipId);
+      const nonce = this._accounts.getNonce(voter);
+      const tx = GovernanceStore.buildGovernanceResultTx({
+        pipId,
+        outcome: quorum.outcome,
+        from: voter,
+        nonce,
+        voteTallies: p.voteTallies,
+        title: p.title,
+      });
+
+      const kp = this._wallet.keys.find((k) => k.address === voter);
+      if (kp) {
+        const sigInput = JSON.stringify(
+          {
+            id: tx.id,
+            type: tx.type,
+            from: tx.from,
+            to: tx.to,
+            amount: tx.amount,
+            fee: tx.fee,
+            nonce: tx.nonce,
+            governanceData: tx.governanceData,
+          },
+          Object.keys({ id: 1, type: 1, from: 1, to: 1, amount: 1, fee: 1, nonce: 1, governanceData: 1 }).sort(),
+        );
+        const privBuf = Buffer.from(kp.privateKey, 'hex');
+        tx.sig = sign(txHash(sigInput), privBuf);
+
+        const mempoolResult = this._mempool.add(tx);
+        if (mempoolResult.ok) {
+          this._addPendingTx(tx);
+          console.log(
+            `[Governance] Quorum reached for ${pipId} — governance_result tx ${tx.id.slice(0, 16)}... submitted to mempool`,
+          );
+          return { ...result, quorum: { reached: true, outcome: quorum.outcome, txId: tx.id } };
+        }
+      }
+    }
+
+    return { ...result, quorum: { reached: false } };
+  }
+
+  /** Get the voting power for an address based on NFT holdings. */
+  getGovernanceVotingPower(voter) {
+    return this._getVotingPower(voter);
+  }
+
+  /**
+   * Check all active proposals and close those whose voting period has expired.
+   * For expired proposals that reached PASS_THRESHOLD, submits a governance_result
+   * tx. For those that didn't, submits a rejected governance_result tx.
+   * Returns the list of just-closed proposals.
+   */
+  closeExpiredProposals() {
+    const expired = this._governance.closeExpiredProposals();
+    if (expired.length === 0) return expired;
+
+    // Find an NFT-holding address in this wallet to submit the tx
+    const from = this._findGovernanceSubmitter();
+    if (!from) {
+      console.warn('[WtcNode] No NFT-holding address found to submit expired governance_result');
+      return expired;
+    }
+
+    const kp = this._wallet.keys.find((k) => k.address === from);
+    if (!kp) return expired;
+
+    for (const ep of expired) {
+      const nonce = this._accounts.getNonce(from);
+      const tx = GovernanceStore.buildGovernanceResultTx({
+        pipId: ep.pipId,
+        outcome: ep.outcome,
+        from,
+        nonce,
+        voteTallies: ep.voteTallies,
+        title: ep.title,
+      });
+
+      const sigInput = JSON.stringify(
+        {
+          id: tx.id,
+          type: tx.type,
+          from: tx.from,
+          to: tx.to,
+          amount: tx.amount,
+          fee: tx.fee,
+          nonce: tx.nonce,
+          governanceData: tx.governanceData,
+        },
+        Object.keys({ id: 1, type: 1, from: 1, to: 1, amount: 1, fee: 1, nonce: 1, governanceData: 1 }).sort(),
+      );
+      const privBuf = Buffer.from(kp.privateKey, 'hex');
+      tx.sig = sign(txHash(sigInput), privBuf);
+
+      const result = this._mempool.add(tx);
+      if (result.ok) {
+        this._addPendingTx(tx);
+        console.log(
+          `[Governance] Proposal ${ep.pipId} expired — ${ep.outcome} — governance_result tx ${tx.id.slice(0, 16)}... submitted`,
+        );
+      } else {
+        console.warn(`[Governance] Failed to submit governance_result for expired ${ep.pipId}: ${result.message}`);
+      }
+    }
+
+    return expired;
+  }
+
+  _findGovernanceSubmitter() {
+    for (const addr of this.getAddresses()) {
+      const nfts = this._nfts.getNftsForAddress(addr);
+      if (nfts && nfts.length > 0) return addr;
+    }
+    return null;
+  }
+
+  /**
+   * Generate the next pipId based on current chain state.
+   */
+  generateGovernancePipId() {
+    return GovernanceStore.generatePipId(this._chain.getHeight());
   }
 }
 

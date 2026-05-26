@@ -470,6 +470,8 @@ class Chain {
             return { ok: false, reason: `tx ${j} missing from/to/sig in block ${b.height}` };
           if (typeof tx.sig.r !== 'string' || typeof tx.sig.s !== 'string')
             return { ok: false, reason: `tx ${j} invalid sig format in block ${b.height}` };
+          // Non-standard tx types (nft, governance) use their own sigInput format
+          if (tx.type === 'nft_mint' || tx.type === 'nft_transfer' || tx.type === 'governance_result') continue;
           const sigInput = JSON.stringify({
             id: tx.id,
             from: tx.from,

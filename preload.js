@@ -141,6 +141,11 @@ try {
           'wattcoin-nft-get',
           'wattcoin-nft-collection',
           'wattcoin-nft-transfer',
+          'wattcoin-governance-list',
+          'wattcoin-governance-get-vote',
+          'wattcoin-governance-get-tallies',
+          'wattcoin-governance-propose',
+          'wattcoin-governance-vote',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

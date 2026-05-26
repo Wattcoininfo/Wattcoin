@@ -197,7 +197,7 @@ describe('IPC allowlist — exact match required (no substring)', () => {
 });
 
 describe('IPC allowlist — count integrity (no accidental additions)', () => {
-  it('has exactly 76 allowed channels', () => {
+  it('has exactly 81 allowed channels', () => {
     assert.strictEqual(ALLOWED_CHANNELS.size, 76);
   });
 

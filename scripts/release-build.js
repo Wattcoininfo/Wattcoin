@@ -17,6 +17,7 @@ const APP_INTEGRITY_FILES = [
   'wtc-consensus.js',
   'wtc-chain.js',
   'wtc-mempool.js',
+  'wtc-governance.js',
   'wtc-sale-queue.js',
   'wtc-staking-queue.js',
   'runtime-config.js',

@@ -63,12 +63,14 @@ class Consensus {
     privateKey,
     allowPartialQuorumCommit = false,
     nfts = null,
+    governance = null,
     getEnergyContributions,
   }) {
     this._chain = chain;
     this._accounts = accounts;
     this._mempool = mempool;
-    this._nfts = nfts; // optional NftStore — if provided, applyBlock is called on commit
+    this._nfts = nfts;
+    this._governance = governance;
     this._peers = getActivePeers;
     this._rpc = requestPeerJson;
     this._privKey = privateKey; // Buffer — secp256k1 private key
@@ -452,6 +454,9 @@ class Consensus {
 
     // Update NFT state
     if (this._nfts) this._nfts.applyBlock(finalBlock);
+
+    // Update governance state (process governance_result transactions)
+    if (this._governance) this._governance.applyBlock(finalBlock);
 
     // Clear committed transactions from mempool
     const txIds = (finalBlock.transactions || []).map((t) => t.id);

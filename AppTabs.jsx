@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Wattcoin from './Wattcoin.jsx';
 import Miner from './Miner.jsx';
 import MiningLog from './MiningLog.jsx';
+import Governance from './Governance.jsx';
 import nftImgGold from './assets/Vortex NFT Gold.jpg';
 import nftImgSilver from './assets/Vortex NFT Silver.jpg';
 import nftImgBronze from './assets/Vortex NFT Bronze.jpg';
@@ -20,6 +21,7 @@ const tabs = [
   { label: 'Dashboard', key: 'dashboard' },
   { label: 'Log', key: 'log' },
   { label: 'Wallet', key: 'wallet' },
+  { label: 'Governance', key: 'governance' },
   { label: 'Whitepaper', key: 'whitepaper' },
 ];
 
@@ -985,6 +987,11 @@ export default function AppTabs() {
             />
           )}
         </div>
+        {activeTab === 'governance' && (
+          <div style={{ height: `calc(100vh - ${TAB_BAR_HEIGHT_PX}px)`, overflowY: 'auto' }}>
+            <Governance selectedWalletAddress={selectedWalletAddress} />
+          </div>
+        )}
         {activeTab === 'whitepaper' && (
           <div style={{ height: `calc(100vh - ${TAB_BAR_HEIGHT_PX}px)`, overflowY: 'auto' }}>
             <Wattcoin />

@@ -108,6 +108,7 @@ module.exports = {
     'wtc-consensus.js',
     'wtc-mempool.js',
     'wtc-nfts.js',
+    'wtc-governance.js',
     'wtc-sale-queue.js',
     'wtc-staking-queue.js',
     'peer-count-observability.js',
