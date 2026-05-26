@@ -115,6 +115,7 @@ module.exports = {
     'peer-privacy.js',
     'peer-self-filter.js',
     'local-subnet-discovery.js',
+    'protocol-constants.js',
     'app-integrity-manifest.json',
     'package.json',
   ],
