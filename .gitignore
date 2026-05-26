@@ -37,7 +37,8 @@ __pycache__/
 
 # Python packages installed locally (e.g. by pip into project dir)
 Lib/
-Scripts/
+/Scripts/
+!scripts/
 Include/
 share/
 pyvenv.cfg
@@ -76,6 +77,9 @@ Thumbs.db
 
 # Keep runtime config templates, ignore ad-hoc local overrides
 wattcoin-beta-config.local-*.json
+
+# Test coverage reports (generated artifacts)
+coverage/
 
 # Temporary test output files
 *_out.txt

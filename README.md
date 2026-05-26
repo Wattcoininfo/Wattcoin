@@ -58,7 +58,11 @@ This starts the Vite dev server and launches Electron with hot-reload.
 ### Build Installer
 
 ```bash
+# Full build + deploy to wattcoin.ee (requires SFTP credentials)
 npm run electron:build
+
+# Local build only (no upload — no credentials needed)
+npm run electron:build:local
 ```
 
 The build script:
@@ -66,8 +70,8 @@ The build script:
 2. Builds the Vite frontend
 3. Runs electron-builder to produce an NSIS installer
 4. Signs the installer (if a dev certificate is present in `certs/`)
-5. Uploads to `wattcoin.ee` via SFTP (requires credentials)
-6. Verifies deployed assets are reachable
+5. Uploads to `wattcoin.ee` via SFTP (requires credentials) — skipped with `--local`
+6. Verifies deployed assets are reachable — skipped with `--local`
 
 ### Lint
 
