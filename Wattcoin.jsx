@@ -1692,6 +1692,12 @@ export default function Wattcoin() {
               A mining round produces a set of verifiable artefacts. Benchmark proofs run once at startup; periodic
               probes run throughout mining with chain-derived seeds so past answers cannot be recycled:
             </p>
+            <p style={{ fontSize: 13, color: '#5a8a5a', lineHeight: 1.6, marginBottom: 24, fontStyle: 'italic' }}>
+              Energy consumption is measured via software-based power estimation using declared hardware TDP and
+              duty-cycle sampling. Estimates carry a typical accuracy of &plusmn;20%, comparable to standard software
+              monitoring tools. The protocol accounts for this variance through statistical re-benchmarking thresholds
+              and peer-verified probe attestations.
+            </p>
           </FadeIn>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
             <FadeIn delay={0.1}>
@@ -2008,9 +2014,10 @@ export default function Wattcoin() {
                   STAKING POOL LIFETIME
                 </div>
                 <div style={{ fontSize: 13, color: '#7aaa7a', lineHeight: 1.6 }}>
-                  The staking rewards pool contains 166,667 WTC. Once fully distributed, the staking programme ends
-                  permanently — there is no replenishment. Early stakers benefit from the deepest pool and the longest
-                  reward window.
+                  The staking rewards pool contains 166,667 WTC and is intentionally designed to drain quickly — no
+                  lock-ups, no early-withdrawal penalties, no replenishment. This maximises the reward rate for early
+                  adopters who stake first. Once fully distributed the programme ends permanently. Early stakers benefit
+                  from the deepest pool and the longest reward window.
                 </div>
               </div>
             </div>
@@ -2551,7 +2558,7 @@ export default function Wattcoin() {
                     letterSpacing: '0.15em',
                   }}
                 >
-                  GENESIS WALLET DIRECTORY — 1,000,000 WTC TOTAL ALLOCATION
+                  GENESIS WALLET DIRECTORY — 1,000,000 WTC ALLOCATED AT LAUNCH (21,000,000 WTC TOTAL SUPPLY)
                 </div>
                 <ElecDial price={elecPrice} live={elecLive} />
               </div>

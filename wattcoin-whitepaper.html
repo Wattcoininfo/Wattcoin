@@ -2140,9 +2140,15 @@
           <span class="section-num">10</span>
           <h2>Verification <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> Security</h2>
         </div>
-        <p style="font-size: 14px; margin-bottom: 32px">
+        <p style="font-size: 14px; margin-bottom: 16px">
           A mining round produces a set of verifiable artefacts. Benchmark proofs run once at startup; periodic probes
           run throughout mining with chain-derived seeds so past answers cannot be recycled:
+        </p>
+        <p style="font-size: 12px; color: #5a8a5a; line-height: 1.7; margin-bottom: 28px; font-style: italic">
+          Energy consumption is measured via software-based power estimation using declared hardware TDP and duty-cycle
+          sampling. Estimates carry a typical accuracy of &plusmn;20%, comparable to standard software monitoring tools.
+          The protocol accounts for this variance through statistical re-benchmarking thresholds and peer-verified probe
+          attestations.
         </p>
         <div class="two-col">
           <div>
@@ -2489,9 +2495,10 @@
             <div class="info-card" style="margin-top: 24px; border-left-color: #4ade80">
               <div class="ic-title" style="color: #4ade80">STAKING POOL LIFETIME</div>
               <p>
-                The staking rewards pool contains 166,667 WTC. Once fully distributed to stakers, the staking programme
-                ends permanently &mdash; there is no replenishment. Early stakers benefit from the deepest pool and the
-                longest reward window.
+                The staking rewards pool contains 166,667 WTC and is intentionally designed to drain quickly &mdash; no
+                lock-ups, no early-withdrawal penalties, no replenishment. This maximises the reward rate for early
+                adopters who stake first. Once fully distributed the programme ends permanently. Early stakers benefit
+                from the deepest pool and the longest reward window.
               </p>
             </div>
             <div class="info-card" style="border-left-color: #4ade80">
@@ -2958,7 +2965,9 @@
         </div>
 
         <div class="wallet-dir" id="wallets">
-          <div class="wallet-dir-title">GENESIS WALLET DIRECTORY &mdash; 1,000,000 WTC TOTAL ALLOCATION</div>
+          <div class="wallet-dir-title">
+            GENESIS WALLET DIRECTORY &mdash; 1,000,000 WTC ALLOCATED AT LAUNCH (21,000,000 WTC TOTAL SUPPLY)
+          </div>
           <div
             style="
               display: grid;
