@@ -190,7 +190,7 @@ class WtcNode {
     getTrustedPeerTargets,
     requestPeerJson,
     onPeerTip,
-    allowPartialQuorumCommit = true,
+    allowPartialQuorumCommit = false,
     isLiveLocalTunnelPeer,
     isSelfPeerUrl,
     getConnectedPeerCount,
@@ -818,7 +818,7 @@ class WtcNode {
    * @param {object} block    parsed JSON body
    * @param {string} fromPeer peer base URL from request headers
    */
-  async handleProposal(block, fromPeer) {
+  handleProposal(block, fromPeer) {
     if (!this._consensus) return { ok: false, reason: 'node not initialized' };
     return this._consensus.receiveProposal(block, fromPeer);
   }
@@ -1235,7 +1235,7 @@ class WtcNode {
   async _tryTrustedBootstrapFallback({
     reason = '',
     bestPeer = '',
-    bestHeight = -1,
+    _bestHeight = -1,
     localHeight = -1,
     localTipHash = '',
   } = {}) {

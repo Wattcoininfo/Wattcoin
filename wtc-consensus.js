@@ -61,7 +61,7 @@ class Consensus {
     getActivePeers,
     requestPeerJson,
     privateKey,
-    allowPartialQuorumCommit = true,
+    allowPartialQuorumCommit = false,
     nfts = null,
     getEnergyContributions,
   }) {
@@ -174,7 +174,7 @@ class Consensus {
    * @param {string} fromPeer — base URL of the proposing peer (for logging)
    * @returns {{ ok: boolean, signer?: string, sig?: string, reason?: string }}
    */
-  async receiveProposal(block, fromPeer) {
+  receiveProposal(block, _fromPeer) {
     // Deduplicate already-committed blocks
     if (this._committed.has(block && block.hash)) {
       return { ok: false, reason: 'already committed' };

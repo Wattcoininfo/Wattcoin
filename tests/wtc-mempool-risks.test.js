@@ -21,33 +21,29 @@
 const assert = require('assert');
 
 const { Mempool } = require('../wtc-mempool');
+const { generateKeypair, sign, txHash } = require('../wtc-address');
+
+const senderKp = generateKeypair();
 
 const BASE_TS = Date.now();
 
 function coinTx(id, fee = 0.01, nonce = 0) {
-  return {
-    id,
-    from: 'wtc1qsender000000000000000000000000000000000000',
-    to: 'wtc1qrecipient0000000000000000000000000000000',
-    amount: 1,
-    fee,
-    nonce,
-    timestamp: BASE_TS,
-    sig: { r: 'r', s: 's', v: 1 },
-  };
+  const from = senderKp.address;
+  const to = 'wtc1qrecipient0000000000000000000000000000000';
+  const amount = 1;
+  const timestamp = BASE_TS;
+  const sigInput = JSON.stringify({ id, from, to, amount, fee, nonce });
+  const sig = sign(txHash(sigInput), Buffer.from(senderKp.privateKey, 'hex'));
+  return { id, from, to, amount, fee, nonce, timestamp, sig };
 }
 
 function nftTx(id, nonce = 0) {
-  return {
-    id,
-    type: 'nft_mint',
-    from: 'wtc1qattacker000000000000000000000000000000000',
-    to: 'wtc1qattacker000000000000000000000000000000000',
-    nftId: `NFT-${id}`,
-    nonce,
-    timestamp: BASE_TS,
-    sig: { r: 'r', s: 's', v: 1 },
-  };
+  const from = senderKp.address;
+  const to = senderKp.address;
+  const timestamp = BASE_TS;
+  const sigInput = JSON.stringify({ id, from, to, nonce });
+  const sig = sign(txHash(sigInput), Buffer.from(senderKp.privateKey, 'hex'));
+  return { id, type: 'nft_mint', from, to, nftId: `NFT-${id}`, nonce, timestamp, sig };
 }
 
 // ── Test 1: Same-fee ordering divergence ─────────────────────────────────────
@@ -131,7 +127,7 @@ function testNftSlotCapProtectsCoinTransfers() {
   assert.strictEqual(overflowNft.code, 'NFT_POOL_FULL', 'NFT beyond cap rejected with NFT_POOL_FULL');
 
   // Coin transfer is still accepted — 1000 reserved slots protect it.
-  const coinRes = pool.add(coinTx('legitimate-transfer', 1.0, 0));
+  const coinRes = pool.add(coinTx('legitimate-transfer', 1.0, 4000));
   assert.strictEqual(coinRes.ok, true, 'coin transfer accepted even after NFT cap hit — reserved slots work');
   assert.strictEqual(pool.size(), NFT_MAX + 1);
 

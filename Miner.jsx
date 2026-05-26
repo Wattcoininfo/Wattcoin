@@ -32,7 +32,7 @@ const STATUS_CARD_HEIGHT_PX = 148;
 const METRIC_CARD_HEIGHT_PX = 232 - CARD_HEIGHT_REDUCTION_PX + CARD_HEIGHT_INCREASE_PX + 38;
 const TOP_SECTION_GAP_PX = 16;
 const HARDWARE_CARD_HEIGHT_PX = STATUS_CARD_HEIGHT_PX + TOP_SECTION_GAP_PX + METRIC_CARD_HEIGHT_PX;
-const LOAD_CARD_HEIGHT_PX = 156;
+const _LOAD_CARD_HEIGHT_PX = 156;
 
 const energyForTier = (n) => (n === 0 ? TIER0_ENERGY : TIER1_ENERGY * Math.pow(2, n - 1));
 const rewardForTier = (n) => BASE_REWARD / Math.pow(2, n);
@@ -120,7 +120,7 @@ async function fetchUrlViaMain(url, opts = {}) {
 }
 
 // Strips HTML tags, scripts, and styles from a string, returning plain text.
-function stripHtml(html) {
+function _stripHtml(html) {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -131,7 +131,7 @@ function stripHtml(html) {
 }
 
 // Returns the first plausible wattage value (10–800 W) found in plain text.
-function parseFirstWattage(text) {
+function _parseFirstWattage(text) {
   const m = text.match(/\b(\d{1,3}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/);
   if (m) {
     const w = parseFloat(m[1]);
@@ -838,7 +838,7 @@ function getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks) {
   // Infer channel count: ≥2 sticks usually implies dual-channel for DDR4/DDR5.
   // LPDDR is always one "virtual channel" per package (spec-defined 128-bit bus treats as 2 ch).
   const isLPDDR = /LPDDR/i.test(memType || '');
-  const isDDR5 = /DDR5/i.test(memType || '');
+  const _isDDR5 = /DDR5/i.test(memType || '');
   let channels = isLPDDR ? 2 : memSticks >= 2 ? 2 : 1;
   // DDR4/5: bus width = 64 bits = 8 bytes per transfer; speed in MT/s
   const theoreticalMBps = channels * memSpeedMhz * 8; // MT/s × 8 B = MB/s
@@ -862,7 +862,7 @@ async function runWebGLBenchmark() {
   // Inner helper: runs the full shader benchmark on an already-created WebGL2 context.
   // Returns { score, framesRendered, elapsedMs } or { error } (shader compile/link fail or
   // calibMs < 0.1 — pipeline did not drain, context is no-op or software-rendered).
-  async function _bench(gl, SIZE) {
+  function _bench(gl, SIZE) {
     const vsSource = `#version 300 es
       in vec2 aPos;
       void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
@@ -1001,7 +1001,7 @@ async function runWebGLBenchmark() {
     try {
       document.body.appendChild(domCanvas);
       domAttached = true;
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     const gl = domCanvas.getContext('webgl2');
     if (!gl) return { error: 'GPU-E5: no webgl2 context' };
     return await _bench(gl, SIZE);
@@ -1012,7 +1012,7 @@ async function runWebGLBenchmark() {
     if (domAttached && domCanvas) {
       try {
         document.body.removeChild(domCanvas);
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
   }
 }
@@ -1029,7 +1029,7 @@ async function runWebGLBenchmark() {
 // Falls back to the original float shader on WebGL1 (timing-only verification then).
 //
 // Returns { pixelHash, elapsedMs, integerShader } or null when WebGL unavailable.
-async function runGpuProbe(seed, size, shaderIterations) {
+function runGpuProbe(seed, size, shaderIterations) {
   let canvas = null;
   let attached = false;
   try {
@@ -1041,7 +1041,7 @@ async function runGpuProbe(seed, size, shaderIterations) {
     try {
       document.body.appendChild(canvas);
       attached = true;
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
 
     // Prefer WebGL2 for the integer-shader path (item 3).
     const gl2 = canvas.getContext('webgl2');
@@ -1170,7 +1170,7 @@ async function runGpuProbe(seed, size, shaderIterations) {
     if (attached && canvas && canvas.parentNode) {
       try {
         canvas.parentNode.removeChild(canvas);
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
   }
 }
@@ -1189,7 +1189,7 @@ async function runGpuProbe(seed, size, shaderIterations) {
 // pixel, all 4 RGBA channels (full 32-bit x) fed into a djb2 accumulator — so both use the same verification.
 const GPU_PROOF_SIZE = 128; // 128×128 pixels — fast but sufficient for a unique hash
 const GPU_PROOF_ITERS = 32; // 32 XOR-shift iterations per pixel
-async function runGpuBenchmarkProof(seed, size, shaderIterations) {
+function runGpuBenchmarkProof(seed, size, shaderIterations) {
   let canvas = null;
   let attached = false;
   try {
@@ -1206,7 +1206,7 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     try {
       document.body.appendChild(canvas);
       attached = true;
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
 
     const gl = canvas.getContext('webgl2');
     if (!gl) return null; // integer shader requires WebGL2 for Node-verifiability
@@ -1350,7 +1350,7 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
           const SYNC_W = BENCH_SIZE,
             SYNC_H = BENCH_SIZE;
           const syncB = new Uint8Array(SYNC_W * SYNC_H * 4);
-          function gpuSyncB() {
+          const gpuSyncB = function () {
             gl.readPixels(0, 0, SYNC_W, SYNC_H, gl.RGBA, gl.UNSIGNED_BYTE, syncB);
           }
           // Warmup: 5 frames with per-frame sync
@@ -1391,7 +1391,7 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
         gl.deleteShader(vsB);
         gl.deleteShader(fsB);
       }
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
 
     return { proofHash: (h >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed), gpuScore, benchError };
   } catch (e) {
@@ -1401,7 +1401,7 @@ async function runGpuBenchmarkProof(seed, size, shaderIterations) {
     if (attached && canvas && canvas.parentNode) {
       try {
         canvas.parentNode.removeChild(canvas);
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
   }
 }
@@ -1886,14 +1886,14 @@ export default function Miner({
   mining,
   setMining,
   coins,
-  setCoins,
+  setCoins: _setCoins,
   maturedCoins = 0,
   unmaturedCoins = 0,
   energy,
-  setEnergy,
-  log,
+  setEnergy: _setEnergy,
+  log: _log,
   setLog,
-  probeLog = [],
+  probeLog: _probeLog = [],
   setProbeLog,
   isActive = true,
   setPowerW, // NEW: callback to lift powerW
@@ -1903,9 +1903,9 @@ export default function Miner({
   hardwareLookupResetNonce = 0,
 }) {
   // Helper for timestamp
-  const now = () => new Date().toLocaleString();
+  const now = React.useCallback(() => new Date().toLocaleString(), []);
   const [realMineBusy, setRealMineBusy] = React.useState(false);
-  const [realMineStatus, setRealMineStatus] = React.useState('');
+  const [_realMineStatus, setRealMineStatus] = React.useState('');
   const [peerCount, setPeerCount] = React.useState(null);
   const [connectedPeerCount, setConnectedPeerCount] = React.useState(0);
   const [peerCountSource, setPeerCountSource] = React.useState(null); // null | 'standalone' | 'coordinator'
@@ -1923,7 +1923,7 @@ export default function Miner({
   });
   const [sharedRoundTotalWh, setSharedRoundTotalWh] = React.useState(0);
 
-  const [baselinePowerW, setBaselinePowerW] = React.useState(0);
+  const [_baselinePowerW, setBaselinePowerW] = React.useState(0);
   const [benchmarkState, setBenchmarkState] = React.useState({
     running: false,
     startupDone: (() => {
@@ -2100,7 +2100,7 @@ export default function Miner({
         }
         return fresh;
       }
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     return {};
   });
 
@@ -2121,7 +2121,7 @@ export default function Miner({
         }
         return fresh;
       }
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     return {};
   });
 
@@ -2227,7 +2227,7 @@ export default function Miner({
                   setTrustScore(seeded.trustScore);
                   trustScoreRef.current = seeded.trustScore;
                 }
-              } catch (_) {}
+              } catch (_) { /* istanbul ignore next */ }
             } else {
               if (typeof auth.trustScore === 'number') {
                 setTrustScore(auth.trustScore);
@@ -2240,7 +2240,7 @@ export default function Miner({
             }
           }
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2275,7 +2275,7 @@ export default function Miner({
           }
           void holdResult;
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
 
       if (mining) {
         setMining(false);
@@ -2301,7 +2301,7 @@ export default function Miner({
 
       return holdUntil;
     },
-    [mining, setMining, setLog],
+    [mining, setMining, setLog, now],
   );
 
   const runBenchmark = React.useCallback(
@@ -2331,7 +2331,7 @@ export default function Miner({
           if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
             await window.wattcoinHardware.setHardwareLoad(benchLoadPct);
           }
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
         // Wait for the full 3-second hardware load ramp to complete before measuring.
         await new Promise((r) => setTimeout(r, 3200));
       } else if (isBaselineBench && wasMiningAtStart && benchLoadPct > 0) {
@@ -2444,7 +2444,7 @@ export default function Miner({
         const memoryMBps = Math.max(0, Number(backendBench.memoryMBps) || 0);
         const jitterRatio = Math.max(0, Number(backendBench.jitterRatio) || 0);
         const cpuSpeedOpsPerSec = Math.max(0, Number(backendBench.cpuSpeedOpsPerSec) || 0);
-        const cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
+        const _cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
         const memLatencyNs = Math.max(0, Number(backendBench.memLatencyNs) || 0);
 
         // Item 2: measurement-derived hardware tiers — independent of declared hardware names.
@@ -2530,7 +2530,7 @@ export default function Miner({
         // Memory bandwidth calibration: compare measured sequential bandwidth to expected for
         // the declared memory type + speed.  Flags impossible values (e.g. DDR5-6000 speed but
         // DDR3-tier bandwidth) and scales the memory TDP contribution accordingly.
-        const randomMemBandwidthMBps = Math.max(0, Number(backendBench.randomMemBandwidthMBps) || 0);
+        const _randomMemBandwidthMBps = Math.max(0, Number(backendBench.randomMemBandwidthMBps) || 0);
         // memLatencyNs already declared above (used for tier computation).
         const expectedMemBwMBps = getExpectedMemBandwidthMBps(
           hardware.memory,
@@ -2562,13 +2562,13 @@ export default function Miner({
         // runWebGLBenchmark now uses a DOM canvas (hardware-accelerated path) and
         // already returns null if readPixels failed to actually drag the GPU pipeline.
         let gpuScore = 0;
-        let gpuScoreElapsedMs = 0;
+        let _gpuScoreElapsedMs = 0;
         if (allowGpuWorkloads) {
           try {
             const gpuBench = await runWebGLBenchmark();
             if (gpuBench && gpuBench.score) {
               gpuScore = gpuBench.score;
-              gpuScoreElapsedMs = gpuBench.elapsedMs;
+              _gpuScoreElapsedMs = gpuBench.elapsedMs;
             } else if (gpuBench && gpuBench.error) {
               issues.push('gpu-bench: ' + gpuBench.error);
             }
@@ -2584,12 +2584,12 @@ export default function Miner({
               : [];
         // Use the highest-ranked expected score among declared GPUs (multi-GPU systems)
         let maxExpectedGpuScore = 0;
-        let gpuTableMatch = false;
+        let _gpuTableMatch = false;
         for (const g of declaredGpus) {
           const exp = getExpectedGpuScore(g);
           if (exp > maxExpectedGpuScore) {
             maxExpectedGpuScore = exp;
-            gpuTableMatch = true;
+            _gpuTableMatch = true;
           }
         }
         if (
@@ -2609,7 +2609,7 @@ export default function Miner({
         // True when at least one declared GPU is a named, table-matched entry.
         // For known GPUs, substituting the table value when readPixels doesn’t stall
         // is correct behaviour — not an anomaly worth flagging.
-        const isNamedGpu = declaredGpus.some((g) =>
+        const _isNamedGpu = declaredGpus.some((g) =>
           /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g),
         );
         let gpuScoreRatio = 1.0;
@@ -2640,7 +2640,7 @@ export default function Miner({
                 })
                 .catch(() => null);
             }
-          } catch (_) {}
+          } catch (_) { /* istanbul ignore next */ }
         }
 
         // GPU proof: single deterministic integer-shader render keyed by challengeSeed.
@@ -2693,14 +2693,14 @@ export default function Miner({
                       })
                       .catch(() => null);
                   }
-                } catch (_) {}
+                } catch (_) { /* istanbul ignore next */ }
               }
             }
-          } catch (_) {}
+          } catch (_) { /* istanbul ignore next */ }
         }
 
         // Startup and slider-stop benchmarks define new baselines — no drift check.
-        const adoptSliderBaseline = reason === 'slider-stop';
+        const _adoptSliderBaseline = reason === 'slider-stop';
         const isBaselineBenchmark = reason === 'startup' || reason === 'slider-stop';
         if (isBaselineBenchmark) {
           benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
@@ -2947,7 +2947,7 @@ export default function Miner({
               }
             }
           }
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
 
         const elapsedMs = performance.now() - startedAt;
         const trustAfter = trustScoreRef.current;
@@ -2965,7 +2965,7 @@ export default function Miner({
               bgMemDutyPct = Math.max(0, Math.min(100, (Number(hwState.memDuty) || 0) * 100));
             }
           }
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
         const totalCpuWorkOpsPerSec = cpuOpsPerSec + bgCpuOpsPerSec;
         const totalMemWorkMBps = memoryMBps + bgMemMBps;
         const gpuDutyPct = Math.max(0, Math.min(100, gpuMeasuredDutyRef.current * 100));
@@ -3101,11 +3101,12 @@ export default function Miner({
             } else if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
               await window.wattcoinHardware.setHardwareLoad(0);
             }
-          } catch (_) {}
+          } catch (_) { /* istanbul ignore next */ }
         }
       }
     },
-    [activateHardwareHold, allowGpuWorkloads, hardware, setLog],
+    // cpuTDPTable/gpuTDPTable are stable useMemo — omitted to avoid TDZ (declared later)
+    [activateHardwareHold, allowGpuWorkloads, hardware, setLog, allGpuModels, now], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   function computeCoinsFromEnergy(energyWh) {
@@ -3133,7 +3134,7 @@ export default function Miner({
   // Simulation mining logic removed
 
   // Mine a single real block attempt.
-  const mineOneRealBlock = async (blockEnergyWh = 0) => {
+  const mineOneRealBlock = React.useCallback(async (blockEnergyWh = 0) => {
     if (!(window.wattcoinHardware && window.wattcoinHardware.mineBlock)) {
       console.error('[MinerSimulator] Mining API unavailable - window.wattcoinHardware.mineBlock not found');
       setRealMineStatus('Mining API unavailable');
@@ -3231,7 +3232,7 @@ export default function Miner({
     } finally {
       setRealMineBusy(false);
     }
-  };
+  }, [miningAddress, onBlockMined, setLog, setRealMineStatus, setRealMineBusy, benchmarkState, now, realMineBusy]);
 
   // Fetch hardware info at startup if not already found, or if deviceType is still unknown
   React.useEffect(() => {
@@ -3245,7 +3246,7 @@ export default function Miner({
           setHardware(hw);
           try {
             sessionStorage.setItem('wattcoinHardware', JSON.stringify(hw));
-          } catch (_) {}
+          } catch (_) { /* istanbul ignore next */ }
         }
       } catch (_) {
         // Hardware detection failed — keep existing state; will retry on next render cycle.
@@ -3414,7 +3415,8 @@ export default function Miner({
       if (rafId) cancelAnimationFrame(rafId);
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [hardware, isActive]);
+  // cpuTDPTable/gpuTDPTable are stable useMemo — omitted to avoid TDZ (declared later)
+  }, [hardware, isActive, dynamicCPUTDPCache]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Startup benchmark runs after hardware recognition AND online TDP fetches are complete.
   // Not dashboard-gated: it must also run when another in-app tab is active.
@@ -3677,7 +3679,7 @@ export default function Miner({
       disposed = true;
       clearInterval(handle);
     };
-  }, [mining, allowGpuWorkloads]);
+  }, [mining, allowGpuWorkloads, setLog, setProbeLog, now]);
 
   // Poll backend probe histories every 20 s to catch:
   //   - timed-out probes (added to probeState.history by getPendingProbe when a probe expires)
@@ -3738,7 +3740,7 @@ export default function Miner({
           if (newEntries.length === 0) return prev;
           return [...newEntries, ...prev].sort((a, b) => b.ts - a.ts).slice(0, 150);
         });
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
 
     mergeBackendHistory();
@@ -3750,7 +3752,7 @@ export default function Miner({
   // Show 0W until a real estimate is available
   let powerW = 0;
   // Exact TDP tables (expand as needed)
-  const cpuTDPTable = {
+  const cpuTDPTable = React.useMemo(() => ({
     // ── Intel Core 14th Gen (Raptor Lake Refresh) — PL2 sustained all-core ─
     'Intel(R) Core(TM) i9-14900KS': 253,
     'Intel(R) Core(TM) i9-14900K': 253,
@@ -4239,8 +4241,8 @@ export default function Miner({
     'AMD Phenom(tm) II X4 965': 125,
     'AMD Phenom(tm) II X4 955': 125,
     'AMD Phenom(tm) II X4 945': 95,
-  };
-  const gpuTDPTable = {
+  }), []);
+  const gpuTDPTable = React.useMemo(() => ({
     // ── NVIDIA GeForce RTX 50 Series ──────────────────────────────────────
     'NVIDIA GeForce RTX 5090': 575,
     'NVIDIA GeForce RTX 5080': 360,
@@ -4424,7 +4426,7 @@ export default function Miner({
     'AMD Radeon HD 7790': 100,
     'AMD Radeon HD 7770': 80,
     'AMD Radeon HD 7750': 55,
-  };
+  }), []);
 
   // Online TDP lookup (Brave Answers AI): fire for all GPU models not yet cached.
   // Skip entirely for laptops — their power is modelled as one whole-unit thermal envelope
@@ -4455,7 +4457,7 @@ export default function Miner({
           const next = { ...prev, [model]: entry };
           try {
             localStorage.setItem(ONLINE_TDP_CACHE_KEY, JSON.stringify(next));
-          } catch (_) {}
+          } catch (_) { /* istanbul ignore next */ }
           return next;
         });
         if (tdp !== null) {
@@ -4496,7 +4498,7 @@ export default function Miner({
           const next = { ...prev, [cpuKey]: entry };
           try {
             localStorage.setItem(ONLINE_CPU_TDP_CACHE_KEY, JSON.stringify(next));
-          } catch (_) {}
+          } catch (_) { /* istanbul ignore next */ }
           return next;
         });
         if (tdp !== null) {
@@ -4549,7 +4551,7 @@ export default function Miner({
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     setTdpFetchingCount((n) => n + 1);
     (async () => {
       try {
@@ -4557,7 +4559,7 @@ export default function Miner({
         const entry = { tdp, ts: Date.now() };
         try {
           localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry));
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
         if (tdp !== null) {
           setLaptopLivePowerW(tdp);
           // Reset benchmark cap so the next benchmark re-establishes from the live TDP base.
@@ -4602,7 +4604,9 @@ export default function Miner({
     hardware.cpu,
     hardwareLookupResetNonce,
     isWholeDeviceMiniPcModel,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+    setLog,
+    now,
+  ]);
 
   // Family regex fallback tables
   const cpuPowerTable = [
@@ -4945,10 +4949,10 @@ export default function Miner({
   // Zero out power contribution while hardware is on hold after consecutive drift failures.
   if (isHardwareOnHold) powerW = 0;
   const totalPowerUsedW = powerW;
-  const miningPowerUsedW = mining ? Math.max(0, powerW) : 0;
+  const _miningPowerUsedW = mining ? Math.max(0, powerW) : 0;
 
-  const normalizedConfidenceTier = 'estimated';
-  const normalizedSourceName = 'local hardware profile model';
+  const _normalizedConfidenceTier = 'estimated';
+  const _normalizedSourceName = 'local hardware profile model';
 
   const WHOLE_DEVICE_LIVE_TYPES = ['Laptop', 'Mac', 'ASIC'];
   const wholeDeviceLiveActive =
@@ -4994,7 +4998,7 @@ export default function Miner({
     }
     return `unit: ${Math.round(hwProfileRaw || 0)} W`;
   })();
-  const powerCalcBreakdown = (() => {
+  const _powerCalcBreakdown = (() => {
     const dt = hardware.deviceType;
     const isLaptop = dt === 'Laptop';
     const isPC = dt === 'Desktop' || dt === 'PC' || dt === 'Server';
@@ -5016,10 +5020,10 @@ export default function Miner({
     }
     return `unit: ${unitFullPowerW} W`;
   })();
-  const liveWattageSmallLabel = `Power used live (estimated): ${fmtNum(totalPowerUsedW, 2)} W`;
-  const normalizedConfidenceLabel = CONFIDENCE_TIER_LABELS.estimated;
-  const normalizedEnergyLabel = 'Telemetry energy: model-driven (local miner accounting only)';
-  const powerTrustLabel = 'unattested (no live sensors)';
+  const _liveWattageSmallLabel = `Power used live (estimated): ${fmtNum(totalPowerUsedW, 2)} W`;
+  const _normalizedConfidenceLabel = CONFIDENCE_TIER_LABELS.estimated;
+  const _normalizedEnergyLabel = 'Telemetry energy: model-driven (local miner accounting only)';
+  const _powerTrustLabel = 'unattested (no live sensors)';
 
   // Track non-mining baseline power to estimate mining-only delta from live telemetry.
   React.useEffect(() => {
@@ -5034,7 +5038,7 @@ export default function Miner({
   const nodeMatured = Math.max(0, Number(maturedCoins) || 0);
   const nodeUnmatured = Math.max(0, Number(unmaturedCoins) || 0);
   const nodeTotal = Math.max(0, Number(coins) || 0, nodeMatured + nodeUnmatured);
-  const nodeStatusCoins = Math.max(0, nodeMatured + nodeUnmatured);
+  const _nodeStatusCoins = Math.max(0, nodeMatured + nodeUnmatured);
   const chainEmittedCoins = (() => {
     if (chainHeight < 0) return 0;
     let total = 1_000_000; // genesis premine (Tier 0)
@@ -5068,7 +5072,7 @@ export default function Miner({
       if (w > 0) {
         try {
           localStorage.setItem(HARDWARE_CARD_WIDTH_KEY, String(w));
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
         setSavedHwCardWidth(w);
       }
     }, 300);
@@ -5170,6 +5174,7 @@ export default function Miner({
     mining,
     runBenchmark,
     setLog,
+    now,
   ]);
 
   const coinsPerHour = tierEnergyPerCoinWh > 0 ? powerW / tierEnergyPerCoinWh : 0;
@@ -5221,7 +5226,7 @@ export default function Miner({
               bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (round so far: ${fmtEnergy(roundWh)})`;
           }
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
         setLog((log) => [
           {
             time: now(),
@@ -5244,7 +5249,7 @@ export default function Miner({
               bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (contributed ${fmtEnergy(roundWh)} this round)`;
           }
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
         setLog((log) => [
           {
             time: now(),
@@ -5255,7 +5260,7 @@ export default function Miner({
         ]);
       })();
     }
-  }, [mining, miningAddress, currentTier, tierEnergyPerCoinWh, tierRewardCoins, setLog]);
+  }, [mining, miningAddress, currentTier, tierEnergyPerCoinWh, tierRewardCoins, setLog, now]);
 
   // Continuous mining loop where power->energy drives when blocks are mined.
   React.useEffect(() => {
@@ -5323,7 +5328,7 @@ export default function Miner({
             return;
           }
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
 
       // Accumulate available mining energy from power over elapsed time.
       energyBudgetWhRef.current += (effectivePowerW * elapsedSeconds) / 3600;
@@ -5353,7 +5358,7 @@ export default function Miner({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [mining, miningAddress, powerW, tierEnergyPerCoinWh, tierRewardCoins, onBlockMined]);
+  }, [mining, miningAddress, powerW, tierEnergyPerCoinWh, tierRewardCoins, onBlockMined, mineOneRealBlock]);
 
   // NEW: lift powerW to parent
   React.useEffect(() => {
@@ -5669,7 +5674,7 @@ export default function Miner({
         setHardwareHoldUntilMs(0);
         try {
           localStorage.removeItem(HW_HOLD_STORAGE_KEY);
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
       }
     };
     tick();
@@ -5709,7 +5714,7 @@ export default function Miner({
     return () => {
       cancelled = true;
     };
-  }, [isHardwareOnHold, mining, setMining, setLog]);
+  }, [isHardwareOnHold, mining, setMining, setLog, now]);
 
   // Poll peer count every 10 seconds while the dashboard is active.
   React.useEffect(() => {
@@ -5734,7 +5739,7 @@ export default function Miner({
             ok: Boolean(res.lastSyncOk),
           });
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     };
     fetch();
     const id = setInterval(fetch, 10000);
@@ -5754,7 +5759,7 @@ export default function Miner({
       try {
         const res = await hw.invoke('wattcoin-get-wallet-readiness');
         if (!cancelled && res) setChainReadiness(res);
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     };
     fetchReadiness();
     const id = setInterval(fetchReadiness, 10000);
@@ -5775,7 +5780,7 @@ export default function Miner({
         if (!cancelled && res && res.ok) {
           setSharedRoundTotalWh(Math.max(0, Number(res.totalWh) || 0));
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     };
     fetchRoundSummary();
     const id = setInterval(fetchRoundSummary, 5000);

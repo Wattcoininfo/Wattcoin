@@ -271,12 +271,12 @@ describe('wtc-address — isValidAddress edge cases', () => {
 
 function run() {
   const tests = [describe];
-  let passed = 0;
+  let _passed = 0;
   let failed = 0;
   for (const [, fn] of Object.entries(tests)) {
     try {
       fn();
-      passed++;
+      _passed++;
     } catch (e) {
       failed++;
     }

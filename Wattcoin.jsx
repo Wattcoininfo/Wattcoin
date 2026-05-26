@@ -861,10 +861,10 @@ export default function Wattcoin() {
       <Section id="vortex">
         <div style={container}>
           <SectionTitle number={2} title="Vortex Hydro Turbine" />
-          <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40, maxWidth: 680 }}>
-            Wattcoin's first physical energy asset. A real-world hydro turbine whose verified output anchors the coin to
-            tangible, renewable electricity production.
-          </p>
+            <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40, maxWidth: 680 }}>
+              Wattcoin&apos;s first physical energy asset. A real-world hydro turbine whose verified output anchors the coin to
+              tangible, renewable electricity production.
+            </p>
 
           {/* Asset */}
           <div
@@ -891,7 +891,7 @@ export default function Wattcoin() {
               A <strong style={{ color: '#e8f5e8' }}>60 kW Vortex Gravity Hydro Turbine</strong> will be installed and
               commissioned. Vortex turbines are low-impact, continuous-output hydro units — no dam required, minimal
               ecological footprint, and capable of near-24/7 baseload generation. At 60 kW capacity, the turbine
-              produces real, metered, verifiable electricity that feeds directly into Wattcoin's energy-backed value
+              produces real, metered, verifiable electricity that feeds directly into Wattcoin&apos;s energy-backed value
               model.
             </p>
           </div>
@@ -966,7 +966,7 @@ export default function Wattcoin() {
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 20 }}>
               Participants who hold WTC from the coin sale gain access to the{' '}
-              <strong style={{ color: '#e8f5e8' }}>Early Adopter Energy Pool</strong> — a share of the turbine's net
+              <strong style={{ color: '#e8f5e8' }}>Early Adopter Energy Pool</strong> — a share of the turbine&apos;s net
               energy revenue, distributed on-chain proportionally to holdings.
             </p>
             <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 20 }}>
@@ -1137,8 +1137,8 @@ export default function Wattcoin() {
           <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#e8f5e8', marginBottom: 20 }}>
             Why Electricity Prices Trend Upward
           </h3>
-          <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 24 }}>
-            WTC's cost floor is structurally linked to global electricity prices. Four independent forces push
+            <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 24 }}>
+            WTC&apos;s cost floor is structurally linked to global electricity prices. Four independent forces push
             electricity prices higher over time:
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -1215,7 +1215,7 @@ export default function Wattcoin() {
                   determines how many operations that requires.
                 </p>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 20 }}>
-                  Energy consumption is derived from hardware specifications scaled by the miner's configured duty-cycle
+                  Energy consumption is derived from hardware specifications scaled by the miner&apos;s configured duty-cycle
                   load:{' '}
                   <strong style={{ color: '#e8f5e8' }}>
                     Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)
@@ -1363,19 +1363,19 @@ export default function Wattcoin() {
                 lineHeight: 2,
               }}
             >
-              <div style={{ color: '#3d5c3d' }}>// Energy per coin at tier n (n ≥ 1)</div>
+               <div style={{ color: '#3d5c3d' }}>{'// Energy per coin at tier n (n ≥ 1)'}</div>
               <div>E(n) = 20,000 Wh × 2^(n−1)</div>
-              <div style={{ color: '#3d5c3d', marginTop: 8 }}>// Operations per coin</div>
+              <div style={{ color: '#3d5c3d', marginTop: 8 }}>{'// Operations per coin'}</div>
               <div>ops(n) = E(n) × 3,600 / η</div>
               <div style={{ color: '#3d5c3d', marginTop: 8 }}>
-                // Actual energy consumed — always equal regardless of hardware
+                {'// Actual energy consumed — always equal regardless of hardware'}
               </div>
               <div>actual = ops × η = E(n) Wh &nbsp;✓</div>
               <div style={{ color: '#3d5c3d', marginTop: 8 }}>
-                // Energy per block at tier n (constant across all tiers T1+)
+                {'// Energy per block at tier n (constant across all tiers T1+)'}
               </div>
               <div>E_block = (1,000 / 2^n) × (20,000 × 2^(n−1)) = 10,000,000 Wh = 10 MWh &nbsp;✓</div>
-              <div style={{ color: '#3d5c3d', marginTop: 8 }}>// Block time (emergent)</div>
+              <div style={{ color: '#3d5c3d', marginTop: 8 }}>{'// Block time (emergent)'}</div>
               <div>T_block (hours) = 10,000,000 Wh ÷ P_total (Watts)</div>
             </div>
           </FadeIn>
@@ -1394,9 +1394,9 @@ export default function Wattcoin() {
           <SectionTitle number={6} title="Hardware Registry" />
           <FadeIn delay={0.1}>
             <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 32 }}>
-              Benchmark proofs determine each hardware type's efficiency η (Joules per operation). Power of usage is
-              calculated via algorithm that specifically calculates your hardware's power consumption and is scaled by
-              the miner's configured duty-cycle load. Benchmark proofs calibrate the estimate against measured
+              Benchmark proofs determine each hardware type&apos;s efficiency η (Joules per operation). Power of usage is
+              calculated via algorithm that specifically calculates your hardware&apos;s power consumption and is scaled by
+              the miner&apos;s configured duty-cycle load. Benchmark proofs calibrate the estimate against measured
               throughput — if the hardware underperforms, its credited power is reduced proportionally. Energy in Wh is
               computed as power × load% × elapsed time, and verified by ledger peers through computation probes.
             </p>
@@ -1503,7 +1503,7 @@ export default function Wattcoin() {
           <FadeIn delay={0.1}>
             <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40 }}>
               When multiple miners contribute verified proofs within the same block window, the block reward is
-              distributed proportionally based on each miner's verified energy contribution. This eliminates luck
+              distributed proportionally based on each miner&apos;s verified energy contribution. This eliminates luck
               variance entirely — every miner receives exactly what their energy deserves, every block.
             </p>
           </FadeIn>
@@ -1521,13 +1521,13 @@ export default function Wattcoin() {
                 lineHeight: 2,
               }}
             >
-              <div style={{ color: '#3d5c3d' }}>// Miner share of block reward</div>
+              <div style={{ color: '#3d5c3d' }}>{'// Miner share of block reward'}</div>
               <div>miner_reward = block_reward × (miner_energy_Wh / total_block_energy_Wh)</div>
               <div style={{ color: '#3d5c3d', marginTop: 8 }}>
-                // Since all hardware is energy-normalized, this simplifies to
+                {'// Since all hardware is energy-normalized, this simplifies to'}
               </div>
               <div>miner_reward = block_reward × (miner_ops × η / Σ(all_ops × η))</div>
-              <div style={{ color: '#3d5c3d', marginTop: 8 }}>// Total block energy is always conserved</div>
+              <div style={{ color: '#3d5c3d', marginTop: 8 }}>{'// Total block energy is always conserved'}</div>
               <div>Σ(miner_rewards) = block_reward &nbsp;✓</div>
             </div>
           </FadeIn>
@@ -1658,7 +1658,7 @@ export default function Wattcoin() {
               </div>
               <p style={{ fontSize: 14, color: '#7aaa7a', lineHeight: 1.7, margin: 0 }}>
                 All network transaction fees are captured by miners and distributed proportionally alongside block
-                rewards — in exact proportion to each contributor's verified energy. As block rewards halve through
+                rewards — in exact proportion to each contributor&apos;s verified energy. As block rewards halve through
                 successive tiers, transaction fees form an increasingly important component of miner revenue, sustaining
                 mining incentives across the full emission schedule.
               </p>
@@ -1877,16 +1877,16 @@ export default function Wattcoin() {
                   lineHeight: 2,
                 }}
               >
-                <div style={{ color: '#3d5c3d' }}>// 1% APY per 10,000 WTC staked network-wide</div>
+                <div style={{ color: '#3d5c3d' }}>{'// 1% APY per 10,000 WTC staked network-wide'}</div>
                 <div>APY(S) = floor(S / 10,000) × 1%</div>
-                <div style={{ color: '#3d5c3d', marginTop: 8 }}>// S = total WTC staked across entire network</div>
+                <div style={{ color: '#3d5c3d', marginTop: 8 }}>{'// S = total WTC staked across entire network'}</div>
                 <div>&nbsp;</div>
-                <div style={{ color: '#3d5c3d' }}>// Examples:</div>
+                <div style={{ color: '#3d5c3d' }}>{'// Examples:'}</div>
                 <div>&nbsp;&nbsp;S = &nbsp;10,000 WTC &nbsp;→ APY = &nbsp;1%</div>
                 <div>&nbsp;&nbsp;S = 100,000 WTC &nbsp;→ APY = 10%</div>
                 <div>&nbsp;&nbsp;S = 166,667 WTC &nbsp;→ APY = 16%</div>
                 <div style={{ color: '#4ade80' }}>
-                  &nbsp;&nbsp;S = 333,333 WTC &nbsp;→ APY = 33% &nbsp;// max — all public sale WTC staked
+                  &nbsp;&nbsp;S = 333,333 WTC &nbsp;→ APY = 33% &nbsp;{'// max — all public sale WTC staked'}
                 </div>
               </div>
               <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#e8f5e8', marginBottom: 16 }}>
@@ -2183,7 +2183,7 @@ export default function Wattcoin() {
               </li>
               <li>
                 <strong style={{ color: '#e8f5e8' }}>Non-stacking entitlement.</strong> Holding multiple NFTs of the
-                same tier does not multiply that tier's entitlement — each address qualifies for the tier benefit of its{' '}
+                same tier does not multiply that tier&apos;s entitlement — each address qualifies for the tier benefit of its{' '}
                 <em>highest-tier</em> NFT only. Additional tokens of equal or lower tier carry the same single-tier
                 entitlement and do not stack.
               </li>
@@ -2711,7 +2711,7 @@ export default function Wattcoin() {
           <SectionTitle number={16} title="Roadmap" />
           <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a', marginBottom: 40 }}>
             Four phases from launch to a full-stack energy-backed monetary system. Each phase is anchored to verifiable
-            on-chain milestones, not promises. Phase 1 now includes the Vortex hydro turbine initiative — Wattcoin's
+            on-chain milestones, not promises. Phase 1 now includes the Vortex hydro turbine initiative — Wattcoin&apos;s
             first real-world physical energy asset.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>

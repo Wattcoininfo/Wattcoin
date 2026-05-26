@@ -330,11 +330,11 @@ describe('wtc-accounts — snapshot and restore', () => {
   });
 });
 
-function run() {
+function _run() {
   const labels = ['construction', 'credit', 'transfer', 'applyBlock', 'stateHash', 'rebuildFromBlocks', 'snapshot'];
-  for (const label of labels) {
+  for (const _label of labels) {
     try {
-      require(`./wtc-accounts.test`).run();
+      require(`./wtc-accounts.test`)._run();
     } catch (_) {}
   }
 }

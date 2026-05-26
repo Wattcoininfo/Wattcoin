@@ -14,7 +14,7 @@ const COINS_PER_TIER = 1_000_000;
 const TOTAL_COINS = COINS_PER_TIER * TOTAL_TIERS;
 
 const energyForTier = (n) => (n === 0 ? TIER0_ENERGY : TIER1_ENERGY * Math.pow(2, n - 1));
-const rewardForTier = (n) => BASE_REWARD / Math.pow(2, n);
+const _rewardForTier = (n) => BASE_REWARD / Math.pow(2, n);
 
 const tabs = [
   { label: 'Dashboard', key: 'dashboard' },
@@ -218,7 +218,7 @@ export default function AppTabs() {
   const [hwResetCooldownRemainingMs, setHwResetCooldownRemainingMs] = useState(0);
   const [searchCacheOnCooldown, setSearchCacheOnCooldown] = useState(false);
   const [searchCacheCooldownRemainingMs, setSearchCacheCooldownRemainingMs] = useState(0);
-  const [betaPolicy, setBetaPolicy] = useState({
+  const [_betaPolicy, _setBetaPolicy] = useState({
     loading: true,
     betaMode: false,
     withdrawalsEnabled: true,
@@ -412,7 +412,7 @@ export default function AppTabs() {
   // Node connection state
   const nodeConnecting = walletSyncState.rpcReachable === false;
   // Helper for timestamp
-  const now = () => new Date().toLocaleString();
+  const _now = () => new Date().toLocaleString();
   const selectedAddressKey =
     (typeof selectedWalletAddress === 'string' ? selectedWalletAddress.trim() : '') || '__legacy__';
   const energy = Math.max(0, Number(energyByAddress[selectedAddressKey]) || 0);
@@ -837,11 +837,11 @@ export default function AppTabs() {
                 setProbeLog([]);
                 try {
                   localStorage.removeItem(LOG_STORAGE_KEY);
-                } catch (_) {}
+                } catch (_) { /* istanbul ignore next */ }
                 try {
                   const hw = window.wattcoinHardware;
                   if (hw && hw.invoke) hw.invoke('wattcoin-save-probe-log', []);
-                } catch (_) {}
+                } catch (_) { /* istanbul ignore next */ }
               }}
               onClearSearchCache={async () => {
                 try {
@@ -871,7 +871,7 @@ export default function AppTabs() {
                     localStorage.removeItem('wattcoin-online-tdp-v2');
                     localStorage.removeItem('wattcoin-online-cpu-tdp-v2');
                     localStorage.removeItem('wattcoin-online-laptop-power-v8');
-                  } catch (_) {}
+                  } catch (_) { /* istanbul ignore next */ }
                   setHardwareLookupResetNonce((value) => value + 1);
                   const nextAllowedMs =
                     result && result.nextClearAllowedAtMs
@@ -927,7 +927,7 @@ export default function AppTabs() {
                     localStorage.removeItem('wattcoin-online-tdp-v2');
                     localStorage.removeItem('wattcoin-online-cpu-tdp-v2');
                     localStorage.removeItem('wattcoin-online-laptop-power-v8');
-                  } catch (_) {}
+                  } catch (_) { /* istanbul ignore next */ }
                   setHardwareLookupResetNonce((value) => value + 1);
                   // Activate cooldown in UI immediately after a successful reset.
                   const nextAllowedMs =
@@ -1109,7 +1109,7 @@ function WalletAddressDisplay({ selectedWalletAddress, walletSyncState, onAddres
     setAddressNicknames(updated);
     try {
       localStorage.setItem('wattcoin-address-nicknames', JSON.stringify(updated));
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
   }
   function startEditingNickname() {
     setNicknameInput(addressNicknames[address] || '');
@@ -1865,7 +1865,7 @@ function WalletAddressDisplay({ selectedWalletAddress, walletSyncState, onAddres
   );
 }
 
-function computeCoinsFromEnergyWallet(energyWh) {
+function _computeCoinsFromEnergyWallet(energyWh) {
   let remainingWh = Math.max(0, Number(energyWh) || 0);
   let minedCoins = 0;
   for (let tier = 0; tier < TOTAL_TIERS; tier++) {
@@ -2161,7 +2161,7 @@ function Row({ label, value, mono }) {
 }
 
 // ─── Sale constants ──────────────────────────────────────────────────────────
-const SALE_ADDRESS = 'wtc1qd6dqez6rvh3ak2xw9jtsz3h8na0ssyepjgec3t';
+const _SALE_ADDRESS = 'wtc1qd6dqez6rvh3ak2xw9jtsz3h8na0ssyepjgec3t';
 const SALE_TOTAL = 333_333;
 const SALE_TIER_SIZE = 111_111;
 const SALE_TIERS = [
@@ -2180,7 +2180,7 @@ function WalletPayModal({ orderId, usdcRequired, wtcAmount, onPaid, onManual, on
   const [walletLabel, setWalletLabel] = React.useState('');
 
   // EIP-681 payment request URI — opens in MetaMask, Trust Wallet, Coinbase, etc.
-  const eip681 = `ethereum:${USDC_CONTRACT}@1/transfer?address=${SELLER}&uint256=${Math.round(usdcRequired * 1_000_000)}`;
+  const _eip681 = `ethereum:${USDC_CONTRACT}@1/transfer?address=${SELLER}&uint256=${Math.round(usdcRequired * 1_000_000)}`;
 
   function detectInjected() {
     try {
@@ -2410,12 +2410,12 @@ function StakingView({ selectedWalletAddress, walletBalance, queuedWtc = 0 }) {
     try {
       const s = await window.wattcoinHardware.invoke('wattcoin-staking-status');
       if (s.ok) setStatus(s);
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     if (address) {
       try {
         const r = await window.wattcoinHardware.invoke('wattcoin-staking-get-my-entries', address);
         if (r.ok) setMyEntries(r.entries || []);
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
   }, [address]);
 
@@ -2492,7 +2492,7 @@ function StakingView({ selectedWalletAddress, walletBalance, queuedWtc = 0 }) {
   const poolBal = status ? status.poolBalance : null;
   const apy = status ? status.currentApy : 0;
   const totalStaked = status ? status.totalStaked : 0;
-  const flushThreshold = status ? status.flushThreshold : 10000;
+  const _flushThreshold = status ? status.flushThreshold : 10000;
 
   return (
     <div style={{ padding: '18px 0' }}>
@@ -2768,7 +2768,7 @@ function SaleView({
     sold === null ? 0 : sold >= SALE_TOTAL ? -1 : sold < SALE_TIER_SIZE ? 0 : sold < 2 * SALE_TIER_SIZE ? 1 : 2;
 
   // ── Load sale status & electricity price ─────────────────────────────────
-  async function loadSaleData() {
+  const loadSaleData = useCallback(async () => {
     if (!(window.wattcoinHardware && window.wattcoinHardware.invoke)) {
       setStatus('Wallet API unavailable.');
       setBusy(false);
@@ -2795,13 +2795,14 @@ function SaleView({
       setStatus('Error loading sale data.');
     }
     setBusy(false);
-  }
+  }, []);
 
   React.useEffect(() => {
     loadSaleData();
     return () => {
       if (orderPollRef.iv) clearInterval(orderPollRef.iv);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // On mount (and whenever the delivery address is resolved), check for any existing
@@ -2847,7 +2848,7 @@ function SaleView({
         });
       })
       .catch(() => {});
-  }, [buyToAddress, orderStatus]);
+  }, [buyToAddress, orderStatus, setOrderId, setOrderStatus, startOrderPoll, loadSaleData]);
 
   // ── Recompute price when amount or electricity changes ─────────────────
   React.useEffect(() => {
@@ -3899,7 +3900,7 @@ function WalletTab({
   coins,
   maturedCoins,
   unmaturedCoins,
-  energy,
+  energy: _energy,
   selectedWalletAddress,
   walletSyncState,
   refreshBalances,
@@ -3975,7 +3976,7 @@ function WalletTab({
   }, []);
 
   // ── Poll order status after placing ──────────────────────────────────────
-  function startOrderPoll(id, callbacks = {}) {
+  const startOrderPoll = useCallback((id, callbacks = {}) => {
     if (orderPollRef.iv) clearInterval(orderPollRef.iv);
     orderPollRef.iv = setInterval(async () => {
       try {
@@ -4003,9 +4004,9 @@ function WalletTab({
             if (callbacks.onExpired) callbacks.onExpired();
           }
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }, 10_000);
-  }
+  }, [orderPollRef]);
 
   React.useEffect(() => {
     try {
@@ -4185,7 +4186,7 @@ function WalletTab({
       cancelled = true;
       clearInterval(iv);
     };
-  }, [selectedWalletAddress]);
+  }, [selectedWalletAddress, startOrderPoll]);
 
   function handleWithdrawAddressChange(raw) {
     setWithdrawAddress(raw);
@@ -4332,7 +4333,7 @@ function WalletTab({
     setWithdrawBusy(false);
   }
 
-  async function submitWithdrawal() {
+  function submitWithdrawal() {
     if (!walletReadiness.spendReady) {
       setWithdrawTxid('');
       setWithdrawMessage('Withdrawals are disabled until wallet sync is ready.');
@@ -4971,7 +4972,7 @@ function WalletTab({
             try {
               const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-block', { height });
               if (res && res.ok) setExplorerSelectedBlockData(res.block);
-            } catch (_) {}
+            } catch (_) { /* istanbul ignore next */ }
             setExplorerBlockBusy(false);
           }}
         />

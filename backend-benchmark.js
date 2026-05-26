@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { performance } = require('perf_hooks');
 const { PROBE_RECEIPT_VERSION, normalizeProbeReceipt } = require('./probe-attestation');
 
-function hasCommand(command, args = ['--help']) {
+function _hasCommand(command, args = ['--help']) {
   try {
     const result = spawnSync(command, args, {
       encoding: 'utf8',
@@ -17,7 +17,7 @@ function hasCommand(command, args = ['--help']) {
   }
 }
 
-function runCommand(command, args = [], timeout = 2000) {
+function _runCommand(command, args = [], timeout = 2000) {
   try {
     const result = spawnSync(command, args, {
       encoding: 'utf8',
@@ -31,7 +31,7 @@ function runCommand(command, args = [], timeout = 2000) {
   }
 }
 
-function runCommandDetailed(command, args = [], timeout = 2000) {
+function _runCommandDetailed(command, args = [], timeout = 2000) {
   try {
     const result = spawnSync(command, args, {
       encoding: 'utf8',
@@ -124,7 +124,7 @@ function runCpuAndMemoryBenchmark(request = {}) {
     const passElapsedMs = Math.max(1, performance.now() - passStart);
     memSamples.push(memBytes / (1024 * 1024) / (passElapsedMs / 1000));
   }
-  const memElapsedMs = 1; // kept for API compatibility; individual pass times used above
+  const _memElapsedMs = 1; // kept for API compatibility; individual pass times used above
   const memoryMBps = average(memSamples);
 
   const variance =
@@ -302,7 +302,7 @@ function getBenchmarkCapabilities() {
   };
 }
 
-async function runBackendBenchmark(_request = {}) {
+function runBackendBenchmark(_request = {}) {
   const request = _request || {};
   const walletAddress = typeof request.walletAddress === 'string' ? request.walletAddress.trim() : '';
   const startedAt = performance.now();
@@ -418,7 +418,7 @@ let probeState = {
 };
 
 // Reuses the same step function as the full benchmark � same algorithm = verifiable.
-function runCpuProbe(seed, iterations) {
+function _runCpuProbe(seed, iterations) {
   let x = seed | 0 || 1;
   const start = performance.now();
   for (let i = 0; i < iterations; i++) x = cpuSpeedStep(x);
@@ -437,7 +437,7 @@ function verifyCpuProbe(seed, iterations, expectedProof) {
 }
 
 // Memory probe: seeded array fill so each probe has a unique, unguessable answer.
-function runMemProbe(arraySeed, iterations) {
+function _runMemProbe(arraySeed, iterations) {
   const ENTRIES = PROBE_MEM_ENTRIES;
   const s = arraySeed | 0 || 1;
   const arr = new Uint32Array(ENTRIES);

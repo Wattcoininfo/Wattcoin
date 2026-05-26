@@ -53,7 +53,7 @@ function createManager(baseDir, opts = {}) {
     isDeprecatedPeerUrl: () => false,
     requestExternalResponse:
       opts.requestExternalResponse ||
-      (async () => {
+      (() => {
         throw new Error('manifest server unreachable');
       }),
     fetchTimeoutMs: 1000,
@@ -111,7 +111,7 @@ async function run() {
     // ── Case 4: corrupt cache + successful remote → recovers ─────────────────
     // The only recovery path is a successful remote manifest fetch.
     const peers4 = await createManager(baseDir, {
-      requestExternalResponse: async () => ({
+      requestExternalResponse: () => ({
         statusCode: 200,
         contentType: 'application/json',
         body: JSON.stringify({ seedPeers: [{ url: 'http://198.51.100.20:39310' }] }),

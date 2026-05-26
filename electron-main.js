@@ -8,9 +8,9 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.setAppUserModelId('com.wattcoin.miner');
-const { spawnSync } = require('child_process');
+const { spawnSync: _spawnSync } = require('child_process');
 const http = require('http');
-const dns = require('dns').promises;
+const _dns = require('dns').promises;
 const https = require('https');
 const net = require('net');
 const dgram = require('dgram');
@@ -31,7 +31,7 @@ const {
   getAttestHistory,
   issuePeerProbe,
   submitPeerProbeResult,
-  getPeerProbeHistory,
+  getPeerProbeHistory: _getPeerProbeHistory,
   verifyCpuSpeedProof,
   verifyMemProof,
   computeGpuProbeExpectedHash,
@@ -75,7 +75,7 @@ function getAppDisplayVersion() {
   let packageVersion = '';
   try {
     packageVersion = String(require('./package.json').version || '').trim();
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 
   if (!app.isPackaged) {
     return packageVersion || '?';
@@ -117,12 +117,12 @@ const BACKUP_FORMAT_VERSION = 1;
 const ABUSE_LOG_FILE_NAME = 'abuse-events.jsonl';
 const STARTUP_TRACE_FILE_NAME = 'wattcoin-startup-trace.log';
 const BUNDLED_SEED_PEER_FILE_NAMES = ['seed-peers.mainnet.json', 'bootstrap-peers.mainnet.json'];
-const CLI_DEFAULT_TIMEOUT_MS = 6000;
-const WALLET_READINESS_REFRESH_INTERVAL_MS = 12000;
-const WALLET_READINESS_DETAILED_REFRESH_INTERVAL_MS = 5 * 60_000;
+const _CLI_DEFAULT_TIMEOUT_MS = 6000;
+const _WALLET_READINESS_REFRESH_INTERVAL_MS = 12000;
+const _WALLET_READINESS_DETAILED_REFRESH_INTERVAL_MS = 5 * 60_000;
 // While syncing, re-run getblockchaininfo on every UI poll (5 s) so block count visibly advances.
-const WALLET_READINESS_DETAILED_RETRY_INTERVAL_MS = 5_000;
-const WALLET_ADDRESS_CACHE_MS = 30000;
+const _WALLET_READINESS_DETAILED_RETRY_INTERVAL_MS = 5_000;
+const _WALLET_ADDRESS_CACHE_MS = 30000;
 const WALLET_SYNC_STATE_REFRESH_INTERVAL_MS = 5000;
 
 // Addresses permitted to initiate withdrawals.
@@ -323,7 +323,7 @@ function loadHwAuthState() {
             }
           }
         }
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
     if (!recovered) {
       // Genuinely new install -- let the renderer seed the legacy localStorage value.
@@ -677,7 +677,7 @@ function saveHwFingerprint(data) {
 function clearHwFingerprint() {
   try {
     fs.unlinkSync(getHwFingerprintPath());
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
 function normalizeGpuFingerprintValue(gpuModels) {
@@ -769,7 +769,7 @@ function saveBenchmarkHistory(history) {
 function clearBenchmarkHistory() {
   try {
     fs.unlinkSync(getBenchmarkHistoryPath());
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
 // Append a new sample to a rolling window, rejecting clear outliers.
@@ -849,7 +849,7 @@ function beginStartupTrace(reason) {
   });
 }
 
-function getCliCommandName(args = []) {
+function _getCliCommandName(args = []) {
   for (const raw of args) {
     const token = String(raw || '').trim();
     if (!token || token.startsWith('-')) continue;
@@ -1104,7 +1104,7 @@ async function requestExternalText(url, timeoutMs = AUTO_PUBLIC_IP_LOOKUP_TIMEOU
   return response.body;
 }
 
-function getRemoteSeedManifestUrls(settings = getLedgerNetworkSettings()) {
+function _getRemoteSeedManifestUrls(settings = getLedgerNetworkSettings()) {
   return remoteSeedManifestManager.getRemoteSeedManifestUrls(settings);
 }
 
@@ -1112,15 +1112,15 @@ function loadCachedRemoteSeedPeers() {
   return remoteSeedManifestManager.loadCachedRemoteSeedPeers();
 }
 
-function saveCachedRemoteSeedPeers(peers) {
+function _saveCachedRemoteSeedPeers(peers) {
   return remoteSeedManifestManager.saveCachedRemoteSeedPeers(peers);
 }
 
-async function fetchRemoteSeedManifest(url) {
+function _fetchRemoteSeedManifest(url) {
   return remoteSeedManifestManager.fetchRemoteSeedManifest(url);
 }
 
-async function refreshRemoteSeedPeers(settings = getLedgerNetworkSettings(), { force = false } = {}) {
+function refreshRemoteSeedPeers(settings = getLedgerNetworkSettings(), { force = false } = {}) {
   return remoteSeedManifestManager.refreshRemoteSeedPeers(settings, { force });
 }
 
@@ -1141,7 +1141,7 @@ function stopRemoteSeedPeerRefresh() {
   remoteSeedPeerRefreshTimer = null;
 }
 
-async function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force = false } = {}) {
+function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force = false } = {}) {
   if (!settings || !settings.enabled || settings.mode !== 'peer') {
     autoDetectedPublicPeerUrl = '';
     return '';
@@ -1154,7 +1154,7 @@ async function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { 
     try {
       const cached = new URL(autoDetectedPublicPeerUrl);
       if (Number(cached.port) === Number(settings.listenPort)) return autoDetectedPublicPeerUrl;
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     autoDetectedPublicPeerUrl = '';
   }
   if (autoDetectedPublicPeerLookupPromise) return autoDetectedPublicPeerLookupPromise;
@@ -1171,7 +1171,7 @@ async function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { 
         if (!peerUrl) continue;
         autoDetectedPublicPeerUrl = peerUrl;
         return peerUrl;
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
     return previousUrl || '';
   })().finally(() => {
@@ -1224,7 +1224,7 @@ function getLocalPeerHosts() {
         }
       }
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   return hosts;
 }
 
@@ -1250,7 +1250,7 @@ function getLocalPeerIpv4InterfaceEntries() {
         });
       }
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   return entries;
 }
 
@@ -1392,7 +1392,7 @@ function scheduleDiscoveredSeedPeerCacheSave() {
       }
       fs.mkdirSync(path.dirname(getDiscoveredSeedPeerCachePath()), { recursive: true });
       fs.writeFileSync(getDiscoveredSeedPeerCachePath(), JSON.stringify({ peers }, null, 2), 'utf8');
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
   }, 250);
 }
 
@@ -1754,7 +1754,7 @@ async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') 
   }
 }
 
-async function maybeRegisterReachableRequester(req, settings, source = 'peer-contact') {
+function maybeRegisterReachableRequester(req, settings, source = 'peer-contact') {
   return maybeRegisterReachableRequesterHelper(req, settings, source, {
     isReverseTunnelForwardedRequest,
     rememberObservedRequester,
@@ -1836,7 +1836,7 @@ function buildReverseTunnelCoordinatorCandidates(settings = getLedgerNetworkSett
       if (!isPublicPeerHost(parsed.hostname)) continue;
       if (parsed.pathname && parsed.pathname !== '/') continue;
       candidates.push(normalizePeerUrl(peerUrl));
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
   }
   return Array.from(new Set(candidates.filter(Boolean)));
 }
@@ -1900,10 +1900,10 @@ function destroyReverseTunnelSession(session, reason = 'closed') {
   failReverseTunnelPendingRequestsForSession(session, `Reverse tunnel ${reason}.`);
   try {
     clearInterval(session.pingTimer);
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   try {
     session.socket.close();
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
 function getReverseTunnelPeerIdentity(req) {
@@ -1968,7 +1968,7 @@ function handleReverseTunnelSocketMessage(session, rawMessage) {
   }
 }
 
-async function handleReverseTunnelHttpRequest(req, res, settings) {
+async function handleReverseTunnelHttpRequest(req, res, _settings) {
   const segments = String(req.url || '')
     .split('?')[0]
     .split('/')
@@ -2038,7 +2038,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
       console.log(`[ReverseTunnel] Rejecting self-connecting tunnel from ${peerIdentity}`);
       try {
         socket.close();
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
       return;
     }
     if (peerIdentity) {
@@ -2059,7 +2059,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         if (socket.readyState !== WebSocket.OPEN) return;
         try {
           socket.send(JSON.stringify({ type: 'ping', nowMs: Date.now() }));
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
       }, REVERSE_TUNNEL_PING_INTERVAL_MS),
     };
     reverseTunnelSessions.set(tunnelId, session);
@@ -2103,7 +2103,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
     } catch (_) {
       try {
         socket.destroy();
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }
   });
 }
@@ -2119,7 +2119,7 @@ function stopReverseTunnelCoordinator() {
   if (reverseTunnelWss) {
     try {
       reverseTunnelWss.close();
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     reverseTunnelWss = null;
   }
 }
@@ -2143,7 +2143,7 @@ function stopManagedReverseTunnelClient() {
   if (reverseTunnelClientState.socket) {
     try {
       reverseTunnelClientState.socket.close();
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     reverseTunnelClientState.socket = null;
   }
 }
@@ -2240,7 +2240,7 @@ async function forwardReverseTunnelRequestToLocalNode(socket, message) {
   });
   try {
     socket.send(JSON.stringify({ type: 'http-response', requestId, ...responsePayload }));
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
 function handleManagedReverseTunnelMessage(socket, rawMessage) {
@@ -2255,7 +2255,7 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
   if (message.type === 'ping') {
     try {
       socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     return;
   }
   if (message.type === 'tunnel-ready') {
@@ -2337,7 +2337,7 @@ function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerN
       if (socket.readyState !== WebSocket.OPEN) return;
       try {
         socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     }, REVERSE_TUNNEL_PING_INTERVAL_MS);
   });
   socket.on('message', (message) => handleManagedReverseTunnelMessage(socket, message));
@@ -2404,7 +2404,7 @@ function ensureManagedReverseTunnelClient(settings = getLedgerNetworkSettings())
       });
       return;
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   writeStartupTrace('reverse-tunnel.enabled', {
     coordinatorUrl: obfuscatePublicPeerUrl(coordinatorUrl),
   });
@@ -2426,11 +2426,11 @@ function getPeerPrivacySecret() {
   try {
     const secret = getDeviceIdentitySecret();
     if (secret) return resolvePeerPrivacySecret(secret);
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   try {
     const identity = loadOrCreateDeviceIdentity();
     return resolvePeerPrivacySecret(getDeviceIdentitySecret(), identity && identity.deviceId);
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   return '';
 }
 
@@ -2523,7 +2523,7 @@ const POLICY_FEED_REFRESH_MS = 15 * 60_000;
 const ENABLE_NODE_ATTESTATION = true;
 const ENABLE_POWER_PROOF_COMMITMENT = true;
 // OP_RETURN prefix for on-chain policy anchors — 'WTCP1:' + 64-char SHA-256 hex = 70 bytes.
-const POLICY_OPRETURN_PREFIX = 'WTCP1:';
+const _POLICY_OPRETURN_PREFIX = 'WTCP1:';
 
 const LOCAL_HARDWARE_PROFILE_DB = [
   {
@@ -2653,15 +2653,15 @@ function loadPolicyAnchorState() {
         scannedAtMs: Number(parsed.scannedAtMs) || 0,
       };
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
-function savePolicyAnchorState() {
+function _savePolicyAnchorState() {
   try {
     const fp = getPolicyAnchorCacheFilePath();
     fs.mkdirSync(path.dirname(fp), { recursive: true });
     fs.writeFileSync(fp, JSON.stringify(policyAnchorState, null, 2), 'utf8');
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
 function getAttestationDbFilePath() {
@@ -2734,7 +2734,7 @@ function verifyPolicyFeedEnvelope(envelope, publicKeyPem) {
   }
 }
 
-function fetchJsonWithTimeout(url, timeoutMs = 5000) {
+function _fetchJsonWithTimeout(url, timeoutMs = 5000) {
   return fetchTextWithTimeout(url, timeoutMs).then((text) => JSON.parse(text));
 }
 
@@ -2900,7 +2900,7 @@ function saveRemoteProfilesToCache(state) {
 
 // Scan the local chain for the most recent WTCP1: OP_RETURN policy anchor.
 // Incremental: on subsequent calls only scans new blocks since last scan.
-async function scanChainForPolicyAnchor() {
+function scanChainForPolicyAnchor() {
   loadPolicyAnchorState();
   return policyAnchorState.latestAnchor
     ? { ok: true, cached: true, ...policyAnchorState.latestAnchor }
@@ -2994,7 +2994,7 @@ function ensurePolicyFeedRefreshLoop() {
 // ── Publish a policy anchor on-chain via OP_RETURN ────────────────────────────
 // Operator usage: window.wattcoinHardware.invoke('wattcoin-publish-policy-anchor', jsonText)
 // jsonText = the policy JSON string (same content that will be hosted at the feed URL).
-ipcMain.handle('wattcoin-publish-policy-anchor', async (_event, policyText) => {
+ipcMain.handle('wattcoin-publish-policy-anchor', (_event, _policyText) => {
   return {
     ok: false,
     code: 'NOT_SUPPORTED',
@@ -3271,8 +3271,8 @@ function buildAttestationMessage(challenge) {
   return `WATTCOIN_ATTEST:${challenge.id}:${challenge.challengeSeed}:${challenge.expiresAtMs}:${challenge.minerId}`;
 }
 
-async function verifyIdentityWithWalletSignature(identity = {}, expectedMessage = '') {
-  const walletName = 'wattminer';
+function verifyIdentityWithWalletSignature(identity = {}, expectedMessage = '') {
+  const _walletName = 'wattminer';
   const address = String(identity.address || '').trim();
   const signature = String(identity.signature || '').trim();
   const message = String(identity.message || '').trim();
@@ -3300,7 +3300,7 @@ async function verifyIdentityWithWalletSignature(identity = {}, expectedMessage 
 // Accepts the current window and the previous one for clock-skew tolerance.
 // Primary: pure JS offline verification (no node required).
 // Fallback: RPC verifymessage (used if pure JS throws unexpectedly).
-async function verifyContributionSignature(address, signature, message, expectedPrefix) {
+function _verifyContributionSignature(address, signature, message, expectedPrefix) {
   if (!address || !signature || !message || !expectedPrefix) {
     return { ok: false, reason: 'address, signature, message, or prefix missing' };
   }
@@ -3822,7 +3822,7 @@ function getPeerIdentityKey(peerUrl, tipResponse) {
   return normalized ? `url:${normalized}` : `url:${String(peerUrl || '').trim()}`;
 }
 
-function getDiscoveredPeerPresenceCount(settings = getLedgerNetworkSettings()) {
+function _getDiscoveredPeerPresenceCount(settings = getLedgerNetworkSettings()) {
   const now = Date.now();
   const selfAdvertisedUrls = new Set(getConfiguredAdvertisedPeerUrls(settings).map(normalizePeerUrl).filter(Boolean));
   const presenceKeys = new Set();
@@ -3838,7 +3838,7 @@ function getDiscoveredPeerPresenceCount(settings = getLedgerNetworkSettings()) {
   return presenceKeys.size;
 }
 
-async function inspectPeerConnectivity(settings = getLedgerNetworkSettings(), { source = 'peer-contact' } = {}) {
+function inspectPeerConnectivity(settings = getLedgerNetworkSettings(), { source = 'peer-contact' } = {}) {
   const peers = getActivePeers(settings);
   return inspectPeerConnectivityForTargets(peers, {
     source,
@@ -4244,12 +4244,12 @@ function getFocusedWindow() {
   return BrowserWindow.getFocusedWindow() || null;
 }
 
-function sleep(ms) {
+function _sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-let walletReadinessCache = null;
-let walletReadinessCacheAt = 0;
+let _walletReadinessCache = null;
+let _walletReadinessCacheAt = 0;
 let walletAddressCache = { address: '', at: 0 };
 let updateInstallInProgress = false;
 const walletSyncEmitter = new EventEmitter();
@@ -4348,7 +4348,7 @@ async function computeWalletSyncState(reason = 'refresh') {
   };
 }
 
-async function refreshWalletSyncState(reason = 'refresh', { force = false } = {}) {
+function refreshWalletSyncState(reason = 'refresh', { force = false } = {}) {
   if (walletSyncRefreshPromise && !force) return walletSyncRefreshPromise;
   walletSyncRefreshPromise = (async () => {
     const next = await computeWalletSyncState(reason);
@@ -4389,7 +4389,7 @@ walletSyncEmitter.on('changed', (snapshot) => {
   }
 });
 
-async function getCurrentBlockHeight() {
+function getCurrentBlockHeight() {
   if (wtcNode) return wtcNode.getHeight();
   return 0;
 }
@@ -4399,7 +4399,7 @@ function normalizeWalletError(e) {
   return { ok: false, code, message };
 }
 
-function parseGeneratedBlockHash(minedOutput) {
+function _parseGeneratedBlockHash(minedOutput) {
   const raw = typeof minedOutput === 'string' ? minedOutput.trim() : '';
   if (!raw) return '';
   try {
@@ -4429,14 +4429,14 @@ function computeMinedCoinsFromHeight(height) {
   return total;
 }
 
-function computeMaturedMinedCoinsFromHeight(height) {
+function _computeMaturedMinedCoinsFromHeight(height) {
   // Coinbase maturity: rewards are spendable only after 100 confirmations.
   const maturityDepth = 100;
   const maturedHeight = Math.max(0, Math.floor(Number(height) || 0) - maturityDepth);
   return computeMinedCoinsFromHeight(maturedHeight);
 }
 
-function computeWattcoinFromMinedBlocks(blockCount) {
+function _computeWattcoinFromMinedBlocks(blockCount) {
   let remainingBlocks = Math.max(0, Math.floor(Number(blockCount) || 0));
   let totalCoins = 0;
 
@@ -4451,7 +4451,7 @@ function computeWattcoinFromMinedBlocks(blockCount) {
   return Number(totalCoins.toFixed(8));
 }
 
-ipcMain.handle('wattcoin-get-wallet-address', async () => {
+ipcMain.handle('wattcoin-get-wallet-address', () => {
   if (!wtcNode) return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up. Please wait...' };
   const address = wtcNode.getPrimaryAddress();
   walletAddressCache = { address, at: Date.now() };
@@ -4460,7 +4460,7 @@ ipcMain.handle('wattcoin-get-wallet-address', async () => {
   return { ok: true, address };
 });
 
-ipcMain.handle('wattcoin-get-wallet-state', async () => {
+ipcMain.handle('wattcoin-get-wallet-state', () => {
   return refreshWalletSyncState('snapshot');
 });
 
@@ -4487,7 +4487,7 @@ ipcMain.handle('wattcoin-set-primary-address', async (_, targetAddress) => {
   }
 });
 
-ipcMain.handle('wattcoin-get-benchmark-capabilities', async () => {
+ipcMain.handle('wattcoin-get-benchmark-capabilities', () => {
   return getBenchmarkCapabilities();
 });
 
@@ -4884,19 +4884,19 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
   return result;
 });
 
-ipcMain.handle('wattcoin-get-pending-probe', async () => {
+ipcMain.handle('wattcoin-get-pending-probe', () => {
   return getPendingProbe();
 });
 
-ipcMain.handle('wattcoin-submit-probe-result', async (_event, result = {}) => {
+ipcMain.handle('wattcoin-submit-probe-result', (_event, result = {}) => {
   return submitProbeResult(result || {});
 });
 
-ipcMain.handle('wattcoin-get-probe-history', async () => {
+ipcMain.handle('wattcoin-get-probe-history', () => {
   return getProbeHistory();
 });
 
-ipcMain.handle('wattcoin-get-attest-history', async () => {
+ipcMain.handle('wattcoin-get-attest-history', () => {
   return getAttestHistory();
 });
 
@@ -4908,7 +4908,7 @@ function getProbeLogFilePath() {
   return path.join(app.getPath('userData'), PROBE_LOG_FILE_NAME);
 }
 
-ipcMain.handle('wattcoin-get-probe-log', async () => {
+ipcMain.handle('wattcoin-get-probe-log', () => {
   try {
     const raw = fs.readFileSync(getProbeLogFilePath(), 'utf8');
     const parsed = JSON.parse(raw);
@@ -4918,7 +4918,7 @@ ipcMain.handle('wattcoin-get-probe-log', async () => {
   }
 });
 
-ipcMain.handle('wattcoin-save-probe-log', async (_event, entries) => {
+ipcMain.handle('wattcoin-save-probe-log', (_event, entries) => {
   try {
     if (!Array.isArray(entries)) return { ok: false };
     // Sanitise each entry: only allow plain objects with string/number/boolean values,
@@ -4953,7 +4953,7 @@ function getFingerprintFilePath() {
   return path.join(getWalletDataDir(), FINGERPRINT_FILE_NAME);
 }
 
-ipcMain.handle('wattcoin-read-fingerprint', async () => {
+ipcMain.handle('wattcoin-read-fingerprint', () => {
   try {
     const filePath = getFingerprintFilePath();
     if (!fs.existsSync(filePath)) return { ok: true, data: null };
@@ -4965,7 +4965,7 @@ ipcMain.handle('wattcoin-read-fingerprint', async () => {
   }
 });
 
-ipcMain.handle('wattcoin-write-fingerprint', async (_event, payload = {}) => {
+ipcMain.handle('wattcoin-write-fingerprint', (_event, payload = {}) => {
   try {
     const filePath = getFingerprintFilePath();
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -5005,7 +5005,7 @@ function getDeviceIdentitySecret() {
       _deviceIdentitySecret = raw.secret;
       return _deviceIdentitySecret;
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   return '';
 }
 
@@ -5031,7 +5031,7 @@ function getOrCreateWalletEncryptionKey() {
         }
       }
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 
   // Generate a new key
   const newKey = crypto.randomBytes(32);
@@ -5045,7 +5045,7 @@ function getOrCreateWalletEncryptionKey() {
       fs.writeFileSync(keyFile, enc);
       _walletEncryptionKey = newKey;
       return _walletEncryptionKey;
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
   }
 
   // Fallback: derive from device-identity secret (same pattern as attestation fallback)
@@ -5059,7 +5059,7 @@ function getOrCreateWalletEncryptionKey() {
       _walletEncryptionKey = fbKey;
       return _walletEncryptionKey;
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 
   // Last resort — random key, lost on restart (wallet will be re-created). Still better than plaintext.
   _walletEncryptionKey = newKey;
@@ -5076,7 +5076,7 @@ function loadOrCreateDeviceIdentity() {
       const raw = fs.readFileSync(filePath, 'utf8');
       identity = JSON.parse(raw);
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 
   if (!identity || !identity.secret || typeof identity.secret !== 'string') {
     const secret = crypto.randomBytes(32).toString('hex');
@@ -5117,7 +5117,7 @@ function persistDevPeerPrivacyRecoveryKey() {
   return writePeerPrivacyRecoveryFile({ fs, baseDir: __dirname, payload });
 }
 
-ipcMain.handle('wattcoin-get-device-identity', async () => {
+ipcMain.handle('wattcoin-get-device-identity', () => {
   try {
     const id = loadOrCreateDeviceIdentity();
     // Attach wallet address as the on-chain link (available once wallet loads).
@@ -5223,7 +5223,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
 const HW_RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SEARCH_CACHE_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
-ipcMain.handle('wattcoin-get-authority-state', async () => {
+ipcMain.handle('wattcoin-get-authority-state', () => {
   const now = Date.now();
   const hwResetCooldownRemainingMs = Math.max(0, hwAuthority.lastHwResetAtMs + HW_RESET_COOLDOWN_MS - now);
   const searchCacheCooldownRemainingMs = Math.max(
@@ -5252,7 +5252,7 @@ ipcMain.handle('wattcoin-get-authority-state', async () => {
   };
 });
 
-ipcMain.handle('wattcoin-clear-search-cache', async () => {
+ipcMain.handle('wattcoin-clear-search-cache', () => {
   const now = Date.now();
   const cooldownRemainingMs = Math.max(0, hwAuthority.lastSearchCacheClearAtMs + SEARCH_CACHE_COOLDOWN_MS - now);
   if (cooldownRemainingMs > 0) {
@@ -5266,7 +5266,7 @@ ipcMain.handle('wattcoin-clear-search-cache', async () => {
   return { ok: true, nextClearAllowedAtMs: now + SEARCH_CACHE_COOLDOWN_MS };
 });
 
-ipcMain.handle('wattcoin-reset-hardware-identity', async () => {
+ipcMain.handle('wattcoin-reset-hardware-identity', () => {
   const now = Date.now();
   const cooldownRemainingMs = Math.max(0, hwAuthority.lastHwResetAtMs + HW_RESET_COOLDOWN_MS - now);
   if (cooldownRemainingMs > 0) {
@@ -5297,7 +5297,7 @@ ipcMain.handle('wattcoin-reset-hardware-identity', async () => {
 
 // One-shot migration: renderer sends its localStorage trust score the first time
 // the app runs so legacy values survive the transition to the backend authority.
-ipcMain.handle('wattcoin-seed-authority-state', async (_event, payload = {}) => {
+ipcMain.handle('wattcoin-seed-authority-state', (_event, payload = {}) => {
   if (!hwAuthStateIsNew) {
     // File already exists — ignore to prevent the renderer overwriting real data.
     return { ok: false, reason: 'not first run' };
@@ -5360,7 +5360,7 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
 // Verify a GPU benchmark proof submitted by the renderer.
 // computeGpuProbeExpectedHash runs the same XOR-shift algorithm in pure JS — bit-identical
 // to the WebGL integer shader — so no GPU is needed on the main-process side.
-ipcMain.handle('wattcoin-verify-gpu-proof', async (_event, payload = {}) => {
+ipcMain.handle('wattcoin-verify-gpu-proof', (_event, payload = {}) => {
   // Match the shader's seed guard: gl.uniform1i uses (seed | 0) || 1, so seed=0 → 1.
   const seed = Number(payload && payload.seed) | 0 || 1;
   const size = Math.max(1, Math.min(512, Number(payload && payload.size) || 128));
@@ -5376,7 +5376,7 @@ ipcMain.handle('wattcoin-verify-gpu-proof', async (_event, payload = {}) => {
 // Renderer signals a hardware hold should be activated (e.g. on extreme drift).
 // Main process validates and records it so the hold persists across renderer reloads.
 const HARDWARE_HOLD_MAX_DURATION_MS = 48 * 60 * 60_000; // 48-hour absolute cap
-ipcMain.handle('wattcoin-activate-hardware-hold', async (_event, payload = {}) => {
+ipcMain.handle('wattcoin-activate-hardware-hold', (_event, payload = {}) => {
   // Hard cap: a compromised renderer cannot set an infinite or multi-year hold.
   const durationMs = Math.min(
     HARDWARE_HOLD_MAX_DURATION_MS,
@@ -5391,7 +5391,7 @@ ipcMain.handle('wattcoin-activate-hardware-hold', async (_event, payload = {}) =
   return { ok: true, hwHoldUntilMs: hwAuthority.hwHoldUntilMs };
 });
 
-ipcMain.handle('wattcoin-attestation-issue-challenge', async (_event, payload = {}) => {
+ipcMain.handle('wattcoin-attestation-issue-challenge', (_event, payload = {}) => {
   const minerId = payload && payload.minerId ? String(payload.minerId) : 'local-client';
   const hardwareSummary =
     payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object' ? payload.hardwareSummary : {};
@@ -5403,7 +5403,7 @@ ipcMain.handle('wattcoin-attestation-submit-proof', async (_event, payload = {})
   return await submitBenchmarkProof(payload || {});
 });
 
-ipcMain.handle('wattcoin-attestation-get-policy', async (_event, payload = {}) => {
+ipcMain.handle('wattcoin-attestation-get-policy', (_event, payload = {}) => {
   const minerId = payload && payload.minerId ? String(payload.minerId) : 'local-client';
   const hardwareSummary =
     payload && payload.hardwareSummary && typeof payload.hardwareSummary === 'object' ? payload.hardwareSummary : {};
@@ -5413,8 +5413,8 @@ ipcMain.handle('wattcoin-attestation-get-policy', async (_event, payload = {}) =
   };
 });
 
-ipcMain.handle('wattcoin-sign-attestation-message', async (_event, payload = {}) => {
-  const walletName = 'wattminer';
+ipcMain.handle('wattcoin-sign-attestation-message', (_event, payload = {}) => {
+  const _walletName = 'wattminer';
   const address = String(payload && payload.address ? payload.address : '').trim();
   const message = String(payload && payload.message ? payload.message : '').trim();
   if (!address || !message) {
@@ -5439,7 +5439,7 @@ ipcMain.handle('wattcoin-sign-attestation-message', async (_event, payload = {})
   return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
 });
 
-ipcMain.handle('wattcoin-get-miner-access-policy', async () => {
+ipcMain.handle('wattcoin-get-miner-access-policy', () => {
   const passwordRequired = isMinerPasswordRequired();
   return {
     ok: true,
@@ -5451,7 +5451,7 @@ ipcMain.handle('wattcoin-get-miner-access-policy', async () => {
   };
 });
 
-ipcMain.handle('wattcoin-get-beta-policy', async () => {
+ipcMain.handle('wattcoin-get-beta-policy', () => {
   return {
     ok: true,
     ...getBetaPolicy(),
@@ -5483,7 +5483,7 @@ ipcMain.handle('wattcoin-verify-miner-password', async (_event, passwordAttempt)
   };
 });
 
-ipcMain.handle('wattcoin-get-network-info', async () => {
+ipcMain.handle('wattcoin-get-network-info', () => {
   return {
     ok: true,
     network: 'wtc-mainnet',
@@ -5616,7 +5616,7 @@ document.getElementById('btn-ext').addEventListener('click',pay);
       setTimeout(() => {
         try {
           server.close();
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
       }, 3000);
     });
     server.listen(0, '127.0.0.1', () => {
@@ -5683,7 +5683,7 @@ ipcMain.handle('wattcoin-sale-compute-price', async (_event, { wtcAmount, electr
 // Place an order (buyer is the logged-in WTC address)
 ipcMain.handle(
   'wattcoin-sale-place-order',
-  async (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
+  (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
     // Basic input sanitisation
     const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
     const amount = Number(wtcAmount);
@@ -5840,7 +5840,7 @@ ipcMain.handle('wattcoin-nft-transfer', (_event, { nftId, fromAddress, toAddress
   }
 });
 
-ipcMain.handle('wattcoin-explorer-get-blocks', async (_event, { offset = 0, limit = 20 } = {}) => {
+ipcMain.handle('wattcoin-explorer-get-blocks', (_event, { offset = 0, limit = 20 } = {}) => {
   try {
     if (!wtcNode) return { ok: false, blocks: [], total: 0 };
     const height = wtcNode.getHeight();
@@ -5870,7 +5870,7 @@ ipcMain.handle('wattcoin-explorer-get-blocks', async (_event, { offset = 0, limi
   }
 });
 
-ipcMain.handle('wattcoin-explorer-get-block', async (_event, { height } = {}) => {
+ipcMain.handle('wattcoin-explorer-get-block', (_event, { height } = {}) => {
   try {
     if (!wtcNode) return { ok: false, block: null };
     const b = wtcNode.getBlock(height);
@@ -5994,7 +5994,7 @@ ipcMain.handle('wattcoin-get-wallet-readiness', async () => {
   return { ok: false, spendReady: false, code: 'NODE_NOT_READY', message: 'Node is starting up. Please wait...' };
 });
 
-ipcMain.handle('wattcoin-set-hardware-load', async (_, percent) => {
+ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
   try {
     const appliedPercent = setHardwareLoadPercent(percent);
     hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : Number(percent) || 0;
@@ -6009,7 +6009,7 @@ ipcMain.handle('wattcoin-set-hardware-load', async (_, percent) => {
   }
 });
 
-ipcMain.handle('wattcoin-stop-hardware-load', async () => {
+ipcMain.handle('wattcoin-stop-hardware-load', () => {
   try {
     stopHardwareLoad();
     hwAuthority.currentLoadPercent = 0;
@@ -6019,7 +6019,7 @@ ipcMain.handle('wattcoin-stop-hardware-load', async () => {
   }
 });
 
-ipcMain.handle('wattcoin-get-hardware-load-state', async () => {
+ipcMain.handle('wattcoin-get-hardware-load-state', () => {
   try {
     return { ok: true, ...getHardwareLoadState() };
   } catch (e) {
@@ -6075,7 +6075,7 @@ function buildPowerProofCommitment(proofData) {
 }
 
 ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
-  const walletName = 'wattminer';
+  const _walletName = 'wattminer';
   // Use the main-process-verified wallet address as the rate-limit actor so the
   // renderer cannot bypass per-miner limits by rotating submitted address strings.
   const verifiedAddr = walletAddressCache.address || '';
@@ -6260,7 +6260,7 @@ function loadBundledSeedPeers() {
             try {
               const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
               if (decoded) return normalizePeerUrl(`http://${decoded}`);
-            } catch (_) {}
+            } catch (_) { /* istanbul ignore next */ }
           }
           return normalizePeerUrl(rawUrl);
         })
@@ -6608,7 +6608,7 @@ function buildRewardMapFromRoundSnapshot(roundSnapshot, fallbackAddress = '') {
   return rewardMap;
 }
 
-async function broadcastRoundContributionToPeers({ address, roundId, totalWh }) {
+function broadcastRoundContributionToPeers({ address, roundId, totalWh }) {
   const normalizedAddress = String(address || '').trim();
   if (!normalizedAddress || !wtcNode || typeof wtcNode.signMessage !== 'function') return;
 
@@ -6984,7 +6984,7 @@ async function discoverPeersOnLocalSubnets(httpPort, settings = getLedgerNetwork
             peerIdentity: String((tip && tip.peerIdentity) || '').trim(),
           });
           found += 1;
-        } catch (_) {}
+        } catch (_) { /* istanbul ignore next */ }
       }
     });
     await Promise.all(workers);
@@ -7042,7 +7042,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
         const peerUrl = selectDiscoveryPeerUrl(beaconCandidates) || directLanPeerUrl;
         rememberDiscoveredPeer(peerUrl, { source: 'beacon', seenAtMs: Date.now() });
       }
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
   });
 
   sock.on('error', (err) => {
@@ -7074,7 +7074,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
       }
       sock.setMulticastTTL(1);
       sock.setMulticastLoopback(true); // receive own beacons (useful for single-machine testing)
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     console.log(
       `[PeerDiscovery] Listening for peers on UDP ${PEER_DISCOVERY_PORT}${joinedGroups > 0 ? ` across ${joinedGroups} interface(s)` : ''}`,
     );
@@ -7115,7 +7115,7 @@ function stopPeerDiscovery() {
   if (peerDiscoverySocket) {
     try {
       peerDiscoverySocket.close();
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     peerDiscoverySocket = null;
   }
   peerLocalSubnetDiscoveryPromise = null;
@@ -7156,7 +7156,7 @@ function recordWitnessedSettlement(summary, fromPeer) {
   }
 }
 
-async function broadcastSettlementToPeers(round) {
+function broadcastSettlementToPeers(round) {
   const settings = getLedgerNetworkSettings();
   if (!settings.enabled) return;
   const peers = getActivePeers(settings);
@@ -7621,7 +7621,7 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   }
 });
 
-ipcMain.handle('wattcoin-ledger-get-round-summary', async () => {
+ipcMain.handle('wattcoin-ledger-get-round-summary', () => {
   try {
     const snapshot = getSharedRoundSnapshot();
     return {
@@ -7706,7 +7706,7 @@ ipcMain.handle('wattcoin-ledger-get-balances', async (_, selectedAddress) => {
 });
 
 // Get WTC balances reconstructed from mined block history for a specific mining address.
-ipcMain.handle('wattcoin-get-node-mined-coins', async (_, selectedAddress) => {
+ipcMain.handle('wattcoin-get-node-mined-coins', (_, selectedAddress) => {
   // ── WTC native chain fast-path ───────────────────────────────────────
   if (wtcNode) {
     try {
@@ -7736,7 +7736,7 @@ ipcMain.handle('wattcoin-get-node-mined-coins', async (_, selectedAddress) => {
 });
 
 ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
-  const walletName = 'wattminer';
+  const _walletName = 'wattminer';
   const betaPolicy = getBetaPolicy();
   if (!betaPolicy.withdrawalsEnabled) {
     await logAbuseEvent({
@@ -7794,7 +7794,7 @@ ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
   }
 });
 
-ipcMain.handle('wattcoin-get-tx-status', async (_, payload = {}) => {
+ipcMain.handle('wattcoin-get-tx-status', (_, payload = {}) => {
   const txid = typeof payload.txid === 'string' ? payload.txid.trim() : '';
   if (!txid) return { ok: false, code: 'MISSING_TXID', message: 'txid required' };
   if (wtcNode) {
@@ -7805,7 +7805,7 @@ ipcMain.handle('wattcoin-get-tx-status', async (_, payload = {}) => {
 });
 
 ipcMain.handle('wattcoin-list-transactions', async (_, payload = {}) => {
-  const walletName = 'wattminer';
+  const _walletName = 'wattminer';
   const actorId =
     payload && typeof payload.selectedAddress === 'string' && payload.selectedAddress.trim()
       ? payload.selectedAddress.trim()
@@ -7827,7 +7827,7 @@ ipcMain.handle('wattcoin-list-transactions', async (_, payload = {}) => {
 });
 
 // Get all addresses with their labels
-ipcMain.handle('wattcoin-get-addresses', async () => {
+ipcMain.handle('wattcoin-get-addresses', () => {
   if (wtcNode) {
     const addresses = wtcNode.getAddresses();
     return { ok: true, addresses };
@@ -7836,7 +7836,7 @@ ipcMain.handle('wattcoin-get-addresses', async () => {
 });
 
 // Create a new mining address
-ipcMain.handle('wattcoin-create-address', async () => {
+ipcMain.handle('wattcoin-create-address', () => {
   if (wtcNode) {
     try {
       const { address } = wtcNode.createAddress();
@@ -7852,7 +7852,7 @@ ipcMain.handle('wattcoin-create-address', async () => {
   return { ok: false, code: 'NODE_NOT_READY', message: 'Node not initialised yet.' };
 });
 
-ipcMain.handle('wattcoin-delete-address', async (_, targetAddress) => {
+ipcMain.handle('wattcoin-delete-address', (_, targetAddress) => {
   const address = typeof targetAddress === 'string' ? targetAddress.trim() : '';
   if (!address) {
     return { ok: false, code: 'INVALID_ADDRESS', message: 'No address selected for deletion.' };
@@ -7879,7 +7879,7 @@ ipcMain.handle('wattcoin-delete-address', async (_, targetAddress) => {
 });
 
 // Get wallet seed phrase or backup guidance.
-ipcMain.handle('wattcoin-get-seed', async () => {
+ipcMain.handle('wattcoin-get-seed', () => {
   return { ok: false, code: 'NOT_SUPPORTED', message: 'Seed phrases are not available for WTC native wallets.' };
 });
 
@@ -7958,7 +7958,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
       return { ok: false, code: 'DECRYPT_FAILED', message: 'Failed to decrypt backup. Check your passphrase.' };
     }
     const metadata = payload && payload.metadata ? payload.metadata : {};
-    const walletName =
+    const _walletName =
       typeof metadata.walletName === 'string' && metadata.walletName ? metadata.walletName : defaultWalletName;
     const expectedNetwork = getActiveNetwork();
     const network = metadata && metadata.network ? metadata.network : 'unknown';
@@ -7991,7 +7991,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
     }
     try {
       stopHardwareLoad();
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     await fsp.mkdir(walletDir, { recursive: true });
     await fsp.writeFile(walletFilePath, walletDat);
     try {
@@ -8023,7 +8023,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
         const restoredPrimary = wtcNode.getPrimaryAddress();
         walletAddressCache = { address: restoredPrimary || '', at: restoredPrimary ? Date.now() : 0 };
         if (restoredPrimary) setCoordinatorIdentityKey(restoredPrimary);
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     } catch (reinitErr) {
       console.error('[RestoreBackup] Failed to re-init WTC node:', reinitErr && reinitErr.message);
     }
@@ -8394,7 +8394,7 @@ if (!gotSingleInstanceLock) {
   });
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   // Query physical CPU core count so hardware-load workers are limited to physical
   // cores only.  On HT CPUs (2 logical per physical) spawning workers on all logical
   // cores doubles the duty-cycle pressure on each physical core, causing actual power
@@ -8435,7 +8435,7 @@ app.whenReady().then(async () => {
     if (_hist.jitterSamples.length >= 2) {
       hwAuthority.rollingJitterMean = _hist.jitterSamples.reduce((a, b) => a + b, 0) / _hist.jitterSamples.length;
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   // Generate unique per-machine RPC credentials on first launch.
   // The bundled config ships with defaults (user/pass); if we still see those,
   // create a local override file in the user-data dir with random credentials.
@@ -8448,7 +8448,7 @@ app.whenReady().then(async () => {
       let localCfg = {};
       try {
         localCfg = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
       const currentUser = String(localCfg.rpcUser || getRuntimeConfig().rpcUser || '');
       const currentPass = String(localCfg.rpcPassword || getRuntimeConfig().rpcPassword || '');
       const currentToken = String(localCfg.ledgerNetworkAuthToken || getRuntimeConfig().ledgerNetworkAuthToken || '');
@@ -8505,7 +8505,7 @@ app.whenReady().then(async () => {
   // is always available before the first renderer IPC call arrives.
   try {
     loadOrCreateDeviceIdentity();
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   try {
     persistDevPeerPrivacyRecoveryKey();
   } catch (e) {
@@ -8807,7 +8807,7 @@ if (app.isPackaged) {
     wins.forEach((w) => {
       try {
         w.webContents.send('wattcoin-update-downloaded', { version: info.version });
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     });
   });
 
@@ -8830,10 +8830,10 @@ if (app.isPackaged) {
     wins.forEach((win) => {
       try {
         win.removeAllListeners('close');
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
       try {
         win.close();
-      } catch (_) {}
+      } catch (_) { /* istanbul ignore next */ }
     });
 
     setImmediate(() => {

@@ -43,7 +43,7 @@ function createStandaloneNode(id, dataDir) {
     signingSecret: `probe-attestation-${id}`,
     allowPartialQuorumCommit: false,
     getActivePeers: () => [],
-    requestPeerJson: async () => {
+    requestPeerJson: () => {
       throw new Error('unexpected peer RPC in standalone test');
     },
   });

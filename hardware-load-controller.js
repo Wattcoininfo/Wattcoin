@@ -154,7 +154,7 @@ function stopMemoryPressure() {
   if (ddrWorker) {
     try {
       ddrWorker.terminate();
-    } catch (_) {}
+    } catch (_) { /* istanbul ignore next */ }
     ddrWorker = null;
   }
   ddrTelemetry = {

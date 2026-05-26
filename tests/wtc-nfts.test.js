@@ -4,7 +4,7 @@ const assert = require('assert');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
+const _crypto = require('crypto');
 
 const { NftStore, NFT_COLLECTION, MINTER_ADDRESS } = require('../wtc-nfts');
 const { generateKeypair, sign, txHash } = require('../wtc-address');
@@ -44,7 +44,7 @@ function silenceLogs(fn) {
 }
 
 /** Build and sign an nft_mint tx using a keypair for `from`. */
-function signedMintTx(nftId, from, fromPriv, to, nonce) {
+function _signedMintTx(nftId, from, fromPriv, to, nonce) {
   const tx = NftStore.buildMintTx({ nftId, from, to, nonce });
   const sigInput = JSON.stringify({
     id: tx.id,

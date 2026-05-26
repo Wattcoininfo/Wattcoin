@@ -38,7 +38,7 @@ function createStandaloneNode(dataDir, peerIdentity) {
     peerIdentity,
     allowPartialQuorumCommit: false,
     getActivePeers: () => [],
-    requestPeerJson: async () => {
+    requestPeerJson: () => {
       throw new Error('unexpected peer RPC in peer identity test');
     },
   });
@@ -78,7 +78,7 @@ function createTunnelOnlyReadinessNode(dataDir, { peerIdentity, connectedPeerCou
     getActivePeers: () => [],
     getPeerTargets: () => [],
     getConnectedPeerCount: () => connectedPeerCount,
-    requestPeerJson: async () => {
+    requestPeerJson: () => {
       throw new Error('unexpected peer RPC in tunnel-only readiness test');
     },
   });
@@ -155,7 +155,7 @@ async function run() {
     const duplicateIdentity = 'c'.repeat(64);
     const nonSelfCollisionNode = createPeerProbeNode(nodeCDir, {
       peerIdentity: duplicateIdentity,
-      requestPeerJson: async () => ({
+      requestPeerJson: () => ({
         ok: true,
         height: 3,
         peerIdentity: duplicateIdentity,
@@ -172,7 +172,7 @@ async function run() {
 
     const actualSelfNode = createPeerProbeNode(nodeDDir, {
       peerIdentity: duplicateIdentity,
-      requestPeerJson: async () => ({
+      requestPeerJson: () => ({
         ok: true,
         height: 3,
         peerIdentity: duplicateIdentity,
@@ -205,7 +205,7 @@ async function run() {
 
     const directoryFallbackNode = createDirectoryFallbackReadinessNode(nodeFDir, {
       peerIdentity: 'f'.repeat(64),
-      requestPeerJson: async (peerUrl) => {
+      requestPeerJson: (peerUrl) => {
         if (peerUrl === 'http://198.51.100.1:39310') {
           throw new Error('configured peer unreachable');
         }
@@ -245,7 +245,7 @@ async function run() {
     let recoveredPeerProbeCount = 0;
     const recoveredPeerNode = createRecoveredPeerReadinessNode(nodeGDir, {
       peerIdentity: 'g'.repeat(64),
-      requestPeerJson: async () => {
+      requestPeerJson: () => {
         recoveredPeerProbeCount += 1;
         if (recoveredPeerProbeCount <= 3) {
           throw new Error('temporary external peer timeout');

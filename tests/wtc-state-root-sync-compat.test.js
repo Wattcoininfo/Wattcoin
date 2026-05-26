@@ -54,7 +54,7 @@ class SimulatedPeerNetwork {
     return Array.from(this.links.get(id) || []);
   }
 
-  async request(fromId, peerId, method, routePath, payload, query = {}) {
+  request(fromId, peerId, method, routePath, payload, query = {}) {
     const reachable = this.links.has(fromId) && this.links.get(fromId).has(peerId);
     if (!reachable) {
       throw new Error(`network partition: ${fromId} -> ${peerId} blocked`);

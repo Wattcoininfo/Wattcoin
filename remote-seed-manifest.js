@@ -90,7 +90,7 @@ function createRemoteSeedManifestManager({
       .filter((peer) => peer && !isDeprecatedPeerUrl(peer));
   }
 
-  async function refreshRemoteSeedPeers(settings, { force = false } = {}) {
+  function refreshRemoteSeedPeers(settings, { force = false } = {}) {
     if (remoteSeedPeerRefreshPromise && !force) return remoteSeedPeerRefreshPromise;
     const runtime = getRuntimeConfig();
     if (!settings || runtime.network !== 'wtc-mainnet') return loadCachedRemoteSeedPeers();

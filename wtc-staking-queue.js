@@ -100,12 +100,12 @@ function _loadOrCreateQueueSecret() {
         return _queueSecret;
       }
     }
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   _queueSecret = crypto.randomBytes(32).toString('hex');
   try {
     fs.mkdirSync(_dataDir, { recursive: true });
     fs.writeFileSync(_secretPath(), JSON.stringify({ secret: _queueSecret }), 'utf8');
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
   return _queueSecret;
 }
 function _computeEntriesSig(entries) {
@@ -150,7 +150,7 @@ function _saveEntries() {
     const sig = _computeEntriesSig(_entries);
     fs.writeFileSync(tmp, JSON.stringify({ entries: _entries, _sig: sig }, null, 2), 'utf8');
     fs.renameSync(tmp, dest);
-  } catch (_) {}
+  } catch (_) { /* istanbul ignore next */ }
 }
 
 // ─── Web API integration (shared pool: app + website) ────────────────────────

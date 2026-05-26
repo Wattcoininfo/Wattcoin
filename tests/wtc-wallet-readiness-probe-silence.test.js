@@ -70,7 +70,7 @@ async function run() {
         getActivePeers: () => peerUrls,
         getPeerTargets: () => peerUrls,
         // Every peer probe throws a network timeout.
-        requestPeerJson: async (peerUrl) => {
+        requestPeerJson: (peerUrl) => {
           throw new Error(`simulated network timeout for ${peerUrl}`);
         },
       });

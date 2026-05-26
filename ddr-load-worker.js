@@ -113,6 +113,7 @@ function resetWindow() {
 function loop() {
   let lastTarget = -1;
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const targetPercent = Atomics.load(sharedInt, 1);
 

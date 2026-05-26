@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-const { Chain, computeBlockHash, GENESIS_PREMINE } = require('../wtc-chain');
+const { Chain, computeBlockHash: _computeBlockHash, GENESIS_PREMINE } = require('../wtc-chain');
 
 const TEST_SECRET = 'test-hmac-secret-for-chain-corruption-tests';
 const TEAM_WALLET = 'wtc1q-test-team-wallet';

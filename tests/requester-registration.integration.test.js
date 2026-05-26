@@ -20,7 +20,7 @@ async function testDirectPublicPeerUsesExplicitAnnouncement() {
     rememberObservedRequester: () => false,
     extractReachablePeerCandidates: () => ['http://198.51.100.24:39310'],
     isPublicPeerHost: (host) => host === '198.51.100.24',
-    verifyReachablePeerCandidate: async (candidate, source) => {
+    verifyReachablePeerCandidate: (candidate, source) => {
       calls.push({ candidate, source });
       return { ok: true, source, candidate };
     },
@@ -50,7 +50,7 @@ async function testNatedPeerWithoutExplicitPublicUrlUsesSocketCandidate() {
     rememberObservedRequester: () => false,
     extractReachablePeerCandidates: () => ['http://192.168.1.44:39310'],
     isPublicPeerHost: () => false,
-    verifyReachablePeerCandidate: async (candidate, source) => {
+    verifyReachablePeerCandidate: (candidate, source) => {
       calls.push({ candidate, source });
       return { ok: true, source, candidate };
     },
@@ -85,7 +85,7 @@ async function testReverseTunnelForwardedRequesterSkipsReachabilityProbe() {
     },
     extractReachablePeerCandidates: () => [],
     isPublicPeerHost: () => false,
-    verifyReachablePeerCandidate: async () => {
+    verifyReachablePeerCandidate: () => {
       verifyCalls += 1;
       return { ok: false };
     },

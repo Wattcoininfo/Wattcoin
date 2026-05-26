@@ -24,9 +24,9 @@ const os = require('os');
 const path = require('path');
 
 const { createWtcNode } = require('../wtc-node');
-const { generateKeypair, sign, txHash, verifySignature } = require('../wtc-address');
+const { generateKeypair, sign, txHash, verifySignature: _verifySignature } = require('../wtc-address');
 const { Mempool } = require('../wtc-mempool');
-const { energyForHeight } = require('../wtc-chain');
+const { energyForHeight: _energyForHeight } = require('../wtc-chain');
 
 const TIER1_ENERGY = 10_000_000; // 10 MWh
 
@@ -56,13 +56,13 @@ function makeNode(id, dir) {
     signingSecret: `counterfeit-test-${id}`,
     allowPartialQuorumCommit: false,
     getActivePeers: () => [],
-    requestPeerJson: async () => {
+    requestPeerJson: () => {
       throw new Error('no peers in counterfeit test');
     },
   });
 }
 
-async function mineOne(node) {
+function mineOne(node) {
   return node.mineBlock(node.getPrimaryAddress(), {
     energyWh: TIER1_ENERGY,
     proofCommitment: `test-proof-${Date.now()}`,
@@ -89,7 +89,7 @@ async function test(name, fn) {
 async function run() {
   // ─── ATTACK 1: Forged signature ───────────────────────────────────────────────
   // Attacker builds a tx that claims to send FROM victim's address but signs with own key.
-  await test('Attack 1 — forged signature is rejected', async () => {
+  await test('Attack 1 — forged signature is rejected', () => {
     const dir = mkTmp('sig');
     try {
       const victim = generateKeypair();
@@ -237,7 +237,7 @@ async function run() {
   // ─── ATTACK 6: Block hash tampering ──────────────────────────────────────────
   // Build a valid block, then mutate its rewardTotal and try to get it committed.
   await test('Attack 6 — tampered block hash is rejected by peers', async () => {
-    const { computeBlockHash } = require('../wtc-chain');
+    const { computeBlockHash: _computeBlockHash } = require('../wtc-chain');
 
     const dir1 = mkTmp('tamper-a');
     const dir2 = mkTmp('tamper-b');
@@ -402,8 +402,8 @@ async function run() {
         stateRoot: '',
         votes: {},
       };
-      const { computeBlockHash } = require('../wtc-chain');
-      fakeBlock.hash = computeBlockHash(fakeBlock);
+    const { computeBlockHash: _computeBlockHash } = require('../wtc-chain');
+      fakeBlock.hash = _computeBlockHash(fakeBlock);
 
       const result = await node.handleProposal(fakeBlock, 'http://attacker:39310');
       assert.strictEqual(result && result.ok, false, 'block with wrong prevHash must be rejected');

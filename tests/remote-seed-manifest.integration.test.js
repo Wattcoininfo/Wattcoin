@@ -55,7 +55,7 @@ async function run() {
     const goodManager = createManager(baseDir, {
       runtimeConfig,
       syncEvents,
-      requestExternalResponse: async (url) => {
+      requestExternalResponse: (url) => {
         assert.strictEqual(url, runtimeConfig.ledgerSeedManifestUrls[0]);
         return {
           statusCode: 200,
@@ -74,7 +74,7 @@ async function run() {
     const malformedManager = createManager(baseDir, {
       runtimeConfig,
       syncEvents: [],
-      requestExternalResponse: async () => ({
+      requestExternalResponse: () => ({
         statusCode: 200,
         contentType: 'text/plain',
         body: 'not-json',
@@ -90,7 +90,7 @@ async function run() {
     const timeoutManager = createManager(baseDir, {
       runtimeConfig,
       syncEvents: [],
-      requestExternalResponse: async () => {
+      requestExternalResponse: () => {
         throw new Error('timeout');
       },
     });
@@ -104,7 +104,7 @@ async function run() {
     const freshManager = createManager(baseDir, {
       runtimeConfig,
       syncEvents: [],
-      requestExternalResponse: async () => {
+      requestExternalResponse: () => {
         throw new Error('seed manifest unavailable');
       },
     });

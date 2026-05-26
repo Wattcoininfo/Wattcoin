@@ -4,7 +4,7 @@ const assert = require('assert');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
+const _crypto = require('crypto');
 
 const sq = require('../wtc-staking-queue');
 

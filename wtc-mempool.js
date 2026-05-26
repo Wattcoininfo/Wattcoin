@@ -19,6 +19,7 @@
  */
 
 const crypto = require('crypto');
+const { txHash, verifySignature: wtcVerify } = require('./wtc-address');
 
 const MEMPOOL_MAX_SIZE = 5000;
 const MEMPOOL_NFT_MAX_SLOTS = 4000; // reserve 20% of slots for coin txs
@@ -73,6 +74,10 @@ class Mempool {
       if (!tx.sig || typeof tx.sig !== 'object') {
         return { ok: false, code: 'MISSING_SIG', message: 'signature required' };
       }
+      const sigInput = JSON.stringify({ id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce });
+      if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) {
+        return { ok: false, code: 'INVALID_SIG', message: 'signature verification failed' };
+      }
       if (typeof tx.nonce !== 'number' || !Number.isInteger(tx.nonce) || tx.nonce < 0) {
         return { ok: false, code: 'INVALID_NONCE', message: 'nonce must be a non-negative integer' };
       }
@@ -118,6 +123,10 @@ class Mempool {
     }
     if (!tx.sig || typeof tx.sig !== 'object') {
       return { ok: false, code: 'MISSING_SIG', message: 'signature object required' };
+    }
+    const sigInput = JSON.stringify({ id: tx.id, from: tx.from, to: tx.to, amount: tx.amount, fee: tx.fee, nonce: tx.nonce });
+    if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) {
+      return { ok: false, code: 'INVALID_SIG', message: 'signature verification failed' };
     }
     if (typeof tx.from === 'string' && typeof tx.nonce === 'number') {
       for (const existing of this._txs.values()) {

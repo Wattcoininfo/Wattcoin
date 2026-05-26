@@ -46,7 +46,7 @@ async function run() {
     allowPartialQuorumCommit: false,
     getActivePeers: () => [unreachablePeer],
     getPeerTargets: () => [unreachablePeer],
-    requestPeerJson: async () => {
+    requestPeerJson: () => {
       requestCount += 1;
       throw new Error('Peer request timed out.');
     },

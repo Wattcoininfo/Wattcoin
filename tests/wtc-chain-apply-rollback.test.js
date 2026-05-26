@@ -52,7 +52,7 @@ function standaloneNode(id, dir) {
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: true,
     getActivePeers: () => [],
-    requestPeerJson: async () => {
+    requestPeerJson: () => {
       throw new Error('no peers in test');
     },
   });
