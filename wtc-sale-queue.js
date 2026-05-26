@@ -55,7 +55,9 @@ const ETHERSCAN_API_KEY = (() => {
   // requiring every user to register their own key.  For production deployments
   // with high transaction volume, operators SHOULD configure a dedicated key
   // via ~/.secrets/etherscan-api-key or ETHERSCAN_API_KEY to avoid rate limits.
-  console.warn(`[${_ts()}] [SaleQueue] Using built-in shared Etherscan API key (rate-limited). For production, set a dedicated key via ~/.secrets/etherscan-api-key or ETHERSCAN_API_KEY`);
+  console.warn(
+    `[${_ts()}] [SaleQueue] Using built-in shared Etherscan API key (rate-limited). For production, set a dedicated key via ~/.secrets/etherscan-api-key or ETHERSCAN_API_KEY`,
+  );
   return Buffer.from('SEhWMUNVRlVJRUgxRjMyVjlEQlNYMlEzQVVKRkRDQVJTWg==', 'base64').toString();
 })();
 const ETHERSCAN_REQUEST_RETRIES = 2;

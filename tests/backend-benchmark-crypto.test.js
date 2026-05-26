@@ -6,7 +6,9 @@ const { computeGpuProbeExpectedHash } = require('../backend-benchmark');
 
 // ─── describe / it helpers ────────────────────────────────────────────────
 
-function describe(name, fn) { fn(); }
+function describe(name, fn) {
+  fn();
+}
 
 function it(name, fn) {
   try {
@@ -14,7 +16,10 @@ function it(name, fn) {
     if (result && typeof result.then === 'function') {
       return result.then(
         () => console.log(`  ✓ ${name}`),
-        (e) => { console.error(`  ✗ ${name}: ${e.message}`); throw e; },
+        (e) => {
+          console.error(`  ✗ ${name}: ${e.message}`);
+          throw e;
+        },
       );
     }
     console.log(`  ✓ ${name}`);

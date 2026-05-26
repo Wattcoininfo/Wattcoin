@@ -187,7 +187,9 @@ const BRAVE_ANSWERS_KEY = (() => {
   try {
     const userKey = localStorage.getItem('braveAnswersKey');
     if (userKey) return userKey;
-  } catch (_) { /* localStorage unavailable */ }
+  } catch (_) {
+    /* localStorage unavailable */
+  }
   if (process.env.REACT_APP_BRAVE_ANSWERS_KEY) return process.env.REACT_APP_BRAVE_ANSWERS_KEY;
   return atob('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA==');
 })();
@@ -2419,7 +2421,9 @@ export default function Miner({
             // localStorage fallback (browser/dev mode).
             let secret = localStorage.getItem(FINGERPRINT_SECRET_STORAGE_KEY);
             if (!secret) {
-              const _buf = new Uint32Array(2); window.crypto.getRandomValues(_buf); secret = `${_buf[0].toString(36)}-${_buf[1].toString(36)}`;
+              const _buf = new Uint32Array(2);
+              window.crypto.getRandomValues(_buf);
+              secret = `${_buf[0].toString(36)}-${_buf[1].toString(36)}`;
               localStorage.setItem(FINGERPRINT_SECRET_STORAGE_KEY, secret);
             }
             const expectedSig = simpleHash(`${secret}|${fingerprintHash}`);
@@ -6808,7 +6812,8 @@ export default function Miner({
                       await window.wattcoinHardware.setHardwareLoad(0);
                     }
                   } catch (_) {
-                    if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
+                    if (process.env.WATTCOIN_DEBUG)
+                      console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
                   }
                 }}
                 disabled={!mining}

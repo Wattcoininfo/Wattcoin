@@ -1752,7 +1752,13 @@ ${priceHtml}
         // ── Helpers ───────────────────────────────────────────────────────────────────
         function setErr(id, msg) {
           const el = document.getElementById(id);
-          if (el) { el.textContent = ''; const d = document.createElement('div'); d.className = 'wtcw-error'; d.textContent = msg; el.appendChild(d); }
+          if (el) {
+            el.textContent = '';
+            const d = document.createElement('div');
+            d.className = 'wtcw-error';
+            d.textContent = msg;
+            el.appendChild(d);
+          }
         }
         function _escHtml(s) {
           return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

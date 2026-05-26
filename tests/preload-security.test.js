@@ -92,7 +92,9 @@ function invoke(channel) {
 
 // ─── describe / it helpers ────────────────────────────────────────────────
 
-function describe(name, fn) { fn(); }
+function describe(name, fn) {
+  fn();
+}
 
 function it(name, fn) {
   try {
@@ -100,7 +102,10 @@ function it(name, fn) {
     if (result && typeof result.then === 'function') {
       return result.then(
         () => console.log(`  ✓ ${name}`),
-        (e) => { console.error(`  ✗ ${name}: ${e.message}`); throw e; },
+        (e) => {
+          console.error(`  ✗ ${name}: ${e.message}`);
+          throw e;
+        },
       );
     }
     console.log(`  ✓ ${name}`);
@@ -156,45 +161,27 @@ describe('IPC allowlist — known production channels', () => {
 
 describe('IPC allowlist — sensitive channels are blocked', () => {
   it('rejects random unknown channel', async () => {
-    await assert.rejects(
-      () => invoke('wattcoin-evil-command'),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke('wattcoin-evil-command'), /not allowed from the renderer/);
   });
 
   it('rejects empty channel', async () => {
-    await assert.rejects(
-      () => invoke(''),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke(''), /not allowed from the renderer/);
   });
 
   it('rejects null channel', async () => {
-    await assert.rejects(
-      () => invoke(null),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke(null), /not allowed from the renderer/);
   });
 
   it('rejects undefined channel', async () => {
-    await assert.rejects(
-      () => invoke(undefined),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke(undefined), /not allowed from the renderer/);
   });
 
   it('rejects channel with path traversal', async () => {
-    await assert.rejects(
-      () => invoke('../wattcoin-evil'),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke('../wattcoin-evil'), /not allowed from the renderer/);
   });
 
   it('rejects channel with unexpected prefix', async () => {
-    await assert.rejects(
-      () => invoke('wattcoin-delete-all-wallets'),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke('wattcoin-delete-all-wallets'), /not allowed from the renderer/);
   });
 });
 
@@ -205,10 +192,7 @@ describe('IPC allowlist — exact match required (no substring)', () => {
   });
 
   it('wattcoin-send-without-approval is NOT allowed', async () => {
-    await assert.rejects(
-      () => invoke('wattcoin-send-without-approval'),
-      /not allowed from the renderer/,
-    );
+    await assert.rejects(() => invoke('wattcoin-send-without-approval'), /not allowed from the renderer/);
   });
 });
 
