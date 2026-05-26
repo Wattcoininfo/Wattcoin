@@ -30,12 +30,8 @@ const crypto = require('crypto');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const SELLER_USDC_ADDRESS = '0x0ca8cc23d85e5c988828076978c4ca65aa4293e8';
-const SALE_WTC_ADDRESS = 'wtc1qd6dqez6rvh3ak2xw9jtsz3h8na0ssyepjgec3t';
-const _REWARD_WTC_ADDRESS = 'wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn';
-
-// USDC on Ethereum mainnet
-const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
+const { SELLER_USDC_ADDRESS, SALE_WTC_ADDRESS, MINTER_ADDRESS, USDC_CONTRACT } = require('./protocol-constants');
+const _REWARD_WTC_ADDRESS = MINTER_ADDRESS;
 
 const FLUSH_THRESHOLD_WTC = 10_101; // flush when queued >= 10101 WTC
 const POLL_INTERVAL_MS = 10 * 60 * 1000; // check Etherscan every 10 minutes
@@ -44,14 +40,22 @@ const MATCH_TX_GRACE_MS = 5 * 60 * 1000; // allow small chain index / clock skew
 const MIN_BUY_WTC = 1;
 const ETHERSCAN_BASE = 'https://api.etherscan.io/v2/api';
 const ETHERSCAN_API_KEY = (() => {
+  // Priority 1: Dedicated user-provided key via secrets file
   try {
     const v = fs.readFileSync(path.join(os.homedir(), '.secrets', 'etherscan-api-key'), 'utf8').trim();
     if (v) return v;
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
-  // Public free-tier Etherscan API key — rate-limited but functional for all users.
-  // Operators may override via ~/.secrets/etherscan-api-key for a dedicated key.
+  // Priority 2: Environment variable
+  if (process.env.ETHERSCAN_API_KEY) return process.env.ETHERSCAN_API_KEY;
+  // Priority 3: Built-in shared free-tier key (rate-limited).
+  // This is a PUBLIC Etherscan API key — it is intentionally shipped in the
+  // source code so the sale payment watcher works out-of-the-box without
+  // requiring every user to register their own key.  For production deployments
+  // with high transaction volume, operators SHOULD configure a dedicated key
+  // via ~/.secrets/etherscan-api-key or ETHERSCAN_API_KEY to avoid rate limits.
+  console.warn(`[${_ts()}] [SaleQueue] Using built-in shared Etherscan API key (rate-limited). For production, set a dedicated key via ~/.secrets/etherscan-api-key or ETHERSCAN_API_KEY`);
   return Buffer.from('SEhWMUNVRlVJRUgxRjMyVjlEQlNYMlEzQVVKRkRDQVJTWg==', 'base64').toString();
 })();
 const ETHERSCAN_REQUEST_RETRIES = 2;
@@ -73,6 +77,7 @@ const SALE_TIERS = [
 let _dataDir = null; // set via init()
 let _wtcNode = null; // set via init()
 let _pollTimer = null;
+let _initialPollTimer = null;
 let _orders = []; // in-memory array, persisted to disk
 let _seenTxHashes = new Set(); // USDC tx hashes already processed
 let _unmatchedTxs = []; // [{hash, usdcValue, fromEthAddr, receivedAtMs}] — unmatched payments awaiting an order
@@ -147,6 +152,10 @@ function shutdown() {
     clearInterval(_pollTimer);
     _pollTimer = null;
   }
+  if (_initialPollTimer) {
+    clearTimeout(_initialPollTimer);
+    _initialPollTimer = null;
+  }
   if (_reconcileTimer) {
     clearInterval(_reconcileTimer);
     _reconcileTimer = null;
@@ -190,7 +199,7 @@ function _saveOrders() {
     fs.writeFileSync(tmp, JSON.stringify(_orders, null, 2), 'utf8');
     fs.renameSync(tmp, dest);
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -209,7 +218,7 @@ function _saveSeenHashes() {
   try {
     fs.writeFileSync(_seenHashesPath(), JSON.stringify([..._seenTxHashes]), 'utf8');
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -228,7 +237,7 @@ function _saveUnmatchedTxs() {
   try {
     fs.writeFileSync(_unmatchedTxsPath(), JSON.stringify(_unmatchedTxs, null, 2), 'utf8');
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -455,7 +464,7 @@ async function cancelOrder(orderId) {
     try {
       await _postServerCancelOrder(orderId, o.ownerProof || null);
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
     }
   }
   return { ok: true };
@@ -566,7 +575,7 @@ function getSoldWTC() {
       const remaining = (bal.confirmed || 0) + (bal.unmatured || 0);
       onChainSold = Math.max(0, SALE_TOTAL - Math.min(SALE_TOTAL, remaining));
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
     }
   }
   // 2. Matched orders — only count orders where USDC receipt is confirmed on-chain.
@@ -924,7 +933,7 @@ function _refreshPublicSaleStatus() {
             _serverSoldWtc = Math.max(0, Math.min(SALE_TOTAL, Number(body.sold) || 0));
           }
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
         }
         finish();
       });
@@ -1164,7 +1173,8 @@ function _startPoller() {
   if (_pollTimer) clearInterval(_pollTimer);
   _pollTimer = setInterval(_pollUsdc, POLL_INTERVAL_MS);
   // Run once shortly after startup
-  setTimeout(_pollUsdc, 10_000);
+  if (_initialPollTimer) clearTimeout(_initialPollTimer);
+  _initialPollTimer = setTimeout(_pollUsdc, 10_000);
 
   // Reconciliation: every 60 s, if any unmatched txs exist, force a sync + retry.
   // This guards against transient server-sync failures in the main poll cycle.
@@ -1175,7 +1185,7 @@ function _startPoller() {
       await _syncServerOrders();
       _retryUnmatched();
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
     }
   }, 60_000);
 
@@ -1192,7 +1202,7 @@ async function _pollUsdc() {
   try {
     await _syncServerOrders();
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
   // Retry again after server sync in case new orders were just mirrored
   _retryUnmatched();
@@ -1525,7 +1535,7 @@ function _matchPayment(txHash, usdcValue, fromEthAddr, txObservedAtMs = Date.now
       try {
         await _syncServerOrders();
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
       }
       _retryUnmatched();
     }, 30_000);
@@ -1612,7 +1622,7 @@ function onBlockConfirmed() {
     try {
       txStatus = _wtcNode ? _wtcNode.getTxStatus(order.fulfilledTxId).status : 'unknown';
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
     }
     if (txStatus === 'confirmed') {
       order.status = 'fulfilled';
@@ -1695,12 +1705,12 @@ async function refreshSoldWTC() {
   try {
     await _refreshPublicSaleStatus();
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
   try {
     await _syncServerOrders();
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[SaleQueue] Caught:', String(_.message || _).slice(0, 80));
   }
   return getSoldWTC();
 }

@@ -47,7 +47,7 @@ function stopCpuWorkers() {
       worker.postMessage({ type: 'stop' });
       worker.terminate();
     } catch (_) {
-      // Best effort.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[HwLoad] Caught:', String(_.message || _).slice(0, 80));
     }
   }
   cpuWorkers = [];
@@ -155,7 +155,7 @@ function stopMemoryPressure() {
     try {
       ddrWorker.terminate();
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[HwLoad] Caught:', String(_.message || _).slice(0, 80));
     }
     ddrWorker = null;
   }

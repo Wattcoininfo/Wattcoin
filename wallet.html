@@ -499,7 +499,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.276 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.277 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;
@@ -1752,7 +1752,7 @@ ${priceHtml}
         // ── Helpers ───────────────────────────────────────────────────────────────────
         function setErr(id, msg) {
           const el = document.getElementById(id);
-          if (el) el.innerHTML = `<div class="wtcw-error">${msg}</div>`;
+          if (el) { el.textContent = ''; const d = document.createElement('div'); d.className = 'wtcw-error'; d.textContent = msg; el.appendChild(d); }
         }
         function _escHtml(s) {
           return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

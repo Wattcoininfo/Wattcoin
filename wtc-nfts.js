@@ -34,7 +34,7 @@ const { txHash, verifySignature } = require('./wtc-address');
 
 // ─── Collection constants ─────────────────────────────────────────────────────
 
-const MINTER_ADDRESS = 'wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn'; // Foundation Reserve
+const { MINTER_ADDRESS } = require('./protocol-constants');
 
 const NFT_COLLECTION = (() => {
   const tokens = [];

@@ -40,7 +40,7 @@ const http = require('http');
 
 // Tier-0 pre-mine staking rewards pool address.
 // Rewards are paid OUT from this address to stakers.
-const STAKING_POOL_ADDRESS = 'wtc1q7t624zx7px3ypd3u6zaz0hr7knpa0aun7d56gv';
+const { STAKING_POOL_ADDRESS } = require('./protocol-constants');
 
 // Trigger a block flush when this many WTC are pending in the queue.
 const FLUSH_THRESHOLD_WTC = 10_000;
@@ -101,14 +101,14 @@ function _loadOrCreateQueueSecret() {
       }
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[StakingQueue] Caught:', String(_.message || _).slice(0, 80));
   }
   _queueSecret = crypto.randomBytes(32).toString('hex');
   try {
     fs.mkdirSync(_dataDir, { recursive: true });
     fs.writeFileSync(_secretPath(), JSON.stringify({ secret: _queueSecret }), 'utf8');
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[StakingQueue] Caught:', String(_.message || _).slice(0, 80));
   }
   return _queueSecret;
 }
@@ -155,7 +155,7 @@ function _saveEntries() {
     fs.writeFileSync(tmp, JSON.stringify({ entries: _entries, _sig: sig }, null, 2), 'utf8');
     fs.renameSync(tmp, dest);
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[StakingQueue] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 

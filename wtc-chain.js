@@ -185,7 +185,7 @@ class Chain {
         console.log('[Chain] Migrated chain file to HMAC-signed format.');
       }
     } catch (_) {
-      /* no chain file yet */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Chain] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 
@@ -211,7 +211,7 @@ class Chain {
     try {
       fs.writeFileSync(this._file, '', 'utf8');
     } catch (_) {
-      /* ignore */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Chain] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 

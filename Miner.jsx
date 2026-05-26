@@ -178,8 +178,19 @@ function parseBestWattage(text) {
   return best;
 }
 
-// Brave Answers AI config
-const BRAVE_ANSWERS_KEY = atob('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA==');
+// Brave Answers AI config — used as the primary GPU/CPU TDP data source for all hardware.
+// Priority 1: User-configured key via localStorage key 'braveAnswersKey' (settable in settings).
+// Priority 2: Built-in shared Brave Answers subscription token.
+// This token is intentionally shipped so TDP lookups work out-of-the-box for all hardware.
+// Operators may set their own key via localStorage.setItem('braveAnswersKey', '...') for dedicated quota.
+const BRAVE_ANSWERS_KEY = (() => {
+  try {
+    const userKey = localStorage.getItem('braveAnswersKey');
+    if (userKey) return userKey;
+  } catch (_) { /* localStorage unavailable */ }
+  if (process.env.REACT_APP_BRAVE_ANSWERS_KEY) return process.env.REACT_APP_BRAVE_ANSWERS_KEY;
+  return atob('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA==');
+})();
 const BRAVE_ANSWERS_URL = 'https://api.search.brave.com/res/v1/chat/completions';
 
 // Fetch GPU TDP via Brave Answers AI (first option for all models)
@@ -1002,7 +1013,7 @@ async function runWebGLBenchmark() {
       document.body.appendChild(domCanvas);
       domAttached = true;
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
     const gl = domCanvas.getContext('webgl2');
     if (!gl) return { error: 'GPU-E5: no webgl2 context' };
@@ -1015,7 +1026,7 @@ async function runWebGLBenchmark() {
       try {
         document.body.removeChild(domCanvas);
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     }
   }
@@ -1046,7 +1057,7 @@ function runGpuProbe(seed, size, shaderIterations) {
       document.body.appendChild(canvas);
       attached = true;
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
 
     // Prefer WebGL2 for the integer-shader path (item 3).
@@ -1177,7 +1188,7 @@ function runGpuProbe(seed, size, shaderIterations) {
       try {
         canvas.parentNode.removeChild(canvas);
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     }
   }
@@ -1215,7 +1226,7 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
       document.body.appendChild(canvas);
       attached = true;
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
 
     const gl = canvas.getContext('webgl2');
@@ -1402,7 +1413,7 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
         gl.deleteShader(fsB);
       }
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
 
     return { proofHash: (h >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed), gpuScore, benchError };
@@ -1414,7 +1425,7 @@ function runGpuBenchmarkProof(seed, size, shaderIterations) {
       try {
         canvas.parentNode.removeChild(canvas);
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     }
   }
@@ -2115,7 +2126,7 @@ export default function Miner({
         return fresh;
       }
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
     return {};
   });
@@ -2138,7 +2149,7 @@ export default function Miner({
         return fresh;
       }
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
     return {};
   });
@@ -2153,7 +2164,7 @@ export default function Miner({
     try {
       sessionStorage.removeItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY);
     } catch (_) {
-      // Ignore storage failures.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
     setBenchmarkState((prev) => ({
       ...prev,
@@ -2209,7 +2220,7 @@ export default function Miner({
           setElectricityPriceSource(res.source || null);
         }
       } catch (_) {
-        /* non-fatal — UI just shows nothing */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     };
     fetchPrice();
@@ -2246,7 +2257,7 @@ export default function Miner({
                   trustScoreRef.current = seeded.trustScore;
                 }
               } catch (_) {
-                /* istanbul ignore next */
+                if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
               }
             } else {
               if (typeof auth.trustScore === 'number') {
@@ -2261,7 +2272,7 @@ export default function Miner({
           }
         }
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2298,7 +2309,7 @@ export default function Miner({
           void holdResult;
         }
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
 
       if (mining) {
@@ -2311,7 +2322,7 @@ export default function Miner({
             await window.wattcoinHardware.setHardwareLoad(0);
           }
         } catch (_) {
-          // Best effort stop when hold is activated.
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         setLog((log) => [
           {
@@ -2356,7 +2367,7 @@ export default function Miner({
             await window.wattcoinHardware.setHardwareLoad(benchLoadPct);
           }
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         // Wait for the full 3-second hardware load ramp to complete before measuring.
         await new Promise((r) => setTimeout(r, 3200));
@@ -2408,7 +2419,7 @@ export default function Miner({
             // localStorage fallback (browser/dev mode).
             let secret = localStorage.getItem(FINGERPRINT_SECRET_STORAGE_KEY);
             if (!secret) {
-              secret = `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+              const _buf = new Uint32Array(2); window.crypto.getRandomValues(_buf); secret = `${_buf[0].toString(36)}-${_buf[1].toString(36)}`;
               localStorage.setItem(FINGERPRINT_SECRET_STORAGE_KEY, secret);
             }
             const expectedSig = simpleHash(`${secret}|${fingerprintHash}`);
@@ -2599,7 +2610,7 @@ export default function Miner({
               issues.push('gpu-bench: ' + gpuBench.error);
             }
           } catch (_) {
-            // WebGL unavailable or context lost — skip GPU calibration silently
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
         }
         const declaredGpus =
@@ -2667,7 +2678,7 @@ export default function Miner({
                 .catch(() => null);
             }
           } catch (_) {
-            /* istanbul ignore next */
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
         }
 
@@ -2722,12 +2733,12 @@ export default function Miner({
                       .catch(() => null);
                   }
                 } catch (_) {
-                  /* istanbul ignore next */
+                  if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
                 }
               }
             }
           } catch (_) {
-            /* istanbul ignore next */
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
         }
 
@@ -2857,7 +2868,7 @@ export default function Miner({
           localStorage.setItem(BENCH_BASELINE_GPS_KEY, '0');
           localStorage.setItem(BENCH_BASELINE_SIG_KEY, newSig);
         } catch (_) {
-          // Ignore persistence failures.
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
 
         // Benchmark-derived power cap: conservative on first run, raises gradually after 10 consecutive underestimates.
@@ -2980,7 +2991,7 @@ export default function Miner({
             }
           }
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
 
         const elapsedMs = performance.now() - startedAt;
@@ -3000,7 +3011,7 @@ export default function Miner({
             }
           }
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         const totalCpuWorkOpsPerSec = cpuOpsPerSec + bgCpuOpsPerSec;
         const totalMemWorkMBps = memoryMBps + bgMemMBps;
@@ -3092,7 +3103,7 @@ export default function Miner({
         try {
           sessionStorage.setItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY, '1');
         } catch (_) {
-          // Ignore storage failures.
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
 
         setLog((log) => [
@@ -3115,7 +3126,7 @@ export default function Miner({
         try {
           sessionStorage.setItem(STARTUP_BENCHMARK_DONE_STORAGE_KEY, '1');
         } catch (_) {
-          // Ignore storage failures.
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         setLog((log) => [
           {
@@ -3138,7 +3149,7 @@ export default function Miner({
               await window.wattcoinHardware.setHardwareLoad(0);
             }
           } catch (_) {
-            /* istanbul ignore next */
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
         }
       }
@@ -3243,7 +3254,7 @@ export default function Miner({
                 probeChain: proofData && proofData.probeChain ? proofData.probeChain : null, // Tier 4e coverage ratio
               });
             } catch (_) {
-              // Keep mining even if immediate balance refresh fails.
+              if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
             }
           }
           setLog((log) => [
@@ -3288,11 +3299,11 @@ export default function Miner({
           try {
             sessionStorage.setItem('wattcoinHardware', JSON.stringify(hw));
           } catch (_) {
-            /* istanbul ignore next */
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
         }
       } catch (_) {
-        // Hardware detection failed — keep existing state; will retry on next render cycle.
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     })();
     return () => {
@@ -3307,7 +3318,7 @@ export default function Miner({
         String(Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0))),
       );
     } catch (_) {
-      // Ignore storage failures.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
   }, [loadPercent]);
 
@@ -3708,7 +3719,7 @@ export default function Miner({
           }
         }
       } catch (_) {
-        // Probe errors must never interrupt mining.
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       } finally {
         inFlight = false;
       }
@@ -3784,7 +3795,7 @@ export default function Miner({
           return [...newEntries, ...prev].sort((a, b) => b.ts - a.ts).slice(0, 150);
         });
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     }
 
@@ -4509,7 +4520,7 @@ export default function Miner({
           try {
             localStorage.setItem(ONLINE_TDP_CACHE_KEY, JSON.stringify(next));
           } catch (_) {
-            /* istanbul ignore next */
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
           return next;
         });
@@ -4552,7 +4563,7 @@ export default function Miner({
           try {
             localStorage.setItem(ONLINE_CPU_TDP_CACHE_KEY, JSON.stringify(next));
           } catch (_) {
-            /* istanbul ignore next */
+            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
           }
           return next;
         });
@@ -4607,7 +4618,7 @@ export default function Miner({
         }
       }
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
     setTdpFetchingCount((n) => n + 1);
     (async () => {
@@ -4617,7 +4628,7 @@ export default function Miner({
         try {
           localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry));
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         if (tdp !== null) {
           setLaptopLivePowerW(tdp);
@@ -5132,7 +5143,7 @@ export default function Miner({
         try {
           localStorage.setItem(HARDWARE_CARD_WIDTH_KEY, String(w));
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         setSavedHwCardWidth(w);
       }
@@ -5198,7 +5209,7 @@ export default function Miner({
             }
           }
         } catch (_) {
-          // Ignore telemetry read failures for surprise-benchmark gating.
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
       }
 
@@ -5288,7 +5299,7 @@ export default function Miner({
             if (roundWh > 0) roundWhStr = ` (round so far: ${fmtEnergy(roundWh)})`;
           }
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         setLog((log) => [
           {
@@ -5313,7 +5324,7 @@ export default function Miner({
             if (roundWh > 0) roundWhStr = ` (contributed ${fmtEnergy(roundWh)} this round)`;
           }
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         setLog((log) => [
           {
@@ -5394,7 +5405,7 @@ export default function Miner({
           }
         }
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
 
       // Accumulate available mining energy from power over elapsed time.
@@ -5491,7 +5502,7 @@ export default function Miner({
       state.measuredFrameMs = measuredFrameMs;
       state.initialized = true;
     } catch (_) {
-      // WebGL unavailable — GPU load won't run, no blocking error.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
     }
   }, [allowGpuWorkloads]);
 
@@ -5742,7 +5753,7 @@ export default function Miner({
         try {
           localStorage.removeItem(HW_HOLD_STORAGE_KEY);
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
       }
     };
@@ -5766,7 +5777,7 @@ export default function Miner({
           await window.wattcoinHardware.setHardwareLoad(0);
         }
       } catch (_) {
-        // Best effort.
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
       if (!cancelled) {
         setLog((log) => [
@@ -5809,7 +5820,7 @@ export default function Miner({
           });
         }
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     };
     fetch();
@@ -5831,7 +5842,7 @@ export default function Miner({
         const res = await hw.invoke('wattcoin-get-wallet-readiness');
         if (!cancelled && res) setChainReadiness(res);
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     };
     fetchReadiness();
@@ -5854,7 +5865,7 @@ export default function Miner({
           setSharedRoundTotalWh(Math.max(0, Number(res.totalWh) || 0));
         }
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
       }
     };
     fetchRoundSummary();
@@ -6797,7 +6808,7 @@ export default function Miner({
                       await window.wattcoinHardware.setHardwareLoad(0);
                     }
                   } catch (_) {
-                    // Ignore stop-load errors on manual stop action.
+                    if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
                   }
                 }}
                 disabled={!mining}

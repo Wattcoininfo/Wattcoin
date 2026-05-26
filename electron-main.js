@@ -76,7 +76,7 @@ function getAppDisplayVersion() {
   try {
     packageVersion = String(require('./package.json').version || '').trim();
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   if (!app.isPackaged) {
@@ -127,14 +127,7 @@ const _WALLET_READINESS_DETAILED_RETRY_INTERVAL_MS = 5_000;
 const _WALLET_ADDRESS_CACHE_MS = 30000;
 const WALLET_SYNC_STATE_REFRESH_INTERVAL_MS = 5000;
 
-// Addresses permitted to initiate withdrawals.
-// Hardcoded in the bundle — cannot be overridden by any config file.
-const ALLOWED_SENDER_ADDRESSES = new Set([
-  'wtc1q073k2x8qvgd6xf7jvq64zkngyh7m7qdt4vvmrn',
-  'wtc1qd6dqez6rvh3ak2xw9jtsz3h8na0ssyepjgec3t',
-  'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw',
-  'wtc1q7t624zx7px3ypd3u6zaz0hr7knpa0aun7d56gv',
-]);
+const { ALLOWED_SENDER_ADDRESSES } = require('./protocol-constants');
 const ENDPOINT_RATE_LIMITS = {
   'wattcoin-mine-block': { windowMs: 60_000, max: 12, lockMs: 5 * 60_000 },
   'wattcoin-ledger-add-contribution': { windowMs: 60_000, max: 240, lockMs: 2 * 60_000 },
@@ -176,7 +169,7 @@ function loadRateLocks() {
       }
     }
   } catch (_) {
-    // File absent or corrupt — start with clean state.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -187,7 +180,7 @@ function saveRateLock(key, lockedUntil) {
     try {
       existing = JSON.parse(fs.readFileSync(filePath, 'utf8')) || {};
     } catch (_) {
-      /* file absent is fine */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     // Prune expired entries while saving.
     const nowMs = Date.now();
@@ -199,7 +192,7 @@ function saveRateLock(key, lockedUntil) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(fresh), 'utf8');
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -326,7 +319,7 @@ function loadHwAuthState() {
           }
         }
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     }
     if (!recovered) {
@@ -349,7 +342,7 @@ function saveHwAuthState() {
     };
     fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   // Write a DPAPI-encrypted backup of trust state into attestation-state.json so
@@ -368,7 +361,7 @@ function saveHwAuthState() {
       atRaw.encryptedTrustBackup = encrypted;
       fs.writeFileSync(atPath, JSON.stringify(atRaw, null, 2), 'utf8');
     } catch (_) {
-      /* non-fatal */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 }
@@ -412,7 +405,7 @@ async function resolveOsHardwareIdentity() {
         .filter(Boolean);
     }
   } catch (_) {
-    /* GPU info unavailable — we'll skip GPU verification */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   // If Electron GPU info didn't return useful model names, try systeminformation.
@@ -423,7 +416,7 @@ async function resolveOsHardwareIdentity() {
         gpuModels = graphics.controllers.map((c) => (c.model || c.name || '').trim()).filter(Boolean);
       }
     } catch (_) {
-      /* non-fatal */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 
@@ -439,7 +432,7 @@ async function resolveOsHardwareIdentity() {
     if (/notebook|laptop|portable/i.test(chassisType)) deviceType = 'Laptop';
     else if (/server/i.test(chassisType)) deviceType = 'Server';
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   // Additional laptop detection: battery presence is a strong signal.
@@ -448,7 +441,7 @@ async function resolveOsHardwareIdentity() {
       const battery = await si.battery();
       if (battery && battery.hasBattery) deviceType = 'Laptop';
     } catch (_) {
-      /* non-fatal */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 
@@ -473,7 +466,7 @@ async function resolveOsHardwareIdentity() {
       if (!vmType) vmType = mfr || model;
     }
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   // Tertiary: CPU model string hints (some hypervisors leave traces).
@@ -679,7 +672,7 @@ function saveHwFingerprint(data) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -687,7 +680,7 @@ function clearHwFingerprint() {
   try {
     fs.unlinkSync(getHwFingerprintPath());
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -777,7 +770,7 @@ function saveBenchmarkHistory(history) {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -785,7 +778,7 @@ function clearBenchmarkHistory() {
   try {
     fs.unlinkSync(getBenchmarkHistoryPath());
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -844,7 +837,7 @@ function writeStartupTrace(event, details = {}) {
         fs.writeFileSync(filePath, '', 'utf8');
       }
     } catch (_) {
-      /* file not yet created — fine */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     const line = JSON.stringify({
       ts: new Date().toISOString(),
@@ -853,7 +846,7 @@ function writeStartupTrace(event, details = {}) {
     });
     fs.appendFileSync(filePath, `${line}\n`, 'utf8');
   } catch (_) {
-    // Logging must never disrupt node startup flow.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -1172,7 +1165,7 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
       const cached = new URL(autoDetectedPublicPeerUrl);
       if (Number(cached.port) === Number(settings.listenPort)) return autoDetectedPublicPeerUrl;
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     autoDetectedPublicPeerUrl = '';
   }
@@ -1191,7 +1184,7 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
         autoDetectedPublicPeerUrl = peerUrl;
         return peerUrl;
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     }
     return previousUrl || '';
@@ -1246,7 +1239,7 @@ function getLocalPeerHosts() {
       }
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   return hosts;
 }
@@ -1274,7 +1267,7 @@ function getLocalPeerIpv4InterfaceEntries() {
       }
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   return entries;
 }
@@ -1418,7 +1411,7 @@ function scheduleDiscoveredSeedPeerCacheSave() {
       fs.mkdirSync(path.dirname(getDiscoveredSeedPeerCachePath()), { recursive: true });
       fs.writeFileSync(getDiscoveredSeedPeerCachePath(), JSON.stringify({ peers }, null, 2), 'utf8');
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }, 250);
 }
@@ -1581,7 +1574,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings()) 
       distinctPeerKeys.add(peerKey);
       onlinePeers.push(peerUrl);
     } catch (_) {
-      // Ignore offline peers here; probe flow will fall back to local attestation.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   };
 
@@ -1864,7 +1857,7 @@ function buildReverseTunnelCoordinatorCandidates(settings = getLedgerNetworkSett
       if (parsed.pathname && parsed.pathname !== '/') continue;
       candidates.push(normalizePeerUrl(peerUrl));
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
   return Array.from(new Set(candidates.filter(Boolean)));
@@ -1930,12 +1923,12 @@ function destroyReverseTunnelSession(session, reason = 'closed') {
   try {
     clearInterval(session.pingTimer);
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   try {
     session.socket.close();
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -2072,7 +2065,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
       try {
         socket.close();
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
       return;
     }
@@ -2095,7 +2088,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         try {
           socket.send(JSON.stringify({ type: 'ping', nowMs: Date.now() }));
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
         }
       }, REVERSE_TUNNEL_PING_INTERVAL_MS),
     };
@@ -2141,7 +2134,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
       try {
         socket.destroy();
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     }
   });
@@ -2159,7 +2152,7 @@ function stopReverseTunnelCoordinator() {
     try {
       reverseTunnelWss.close();
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     reverseTunnelWss = null;
   }
@@ -2185,7 +2178,7 @@ function stopManagedReverseTunnelClient() {
     try {
       reverseTunnelClientState.socket.close();
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     reverseTunnelClientState.socket = null;
   }
@@ -2284,7 +2277,7 @@ async function forwardReverseTunnelRequestToLocalNode(socket, message) {
   try {
     socket.send(JSON.stringify({ type: 'http-response', requestId, ...responsePayload }));
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -2301,7 +2294,7 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
     try {
       socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     return;
   }
@@ -2385,7 +2378,7 @@ function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerN
       try {
         socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     }, REVERSE_TUNNEL_PING_INTERVAL_MS);
   });
@@ -2454,7 +2447,7 @@ function ensureManagedReverseTunnelClient(settings = getLedgerNetworkSettings())
       return;
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   writeStartupTrace('reverse-tunnel.enabled', {
     coordinatorUrl: obfuscatePublicPeerUrl(coordinatorUrl),
@@ -2478,13 +2471,13 @@ function getPeerPrivacySecret() {
     const secret = getDeviceIdentitySecret();
     if (secret) return resolvePeerPrivacySecret(secret);
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   try {
     const identity = loadOrCreateDeviceIdentity();
     return resolvePeerPrivacySecret(getDeviceIdentitySecret(), identity && identity.deviceId);
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   return '';
 }
@@ -2528,7 +2521,7 @@ async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
         forgetDiscoveredPeersByIdentity(peerIdentity, { keepUrl });
       }
     } catch (_) {
-      // requestPeerJson already records failures and ban counters.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 }
@@ -2658,7 +2651,7 @@ function loadConsumedProofs() {
       }
     }
   } catch (_) {
-    // File absent or corrupt — start with empty replay cache.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -2675,7 +2668,7 @@ function saveConsumedProofs() {
     const sig = computeHwAuthSig(obj);
     fs.writeFileSync(filePath, JSON.stringify({ ...obj, _sig: sig }), 'utf8');
   } catch (_) {
-    /* non-fatal */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 let remoteProfileFeed = {
@@ -2709,7 +2702,7 @@ function loadPolicyAnchorState() {
       };
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -2719,7 +2712,7 @@ function _savePolicyAnchorState() {
     fs.mkdirSync(path.dirname(fp), { recursive: true });
     fs.writeFileSync(fp, JSON.stringify(policyAnchorState, null, 2), 'utf8');
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -2937,7 +2930,7 @@ function loadCachedRemoteProfiles() {
       };
     }
   } catch (_) {
-    // Ignore corrupted cache.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -2953,7 +2946,7 @@ function saveRemoteProfilesToCache(state) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(cachePayload, null, 2), 'utf8');
   } catch (_) {
-    // Do not fail attestation flow on cache write errors.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -3161,7 +3154,7 @@ function saveAttestationState() {
     }
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
   } catch (_) {
-    // Do not block mining flow on attestation persistence failures.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -3705,7 +3698,7 @@ async function logAbuseEvent(event) {
     await fsp.mkdir(path.dirname(getAbuseLogFilePath()), { recursive: true });
     await fsp.appendFile(getAbuseLogFilePath(), `${JSON.stringify(payload)}\n`, 'utf8');
   } catch (_) {
-    // Do not block app flow on log write failures.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 }
 
@@ -4132,7 +4125,7 @@ async function collectOpsSnapshotInner() {
     await fsp.mkdir(path.dirname(getOpsMetricsFilePath()), { recursive: true });
     await fsp.writeFile(getOpsMetricsFilePath(), JSON.stringify(snapshot, null, 2), 'utf8');
   } catch (_) {
-    // Best effort persistence only.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   return snapshot;
 }
@@ -4443,7 +4436,7 @@ walletSyncEmitter.on('changed', (snapshot) => {
     try {
       win.webContents.send('wattcoin-wallet-state', snapshot);
     } catch (_) {
-      // Best-effort renderer fan-out only.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 });
@@ -4467,7 +4460,7 @@ function _parseGeneratedBlockHash(minedOutput) {
       return parsed[0];
     }
   } catch (_) {
-    // Fallback below for non-JSON output.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   return raw;
 }
@@ -4563,7 +4556,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         if (address) walletAddressCache = { address, at: Date.now() };
       }
     } catch (_) {
-      /* bench will still run; proof will be flagged as unverified */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
   const benchRequest = { ...(request || {}), walletAddress: walletAddressCache.address || '' };
@@ -5065,7 +5058,7 @@ function getDeviceIdentitySecret() {
       return _deviceIdentitySecret;
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   return '';
 }
@@ -5093,7 +5086,7 @@ function getOrCreateWalletEncryptionKey() {
       }
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   // Generate a new key
@@ -5109,7 +5102,7 @@ function getOrCreateWalletEncryptionKey() {
       _walletEncryptionKey = newKey;
       return _walletEncryptionKey;
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
 
@@ -5125,7 +5118,7 @@ function getOrCreateWalletEncryptionKey() {
       return _walletEncryptionKey;
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   // Last resort — random key, lost on restart (wallet will be re-created). Still better than plaintext.
@@ -5144,7 +5137,7 @@ function loadOrCreateDeviceIdentity() {
       identity = JSON.parse(raw);
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
   if (!identity || !identity.secret || typeof identity.secret !== 'string') {
@@ -5645,7 +5638,8 @@ const SELLER='${safeAddr}';
 const CONTRACT='${USDC_CONTRACT}';
 const USDC=${usdcRequired};
 const EIP681='${eip681}';
-function show(type,msg,isHtml){const s=document.getElementById('status');s.className='status '+type;if(isHtml){s.innerHTML=msg;}else{s.textContent=msg;}}
+function show(type,msg){const s=document.getElementById('status');s.className='status '+type;s.textContent=msg;}
+function showSuccess(hash){const s=document.getElementById('status');s.className='status ok';s.textContent='';const t=document.createElement('div');t.textContent='\u2713 Transaction submitted!';const h=document.createElement('small');h.style.wordBreak='break-all';h.style.color='#a7ffb0';h.textContent=hash.replace(/[^0-9a-fA-Fx]/g,'');const d=document.createElement('small');d.textContent='WTC will be delivered to your wallet once queued.';s.appendChild(t);s.appendChild(h);s.appendChild(d);}
 function encData(to,amt){
   const data='0xa9059cbb'+to.replace(/^0x/,'').toLowerCase().padStart(64,'0')+BigInt(Math.round(amt*1000000)).toString(16).padStart(64,'0');
   return data;
@@ -5668,7 +5662,7 @@ async function pay(){
     }
     btn.textContent='Confirm in wallet\u2026';
     const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[{from:accounts[0],to:CONTRACT,value:'0x0',data:encData(SELLER,USDC)}]});
-    show('ok','&#10003; Transaction submitted!<br><small style="word-break:break-all;color:#a7ffb0">'+hash.replace(/[^0-9a-fA-Fx]/g,'')+'</small><br><small>WTC will be delivered to your wallet once queued.</small>',true);
+    showSuccess(hash);
     btn.textContent='Payment Submitted';
   }catch(e){
     if(e&&e.code===4001){show('err','Transaction cancelled.');btn.disabled=false;btn.textContent='Pay with Wallet Extension';}
@@ -5686,7 +5680,7 @@ document.getElementById('btn-ext').addEventListener('click',pay);
         try {
           server.close();
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
         }
       }, 3000);
     });
@@ -5835,7 +5829,7 @@ ipcMain.handle('wattcoin-staking-stake', (_event, { fromAddress, wtcAmount }) =>
         return { ok: false, error: `Insufficient balance. You have ${available.toLocaleString()} WTC in your wallet.` };
       }
     } catch (_) {
-      /* node not ready — allow through and let queue handle it */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
   return stakingQueue.stakeWtc({ fromAddress: addr, wtcAmount: amount });
@@ -6329,7 +6323,7 @@ function loadBundledSeedPeers() {
               const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
               if (decoded) return normalizePeerUrl(`http://${decoded}`);
             } catch (_) {
-              /* istanbul ignore next */
+              if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
             }
           }
           return normalizePeerUrl(rawUrl);
@@ -7055,7 +7049,7 @@ async function discoverPeersOnLocalSubnets(httpPort, settings = getLedgerNetwork
           });
           found += 1;
         } catch (_) {
-          /* istanbul ignore next */
+          if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
         }
       }
     });
@@ -7115,7 +7109,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
         rememberDiscoveredPeer(peerUrl, { source: 'beacon', seenAtMs: Date.now() });
       }
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   });
 
@@ -7149,7 +7143,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
       sock.setMulticastTTL(1);
       sock.setMulticastLoopback(true); // receive own beacons (useful for single-machine testing)
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     console.log(
       `[PeerDiscovery] Listening for peers on UDP ${PEER_DISCOVERY_PORT}${joinedGroups > 0 ? ` across ${joinedGroups} interface(s)` : ''}`,
@@ -7192,7 +7186,7 @@ function stopPeerDiscovery() {
     try {
       peerDiscoverySocket.close();
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     peerDiscoverySocket = null;
   }
@@ -7633,7 +7627,7 @@ function stopLedgerNetworkServer() {
   try {
     ledgerNetworkServer.close();
   } catch (_) {
-    // Best-effort shutdown.
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   ledgerNetworkServer = null;
 }
@@ -8070,7 +8064,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
     try {
       stopHardwareLoad();
     } catch (_) {
-      /* istanbul ignore next */
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     await fsp.mkdir(walletDir, { recursive: true });
     await fsp.writeFile(walletFilePath, walletDat);
@@ -8104,7 +8098,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
         walletAddressCache = { address: restoredPrimary || '', at: restoredPrimary ? Date.now() : 0 };
         if (restoredPrimary) setCoordinatorIdentityKey(restoredPrimary);
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     } catch (reinitErr) {
       console.error('[RestoreBackup] Failed to re-init WTC node:', reinitErr && reinitErr.message);
@@ -8246,7 +8240,7 @@ function startLedgerReconcileLoop() {
       const blockHeight = await getCurrentBlockHeight();
       roundLedger.syncMaturity(blockHeight);
     } catch (_) {
-      // Best effort: node may be starting up or temporarily unavailable.
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }, LEDGER_RECONCILE_INTERVAL_MS);
 }
@@ -8497,7 +8491,7 @@ app.whenReady().then(() => {
         }
         configurePhysicalCores(physical);
       } catch (_) {
-        // Best effort; controller fallback remains logical core count.
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     })
     .catch(() => {}); // best-effort; controller falls back to logical core count
@@ -8518,7 +8512,7 @@ app.whenReady().then(() => {
       hwAuthority.rollingJitterMean = _hist.jitterSamples.reduce((a, b) => a + b, 0) / _hist.jitterSamples.length;
     }
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   // Generate unique per-machine RPC credentials on first launch.
   // The bundled config ships with defaults (user/pass); if we still see those,
@@ -8533,7 +8527,7 @@ app.whenReady().then(() => {
       try {
         localCfg = JSON.parse(fs.readFileSync(localPath, 'utf8'));
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
       const currentUser = String(localCfg.rpcUser || getRuntimeConfig().rpcUser || '');
       const currentPass = String(localCfg.rpcPassword || getRuntimeConfig().rpcPassword || '');
@@ -8592,7 +8586,7 @@ app.whenReady().then(() => {
   try {
     loadOrCreateDeviceIdentity();
   } catch (_) {
-    /* istanbul ignore next */
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
   try {
     persistDevPeerPrivacyRecoveryKey();
@@ -8896,7 +8890,7 @@ if (app.isPackaged) {
       try {
         w.webContents.send('wattcoin-update-downloaded', { version: info.version });
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     });
   });
@@ -8921,12 +8915,12 @@ if (app.isPackaged) {
       try {
         win.removeAllListeners('close');
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
       try {
         win.close();
       } catch (_) {
-        /* istanbul ignore next */
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     });
 
