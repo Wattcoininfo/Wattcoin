@@ -20,7 +20,8 @@ const { txHash, verifySignature } = require('./wtc-address');
 const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
 const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
 
-const PASS_THRESHOLD = 71;
+const FALLBACK_PASS_THRESHOLD = 71;
+const TOTAL_POSSIBLE_WEIGHT = 140;
 const MAX_VOTE_DURATION_MS = 10 * 7 * 24 * 60 * 60 * 1000;
 const VOTE_DURATION_DEFAULT_WEEKS = 2;
 const VOTE_DURATION_MIN_WEEKS = 2;
@@ -232,14 +233,37 @@ function _isImmutablePrincipleViolation(title, description) {
 
 class GovernanceStore {
   /**
-   * @param {{ dataDir: string, signingSecret: string }} opts
+   * @param {{ dataDir: string, signingSecret: string, nftStore?: object }} opts
    */
-  constructor({ dataDir, signingSecret }) {
+  constructor({ dataDir, signingSecret, nftStore }) {
     this._file = path.join(dataDir, 'wtc-governance.json');
     this._secret = signingSecret;
     this._proposals = {};
     this._nonces = {};
+    this._nftStore = nftStore || null;
     this._load();
+  }
+
+  /** Calculate the pass threshold based on currently distributed NFT voting power. */
+  _getPassThreshold() {
+    if (!this._nftStore) return FALLBACK_PASS_THRESHOLD;
+    const { totalPower } = this._nftStore.getDistributedVotingPower();
+    if (totalPower <= 0) return FALLBACK_PASS_THRESHOLD;
+    return Math.floor(totalPower / 2) + 1;
+  }
+
+  /** Return current governance status: distributed power, pass threshold, total possible. */
+  getGovernanceStatus() {
+    const distributed = this._nftStore
+      ? this._nftStore.getDistributedVotingPower()
+      : { totalPower: TOTAL_POSSIBLE_WEIGHT, distributedCount: 60, totalPossible: TOTAL_POSSIBLE_WEIGHT };
+    const passThreshold = this._getPassThreshold();
+    return {
+      distributedPower: distributed.totalPower,
+      distributedCount: distributed.distributedCount,
+      totalPossible: distributed.totalPossible,
+      passThreshold,
+    };
   }
 
   // ─── Persistence ─────────────────────────────────────────────────────────
@@ -428,11 +452,12 @@ class GovernanceStore {
     const p = this._proposals[pipId];
     if (!p || p.status !== STATUS_ACTIVE) return { ok: false, reason: 'not active' };
 
-    if (p.voteTallies.for >= PASS_THRESHOLD) {
+    const threshold = this._getPassThreshold();
+    if (p.voteTallies.for >= threshold) {
       return { ok: true, outcome: 'passed' };
     }
 
-    return { ok: false, reason: `for (${p.voteTallies.for}) < ${PASS_THRESHOLD} needed` };
+    return { ok: false, reason: `for (${p.voteTallies.for}) < ${threshold} needed` };
   }
 
   /**
@@ -451,7 +476,8 @@ class GovernanceStore {
       if (p.status !== STATUS_ACTIVE) continue;
       if (now < p.votingEndsAt) continue;
 
-      const outcome = p.voteTallies.for >= PASS_THRESHOLD ? 'passed' : 'rejected';
+      const threshold = this._getPassThreshold();
+      const outcome = p.voteTallies.for >= threshold ? 'passed' : 'rejected';
       p.status = outcome;
       expired.push({
         pipId: p.pipId,

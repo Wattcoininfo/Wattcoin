@@ -257,6 +257,22 @@ class NftStore {
     });
   }
 
+  /**
+   * Returns the total voting power currently in non-MINTER_ADDRESS wallets
+   * (i.e., genuinely distributed to real holders).
+   */
+  getDistributedVotingPower() {
+    let totalPower = 0;
+    let distributedCount = 0;
+    for (const token of Object.values(this._tokens)) {
+      if (token.owner !== MINTER_ADDRESS) {
+        totalPower += (token.metadata && token.metadata.shares) || 0;
+        distributedCount++;
+      }
+    }
+    return { totalPower, distributedCount, totalPossible: 140 };
+  }
+
   /** Returns the full collection state (all 60 tokens with current owner or null). */
   getAllNfts() {
     return NFT_COLLECTION.map((def) => {

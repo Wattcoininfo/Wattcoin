@@ -144,6 +144,7 @@ export default function Governance({ selectedWalletAddress }) {
   const [createDuration, setCreateDuration] = useState(2);
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState('info');
+  const [govStatus, setGovStatus] = useState({ distributedPower: 0, passThreshold: 0, totalPossible: 140 });
 
   const highestTier = getHighestTier(nfts);
   const hasNft = nfts.length > 0;
@@ -173,10 +174,24 @@ export default function Governance({ selectedWalletAddress }) {
       })
       .catch(() => {})
       .finally(() => setProposalsLoaded(true));
+    window.wattcoinHardware
+      .invoke('wattcoin-governance-status')
+      .then((res) => {
+        if (res && res.ok) setGovStatus(res);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     loadProposals();
+    if (window.wattcoinHardware?.invoke) {
+      window.wattcoinHardware
+        .invoke('wattcoin-governance-status')
+        .then((res) => {
+          if (res && res.ok) setGovStatus(res);
+        })
+        .catch(() => {});
+    }
     const iv = setInterval(loadProposals, 10000);
     return () => clearInterval(iv);
   }, [loadProposals]);
@@ -245,7 +260,7 @@ export default function Governance({ selectedWalletAddress }) {
             if (res.quorum && res.quorum.reached) {
               setStatusType('info');
               setStatusMsg(
-                `Pass threshold reached (71/140 votes)! Proposal ${res.quorum.outcome}. Transaction submitted.`,
+                `Pass threshold reached (${govStatus.passThreshold}/${govStatus.distributedPower} votes)! Proposal ${res.quorum.outcome}. Transaction submitted.`,
               );
               setTimeout(() => setStatusMsg(''), 6000);
             }
@@ -259,7 +274,7 @@ export default function Governance({ selectedWalletAddress }) {
           setStatusMsg(`Error: ${e && e.message}`);
         });
     },
-    [selectedWalletAddress, nfts, loadProposals],
+    [selectedWalletAddress, nfts, loadProposals, govStatus],
   );
 
   if (!nftsLoaded || !proposalsLoaded) {
@@ -300,7 +315,10 @@ export default function Governance({ selectedWalletAddress }) {
               {votingTier && (
                 <span style={badgeStyle(votingTier)}>{votingTier.charAt(0).toUpperCase() + votingTier.slice(1)}</span>
               )}
-              <span style={{ marginLeft: 12, fontSize: 11, color: '#5a8a5a' }}>NFT holders can propose and vote</span>
+              <span style={{ marginLeft: 12, fontSize: 11, color: '#5a8a5a' }}>
+                Pass threshold: <strong style={{ color: '#fbbf24' }}>{govStatus.passThreshold}</strong>/
+                {govStatus.distributedPower} distributed votes
+              </span>
             </div>
           </div>
           <button

@@ -98,7 +98,7 @@ class WtcNode {
     this._chain = new Chain({ dataDir, signingSecret: this._secret });
     this._mempool = new Mempool();
     this._nfts = new NftStore({ dataDir, signingSecret: this._secret });
-    this._governance = new GovernanceStore({ dataDir, signingSecret: this._secret });
+    this._governance = new GovernanceStore({ dataDir, signingSecret: this._secret, nftStore: this._nfts });
 
     this._consensus = null; // set during init()
     this._wallet = this._loadOrCreateWallet();
@@ -1619,6 +1619,11 @@ class WtcNode {
   /** Return all known proposals (newest first). */
   getGovernanceProposals() {
     return this._governance.getProposals();
+  }
+
+  /** Return governance status: distributed power, pass threshold, total possible. */
+  getGovernanceStatus() {
+    return this._governance.getGovernanceStatus();
   }
 
   /** Return a single proposal. */

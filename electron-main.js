@@ -5904,6 +5904,15 @@ ipcMain.handle('wattcoin-nft-transfer', (_event, { nftId, fromAddress, toAddress
 
 // ── Governance IPC handlers ──────────────────────────────────────────────────────────
 
+ipcMain.handle('wattcoin-governance-status', (_event) => {
+  try {
+    if (!wtcNode) return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140 };
+    return { ok: true, ...wtcNode.getGovernanceStatus() };
+  } catch (e) {
+    return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140, error: String(e && e.message) };
+  }
+});
+
 ipcMain.handle('wattcoin-governance-list', (_event) => {
   try {
     if (!wtcNode) return { ok: false, proposals: [] };

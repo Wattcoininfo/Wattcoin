@@ -3242,8 +3242,10 @@
                   Once the comment period expires, voting opens automatically. Each Vortex NFT holder votes with
                   weighted power matching their profit-share tier: Gold 5 votes, Silver 3 votes, Bronze 1 vote. Multiple
                   NFTs do not stack &mdash; only the highest-tier NFT in a wallet determines voting power. Votes can be
-                  changed during the voting window. The pass threshold is 71 out of 140 total possible weighted votes (a
-                  simple majority).
+                  changed during the voting window. The pass threshold is a simple majority (&gt;50%) of the currently
+                  distributed NFT voting power. If only one Bronze NFT (1 vote) is in community hands, the threshold is
+                  1; when all 60 NFTs are distributed (140 votes), it reaches 71. The threshold adjusts automatically as
+                  NFTs leave the Foundation Reserve wallet.
                 </div>
               </div>
             </div>
@@ -3327,10 +3329,11 @@
               </p>
             </div>
             <div class="info-card">
-              <div class="ic-title">GOVERNANCE THRESHOLD &mdash; 71/140 SIMPLE MAJORITY</div>
+              <div class="ic-title">GOVERNANCE THRESHOLD &mdash; MAJORITY OF DISTRIBUTED VOTES</div>
               <p>
-                The pass threshold is a protocol constant. Proposals to raise, lower, or bypass the quorum requirement
-                are automatically rejected.
+                The pass threshold is calculated as a simple majority of the voting power held by genuinely distributed
+                NFT holders (non-Foundation wallets): <code>floor(distributedPower / 2) + 1</code>. Proposals to raise,
+                lower, or bypass the quorum requirement are automatically rejected.
               </p>
             </div>
             <div class="info-card">

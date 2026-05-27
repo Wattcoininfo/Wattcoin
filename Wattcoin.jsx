@@ -2908,7 +2908,7 @@ export default function Wattcoin() {
                 [
                   '03',
                   'VOTING',
-                  'Once the comment period expires, voting opens automatically. Each Vortex NFT holder votes with weighted power matching their profit-share tier: Gold 5 votes, Silver 3 votes, Bronze 1 vote. Multiple NFTs do not stack — only the highest-tier NFT in a wallet determines voting power. Votes can be changed during the voting window. The pass threshold is 71 out of 140 total possible weighted votes (a simple majority).',
+                  'Once the comment period expires, voting opens automatically. Each Vortex NFT holder votes with weighted power matching their profit-share tier: Gold 5 votes, Silver 3 votes, Bronze 1 vote. Multiple NFTs do not stack — only the highest-tier NFT in a wallet determines voting power. Votes can be changed during the voting window. The pass threshold is a simple majority (>50%) of the currently distributed NFT voting power — it adjusts automatically as NFTs leave the Foundation Reserve wallet.',
                 ],
                 [
                   '04',
@@ -2983,9 +2983,10 @@ export default function Wattcoin() {
                 </InfoCard>
               </div>
               <div style={{ marginTop: 12 }}>
-                <InfoCard title="GOVERNANCE THRESHOLD — 71/140">
-                  The pass threshold is 71 out of 140 total weighted votes (a simple majority). Proposals that attempt
-                  to change this threshold are rejected automatically.
+                <InfoCard title="GOVERNANCE THRESHOLD — MAJORITY OF DISTRIBUTED VOTES">
+                  The pass threshold is calculated as a simple majority of the voting power held by genuinely
+                  distributed NFT holders: floor(distributedPower / 2) + 1. Proposals that attempt to change this
+                  threshold are rejected automatically.
                 </InfoCard>
               </div>
               <div style={{ marginTop: 12 }}>
