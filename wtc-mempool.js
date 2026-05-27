@@ -131,14 +131,20 @@ class Mempool {
     if (!tx.sig || typeof tx.sig !== 'object') {
       return { ok: false, code: 'MISSING_SIG', message: 'signature object required' };
     }
-    const sigInput = JSON.stringify({
+    const sigFields = {
       id: tx.id,
       from: tx.from,
       to: tx.to,
       amount: tx.amount,
       fee: tx.fee,
       nonce: tx.nonce,
-    });
+    };
+    // Governance wallet transfers include governanceTransferRef in the signed
+    // data so the authorization (passed proposal) cannot be stripped.
+    if (tx.governanceTransferRef) {
+      sigFields.governanceTransferRef = tx.governanceTransferRef;
+    }
+    const sigInput = JSON.stringify(sigFields);
     if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) {
       return { ok: false, code: 'INVALID_SIG', message: 'signature verification failed' };
     }

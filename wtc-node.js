@@ -1759,7 +1759,7 @@ class WtcNode {
           );
 
           // If this was a governance transfer proposal, execute the transfer now
-          const transferResult = this._executeGovernanceTransfer(quorum);
+          const transferResult = this._executeGovernanceTransfer({ ...quorum, pipId });
           return {
             ...result,
             quorum: { reached: true, outcome: quorum.outcome, txId: tx.id, transfer: transferResult },
@@ -1833,6 +1833,7 @@ class WtcNode {
         );
         // Execute governance transfer if this was a governance transfer proposal
         this._executeGovernanceTransfer({
+          pipId: ep.pipId,
           transferTo: ep.transferTo,
           transferAmount: ep.transferAmount,
           outcome: ep.outcome,
@@ -1846,23 +1847,58 @@ class WtcNode {
   }
 
   /** Execute a governance treasury transfer after a passed proposal. */
-  _executeGovernanceTransfer({ transferTo, transferAmount, outcome }) {
+  _executeGovernanceTransfer({ transferTo, transferAmount, outcome, pipId }) {
     if (outcome !== 'passed' || !transferTo || !transferAmount) return null;
+    if (!pipId) {
+      console.warn('[Governance] No pipId provided for treasury transfer — cannot execute');
+      return null;
+    }
     const govKey = this._wallet.keys.find((k) => k.address === GOVERNANCE_WALLET_ADDRESS);
     if (!govKey) {
       console.warn('[Governance] Governance wallet key not found — cannot execute treasury transfer');
       return null;
     }
     try {
-      const result = this.send({
-        fromAddress: GOVERNANCE_WALLET_ADDRESS,
-        toAddress: transferTo,
+      // Build the transfer tx with a governanceTransferRef so the consensus
+      // layer can verify it's authorized by a passed on-chain proposal.
+      // The ref is included in the signed data so it cannot be stripped.
+      const fee = 0.01;
+      const balance = this._accounts.getBalance(GOVERNANCE_WALLET_ADDRESS);
+      if (balance.confirmed < transferAmount + fee) {
+        throw new Error(`Insufficient governance balance: ${balance.confirmed.toFixed(2)} WTC`);
+      }
+      const nonce = balance.nonce;
+      const governanceTransferRef = { pipId };
+      const tx = Mempool.buildTx({
+        from: GOVERNANCE_WALLET_ADDRESS,
+        to: transferTo,
         amount: transferAmount,
+        fee,
+        nonce,
       });
+      tx.governanceTransferRef = governanceTransferRef;
+
+      // Sign — include governanceTransferRef so the signature covers it
+      const privBuf = Buffer.from(govKey.privateKey, 'hex');
+      const sigInput = JSON.stringify({
+        id: tx.id,
+        from: tx.from,
+        to: tx.to,
+        amount: tx.amount,
+        fee: tx.fee,
+        nonce: tx.nonce,
+        governanceTransferRef,
+      });
+      tx.sig = sign(txHash(sigInput), privBuf);
+
+      const result = this._mempool.add(tx);
+      if (!result.ok) throw new Error(result.message);
+
+      this._addPendingTx(tx);
       console.log(
-        `[Governance] Treasury transfer executed: ${transferAmount} WTC → ${transferTo.slice(0, 12)}... (${result.txid.slice(0, 16)}...)`,
+        `[Governance] Treasury transfer executed: ${transferAmount} WTC → ${transferTo.slice(0, 12)}... (tx ${tx.id.slice(0, 16)}..., proposal ${pipId})`,
       );
-      return { ok: true, txid: result.txid };
+      return { ok: true, txid: tx.id };
     } catch (e) {
       console.warn(`[Governance] Treasury transfer failed: ${e && e.message}`);
       return { ok: false, error: String(e && e.message) };

@@ -458,6 +458,50 @@ class Consensus {
     // Update governance state (process governance_result transactions)
     if (this._governance) this._governance.applyBlock(finalBlock);
 
+    // Protocol enforcement: governance wallet transfers MUST reference a
+    // passed on-chain governance_transfer proposal.  Without this check,
+    // anyone holding the governance wallet private key could bypass NFT
+    // governance.  With this check, the key is irrelevant — only a passed
+    // vote can move treasury funds.
+    for (const tx of finalBlock.transactions || []) {
+      if (tx.type === 'transfer' && tx.from === 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw') {
+        const ref = tx.governanceTransferRef;
+        if (!ref || !ref.pipId) {
+          console.error(
+            `[Consensus] SECURITY: governance wallet transfer ${tx.id.slice(0, 16)} lacks governanceTransferRef — rejecting block`,
+          );
+          this._chain.rollback();
+          this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+          if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+          if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+          throw new Error(`Governance wallet transfer without governance authorization`);
+        }
+        if (this._governance) {
+          const proposal = this._governance.getProposal(ref.pipId);
+          if (!proposal) {
+            console.error(
+              `[Consensus] SECURITY: governance wallet transfer references unknown proposal ${ref.pipId} — rejecting block`,
+            );
+            this._chain.rollback();
+            this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+            throw new Error(`Governance wallet transfer references unknown proposal ${ref.pipId}`);
+          }
+          if (proposal.status !== 'passed') {
+            console.error(
+              `[Consensus] SECURITY: governance wallet transfer references non-passed proposal ${ref.pipId} (status=${proposal.status}) — rejecting block`,
+            );
+            this._chain.rollback();
+            this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+            throw new Error(`Governance wallet transfer references non-passed proposal ${ref.pipId}`);
+          }
+        }
+      }
+    }
+
     // Clear committed transactions from mempool
     const txIds = (finalBlock.transactions || []).map((t) => t.id);
     this._mempool.removeAll(txIds);
