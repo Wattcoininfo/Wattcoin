@@ -16,6 +16,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const { txHash, verifySignature } = require('./wtc-address');
+const { GOVERNANCE_WALLET_ADDRESS } = require('./protocol-constants');
 
 const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
 const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
@@ -35,6 +36,10 @@ const STATUS_COMMENT = 'in_comment';
 const STATUS_ACTIVE = 'active';
 const STATUS_PASSED = 'passed';
 const STATUS_REJECTED = 'rejected';
+
+// Governance treasury minimum reserve — protects against governance capturing
+// the full treasury in a single proposal.  Can be overridden by a subsequent vote.
+const GOVERNANCE_MIN_RESERVE = 10000;
 
 const IMMUTABLE_PRINCIPLES = [
   {
@@ -193,7 +198,7 @@ const IMMUTABLE_PRINCIPLES = [
   },
   {
     id: 'governance_threshold',
-    label: 'Governance Pass Threshold (71/140)',
+    label: 'Governance Pass Threshold (simple majority of distributed votes)',
     keywords: [
       'change pass threshold',
       'lower threshold',
@@ -205,7 +210,26 @@ const IMMUTABLE_PRINCIPLES = [
       'remove pass threshold',
       'bypass quorum',
     ],
-    description: 'The 71/140 simple majority pass threshold for governance is a protocol constant.',
+    description: 'The simple-majority-of-distributed-votes pass threshold (floor(N/2)+1) is a protocol constant.',
+    matchMode: 'blocking',
+  },
+  {
+    id: 'governance_treasury',
+    label: 'Governance Treasury Minimum Reserve (10,000 WTC)',
+    keywords: [
+      'drain treasury',
+      'empty governance',
+      'remove reserve',
+      'governance minimum',
+      'below 10000',
+      'drain governance',
+      'take all',
+      'zero reserve',
+      'eliminate reserve',
+      'remove minimum reserve',
+    ],
+    description:
+      'Governance treasury transfers must leave at least 10,000 WTC in the governance wallet to ensure continued operations.',
     matchMode: 'blocking',
   },
 ];
@@ -372,6 +396,9 @@ class GovernanceStore {
     creatorTier,
     votingDurationWeeks,
     commentPeriodWeeks,
+    transferTo,
+    transferAmount,
+    transferPurpose,
   }) {
     if (this._proposals[pipId]) return { ok: true, pipId, isNew: false };
 
@@ -381,6 +408,12 @@ class GovernanceStore {
 
     const principleCheck = this.validateProposalContent(title, description);
     if (!principleCheck.ok) return principleCheck;
+
+    // If this is a governance transfer proposal, validate it
+    if (transferTo || transferAmount) {
+      const transferCheck = this.validateGovernanceTransfer(transferTo, transferAmount);
+      if (!transferCheck.ok) return transferCheck;
+    }
 
     const cWeeks = Math.max(
       COMMENT_PERIOD_MIN_WEEKS,
@@ -394,7 +427,7 @@ class GovernanceStore {
     );
     const voteDurationMs = vWeeks * 7 * 24 * 60 * 60 * 1000;
 
-    this._proposals[pipId] = {
+    const proposal = {
       pipId,
       title,
       description: description || '',
@@ -411,8 +444,34 @@ class GovernanceStore {
       votingEndsAt: createdAt + commentPeriodMs + voteDurationMs,
     };
 
+    // Governance transfer fields
+    if (transferTo && transferAmount) {
+      proposal.transferTo = transferTo;
+      proposal.transferAmount = transferAmount;
+      proposal.transferPurpose = transferPurpose || '';
+    }
+
+    this._proposals[pipId] = proposal;
     this._save();
     return { ok: true, pipId, isNew: true };
+  }
+
+  /** Validate a governance transfer proposal parameters. */
+  validateGovernanceTransfer(transferTo, transferAmount) {
+    if (!transferTo) {
+      return { ok: false, error: 'Transfer recipient address is required for governance treasury transfers.' };
+    }
+    const { isValidAddress } = require('./wtc-address');
+    if (!isValidAddress(transferTo)) {
+      return { ok: false, error: `Invalid recipient address: ${transferTo}` };
+    }
+    if (typeof transferAmount !== 'number' || transferAmount <= 0) {
+      return { ok: false, error: 'Transfer amount must be a positive number.' };
+    }
+    if (transferAmount > 300000) {
+      return { ok: false, error: 'Transfer amount cannot exceed the governance treasury allocation (300,000 WTC).' };
+    }
+    return { ok: true };
   }
 
   /**
@@ -454,7 +513,12 @@ class GovernanceStore {
 
     const threshold = this._getPassThreshold();
     if (p.voteTallies.for >= threshold) {
-      return { ok: true, outcome: 'passed' };
+      return {
+        ok: true,
+        outcome: 'passed',
+        transferTo: p.transferTo,
+        transferAmount: p.transferAmount,
+      };
     }
 
     return { ok: false, reason: `for (${p.voteTallies.for}) < ${threshold} needed` };
@@ -464,7 +528,7 @@ class GovernanceStore {
    * Mark any active proposal whose voting period has expired.
    * Passed if ≥PASS_THRESHOLD, otherwise rejected.
    * Also advances comment periods.
-   * Returns an array of { pipId, outcome, voteTallies, title }.
+   * Returns an array of { pipId, outcome, voteTallies, title, transferTo, transferAmount }.
    */
   closeExpiredProposals() {
     this.advanceCommentPeriods();
@@ -484,6 +548,8 @@ class GovernanceStore {
         outcome,
         voteTallies: { for: p.voteTallies.for, against: p.voteTallies.against },
         title: p.title,
+        transferTo: p.transferTo,
+        transferAmount: p.transferAmount,
       });
     }
 
@@ -533,9 +599,13 @@ class GovernanceStore {
    * Build an unsigned governance_result transaction.
    * Caller must set tx.sig after signing.
    */
-  static buildGovernanceResultTx({ pipId, outcome, from, nonce, voteTallies, title }) {
+  static buildGovernanceResultTx({ pipId, outcome, from, nonce, voteTallies, title, transferTo, transferAmount }) {
     const timestamp = Date.now();
     const govData = { pipId, outcome, title: title || '', voteTallies, timestamp };
+    if (transferTo && transferAmount) {
+      govData.transferTo = transferTo;
+      govData.transferAmount = transferAmount;
+    }
     const id = crypto
       .createHash('sha256')
       .update(_sortedJson({ type: 'governance_result', from, nonce, governanceData: govData }))
@@ -647,4 +717,15 @@ class GovernanceStore {
   }
 }
 
-module.exports = { GovernanceStore, VOTE_WEIGHTS, TIER_RANK, IMMUTABLE_PRINCIPLES };
+module.exports = {
+  GovernanceStore,
+  VOTE_WEIGHTS,
+  TIER_RANK,
+  IMMUTABLE_PRINCIPLES,
+  GOVERNANCE_WALLET_ADDRESS,
+  GOVERNANCE_MIN_RESERVE,
+  STATUS_COMMENT,
+  STATUS_ACTIVE,
+  STATUS_PASSED,
+  STATUS_REJECTED,
+};

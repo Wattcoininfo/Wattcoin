@@ -145,6 +145,10 @@ export default function Governance({ selectedWalletAddress }) {
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState('info');
   const [govStatus, setGovStatus] = useState({ distributedPower: 0, passThreshold: 0, totalPossible: 140 });
+  const [showTransferForm, setShowTransferForm] = useState(false);
+  const [transferTo, setTransferTo] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferPurpose, setTransferPurpose] = useState('');
 
   const highestTier = getHighestTier(nfts);
   const hasNft = nfts.length > 0;
@@ -212,12 +216,25 @@ export default function Governance({ selectedWalletAddress }) {
       votingDurationWeeks: createDuration,
     };
 
+    // Include governance transfer fields if filled
+    const transferAddr = transferTo.trim();
+    const transferAmt = parseFloat(transferAmount);
+    if (transferAddr && transferAmt > 0) {
+      proposal.transferTo = transferAddr;
+      proposal.transferAmount = transferAmt;
+      proposal.transferPurpose = transferPurpose.trim();
+    }
+
     window.wattcoinHardware
       .invoke('wattcoin-governance-propose', proposal)
       .then((res) => {
         if (res && res.ok) {
           setCreateTitle('');
           setCreateDesc('');
+          setTransferTo('');
+          setTransferAmount('');
+          setTransferPurpose('');
+          setShowTransferForm(false);
           setShowCreate(false);
           setStatusType('info');
           setStatusMsg(`Proposal submitted as ${pipDisplayId(res.pipId)}.`);
@@ -240,7 +257,16 @@ export default function Governance({ selectedWalletAddress }) {
         setStatusType('error');
         setStatusMsg(`Error: ${e && e.message}`);
       });
-  }, [createTitle, createDesc, createCommentPeriod, createDuration, loadProposals]);
+  }, [
+    createTitle,
+    createDesc,
+    createCommentPeriod,
+    createDuration,
+    loadProposals,
+    transferTo,
+    transferAmount,
+    transferPurpose,
+  ]);
 
   const handleVote = useCallback(
     (pipId, vote) => {
@@ -319,6 +345,11 @@ export default function Governance({ selectedWalletAddress }) {
                 Pass threshold: <strong style={{ color: '#fbbf24' }}>{govStatus.passThreshold}</strong>/
                 {govStatus.distributedPower} distributed votes
               </span>
+              {govStatus.governanceWallet && (
+                <span style={{ marginLeft: 12, fontSize: 11, color: '#38bdf8' }}>
+                  Treasury: <strong>{govStatus.governanceWallet.confirmed.toLocaleString()} WTC</strong>
+                </span>
+              )}
             </div>
           </div>
           <button
@@ -446,6 +477,90 @@ export default function Governance({ selectedWalletAddress }) {
               Proposals that mention changing the 21M hard cap, energy law (20 kWh/coin floor), or genesis allocation
               will be automatically rejected.
             </div>
+
+            {/* Governance treasury transfer toggle */}
+            <div
+              onClick={() => setShowTransferForm(!showTransferForm)}
+              style={{
+                fontSize: 12,
+                color: '#38bdf8',
+                cursor: 'pointer',
+                marginBottom: showTransferForm ? 10 : 0,
+                padding: '4px 0',
+              }}
+            >
+              {showTransferForm ? '− Hide treasury transfer' : '+ Add treasury transfer'}
+            </div>
+
+            {showTransferForm && (
+              <div
+                style={{
+                  background: '#0a1f2e',
+                  border: '1px solid #1e4a6e',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginBottom: 10,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 8 }}>
+                  Governance Treasury Transfer
+                </div>
+                <input
+                  value={transferTo}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                  placeholder="Recipient address (wtc1...)"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 13,
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #224022',
+                    background: '#060e06',
+                    color: '#d7ffd9',
+                    marginBottom: 6,
+                    fontFamily: 'monospace',
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    placeholder="Amount (WTC)"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    style={{
+                      flex: 1,
+                      boxSizing: 'border-box',
+                      fontSize: 13,
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #224022',
+                      background: '#060e06',
+                      color: '#d7ffd9',
+                      marginBottom: 6,
+                    }}
+                  />
+                </div>
+                <input
+                  value={transferPurpose}
+                  onChange={(e) => setTransferPurpose(e.target.value)}
+                  placeholder="Purpose (e.g. Security audit Q3 2026)"
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 13,
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #224022',
+                    background: '#060e06',
+                    color: '#d7ffd9',
+                  }}
+                />
+              </div>
+            )}
+
             <button
               onClick={handleCreateProposal}
               style={{
@@ -492,6 +607,31 @@ export default function Governance({ selectedWalletAddress }) {
                   )}
                   <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
                 </div>
+                {proposal.transferTo && proposal.transferAmount && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: '#60a5fa',
+                      background: '#1e3a8a22',
+                      borderRadius: 6,
+                      padding: '6px 10px',
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span>
+                      💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong>
+                    </span>
+                    <span style={{ color: '#93c5fd' }}>→</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#93c5fd' }}>
+                      {proposal.transferTo.slice(0, 12)}...
+                    </span>
+                    {proposal.transferPurpose && <span style={{ color: '#93c5fd' }}>· {proposal.transferPurpose}</span>}
+                  </div>
+                )}
                 <div
                   style={{
                     fontSize: 12,
@@ -563,6 +703,34 @@ export default function Governance({ selectedWalletAddress }) {
                       </span>
                     )}
                   </div>
+
+                  {proposal.transferTo && proposal.transferAmount && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: '#60a5fa',
+                        background: '#1e3a8a22',
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        marginBottom: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span>
+                        💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong>
+                      </span>
+                      <span style={{ color: '#93c5fd' }}>→</span>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#93c5fd' }}>
+                        {proposal.transferTo.slice(0, 12)}...
+                      </span>
+                      {proposal.transferPurpose && (
+                        <span style={{ color: '#93c5fd' }}>· {proposal.transferPurpose}</span>
+                      )}
+                    </div>
+                  )}
 
                   {totalVotes > 0 && (
                     <div style={{ marginBottom: 10 }}>
@@ -652,6 +820,19 @@ export default function Governance({ selectedWalletAddress }) {
                       }}
                     >
                       {proposal.description}
+                    </div>
+                  )}
+                  {proposal.transferTo && proposal.transferAmount && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: '#93c5fd',
+                        marginBottom: 6,
+                      }}
+                    >
+                      💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong> →{' '}
+                      <span style={{ fontFamily: 'monospace' }}>{proposal.transferTo.slice(0, 12)}...</span>
+                      {proposal.transferPurpose && ` · ${proposal.transferPurpose}`}
                     </div>
                   )}
                   <div style={{ fontSize: 12, color: '#6b8f6b' }}>

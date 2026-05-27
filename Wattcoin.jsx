@@ -1227,11 +1227,11 @@ export default function Wattcoin() {
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a' }}>
                   The design uses a two-tier structure: <strong style={{ color: '#fbbf24' }}>Tier 0</strong> — 1,000,000
                   WTC allocated at genesis to the Foundation Reserve and distributed via on-chain transactions to four
-                  wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), and Team
-                  (300,000). From <strong style={{ color: '#4ade80' }}>Tier 1 onward</strong> the real economy begins at
-                  20 kWh per coin, with the energy requirement doubling each tier across 20 mining tiers until the
-                  21,000,000 WTC hard cap is reached. Transaction fees are awarded to the block proposer alongside the
-                  block reward.
+                  wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), and
+                  Governance Treasury (300,000). From <strong style={{ color: '#4ade80' }}>Tier 1 onward</strong> the
+                  real economy begins at 20 kWh per coin, with the energy requirement doubling each tier across 20
+                  mining tiers until the 21,000,000 WTC hard cap is reached. Transaction fees are awarded to the block
+                  proposer alongside the block reward.
                 </p>
               </div>
             </FadeIn>
@@ -1239,8 +1239,8 @@ export default function Wattcoin() {
               <div style={{ display: 'grid', gap: 12 }}>
                 <InfoCard title="TIER 0 — GENESIS ALLOCATION">
                   1,000,000 WTC allocated at genesis to the Foundation Reserve and distributed via on-chain transactions
-                  to four wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667), Team
-                  (300,000). Every allocation is verifiable on the public chain.
+                  to four wallets: Foundation Reserve (200,000), Public Sale (333,333), Staking Rewards (166,667),
+                  Governance Treasury (300,000). Every allocation is verifiable on the public chain.
                 </InfoCard>
                 <InfoCard title="TIER 1+ — ECONOMY LAW">
                   20 kWh per coin — the real economic floor. Energy requirement doubles every tier. At $
@@ -2446,7 +2446,7 @@ export default function Wattcoin() {
                       'Genesis supply',
                       'None (Satoshi ~1M early mined)',
                       '~72M ETH ICO pre-sale',
-                      'Team/investor allocation',
+                      'Governance treasury / investor allocation',
                       '1,000,000 WTC pre-mined',
                     ],
                     ['Economy floor', 'Variable', 'N/A', 'Variable', 'Tier 1 — 20 kWh/coin'],
@@ -2573,7 +2573,7 @@ export default function Wattcoin() {
                   { label: 'FOUNDATION', amount: '200,000', pct: '20%', color: '#4ade80' },
                   { label: 'PUBLIC SALE', amount: '333,333', pct: '33.3%', color: '#fbbf24' },
                   { label: 'STAKING', amount: '166,667', pct: '16.7%', color: '#a78bfa' },
-                  { label: 'TEAM', amount: '300,000', pct: '30%', color: '#38bdf8' },
+                  { label: 'GOVERNANCE', amount: '300,000', pct: '30%', color: '#38bdf8' },
                 ].map(({ label, amount, pct, color }) => (
                   <div
                     key={label}
@@ -2640,11 +2640,11 @@ export default function Wattcoin() {
                   },
                   {
                     address: 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw',
-                    label: 'Team',
+                    label: 'Governance Treasury',
                     amount: '300,000 WTC',
                     color: '#38bdf8',
                     description:
-                      '300,000 WTC reserved for the Wattcoin development team. Funds protocol development, security research, audits, and long-term ecosystem growth. All allocations are on-chain and auditable by anyone at any time.',
+                      '300,000 WTC reserved for the Wattcoin DAO governance treasury, controlled by Vortex NFT holders through on-chain governance proposals. Funds protocol development, security research, audits, and long-term ecosystem growth. All allocations are on-chain and auditable by anyone at any time. Treasury transfers require a simple majority vote of distributed NFT voting power.',
                   },
                 ].map(({ address, label, amount, color, description }) => (
                   <div

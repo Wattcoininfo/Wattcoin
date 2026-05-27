@@ -5907,7 +5907,15 @@ ipcMain.handle('wattcoin-nft-transfer', (_event, { nftId, fromAddress, toAddress
 ipcMain.handle('wattcoin-governance-status', (_event) => {
   try {
     if (!wtcNode) return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140 };
-    return { ok: true, ...wtcNode.getGovernanceStatus() };
+    const status = wtcNode.getGovernanceStatus();
+    // Include governance wallet balance
+    const walletBal = wtcNode.getGovernanceWalletBalance();
+    return {
+      ok: true,
+      ...status,
+      governanceWallet: walletBal,
+      governanceWalletAddress: 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw',
+    };
   } catch (e) {
     return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140, error: String(e && e.message) };
   }
@@ -5982,6 +5990,30 @@ ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
       votingDurationWeeks,
       commentPeriodWeeks,
     };
+
+    // Governance transfer fields — only accepted if the governance wallet key is in this node
+    if (proposal.transferTo && proposal.transferAmount) {
+      const govKey = wtcNode.hasAddress('wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw');
+      if (!govKey) {
+        return {
+          ok: false,
+          error: 'Governance wallet key not available on this node — cannot submit treasury transfer proposals.',
+        };
+      }
+      // Validate minimum reserve at node level (needs balance info)
+      const bal = wtcNode.getGovernanceWalletBalance();
+      const minReserve = 10000;
+      if (bal.confirmed - Number(proposal.transferAmount) < minReserve) {
+        return {
+          ok: false,
+          error: `Governance treasury must retain at least ${minReserve.toLocaleString()} WTC. Current balance: ${bal.confirmed.toLocaleString()} WTC.`,
+        };
+      }
+      enriched.transferTo = String(proposal.transferTo).trim();
+      enriched.transferAmount = Number(proposal.transferAmount);
+      enriched.transferPurpose = String(proposal.transferPurpose || '').trim();
+    }
+
     const result = wtcNode.addGovernanceProposal(enriched);
     if (!result.ok) return result;
     return { ok: true, pipId };

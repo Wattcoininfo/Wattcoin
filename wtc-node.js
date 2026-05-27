@@ -42,7 +42,7 @@ const { Chain } = require('./wtc-chain');
 const { Mempool } = require('./wtc-mempool');
 const { Consensus } = require('./wtc-consensus');
 const { NftStore, NFT_COLLECTION, MINTER_ADDRESS } = require('./wtc-nfts');
-const { GovernanceStore } = require('./wtc-governance');
+const { GovernanceStore, GOVERNANCE_WALLET_ADDRESS } = require('./wtc-governance');
 const { generateKeypair, isValidAddress, txHash, sign, verifySignature } = require('./wtc-address');
 
 const WALLET_FILE = 'wtc-wallet.json';
@@ -307,6 +307,11 @@ class WtcNode {
   /** All addresses held by this wallet. */
   getAddresses() {
     return this._wallet.keys.map((k) => k.address);
+  }
+
+  /** Check if an address exists in this node's wallet. */
+  hasAddress(address) {
+    return this._wallet.keys.some((k) => k.address === address);
   }
 
   /** The primary mining/receiving address. */
@@ -1724,6 +1729,8 @@ class WtcNode {
         nonce,
         voteTallies: p.voteTallies,
         title: p.title,
+        transferTo: quorum.transferTo,
+        transferAmount: quorum.transferAmount,
       });
 
       const kp = this._wallet.keys.find((k) => k.address === voter);
@@ -1750,7 +1757,13 @@ class WtcNode {
           console.log(
             `[Governance] Quorum reached for ${pipId} — governance_result tx ${tx.id.slice(0, 16)}... submitted to mempool`,
           );
-          return { ...result, quorum: { reached: true, outcome: quorum.outcome, txId: tx.id } };
+
+          // If this was a governance transfer proposal, execute the transfer now
+          const transferResult = this._executeGovernanceTransfer(quorum);
+          return {
+            ...result,
+            quorum: { reached: true, outcome: quorum.outcome, txId: tx.id, transfer: transferResult },
+          };
         }
       }
     }
@@ -1792,6 +1805,8 @@ class WtcNode {
         nonce,
         voteTallies: ep.voteTallies,
         title: ep.title,
+        transferTo: ep.transferTo,
+        transferAmount: ep.transferAmount,
       });
 
       const sigInput = JSON.stringify(
@@ -1816,12 +1831,52 @@ class WtcNode {
         console.log(
           `[Governance] Proposal ${ep.pipId} expired — ${ep.outcome} — governance_result tx ${tx.id.slice(0, 16)}... submitted`,
         );
+        // Execute governance transfer if this was a governance transfer proposal
+        this._executeGovernanceTransfer({
+          transferTo: ep.transferTo,
+          transferAmount: ep.transferAmount,
+          outcome: ep.outcome,
+        });
       } else {
         console.warn(`[Governance] Failed to submit governance_result for expired ${ep.pipId}: ${result.message}`);
       }
     }
 
     return expired;
+  }
+
+  /** Execute a governance treasury transfer after a passed proposal. */
+  _executeGovernanceTransfer({ transferTo, transferAmount, outcome }) {
+    if (outcome !== 'passed' || !transferTo || !transferAmount) return null;
+    const govKey = this._wallet.keys.find((k) => k.address === GOVERNANCE_WALLET_ADDRESS);
+    if (!govKey) {
+      console.warn('[Governance] Governance wallet key not found — cannot execute treasury transfer');
+      return null;
+    }
+    try {
+      const result = this.send({
+        fromAddress: GOVERNANCE_WALLET_ADDRESS,
+        toAddress: transferTo,
+        amount: transferAmount,
+      });
+      console.log(
+        `[Governance] Treasury transfer executed: ${transferAmount} WTC → ${transferTo.slice(0, 12)}... (${result.txid.slice(0, 16)}...)`,
+      );
+      return { ok: true, txid: result.txid };
+    } catch (e) {
+      console.warn(`[Governance] Treasury transfer failed: ${e && e.message}`);
+      return { ok: false, error: String(e && e.message) };
+    }
+  }
+
+  /** Get the governance wallet confirmed balance. */
+  getGovernanceWalletBalance() {
+    try {
+      const balance = this._accounts.getBalance(GOVERNANCE_WALLET_ADDRESS);
+      return { ok: true, confirmed: balance.confirmed, pending: balance.pending, address: GOVERNANCE_WALLET_ADDRESS };
+    } catch (_) {
+      return { ok: false, confirmed: 0, pending: 0, address: GOVERNANCE_WALLET_ADDRESS };
+    }
   }
 
   _findGovernanceSubmitter() {

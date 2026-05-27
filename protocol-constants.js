@@ -26,11 +26,14 @@ const SELLER_USDC_ADDRESS = '0x0ca8cc23d85e5c988828076978c4ca65aa4293e8';
 // USDC ERC-20 contract on Ethereum mainnet
 const USDC_CONTRACT = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48';
 
+// Governance treasury — controlled by Vortex NFT holders via on-chain proposals
+const GOVERNANCE_WALLET_ADDRESS = 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw';
+
 // Additional addresses permitted to initiate withdrawals
 const ALLOWED_SENDER_ADDRESSES = new Set([
   MINTER_ADDRESS,
   SALE_WTC_ADDRESS,
-  'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw',
+  GOVERNANCE_WALLET_ADDRESS,
   STAKING_POOL_ADDRESS,
 ]);
 
@@ -38,6 +41,7 @@ module.exports = {
   MINTER_ADDRESS,
   STAKING_POOL_ADDRESS,
   SALE_WTC_ADDRESS,
+  GOVERNANCE_WALLET_ADDRESS,
   SELLER_USDC_ADDRESS,
   USDC_CONTRACT,
   ALLOWED_SENDER_ADDRESSES,
