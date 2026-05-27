@@ -631,6 +631,7 @@ class GovernanceStore {
   applyBlock(block) {
     let changed = false;
 
+    // Phase 1: Process governance_result transactions (update proposal status)
     for (const tx of block.transactions || []) {
       if (!tx || tx.type !== 'governance_result') continue;
       if (!tx.governanceData) continue;
@@ -668,6 +669,32 @@ class GovernanceStore {
         this._bumpNonce(tx.from);
         changed = true;
         console.log(`[GovernanceStore] Proposal ${pipId} recorded on-chain at height ${block.height} as ${outcome}`);
+      }
+    }
+
+    // Phase 2: Detect governance treasury transfer execution in this block.
+    // When a governance wallet transfer tx is mined (authorized by a passed
+    // proposal), record which proposal it executed.  This marker persists
+    // through chain rebuilds (rebuildFromBlocks), preventing replay attacks
+    // where the same pipId is reused for a second transfer.
+    //
+    // The consensus._commit post-gov check relies on this field: if
+    // transferExecutedAt is already set for a DIFFERENT block height, the
+    // block is rejected as a replay attempt.
+    //
+    // We only set the marker on FIRST execution (transferExecutedAt is
+    // undefined).  If it is already set (from a previous block), we leave
+    // it alone — the consensus check will reject this block.
+    for (const tx of block.transactions || []) {
+      if (tx.type === 'transfer' && tx.from === GOVERNANCE_WALLET_ADDRESS && tx.governanceTransferRef?.pipId) {
+        const p = this._proposals[tx.governanceTransferRef.pipId];
+        if (p && p.status === STATUS_PASSED && p.transferExecutedAt === undefined) {
+          p.transferExecutedAt = block.height;
+          changed = true;
+          console.log(
+            `[GovernanceStore] Proposal ${tx.governanceTransferRef.pipId} transfer executed at height ${block.height}`,
+          );
+        }
       }
     }
 

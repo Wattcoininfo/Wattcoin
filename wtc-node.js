@@ -1444,14 +1444,18 @@ class WtcNode {
     if (balance.confirmed < tx.amount + (tx.fee || 0)) return false;
     if (balance.nonce > tx.nonce) return false;
     try {
-      const sigInput = JSON.stringify({
+      const sigFields = {
         id: tx.id,
         from: tx.from,
         to: tx.to,
         amount: tx.amount,
         fee: tx.fee,
         nonce: tx.nonce,
-      });
+      };
+      if (tx.governanceTransferRef) {
+        sigFields.governanceTransferRef = tx.governanceTransferRef;
+      }
+      const sigInput = JSON.stringify(sigFields);
       return verifySignature(txHash(sigInput), tx.sig, tx.from);
     } catch (_) {
       return false;

@@ -20,6 +20,7 @@
 
 const crypto = require('crypto');
 const { txHash, verifySignature: wtcVerify } = require('./wtc-address');
+const { GOVERNANCE_WALLET_ADDRESS } = require('./protocol-constants');
 
 const MEMPOOL_MAX_SIZE = 5000;
 const MEMPOOL_NFT_MAX_SLOTS = 4000; // reserve 20% of slots for coin txs
@@ -106,6 +107,18 @@ class Mempool {
     if (!tx.to || typeof tx.to !== 'string') {
       return { ok: false, code: 'MISSING_TO', message: 'to address required' };
     }
+    // Protocol enforcement: governance wallet transfers MUST include a
+    // governanceTransferRef referencing a passed on-chain proposal.  Without
+    // this check, a transaction signed by the governance wallet key would
+    // bypass the consensus-layer guard and enter the mempool unchallenged.
+    if (tx.from === GOVERNANCE_WALLET_ADDRESS && !tx.governanceTransferRef) {
+      return {
+        ok: false,
+        code: 'MISSING_GOV_REF',
+        message: `transfers from the governance wallet require a governanceTransferRef`,
+      };
+    }
+
     if (typeof tx.amount !== 'number' || tx.amount <= 0) {
       return { ok: false, code: 'INVALID_AMOUNT', message: 'amount must be a positive number' };
     }

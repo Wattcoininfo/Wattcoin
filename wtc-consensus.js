@@ -404,14 +404,20 @@ class Consensus {
         // Signature verification still applies: NFT txns are signed the same way.
         if (!tx.from || !tx.to || !tx.sig) return `tx ${i} missing from/to/sig`;
         if (typeof tx.sig.r !== 'string' || typeof tx.sig.s !== 'string') return `tx ${i} invalid sig format`;
-        const sigInput = JSON.stringify({
+        const sigFields = {
           id: tx.id,
           from: tx.from,
           to: tx.to,
           amount: tx.amount,
           fee: tx.fee,
           nonce: tx.nonce,
-        });
+        };
+        // Governance wallet transfers include governanceTransferRef in the
+        // signed data so the authorization (passed proposal) cannot be stripped.
+        if (tx.governanceTransferRef) {
+          sigFields.governanceTransferRef = tx.governanceTransferRef;
+        }
+        const sigInput = JSON.stringify(sigFields);
         if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) return `tx ${i} signature mismatch`;
       }
     }
@@ -463,6 +469,16 @@ class Consensus {
     // anyone holding the governance wallet private key could bypass NFT
     // governance.  With this check, the key is irrelevant — only a passed
     // vote can move treasury funds.
+    //
+    // Checks performed for each governance wallet transfer tx:
+    //   1. governanceTransferRef.pipId is present
+    //   2. Referenced proposal exists in GovernanceStore
+    //   3. Proposal status is 'passed'
+    //   4. transferTo / transferAmount EXACTLY match the proposal
+    //      (prevents a node from referencing proposal X that passed for
+    //       recipient A / amount Y, but crafting a tx for recipient B / X)
+    //   5. Proposal.transferExecutedAt not already set for a DIFFERENT
+    //      block height (prevents replay — one passed pipId = one transfer)
     for (const tx of finalBlock.transactions || []) {
       if (tx.type === 'transfer' && tx.from === 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw') {
         const ref = tx.governanceTransferRef;
@@ -497,6 +513,41 @@ class Consensus {
             if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
             if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
             throw new Error(`Governance wallet transfer references non-passed proposal ${ref.pipId}`);
+          }
+          // Check 4: transferTo / transferAmount must match the proposal
+          if (tx.to !== proposal.transferTo) {
+            console.error(
+              `[Consensus] SECURITY: governance wallet transfer recipient ${tx.to} does not match proposal ${ref.pipId} recipient ${proposal.transferTo} — rejecting block`,
+            );
+            this._chain.rollback();
+            this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+            throw new Error(`Governance wallet transfer recipient mismatch for proposal ${ref.pipId}`);
+          }
+          if (tx.amount !== proposal.transferAmount) {
+            console.error(
+              `[Consensus] SECURITY: governance wallet transfer amount ${tx.amount} does not match proposal ${ref.pipId} amount ${proposal.transferAmount} — rejecting block`,
+            );
+            this._chain.rollback();
+            this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+            throw new Error(`Governance wallet transfer amount mismatch for proposal ${ref.pipId}`);
+          }
+          // Check 5: replay protection — this pipId must NOT have already
+          // executed a transfer in a previous block.  If transferExecutedAt
+          // is set and differs from the current block, the proposal was
+          // already used.
+          if (proposal.transferExecutedAt !== undefined && proposal.transferExecutedAt !== finalBlock.height) {
+            console.error(
+              `[Consensus] SECURITY: governance proposal ${ref.pipId} already executed at height ${proposal.transferExecutedAt} — rejecting replay attempt at height ${finalBlock.height}`,
+            );
+            this._chain.rollback();
+            this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+            if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+            throw new Error(`Governance proposal ${ref.pipId} already used for a prior transfer`);
           }
         }
       }
