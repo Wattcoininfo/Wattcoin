@@ -5998,10 +5998,10 @@ ipcMain.handle('wattcoin-governance-vote', (_event, pipId, voteData) => {
     const vp = wtcNode.getGovernanceVotingPower(voteData.voter);
     if (!vp.hasNft) return { ok: false, error: `${voteData.voter.slice(0, 12)}... does not own any Vortex NFTs` };
 
-    // Step 2: sign the vote WITH the computed power so the power is
+    // Step 2: sign the vote WITH the computed power and tier so both are
     // cryptographically committed and can't be tampered with in transit.
     const timestamp = Date.now();
-    const message = `${pipId}|${voteData.voter}|${voteData.vote}|${vp.bestPower}|${timestamp}`;
+    const message = `${pipId}|${voteData.voter}|${voteData.vote}|${vp.bestPower}|${vp.bestTier}|${timestamp}`;
     const signed = wtcNode.signMessage(voteData.voter, message);
 
     // Step 3: store vote with signature and verified power
@@ -7410,6 +7410,28 @@ async function syncGovernanceFromPeers() {
     if (!snapshot || !snapshot.ok || !Array.isArray(snapshot.proposals)) continue;
 
     for (const proposal of snapshot.proposals) {
+      // Security: verify the creator's NFT holdings — never trust peer-supplied
+      // creatorNftId / creatorTier.  Strip them if they don't match local truth.
+      let creatorNftId = '';
+      let creatorTier = '';
+      if (proposal.creator) {
+        const creatorNfts = wtcNode.getNftsForAddress(proposal.creator);
+        if (creatorNfts && creatorNfts.length > 0) {
+          const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
+          let bestTier = 'bronze';
+          let bestNftId = '';
+          for (const nft of creatorNfts) {
+            const tier = (nft.metadata && nft.metadata.tier) || 'bronze';
+            if ((TIER_RANK[tier] || 0) > (TIER_RANK[bestTier] || 0)) {
+              bestTier = tier;
+              bestNftId = nft.nftId;
+            }
+          }
+          creatorNftId = bestNftId;
+          creatorTier = bestTier;
+        }
+      }
+
       // Merge proposal metadata
       const propResult = wtcNode.addGovernanceProposal({
         pipId: proposal.pipId,
@@ -7417,8 +7439,8 @@ async function syncGovernanceFromPeers() {
         description: proposal.description || '',
         creator: proposal.creator || '',
         createdAt: proposal.createdAt || Date.now(),
-        creatorNftId: proposal.creatorNftId || '',
-        creatorTier: proposal.creatorTier || 'bronze',
+        creatorNftId,
+        creatorTier,
         votingDurationWeeks: Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 2))),
         commentPeriodWeeks: Math.max(1, Math.min(4, Math.floor(Number(proposal.commentPeriodWeeks) || 2))),
       });
@@ -7429,13 +7451,14 @@ async function syncGovernanceFromPeers() {
           const v = proposal.votes[voterAddr];
           if (!v || !v.signature) continue;
 
-          // Verify the vote signature — includes power so it can't be tampered with in transit.
-          const msg = `${proposal.pipId}|${v.voter}|${v.vote}|${v.power}|${v.timestamp}`;
+          // Verify the vote signature — the message includes power AND nftTier
+          // so neither can be tampered with in transit.
+          const msg = `${proposal.pipId}|${v.voter}|${v.vote}|${v.power}|${v.nftTier}|${v.timestamp}`;
           if (!wtcNode.verifyMessage(v.voter, v.signature, msg)) continue;
 
-          // Trust the power from the snapshot (source peer computed it from
-          // their NFT store at vote time) to avoid race conditions where
-          // the local NFT store hasn't synced the voter's NFTs yet.
+          // Security: always verify the voter's current NFT holdings.
+          // The local NftStore determines real power — never trust peer-supplied
+          // power or nftTier.  This prevents vote replay after NFT transfer.
           wtcNode.addGovernanceVote(proposal.pipId, {
             voter: v.voter,
             vote: v.vote,
@@ -7443,7 +7466,6 @@ async function syncGovernanceFromPeers() {
             nftTier: v.nftTier,
             timestamp: v.timestamp,
             signature: v.signature,
-            _skipNftCheck: true,
           });
         }
       }
@@ -7569,11 +7591,6 @@ function startLedgerNetworkServer() {
         }
         if (!wtcNode) {
           sendJson(res, 503, { ok: false, error: 'Node not ready' });
-          return;
-        }
-        // Only serve to peers that hold NFTs
-        if (!_nodeHasGovernanceNfts()) {
-          sendJson(res, 200, { ok: true, proposals: [], skipped: 'no-nft' });
           return;
         }
         try {

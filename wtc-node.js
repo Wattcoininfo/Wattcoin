@@ -1693,21 +1693,15 @@ class WtcNode {
     return { hasNft: true, bestTier, bestPower };
   }
 
-  addGovernanceVote(pipId, { voter, power, nftTier, vote, signature, timestamp: voteTimestamp, _skipNftCheck }) {
-    let bestTier = nftTier || 'bronze';
-    let bestPower = typeof power === 'number' && power > 0 ? power : 1;
-
-    if (!_skipNftCheck) {
-      // Security: verify actual NFT holdings and compute real voting power.
-      // Self-reported power/nftTier are NEVER trusted (unless _skipNftCheck is set,
-      // which only happens during snapshot sync from a trusted NFT-holding peer).
-      const vp = this._getVotingPower(voter);
-      if (!vp.hasNft) {
-        return { ok: false, error: `${voter.slice(0, 12)}... does not own any Vortex NFTs` };
-      }
-      bestTier = vp.bestTier;
-      bestPower = vp.bestPower;
+  addGovernanceVote(pipId, { voter, power: _power, nftTier: _nftTier, vote, signature, timestamp: voteTimestamp }) {
+    // Security: always verify actual NFT holdings and compute real voting power.
+    // Self-reported power/nftTier from any source (peer gossip, IPC) are NEVER trusted.
+    const vp = this._getVotingPower(voter);
+    if (!vp.hasNft) {
+      return { ok: false, error: `${voter.slice(0, 12)}... does not own any Vortex NFTs` };
     }
+    let bestTier = vp.bestTier;
+    let bestPower = vp.bestPower;
 
     const result = this._governance.addVote(pipId, {
       voter,
