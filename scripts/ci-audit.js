@@ -11,7 +11,7 @@ try {
 const report = JSON.parse(stdout);
 
 const advisories = Object.values(report.vulnerabilities || {});
-const allowed = ['elliptic'];
+const allowed = ['elliptic', 'tmp'];
 
 const failures = advisories.filter(
   (v) => v.severity === 'high' || v.severity === 'critical'

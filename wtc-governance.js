@@ -131,7 +131,8 @@ const IMMUTABLE_PRINCIPLES = [
       'no longer require energy',
       'eliminate energy verification',
     ],
-    description: 'Proof-of-Energy is the fundamental consensus mechanism. The protocol cannot switch to PoS, PoW, or any other mechanism.',
+    description:
+      'Proof-of-Energy is the fundamental consensus mechanism. The protocol cannot switch to PoS, PoW, or any other mechanism.',
     matchMode: 'blocking',
   },
   {
@@ -146,7 +147,8 @@ const IMMUTABLE_PRINCIPLES = [
       'pool required',
       'luck-based reward',
     ],
-    description: 'Block rewards must remain proportional to verified energy contribution. No lottery or winner-takes-all model.',
+    description:
+      'Block rewards must remain proportional to verified energy contribution. No lottery or winner-takes-all model.',
     matchMode: 'blocking',
   },
   {
@@ -165,7 +167,8 @@ const IMMUTABLE_PRINCIPLES = [
       'change profit share count',
       'add nft tier',
     ],
-    description: 'The 60-NFT collection is sealed at genesis. No additional minting. 140 total profit shares are fixed.',
+    description:
+      'The 60-NFT collection is sealed at genesis. No additional minting. 140 total profit shares are fixed.',
     matchMode: 'blocking',
   },
   {
@@ -552,7 +555,8 @@ class GovernanceStore {
           recordedAtHeight: block.height,
           recordedAtHash: block.hash,
           commentPeriodWeeks: COMMENT_PERIOD_DEFAULT_WEEKS,
-          commentPeriodEndsAt: (tx.governanceData.timestamp || block.timestamp) + COMMENT_PERIOD_DEFAULT_WEEKS * 7 * 24 * 60 * 60 * 1000,
+          commentPeriodEndsAt:
+            (tx.governanceData.timestamp || block.timestamp) + COMMENT_PERIOD_DEFAULT_WEEKS * 7 * 24 * 60 * 60 * 1000,
           votingDurationWeeks: VOTE_DURATION_DEFAULT_WEEKS,
           votingEndsAt: (tx.governanceData.timestamp || block.timestamp) + MAX_VOTE_DURATION_MS,
         };

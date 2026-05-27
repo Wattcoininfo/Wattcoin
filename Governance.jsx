@@ -300,9 +300,7 @@ export default function Governance({ selectedWalletAddress }) {
               {votingTier && (
                 <span style={badgeStyle(votingTier)}>{votingTier.charAt(0).toUpperCase() + votingTier.slice(1)}</span>
               )}
-              <span style={{ marginLeft: 12, fontSize: 11, color: '#5a8a5a' }}>
-                NFT holders can propose and vote
-              </span>
+              <span style={{ marginLeft: 12, fontSize: 11, color: '#5a8a5a' }}>NFT holders can propose and vote</span>
             </div>
           </div>
           <button
@@ -450,9 +448,7 @@ export default function Governance({ selectedWalletAddress }) {
 
         {commentProposals.length > 0 && (
           <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', margin: '0 0 10px' }}>
-              In Comment Period
-            </div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', margin: '0 0 10px' }}>In Comment Period</div>
             {commentProposals.map((proposal) => (
               <div key={proposal.pipId} style={{ ...cardStyle, borderColor: '#3b82f6' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -488,8 +484,11 @@ export default function Governance({ selectedWalletAddress }) {
                     display: 'inline-block',
                   }}
                 >
-                  💬 Comment period{proposal.commentPeriodEndsAt ? ` — ${getRemainingTime(proposal.commentPeriodEndsAt)}` : ''}
-                  {proposal.commentPeriodWeeks ? ` (${proposal.commentPeriodWeeks} week${proposal.commentPeriodWeeks > 1 ? 's' : ''})` : ''}
+                  💬 Comment period
+                  {proposal.commentPeriodEndsAt ? ` — ${getRemainingTime(proposal.commentPeriodEndsAt)}` : ''}
+                  {proposal.commentPeriodWeeks
+                    ? ` (${proposal.commentPeriodWeeks} week${proposal.commentPeriodWeeks > 1 ? 's' : ''})`
+                    : ''}
                   {proposal.votingDurationWeeks ? ` · Voting opens after` : ''}
                 </div>
               </div>
