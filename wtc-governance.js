@@ -40,6 +40,7 @@ const STATUS_REJECTED = 'rejected';
 // Governance treasury minimum reserve — protects against governance capturing
 // the full treasury in a single proposal.  Can be overridden by a subsequent vote.
 const GOVERNANCE_MIN_RESERVE = 10000;
+const GOVERNANCE_MAX_TRANSFER = 50000;
 
 const IMMUTABLE_PRINCIPLES = [
   {
@@ -468,8 +469,11 @@ class GovernanceStore {
     if (typeof transferAmount !== 'number' || transferAmount <= 0) {
       return { ok: false, error: 'Transfer amount must be a positive number.' };
     }
-    if (transferAmount > 300000) {
-      return { ok: false, error: 'Transfer amount cannot exceed the governance treasury allocation (300,000 WTC).' };
+    if (transferAmount > GOVERNANCE_MAX_TRANSFER) {
+      return {
+        ok: false,
+        error: `Transfer amount cannot exceed ${GOVERNANCE_MAX_TRANSFER.toLocaleString()} WTC per proposal.`,
+      };
     }
     return { ok: true };
   }
@@ -751,6 +755,7 @@ module.exports = {
   IMMUTABLE_PRINCIPLES,
   GOVERNANCE_WALLET_ADDRESS,
   GOVERNANCE_MIN_RESERVE,
+  GOVERNANCE_MAX_TRANSFER,
   STATUS_COMMENT,
   STATUS_ACTIVE,
   STATUS_PASSED,
