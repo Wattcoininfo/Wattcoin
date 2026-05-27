@@ -20,11 +20,90 @@ const { txHash, verifySignature } = require('./wtc-address');
 const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
 const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
 
-const PASS_THRESHOLD = 71; // Simple majority of 140 total voting power
-const MAX_VOTE_DURATION_MS = 10 * 7 * 24 * 60 * 60 * 1000; // 10 weeks — used as default for on-chain rebuild
+const PASS_THRESHOLD = 71;
+const MAX_VOTE_DURATION_MS = 10 * 7 * 24 * 60 * 60 * 1000;
+const VOTE_DURATION_DEFAULT_WEEKS = 2;
+const VOTE_DURATION_MIN_WEEKS = 2;
+const VOTE_DURATION_MAX_WEEKS = 10;
+
+const COMMENT_PERIOD_DEFAULT_WEEKS = 2;
+const COMMENT_PERIOD_MIN_WEEKS = 1;
+const COMMENT_PERIOD_MAX_WEEKS = 4;
+
+const STATUS_COMMENT = 'in_comment';
+const STATUS_ACTIVE = 'active';
+const STATUS_PASSED = 'passed';
+const STATUS_REJECTED = 'rejected';
+
+const IMMUTABLE_PRINCIPLES = [
+  {
+    id: 'hard_cap',
+    label: 'Hard Cap (21,000,000 WTC)',
+    keywords: [
+      '21,000,000',
+      '21 million',
+      '21000000',
+      'hard cap',
+      'total supply',
+      'increase supply',
+      'dilution',
+      'inflate supply',
+    ],
+    description: 'The 21,000,000 WTC hard cap is inviolable. No governance process can modify it.',
+    matchMode: 'blocking',
+  },
+  {
+    id: 'energy_law',
+    label: 'Energy Law (20 kWh/coin floor, halving schedule)',
+    keywords: [
+      '20 kwh',
+      'energy per coin',
+      'tier 1 energy',
+      'halving schedule',
+      'block reward',
+      'energy floor',
+      'change the energy',
+      'modify tier',
+      'remove tier',
+    ],
+    description: 'The 20 kWh/coin Tier 1 floor and the halving schedule are protected constants.',
+    matchMode: 'blocking',
+  },
+  {
+    id: 'genesis_allocation',
+    label: 'Genesis Allocation',
+    keywords: [
+      'genesis allocation',
+      'genesis wallet',
+      'reallocate genesis',
+      'modify genesis',
+      'clawback genesis',
+      'seize genesis',
+    ],
+    description: 'Genesis wallet allocations are on-chain and auditable. Post-genesis reallocation is not permitted.',
+    matchMode: 'blocking',
+  },
+];
 
 function _sortedJson(obj) {
   return JSON.stringify(obj, Object.keys(obj).sort());
+}
+
+function _titleAndDescMatch(text, principle) {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return principle.keywords.some((kw) => lower.includes(kw));
+}
+
+function _isImmutablePrincipleViolation(title, description) {
+  const combined = [title, description].filter(Boolean).join(' ');
+  const violations = [];
+  for (const principle of IMMUTABLE_PRINCIPLES) {
+    if (principle.matchMode === 'blocking' && _titleAndDescMatch(combined, principle)) {
+      violations.push(principle);
+    }
+  }
+  return violations;
 }
 
 class GovernanceStore {
@@ -34,8 +113,8 @@ class GovernanceStore {
   constructor({ dataDir, signingSecret }) {
     this._file = path.join(dataDir, 'wtc-governance.json');
     this._secret = signingSecret;
-    this._proposals = {}; // pipId → proposal
-    this._nonces = {}; // address → number (for governance_result tx nonces)
+    this._proposals = {};
+    this._nonces = {};
     this._load();
   }
 
@@ -86,7 +165,11 @@ class GovernanceStore {
   }
 
   getActiveProposals() {
-    return this.getProposals().filter((p) => p.status === 'active');
+    return this.getProposals().filter((p) => p.status === STATUS_ACTIVE);
+  }
+
+  getProposalsInCommentPeriod() {
+    return this.getProposals().filter((p) => p.status === STATUS_COMMENT);
   }
 
   getVoteTallies(pipId) {
@@ -102,7 +185,27 @@ class GovernanceStore {
   }
 
   hasActiveProposalByAddress(address) {
-    return Object.values(this._proposals).some((p) => p.status === 'active' && p.creator === address);
+    return Object.values(this._proposals).some(
+      (p) => (p.status === STATUS_COMMENT || p.status === STATUS_ACTIVE) && p.creator === address,
+    );
+  }
+
+  // ─── Immutable Principles ─────────────────────────────────────────────────
+
+  static getImmutablePrinciples() {
+    return IMMUTABLE_PRINCIPLES;
+  }
+
+  validateProposalContent(title, description) {
+    const violations = _isImmutablePrincipleViolation(title, description);
+    if (violations.length > 0) {
+      return {
+        ok: false,
+        violations: violations.map((v) => ({ id: v.id, label: v.label, description: v.description })),
+        error: `Proposal violates immutable principles: ${violations.map((v) => v.label).join(', ')}`,
+      };
+    }
+    return { ok: true, violations: [] };
   }
 
   // ─── Proposal management ─────────────────────────────────────────────────
@@ -111,15 +214,37 @@ class GovernanceStore {
    * Add a proposal received from the local user or from a peer.
    * Returns { ok, pipId, isNew }
    */
-  addProposal({ pipId, title, description, creator, createdAt, creatorNftId, creatorTier, votingDurationWeeks }) {
+  addProposal({
+    pipId,
+    title,
+    description,
+    creator,
+    createdAt,
+    creatorNftId,
+    creatorTier,
+    votingDurationWeeks,
+    commentPeriodWeeks,
+  }) {
     if (this._proposals[pipId]) return { ok: true, pipId, isNew: false };
 
     if (!pipId || !title || !creator || !createdAt) {
       return { ok: false, error: 'Missing required proposal fields' };
     }
 
-    const weeks = Math.max(2, Math.min(10, Math.floor(Number(votingDurationWeeks) || 10)));
-    const durationMs = weeks * 7 * 24 * 60 * 60 * 1000;
+    const principleCheck = this.validateProposalContent(title, description);
+    if (!principleCheck.ok) return principleCheck;
+
+    const cWeeks = Math.max(
+      COMMENT_PERIOD_MIN_WEEKS,
+      Math.min(COMMENT_PERIOD_MAX_WEEKS, Math.floor(Number(commentPeriodWeeks) || COMMENT_PERIOD_DEFAULT_WEEKS)),
+    );
+    const commentPeriodMs = cWeeks * 7 * 24 * 60 * 60 * 1000;
+
+    const vWeeks = Math.max(
+      VOTE_DURATION_MIN_WEEKS,
+      Math.min(VOTE_DURATION_MAX_WEEKS, Math.floor(Number(votingDurationWeeks) || VOTE_DURATION_DEFAULT_WEEKS)),
+    );
+    const voteDurationMs = vWeeks * 7 * 24 * 60 * 60 * 1000;
 
     this._proposals[pipId] = {
       pipId,
@@ -129,11 +254,13 @@ class GovernanceStore {
       createdAt,
       creatorNftId: creatorNftId || '',
       creatorTier: creatorTier || 'bronze',
-      status: 'active',
+      status: STATUS_COMMENT,
       votes: {},
       voteTallies: { for: 0, against: 0 },
-      votingDurationWeeks: weeks,
-      votingEndsAt: createdAt + durationMs,
+      commentPeriodWeeks: cWeeks,
+      commentPeriodEndsAt: createdAt + commentPeriodMs,
+      votingDurationWeeks: vWeeks,
+      votingEndsAt: createdAt + commentPeriodMs + voteDurationMs,
     };
 
     this._save();
@@ -142,8 +269,6 @@ class GovernanceStore {
 
   /**
    * Generate the next pipId.
-   * Format: pip-{height}-{index} where height is the current chain height
-   * at creation time and index ensures uniqueness.
    */
   static generatePipId(chainHeight) {
     const ts = Date.now();
@@ -152,13 +277,32 @@ class GovernanceStore {
   }
 
   /**
+   * Transition in_comment proposals to active once comment period expires.
+   * Returns array of pipIds that transitioned.
+   */
+  advanceCommentPeriods() {
+    const now = Date.now();
+    const advanced = [];
+
+    for (const p of Object.values(this._proposals)) {
+      if (p.status !== STATUS_COMMENT) continue;
+      if (now < p.commentPeriodEndsAt) continue;
+
+      p.status = STATUS_ACTIVE;
+      advanced.push(p.pipId);
+    }
+
+    if (advanced.length > 0) this._save();
+    return advanced;
+  }
+
+  /**
    * Check whether a proposal has reached passing quorum.
-   * Requires ≥PASS_THRESHOLD (71) weighted votes in favor — a simple
-   * majority of 140 total possible voting power.
+   * Requires ≥PASS_THRESHOLD (71) weighted votes in favor.
    */
   checkQuorum(pipId) {
     const p = this._proposals[pipId];
-    if (!p || p.status !== 'active') return { ok: false, reason: 'not active' };
+    if (!p || p.status !== STATUS_ACTIVE) return { ok: false, reason: 'not active' };
 
     if (p.voteTallies.for >= PASS_THRESHOLD) {
       return { ok: true, outcome: 'passed' };
@@ -170,15 +314,17 @@ class GovernanceStore {
   /**
    * Mark any active proposal whose voting period has expired.
    * Passed if ≥PASS_THRESHOLD, otherwise rejected.
-   * Returns an array of { pipId, outcome, voteTallies, title } for callers
-   * that need to submit governance_result transactions.
+   * Also advances comment periods.
+   * Returns an array of { pipId, outcome, voteTallies, title }.
    */
   closeExpiredProposals() {
+    this.advanceCommentPeriods();
+
     const now = Date.now();
     const expired = [];
 
     for (const p of Object.values(this._proposals)) {
-      if (p.status !== 'active') continue;
+      if (p.status !== STATUS_ACTIVE) continue;
       if (now < p.votingEndsAt) continue;
 
       const outcome = p.voteTallies.for >= PASS_THRESHOLD ? 'passed' : 'rejected';
@@ -204,7 +350,8 @@ class GovernanceStore {
   addVote(pipId, { voter, power, nftTier, vote, signature, timestamp: voteTimestamp }) {
     const p = this._proposals[pipId];
     if (!p) return { ok: false, error: 'Proposal not found' };
-    if (p.status !== 'active') return { ok: false, error: 'Proposal is not active' };
+    if (p.status === STATUS_COMMENT) return { ok: false, error: 'Proposal is in comment period — voting not yet open' };
+    if (p.status !== STATUS_ACTIVE) return { ok: false, error: 'Proposal is not active' };
     if (!voter || !vote || !power) return { ok: false, error: 'Missing vote fields' };
     if (vote !== 'for' && vote !== 'against') return { ok: false, error: 'Invalid vote value' };
 
@@ -278,12 +425,14 @@ class GovernanceStore {
           description: '',
           creator: tx.from || '',
           createdAt: tx.governanceData.timestamp || block.timestamp,
-          status: outcome === 'passed' ? 'passed' : 'rejected',
+          status: outcome === 'passed' ? STATUS_PASSED : STATUS_REJECTED,
           votes: {},
           voteTallies: voteTallies || { for: 0, against: 0 },
           recordedAtHeight: block.height,
           recordedAtHash: block.hash,
-          votingDurationWeeks: 10,
+          commentPeriodWeeks: COMMENT_PERIOD_DEFAULT_WEEKS,
+          commentPeriodEndsAt: (tx.governanceData.timestamp || block.timestamp) + COMMENT_PERIOD_DEFAULT_WEEKS * 7 * 24 * 60 * 60 * 1000,
+          votingDurationWeeks: VOTE_DURATION_DEFAULT_WEEKS,
           votingEndsAt: (tx.governanceData.timestamp || block.timestamp) + MAX_VOTE_DURATION_MS,
         };
         this._bumpNonce(tx.from);
@@ -291,8 +440,8 @@ class GovernanceStore {
         continue;
       }
 
-      if (p.status === 'active') {
-        p.status = outcome === 'passed' ? 'passed' : 'rejected';
+      if (p.status === STATUS_COMMENT || p.status === STATUS_ACTIVE) {
+        p.status = outcome === 'passed' ? STATUS_PASSED : STATUS_REJECTED;
         p.recordedAtHeight = block.height;
         p.recordedAtHash = block.hash;
         this._bumpNonce(tx.from);
@@ -347,4 +496,4 @@ class GovernanceStore {
   }
 }
 
-module.exports = { GovernanceStore, VOTE_WEIGHTS, TIER_RANK };
+module.exports = { GovernanceStore, VOTE_WEIGHTS, TIER_RANK, IMMUTABLE_PRINCIPLES };

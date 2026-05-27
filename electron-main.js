@@ -5959,7 +5959,8 @@ ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
       }
     }
 
-    const votingDurationWeeks = Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 10)));
+    const votingDurationWeeks = Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 2)));
+    const commentPeriodWeeks = Math.max(1, Math.min(4, Math.floor(Number(proposal.commentPeriodWeeks) || 2)));
     const pipId = wtcNode.generateGovernancePipId();
     const enriched = {
       title: proposal.title,
@@ -5970,6 +5971,7 @@ ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
       pipId,
       createdAt: Date.now(),
       votingDurationWeeks,
+      commentPeriodWeeks,
     };
     const result = wtcNode.addGovernanceProposal(enriched);
     if (!result.ok) return result;
@@ -7408,7 +7410,8 @@ async function syncGovernanceFromPeers() {
         createdAt: proposal.createdAt || Date.now(),
         creatorNftId: proposal.creatorNftId || '',
         creatorTier: proposal.creatorTier || 'bronze',
-        votingDurationWeeks: Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 10))),
+        votingDurationWeeks: Math.max(2, Math.min(10, Math.floor(Number(proposal.votingDurationWeeks) || 2))),
+        commentPeriodWeeks: Math.max(1, Math.min(4, Math.floor(Number(proposal.commentPeriodWeeks) || 2))),
       });
 
       // Merge votes if the proposal was new or we already have it

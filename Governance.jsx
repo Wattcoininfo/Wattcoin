@@ -122,10 +122,10 @@ function pipDisplayId(pipId) {
   return pipId;
 }
 
-function getRemainingTime(votingEndsAt) {
-  if (!votingEndsAt) return '';
-  const remaining = votingEndsAt - Date.now();
-  if (remaining <= 0) return 'Voting ended';
+function getRemainingTime(endAt) {
+  if (!endAt) return '';
+  const remaining = endAt - Date.now();
+  if (remaining <= 0) return '';
   const days = Math.floor(remaining / 86400000);
   const hours = Math.floor((remaining % 86400000) / 3600000);
   if (days > 0) return `${days}d ${hours}h remaining`;
@@ -140,6 +140,7 @@ export default function Governance({ selectedWalletAddress }) {
   const [showCreate, setShowCreate] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createDesc, setCreateDesc] = useState('');
+  const [createCommentPeriod, setCreateCommentPeriod] = useState(2);
   const [createDuration, setCreateDuration] = useState(2);
   const [statusMsg, setStatusMsg] = useState('');
   const [statusType, setStatusType] = useState('info');
@@ -189,7 +190,12 @@ export default function Governance({ selectedWalletAddress }) {
       return;
     }
 
-    const proposal = { title, description: desc, votingDurationWeeks: createDuration };
+    const proposal = {
+      title,
+      description: desc,
+      commentPeriodWeeks: createCommentPeriod,
+      votingDurationWeeks: createDuration,
+    };
 
     window.wattcoinHardware
       .invoke('wattcoin-governance-propose', proposal)
@@ -203,15 +209,23 @@ export default function Governance({ selectedWalletAddress }) {
           loadProposals();
           setTimeout(() => setStatusMsg(''), 4000);
         } else {
-          setStatusType('error');
-          setStatusMsg(`Failed: ${(res && res.error) || 'unknown error'}`);
+          const errMsg = (res && res.error) || 'unknown error';
+          if (res && res.violations && res.violations.length > 0) {
+            setStatusType('error');
+            setStatusMsg(
+              `Proposal rejected: violates immutable principles — ${res.violations.map((v) => v.label).join(', ')}`,
+            );
+          } else {
+            setStatusType('error');
+            setStatusMsg(`Failed: ${errMsg}`);
+          }
         }
       })
       .catch((e) => {
         setStatusType('error');
         setStatusMsg(`Error: ${e && e.message}`);
       });
-  }, [createTitle, createDesc, createDuration, selectedWalletAddress, nfts, loadProposals]);
+  }, [createTitle, createDesc, createCommentPeriod, createDuration, loadProposals]);
 
   const handleVote = useCallback(
     (pipId, vote) => {
@@ -263,16 +277,17 @@ export default function Governance({ selectedWalletAddress }) {
           <div style={noNftIconStyle}>🗳️</div>
           <div style={noNftTitleStyle}>Governance</div>
           <div style={noNftTextStyle}>
-            Governance participation requires a Wattcoin Vortex NFT. No Vortex NFTs were detected in your wallet.
-            Acquire a Vortex NFT to submit proposals and vote on protocol changes.
+            Acquiring a Vortex NFT grants you access to on-chain governance. No Vortex NFTs were detected in your
+            wallet. Acquire a Vortex NFT from the NFT tab to submit proposals and vote on protocol changes.
           </div>
         </div>
       </div>
     );
   }
 
+  const commentProposals = proposals.filter((p) => p.status === 'in_comment');
   const activeProposals = proposals.filter((p) => p.status === 'active');
-  const pastProposals = proposals.filter((p) => p.status !== 'active');
+  const pastProposals = proposals.filter((p) => p.status !== 'in_comment' && p.status !== 'active');
 
   return (
     <div style={containerStyle}>
@@ -285,6 +300,9 @@ export default function Governance({ selectedWalletAddress }) {
               {votingTier && (
                 <span style={badgeStyle(votingTier)}>{votingTier.charAt(0).toUpperCase() + votingTier.slice(1)}</span>
               )}
+              <span style={{ marginLeft: 12, fontSize: 11, color: '#5a8a5a' }}>
+                NFT holders can propose and vote
+              </span>
             </div>
           </div>
           <button
@@ -364,26 +382,53 @@ export default function Governance({ selectedWalletAddress }) {
                 fontFamily: 'inherit',
               }}
             />
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-              <div style={{ fontSize: 12, color: '#7aaa7a' }}>Voting period:</div>
-              <select
-                value={createDuration}
-                onChange={(e) => setCreateDuration(Number(e.target.value))}
-                style={{
-                  fontSize: 13,
-                  padding: '6px 10px',
-                  borderRadius: 6,
-                  border: '1px solid #224022',
-                  background: '#060e06',
-                  color: '#d7ffd9',
-                }}
-              >
-                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
-                  <option key={w} value={w}>
-                    {w} week{w > 1 ? 's' : ''}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: '#7aaa7a' }}>Comment period:</div>
+                <select
+                  value={createCommentPeriod}
+                  onChange={(e) => setCreateCommentPeriod(Number(e.target.value))}
+                  style={{
+                    fontSize: 13,
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #224022',
+                    background: '#060e06',
+                    color: '#d7ffd9',
+                  }}
+                >
+                  {[1, 2, 3, 4].map((w) => (
+                    <option key={w} value={w}>
+                      {w} week{w > 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: '#7aaa7a' }}>Voting period:</div>
+                <select
+                  value={createDuration}
+                  onChange={(e) => setCreateDuration(Number(e.target.value))}
+                  style={{
+                    fontSize: 13,
+                    padding: '6px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #224022',
+                    background: '#060e06',
+                    color: '#d7ffd9',
+                  }}
+                >
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
+                    <option key={w} value={w}>
+                      {w} week{w > 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: '#5a8a5a', marginBottom: 10, lineHeight: 1.5 }}>
+              Proposals that mention changing the 21M hard cap, energy law (20 kWh/coin floor), or genesis allocation
+              will be automatically rejected.
             </div>
             <button
               onClick={handleCreateProposal}
@@ -403,92 +448,152 @@ export default function Governance({ selectedWalletAddress }) {
           </div>
         )}
 
-        {activeProposals.length === 0 && (
+        {commentProposals.length > 0 && (
+          <>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', margin: '0 0 10px' }}>
+              In Comment Period
+            </div>
+            {commentProposals.map((proposal) => (
+              <div key={proposal.pipId} style={{ ...cardStyle, borderColor: '#3b82f6' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={cardTitleStyle}>{proposal.title}</div>
+                  <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
+                    {pipDisplayId(proposal.pipId)}
+                  </span>
+                </div>
+                {proposal.description && (
+                  <div
+                    style={{ fontSize: 13, color: '#b7f5bc', marginBottom: 8, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
+                  >
+                    {proposal.description}
+                  </div>
+                )}
+                <div style={{ ...cardMetaStyle, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>by {proposal.creator ? proposal.creator.slice(0, 12) + '...' : 'unknown'}</span>
+                  {proposal.creatorNftId && (
+                    <span style={badgeStyle(proposal.creatorTier)}>
+                      {proposal.creatorNftId.toUpperCase()} ·{' '}
+                      {proposal.creatorTier.charAt(0).toUpperCase() + proposal.creatorTier.slice(1)}
+                    </span>
+                  )}
+                  <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: '#60a5fa',
+                    background: '#1e3a8a22',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    display: 'inline-block',
+                  }}
+                >
+                  💬 Comment period{proposal.commentPeriodEndsAt ? ` — ${getRemainingTime(proposal.commentPeriodEndsAt)}` : ''}
+                  {proposal.commentPeriodWeeks ? ` (${proposal.commentPeriodWeeks} week${proposal.commentPeriodWeeks > 1 ? 's' : ''})` : ''}
+                  {proposal.votingDurationWeeks ? ` · Voting opens after` : ''}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {activeProposals.length === 0 && commentProposals.length === 0 && (
           <div style={{ fontSize: 14, color: '#7aaa7a', textAlign: 'center', marginTop: 40, marginBottom: 20 }}>
-            No active proposals. Click {'\u201C'}New Proposal{'\u201D'} to create one.
+            No active proposals. Click &ldquo;New Proposal&rdquo; to create one.
           </div>
         )}
 
-        {activeProposals.map((proposal) => {
-          const totalVotes = proposal.voteTallies.for + proposal.voteTallies.against;
-          const forPct = totalVotes > 0 ? Math.round((proposal.voteTallies.for / totalVotes) * 100) : 0;
-          const againstPct = totalVotes > 0 ? Math.round((proposal.voteTallies.against / totalVotes) * 100) : 0;
-          return (
-            <div key={proposal.pipId} style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={cardTitleStyle}>{proposal.title}</div>
-                <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
-                  {pipDisplayId(proposal.pipId)}
-                </span>
-              </div>
-              {proposal.description && (
-                <div
-                  style={{ fontSize: 13, color: '#b7f5bc', marginBottom: 8, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
-                >
-                  {proposal.description}
-                </div>
-              )}
-              <div style={{ ...cardMetaStyle, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span>by {proposal.creator ? proposal.creator.slice(0, 12) + '...' : 'unknown'}</span>
-                {proposal.creatorNftId && (
-                  <span style={badgeStyle(proposal.creatorTier)}>
-                    {proposal.creatorNftId.toUpperCase()} ·{' '}
-                    {proposal.creatorTier.charAt(0).toUpperCase() + proposal.creatorTier.slice(1)}
-                  </span>
-                )}
-                <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
-                {proposal.votingEndsAt && (
-                  <span style={{ color: '#fbbf24', fontSize: 12 }}>
-                    &middot; {getRemainingTime(proposal.votingEndsAt)}
-                  </span>
-                )}
-              </div>
-
-              {totalVotes > 0 && (
-                <div style={{ marginBottom: 10 }}>
-                  <div
-                    style={{
-                      height: 6,
-                      background: '#1e3a1e',
-                      borderRadius: 3,
-                      overflow: 'hidden',
-                      display: 'flex',
-                    }}
-                  >
+        {activeProposals.length > 0 && (
+          <>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80', margin: '16px 0 10px' }}>Voting Open</div>
+            {activeProposals.map((proposal) => {
+              const totalVotes = proposal.voteTallies.for + proposal.voteTallies.against;
+              const forPct = totalVotes > 0 ? Math.round((proposal.voteTallies.for / totalVotes) * 100) : 0;
+              const againstPct = totalVotes > 0 ? Math.round((proposal.voteTallies.against / totalVotes) * 100) : 0;
+              return (
+                <div key={proposal.pipId} style={cardStyle}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={cardTitleStyle}>{proposal.title}</div>
+                    <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
+                      {pipDisplayId(proposal.pipId)}
+                    </span>
+                  </div>
+                  {proposal.description && (
                     <div
                       style={{
-                        width: `${forPct}%`,
-                        background: '#4ade80',
-                        transition: 'width 0.3s',
+                        fontSize: 13,
+                        color: '#b7f5bc',
+                        marginBottom: 8,
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap',
                       }}
-                    />
-                    <div
-                      style={{
-                        width: `${againstPct}%`,
-                        background: '#ef4444',
-                        transition: 'width 0.3s',
-                      }}
-                    />
+                    >
+                      {proposal.description}
+                    </div>
+                  )}
+                  <div style={{ ...cardMetaStyle, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>by {proposal.creator ? proposal.creator.slice(0, 12) + '...' : 'unknown'}</span>
+                    {proposal.creatorNftId && (
+                      <span style={badgeStyle(proposal.creatorTier)}>
+                        {proposal.creatorNftId.toUpperCase()} ·{' '}
+                        {proposal.creatorTier.charAt(0).toUpperCase() + proposal.creatorTier.slice(1)}
+                      </span>
+                    )}
+                    <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
+                    {proposal.votingEndsAt && (
+                      <span style={{ color: '#fbbf24', fontSize: 12 }}>
+                        &middot; {getRemainingTime(proposal.votingEndsAt)}
+                      </span>
+                    )}
                   </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      fontSize: 12,
-                      color: '#7aaa7a',
-                      marginTop: 4,
-                    }}
-                  >
-                    <span style={{ color: '#4ade80' }}>{proposal.voteTallies.for} for</span>
-                    <span style={{ color: '#ef4444' }}>{proposal.voteTallies.against} against</span>
-                  </div>
-                </div>
-              )}
 
-              <VoteButtons proposal={proposal} selectedWalletAddress={selectedWalletAddress} onVote={handleVote} />
-            </div>
-          );
-        })}
+                  {totalVotes > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div
+                        style={{
+                          height: 6,
+                          background: '#1e3a1e',
+                          borderRadius: 3,
+                          overflow: 'hidden',
+                          display: 'flex',
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${forPct}%`,
+                            background: '#4ade80',
+                            transition: 'width 0.3s',
+                          }}
+                        />
+                        <div
+                          style={{
+                            width: `${againstPct}%`,
+                            background: '#ef4444',
+                            transition: 'width 0.3s',
+                          }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          fontSize: 12,
+                          color: '#7aaa7a',
+                          marginTop: 4,
+                        }}
+                      >
+                        <span style={{ color: '#4ade80' }}>{proposal.voteTallies.for} for</span>
+                        <span style={{ color: '#ef4444' }}>{proposal.voteTallies.against} against</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <VoteButtons proposal={proposal} selectedWalletAddress={selectedWalletAddress} onVote={handleVote} />
+                </div>
+              );
+            })}
+          </>
+        )}
 
         {pastProposals.length > 0 && (
           <>

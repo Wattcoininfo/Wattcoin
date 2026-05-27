@@ -2754,9 +2754,10 @@
               20&times;3 + 30&times;1 = 50+60+30 = 140).
             </li>
             <li>
-              <strong style="color: #e8f5e8">Voting power mirrors profit share.</strong> Each NFT carries governance
-              voting weight equal to its profit-share count &mdash; Gold 5 votes, Silver 3 votes, Bronze 1 vote. An NFT
-              that earns more earns more say.
+              <strong style="color: #e8f5e8">Governance access.</strong> Acquiring a Vortex NFT grants governance
+              access &mdash; the ability to submit Protocol Improvement Proposals (PIPs) and vote on protocol changes.
+              Voting power mirrors profit share. Each NFT carries governance voting weight equal to its profit-share
+              count &mdash; Gold 5 votes, Silver 3 votes, Bronze 1 vote. An NFT that earns more earns more say.
             </li>
             <li>
               <strong style="color: #e8f5e8">On-chain ownership.</strong> Every NFT is minted and tracked natively on
@@ -3123,6 +3124,7 @@
               <li class="done">Public sale open &mdash; 333,333 WTC across 3 tiers</li>
               <li class="done">Staking live &mdash; 166,667 WTC reward pool active</li>
               <li class="done">Built-in wallet, explorer, buy &amp; stake interface</li>
+              <li class="done">On-chain governance &mdash; Vortex NFT holders propose and vote on PIPs</li>
               <li class="done">Foundation seed peer infrastructure</li>
               <li>
                 <strong style="color: #4ade80">Vortex Hydro Turbine</strong> &mdash; land acquisition &amp; project
@@ -3197,11 +3199,12 @@
           <h2>Governance</h2>
         </div>
         <p>
-          Wattcoin governance transitions to Vortex NFT holders upon distribution. Until then, the Wattcoin Foundation
-          proposes protocol upgrades publicly, seeks community feedback openly, and coordinates development. Once NFTs
-          are distributed, voting power rests exclusively with NFT holders their on-chain signals drive all material
-          protocol decisions. The core economic rules: energy per coin, block rewards, and total supply are protected
-          constants.
+          Wattcoin governance is powered by <strong class="green">Vortex NFT holders</strong>. Acquiring a Vortex NFT
+          grants you access to on-chain governance &mdash; the ability to submit Protocol Improvement Proposals (PIPs)
+          and vote on protocol changes. Voting power mirrors profit-share allocation: <strong class="gold">Gold</strong>
+          (5 votes), <strong>Silver</strong> (3 votes), <strong>Bronze</strong> (1 vote). An NFT that earns more,
+          decides more. The core economic rules &mdash; energy per coin, block rewards, and total supply &mdash; are
+          protected constants enforced by the protocol itself.
         </p>
 
         <div class="two-col">
@@ -3212,40 +3215,48 @@
               <div>
                 <div class="bw-title">PROPOSAL (PIP)</div>
                 <div class="bw-desc">
-                  The Foundation or any community member publishes a Protocol Improvement Proposal describing the
-                  change, motivation, and expected impact.
+                  Any Vortex NFT holder submits a Protocol Improvement Proposal (PIP) via the Governance tab in the
+                  Wattcoin Miner app. The proposer sets both the public comment period (1&ndash;4 weeks) and the voting
+                  period (2&ndash;10 weeks). Proposals that reference changing the 21M hard cap, energy law, or genesis
+                  allocation are automatically rejected by the protocol.
                 </div>
               </div>
             </div>
             <div class="bw-step">
               <div class="bw-num">02</div>
               <div>
-                <div class="bw-title">DISCUSSION</div>
+                <div class="bw-title">PUBLIC COMMENT PERIOD</div>
                 <div class="bw-desc">
-                  A minimum 14-day public comment period. The Foundation publishes written responses to all significant
-                  objections.
+                  The proposal enters a public comment period of the proposer&rsquo;s chosen duration (default 2 weeks).
+                  During this period the proposal is visible to all NFT holders, but voting is locked. Community members
+                  discuss the proposal through off-chain channels. The comment period ensures every proposal receives
+                  adequate review before voting begins.
                 </div>
               </div>
             </div>
             <div class="bw-step">
               <div class="bw-num">03</div>
               <div>
-                <div class="bw-title">COMMUNITY SIGNALLING</div>
+                <div class="bw-title">VOTING</div>
                 <div class="bw-desc">
-                  Upon distribution, Vortex NFT holders become the voting body for protocol governance. Voting power
-                  mirrors profit-share allocations &mdash; Gold (5 votes), Silver (3 votes), Bronze (1 vote) &mdash;
-                  ensuring governance authority aligns with economic commitment. The Foundation reviews on-chain signals
-                  from NFT holders and treats their consensus as binding-equivalent guidance for core protocol upgrades.
+                  Once the comment period expires, voting opens automatically. Each Vortex NFT holder votes with
+                  weighted power matching their profit-share tier: Gold 5 votes, Silver 3 votes, Bronze 1 vote.
+                  Multiple NFTs do not stack &mdash; only the highest-tier NFT in a wallet determines voting power.
+                  Votes can be changed during the voting window. The pass threshold is 71 out of 140 total possible
+                  weighted votes (a simple majority).
                 </div>
               </div>
             </div>
             <div class="bw-step">
               <div class="bw-num">04</div>
               <div>
-                <div class="bw-title">DECISION & RELEASE</div>
+                <div class="bw-title">AUTOMATIC RESULT & ON-CHAIN RECORDING</div>
                 <div class="bw-desc">
-                  The Foundation publishes a final decision with full rationale. Approved upgrades ship as a new
-                  Wattcoin Miner version. Nodes upgrade voluntarily; the Foundation coordinates timing.
+                  When the pass threshold is reached or the voting period expires, the outcome is determined
+                  automatically. A <strong class="green">governance_result</strong> transaction is signed and submitted
+                  to the mempool, then mined into a block &mdash; making the outcome immutable on-chain. The result is
+                  visible in every node&rsquo;s block explorer. No Foundation gate, no manual step &mdash; the protocol
+                  executes governance autonomously.
                 </div>
               </div>
             </div>
@@ -3253,32 +3264,42 @@
           <div>
             <h3>Immutable Principles</h3>
             <div class="info-card">
-              <div class="ic-title">HARD CAP &mdash; INVIOLABLE</div>
+              <div class="ic-title">HARD CAP &mdash; CODE-ENFORCED</div>
               <p>
-                The 21,000,000 WTC supply cap is a protocol constant. No governance process can modify it. Any proposal
-                to inflate supply is automatically invalid.
+                The 21,000,000 WTC supply cap is a protocol constant enforced at proposal submission. Any proposal
+                whose title or description references changing the hard cap, total supply, or coin dilution is
+                automatically rejected. The cap cannot be modified by any governance process.
               </p>
             </div>
             <div class="info-card">
-              <div class="ic-title">ENERGY LAW &mdash; PROTECTED</div>
+              <div class="ic-title">ENERGY LAW &mdash; CODE-ENFORCED</div>
               <p>
-                The 20 kWh/coin Tier 1 floor and the halving schedule define the economic core of Wattcoin. Changes to
-                these parameters require overwhelming community consensus and are not expected.
+                The 20 kWh/coin Tier 1 floor and the halving schedule define the economic core of Wattcoin. Proposals
+                mentioning changes to the energy per coin, block reward schedule, or tier structure are automatically
+                rejected.
               </p>
             </div>
             <div class="info-card">
-              <div class="ic-title">GENESIS WALLETS &mdash; ON-CHAIN</div>
+              <div class="ic-title">GENESIS ALLOCATION &mdash; CODE-ENFORCED</div>
               <p>
-                All genesis allocations are visible on the public chain. Foundation spending from the reserve wallet is
-                on-chain and auditable by anyone at any time.
+                All genesis allocations are visible on the public chain. Proposals referencing reallocation or
+                modification of genesis wallet distributions are automatically rejected.
               </p>
             </div>
             <div class="info-card">
-              <div class="ic-title">NFT VOTING WEIGHT</div>
+              <div class="ic-title">NFT GATED</div>
               <p>
-                Vortex NFT holders carry weighted votes matching their profit-share tier &mdash; Gold (5), Silver (3),
-                Bronze (1). An NFT that earns more, decides more. Voting weight is verified on-chain against NFT
-                ownership at the time of the signal.
+                Only wallets holding at least one Vortex NFT can submit proposals or vote. Voting power is determined
+                by the highest-tier NFT in the wallet and verified against the on-chain NFT store at the time of each
+                vote. Self-reported power is never trusted.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">P2P GOVERNANCE SYNC</div>
+              <p>
+                Proposals and votes are distributed across the network via peer-to-peer gossip. NFT-holding nodes
+                periodically pull governance snapshots from their peers, merge new proposals and votes, and verify
+                cryptographic signatures. Non-NFT nodes never receive governance data.
               </p>
             </div>
           </div>

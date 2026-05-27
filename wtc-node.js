@@ -1649,6 +1649,7 @@ class WtcNode {
     creatorNftId,
     creatorTier,
     votingDurationWeeks,
+    commentPeriodWeeks,
   }) {
     return this._governance.addProposal({
       pipId,
@@ -1659,6 +1660,7 @@ class WtcNode {
       creatorNftId,
       creatorTier,
       votingDurationWeeks,
+      commentPeriodWeeks,
     });
   }
 
