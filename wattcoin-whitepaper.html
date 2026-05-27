@@ -3074,7 +3074,7 @@
                   margin-bottom: 6px;
                 "
               >
-                TEAM
+                GOVERNANCE
               </div>
               <div style="font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: #e8f5e8">
                 300,000
@@ -3203,8 +3203,11 @@
           grants you access to on-chain governance &mdash; the ability to submit Protocol Improvement Proposals (PIPs)
           and vote on protocol changes. Voting power mirrors profit-share allocation:
           <strong class="gold">Gold</strong> (5 votes), <strong>Silver</strong> (3 votes), <strong>Bronze</strong> (1
-          vote). An NFT that earns more, decides more. The core economic rules &mdash; energy per coin, block rewards,
-          and total supply &mdash; are protected constants enforced by the protocol itself.
+          vote). An NFT that earns more, decides more. NFT holders also control the 300,000 WTC governance treasury
+          &mdash; any holder can propose a treasury transfer, and if it passes a simple majority vote of distributed NFT
+          voting power, the transfer executes automatically at the protocol level without a central authority. The core
+          economic rules &mdash; energy per coin, block rewards, and total supply &mdash; are protected constants
+          enforced by the protocol itself.
         </p>
 
         <div class="two-col">
@@ -3257,8 +3260,10 @@
                   When the pass threshold is reached or the voting period expires, the outcome is determined
                   automatically. A <strong class="green">governance_result</strong> transaction is signed and submitted
                   to the mempool, then mined into a block &mdash; making the outcome immutable on-chain. The result is
-                  visible in every node&rsquo;s block explorer. No Foundation gate, no manual step &mdash; the protocol
-                  executes governance autonomously.
+                  visible in every node&rsquo;s block explorer. For governance treasury transfer proposals, the transfer
+                  transaction is submitted to the mempool immediately when quorum is reached and authorized at the
+                  consensus level against the passed proposal &mdash; the governance wallet private key cannot bypass
+                  governance. No Foundation gate, no manual step &mdash; the protocol executes governance autonomously.
                 </div>
               </div>
             </div>
@@ -4075,7 +4080,7 @@
             amount: '300,000 WTC',
             color: '#38bdf8',
             description:
-              '300,000 WTC reserved for the Wattcoin DAO governance treasury, controlled by Vortex NFT holders through on-chain governance proposals. Funds protocol development, security research, audits, and long-term ecosystem growth. All allocations are on-chain and auditable by anyone at any time. Treasury transfers require a simple majority vote of distributed NFT voting power.',
+              '300,000 WTC reserved for the Wattcoin DAO governance treasury, controlled by Vortex NFT holders through on-chain governance proposals. Funds protocol development, security research, audits, and long-term ecosystem growth. Allocations are on-chain and auditable by anyone at any time. Treasury transfers require a simple majority vote of distributed NFT voting power. Each transfer is limited to 50,000 WTC maximum with a 10,000 WTC minimum reserve enforced at the protocol level&mdash;the governance wallet private key cannot bypass governance; only a passed on-chain proposal authorizes movement of funds.',
           },
         ];
         document.getElementById('wallet-cards').innerHTML = wallets

@@ -2644,7 +2644,7 @@ export default function Wattcoin() {
                     amount: '300,000 WTC',
                     color: '#38bdf8',
                     description:
-                      '300,000 WTC reserved for the Wattcoin DAO governance treasury, controlled by Vortex NFT holders through on-chain governance proposals. Funds protocol development, security research, audits, and long-term ecosystem growth. All allocations are on-chain and auditable by anyone at any time. Treasury transfers require a simple majority vote of distributed NFT voting power.',
+                      '300,000 WTC reserved for the Wattcoin DAO governance treasury, controlled by Vortex NFT holders through on-chain governance proposals. Funds protocol development, security research, audits, and long-term ecosystem growth. Allocations are on-chain and auditable by anyone at any time. Treasury transfers require a simple majority vote of distributed NFT voting power. Each transfer is limited to 50,000 WTC maximum with a 10,000 WTC minimum reserve enforced at the protocol level—the governance wallet private key cannot bypass governance; only a passed on-chain proposal authorizes movement of funds.',
                   },
                 ].map(({ address, label, amount, color, description }) => (
                   <div
@@ -2885,9 +2885,11 @@ export default function Wattcoin() {
             Proposals (PIPs) and vote on protocol changes. Voting power mirrors profit-share allocation:{' '}
             <strong style={{ color: '#fbbf24' }}>Gold</strong> (5 votes),{' '}
             <strong style={{ color: '#9ca3af' }}>Silver</strong> (3 votes),{' '}
-            <strong style={{ color: '#d97706' }}>Bronze</strong> (1 vote). An NFT that earns more, decides more. The
-            core economic rules — energy per coin, block rewards, and total supply — are protected constants enforced by
-            the protocol itself.
+            <strong style={{ color: '#d97706' }}>Bronze</strong> (1 vote). An NFT that earns more, decides more. NFT
+            holders also control the 300,000 WTC governance treasury — any holder can propose a treasury transfer, and
+            if it passes a simple majority vote of distributed NFT voting power, the transfer executes automatically at
+            the protocol level without a central authority. The core economic rules — energy per coin, block rewards,
+            and total supply — are protected constants enforced by the protocol itself.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
             <div>
@@ -2913,7 +2915,7 @@ export default function Wattcoin() {
                 [
                   '04',
                   'AUTOMATIC ENFORCEMENT',
-                  'Passed proposals are automatically enforced by the protocol. There is no Foundation gate, no manual release — the on-chain voting outcome executes directly. Proposals that violate immutable principles are rejected at submission before any vote occurs.',
+                  'Passed proposals are automatically enforced by the protocol. There is no Foundation gate, no manual release — the on-chain voting outcome executes directly. For governance treasury transfer proposals, the transfer transaction is built and submitted to the mempool immediately when quorum is reached, and authorized at the consensus level against the passed proposal. Proposals that violate immutable principles are rejected at submission before any vote occurs.',
                 ],
               ].map(([num, title, desc]) => (
                 <div key={num} style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
