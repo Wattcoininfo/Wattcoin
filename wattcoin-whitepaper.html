@@ -3262,28 +3262,75 @@
             </div>
           </div>
           <div>
-            <h3>Immutable Principles</h3>
+            <h3>Immutable Principles &mdash; What Governance Cannot Change</h3>
+            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin-bottom: 24px">
+              The following principles are enforced at the protocol level. Any proposal whose title or description
+              references changing them is automatically rejected at submission &mdash; no vote ever occurs. These are
+              not social conventions; they are hard-coded constraints in the governance system itself.
+            </p>
             <div class="info-card">
-              <div class="ic-title">HARD CAP &mdash; CODE-ENFORCED</div>
+              <div class="ic-title">HARD CAP &mdash; 21,000,000 WTC</div>
               <p>
-                The 21,000,000 WTC supply cap is a protocol constant enforced at proposal submission. Any proposal
-                whose title or description references changing the hard cap, total supply, or coin dilution is
-                automatically rejected. The cap cannot be modified by any governance process.
+                The total supply cap is inviolable. Proposals referencing raising, removing, or diluting the cap are
+                automatically rejected. No governance process can authorise additional minting or inflation.
               </p>
             </div>
             <div class="info-card">
-              <div class="ic-title">ENERGY LAW &mdash; CODE-ENFORCED</div>
+              <div class="ic-title">ENERGY LAW &mdash; 20 kWh/COIN FLOOR, HALVING SCHEDULE, 10 MWh/BLOCK</div>
               <p>
-                The 20 kWh/coin Tier 1 floor and the halving schedule define the economic core of Wattcoin. Proposals
-                mentioning changes to the energy per coin, block reward schedule, or tier structure are automatically
-                rejected.
+                The Tier 1 energy floor (20 kWh/coin), the tier ratchet (doubling each tier), and the per-block energy
+                constant (10 MWh) define the economic core. Proposals mentioning changes to energy per coin, block
+                rewards, or the halving schedule are automatically rejected.
               </p>
             </div>
             <div class="info-card">
-              <div class="ic-title">GENESIS ALLOCATION &mdash; CODE-ENFORCED</div>
+              <div class="ic-title">TIER STRUCTURE &mdash; 21 TIERS, 1,000,000 COINS EACH</div>
               <p>
-                All genesis allocations are visible on the public chain. Proposals referencing reallocation or
-                modification of genesis wallet distributions are automatically rejected.
+                The 21-tier structure with 1,000,000 coins per tier is a protocol constant. Proposals to add, remove,
+                or merge tiers are automatically rejected.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">CONSENSUS MECHANISM &mdash; PROOF-OF-ENERGY</div>
+              <p>
+                Proof-of-Energy is the fundamental consensus mechanism. Proposals to switch to proof-of-stake,
+                proof-of-work, or any other consensus model are automatically rejected. The energy-backed model is not
+                negotiable.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">PROPORTIONAL BLOCK REWARDS</div>
+              <p>
+                Block rewards must remain proportional to verified energy contribution. Proposals introducing lottery,
+                winner-takes-all, or mining-pool-based reward models are automatically rejected.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">GENESIS ALLOCATION</div>
+              <p>
+                All genesis allocations are visible on the public chain and are immutable. Proposals referencing
+                reallocation, clawback, or modification of genesis wallet distributions are automatically rejected.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">NFT COLLECTION &mdash; 60 NFTS, 140 PROFIT SHARES</div>
+              <p>
+                The 60-NFT Vortex collection is sealed at genesis. Proposals to mint additional NFTs, increase the
+                collection size, or alter the 140 total profit share count are automatically rejected.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">NFT VOTING WEIGHTS &mdash; GOLD 5, SILVER 3, BRONZE 1</div>
+              <p>
+                NFT voting weights are tied to profit-share tiers. Proposals to change, equalise, or remove weighted
+                voting are automatically rejected.
+              </p>
+            </div>
+            <div class="info-card">
+              <div class="ic-title">GOVERNANCE THRESHOLD &mdash; 71/140 SIMPLE MAJORITY</div>
+              <p>
+                The pass threshold is a protocol constant. Proposals to raise, lower, or bypass the quorum requirement
+                are automatically rejected.
               </p>
             </div>
             <div class="info-card">
