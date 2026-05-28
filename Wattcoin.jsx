@@ -744,6 +744,19 @@ export default function Wattcoin() {
             }}
           >
             Watt<span style={{ color: '#4ade80' }}>coin</span>
+            <span
+              style={{
+                display: 'block',
+                fontSize: 18,
+                fontFamily: "'DM Mono', monospace",
+                color: '#4ade80',
+                fontWeight: 400,
+                letterSpacing: '0.06em',
+                marginTop: 12,
+              }}
+            >
+              Proof-of-Energy Cryptocurrency Whitepaper
+            </span>
           </h1>
           <p
             style={{
@@ -2891,8 +2904,8 @@ export default function Wattcoin() {
             the protocol level without a central authority. The core economic rules — energy per coin, block rewards,
             and total supply — are protected constants enforced by the protocol itself.
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 48 }}>
-            <div>
+          <div style={{ maxWidth: 760, margin: '0 auto' }}>
+            <div style={{ marginBottom: 48 }}>
               <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, color: '#e8f5e8', marginBottom: 20 }}>
                 Upgrade Process
               </h3>

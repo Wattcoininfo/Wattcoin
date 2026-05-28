@@ -167,6 +167,17 @@ export default function AppTabs() {
   const initialEnergyByAddress = loadPersistedEnergyByAddress();
   const [activeTab, setActiveTab] = useState('dashboard');
 
+  useEffect(() => {
+    const titles = {
+      dashboard: 'Wattcoin — Mine | Energy-Backed Cryptocurrency',
+      log: 'Wattcoin — Mining Log | Proof-of-Energy Activity',
+      wallet: 'Wattcoin — Wallet | Send, Stake & Manage WTC',
+      governance: 'Wattcoin — Governance | DAO Treasury & Vortex NFT Voting',
+      whitepaper: 'Wattcoin — Whitepaper | Proof-of-Energy Cryptocurrency',
+    };
+    document.title = titles[activeTab] || 'Wattcoin — Energy-Backed Cryptocurrency';
+  }, [activeTab]);
+
   function handleTabClick(key) {
     setActiveTab(key);
   }
