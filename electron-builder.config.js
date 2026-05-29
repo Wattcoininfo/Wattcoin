@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 
 function optionalString(...names) {
   for (const name of names) {
@@ -72,7 +73,11 @@ if (enableWindowsSigning && customSignScript) {
   winConfig.sign = path.resolve(customSignScript);
 }
 
-module.exports = {
+const scriptDir = path.resolve(__dirname, 'scripts');
+const hasAfterPack = fs.existsSync(path.join(scriptDir, 'after-pack-windows.js'));
+const hasAfterSign = fs.existsSync(path.join(scriptDir, 'after-sign-windows.js'));
+
+const config = {
   appId: 'com.wattcoin.miner',
   productName: 'Wattcoin Miner',
   icon: 'assets/icons/icon.png',
@@ -145,8 +150,6 @@ module.exports = {
     enableEmbeddedAsarIntegrityValidation: true,
     onlyLoadAppFromAsar: true,
   },
-  afterPack: 'scripts/after-pack-windows.js',
-  afterSign: 'scripts/after-sign-windows.js',
   win: {
     ...winConfig,
     icon: 'assets/icons/icon.ico',
@@ -190,3 +193,8 @@ module.exports = {
     },
   },
 };
+
+if (hasAfterPack) config.afterPack = 'scripts/after-pack-windows.js';
+if (hasAfterSign) config.afterSign = 'scripts/after-sign-windows.js';
+
+module.exports = config;
