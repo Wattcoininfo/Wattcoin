@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // ── Validate page name ────────────────────────────────────────────────────────
-const ALLOWED = ['whitepaper', 'wallet', 'download'];
+const ALLOWED = ['whitepaper', 'wallet', 'download', 'whitepaper-pdf'];
 $page = isset($_GET['page']) ? (string)$_GET['page'] : '';
 if (!in_array($page, ALLOWED, true)) {
     http_response_code(400);

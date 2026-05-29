@@ -2840,8 +2840,8 @@
               .catch(function () {});
           });
         }
-        // Whitepaper download counter
-        fetch(BASE + 'download', { method: 'GET' })
+        // Whitepaper PDF download counter (separate from installer counter)
+        fetch(BASE + 'whitepaper-pdf', { method: 'GET' })
           .then(function (r) {
             return r.json();
           })
@@ -2853,7 +2853,7 @@
         var wpBtn = document.getElementById('whitepaper-download-btn');
         if (wpBtn) {
           wpBtn.addEventListener('click', function () {
-            fetch(BASE + 'download', { method: 'POST' })
+            fetch(BASE + 'whitepaper-pdf', { method: 'POST' })
               .then(function (r) {
                 return r.json();
               })
