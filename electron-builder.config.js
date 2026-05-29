@@ -120,22 +120,6 @@ module.exports = {
     'app-integrity-manifest.json',
     'package.json',
   ],
-  extraFiles: [
-    {
-      // VisualElementsManifest must sit next to Wattcoin Miner.exe so Windows
-      // Start Menu uses a full-size tile icon instead of a tiny scaled graphic.
-      from: 'assets/icons/Wattcoin Miner.VisualElementsManifest.xml',
-      to: 'Wattcoin Miner.VisualElementsManifest.xml',
-    },
-    {
-      from: 'assets/icons/icon-150.png',
-      to: 'assets/icons/icon-150.png',
-    },
-    {
-      from: 'assets/icons/icon-70.png',
-      to: 'assets/icons/icon-70.png',
-    },
-  ],
   extraResources: [
     {
       from: 'wattcoin-beta-config.json',
@@ -163,16 +147,44 @@ module.exports = {
   },
   afterPack: 'scripts/after-pack-windows.js',
   afterSign: 'scripts/after-sign-windows.js',
-  win: { ...winConfig, icon: 'assets/icons/icon.ico' },
-  nsis: {
-    oneClick: false,
-    allowToChangeInstallationDirectory: true,
-    createDesktopShortcut: true,
-    createStartMenuShortcut: true,
-    runAfterFinish: true,
-    installerIcon: 'assets/icons/icon.ico',
-    uninstallerIcon: 'assets/icons/icon.ico',
-    installerHeaderIcon: 'assets/icons/icon.ico',
+  win: {
+    ...winConfig,
+    icon: 'assets/icons/icon.ico',
+    artifactName: 'Wattcoin Miner Setup ${version}.exe',
+    extraFiles: [
+      {
+        from: 'assets/icons/Wattcoin Miner.VisualElementsManifest.xml',
+        to: 'Wattcoin Miner.VisualElementsManifest.xml',
+      },
+      {
+        from: 'assets/icons/icon-150.png',
+        to: 'assets/icons/icon-150.png',
+      },
+      {
+        from: 'assets/icons/icon-70.png',
+        to: 'assets/icons/icon-70.png',
+      },
+    ],
+    nsis: {
+      oneClick: false,
+      allowToChangeInstallationDirectory: true,
+      createDesktopShortcut: true,
+      createStartMenuShortcut: true,
+      runAfterFinish: true,
+      installerIcon: 'assets/icons/icon.ico',
+      uninstallerIcon: 'assets/icons/icon.ico',
+      installerHeaderIcon: 'assets/icons/icon.ico',
+    },
   },
-  artifactName: 'Wattcoin Miner Setup ${version}.exe',
+  linux: {
+    target: ['AppImage', 'deb'],
+    icon: 'assets/icons/icon.png',
+    artifactName: 'Wattcoin-Miner-${version}.${ext}',
+    category: 'Utility',
+    desktop: {
+      Name: 'Wattcoin Miner',
+      Comment: 'Wattcoin Miner — CPU/GPU miner, wallet and staking',
+      Terminal: false,
+    },
+  },
 };
