@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
 const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };

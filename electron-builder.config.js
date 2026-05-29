@@ -165,16 +165,16 @@ module.exports = {
         to: 'assets/icons/icon-70.png',
       },
     ],
-    nsis: {
-      oneClick: false,
-      allowToChangeInstallationDirectory: true,
-      createDesktopShortcut: true,
-      createStartMenuShortcut: true,
-      runAfterFinish: true,
-      installerIcon: 'assets/icons/icon.ico',
-      uninstallerIcon: 'assets/icons/icon.ico',
-      installerHeaderIcon: 'assets/icons/icon.ico',
-    },
+  },
+  nsis: {
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true,
+    runAfterFinish: true,
+    installerIcon: 'assets/icons/icon.ico',
+    uninstallerIcon: 'assets/icons/icon.ico',
+    installerHeaderIcon: 'assets/icons/icon.ico',
   },
   linux: {
     target: ['AppImage', 'deb'],
@@ -182,9 +182,11 @@ module.exports = {
     artifactName: 'Wattcoin-Miner-${version}.${ext}',
     category: 'Utility',
     desktop: {
-      Name: 'Wattcoin Miner',
-      Comment: 'Wattcoin Miner — CPU/GPU miner, wallet and staking',
-      Terminal: false,
+      entry: {
+        Name: 'Wattcoin Miner',
+        Comment: 'Wattcoin Miner — CPU/GPU miner, wallet and staking',
+        Terminal: false,
+      },
     },
   },
 };
