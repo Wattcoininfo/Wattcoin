@@ -4,6 +4,10 @@
   # Strip index.html from URLs
   RewriteCond %{THE_REQUEST} /index\.html [NC]
   RewriteRule ^(.*)index\.html$ /$1 [R=301,L]
+
+  # Redirect homepage.html → /
+  RewriteCond %{THE_REQUEST} /homepage\.html [NC]
+  RewriteRule ^homepage\.html$ / [R=301,L]
 </IfModule>
 
 <IfModule mod_headers.c>
@@ -18,10 +22,15 @@
   </FilesMatch>
 
   # No cache for HTML pages (version-sensitive)
-  <FilesMatch "^(index\.html|homepage\.html|wattcoin-whitepaper\.html)$">
+  <FilesMatch "^(index\.html|homepage\.html)$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
+  </FilesMatch>
+
+  # Cache whitepaper for Google snippets
+  <FilesMatch "wattcoin-whitepaper\.html$">
+    Header set Cache-Control "public, max-age=3600"
   </FilesMatch>
 
   # Cache static assets aggressively

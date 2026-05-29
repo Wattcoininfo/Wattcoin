@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Wattcoin Updates</title>
+    <link>https://wattcoin.ee/</link>
+    <description>Latest news and updates from the Wattcoin project</description>
+    <language>en</language>
+    <lastBuildDate>Thu, 28 May 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://wattcoin.ee/updates.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title>v1.0.284 released — Governance UI, SEO redesign, new FAQ</title>
+      <link>https://wattcoin.ee/#latest</link>
+      <description>Governance tab UI improvements, SEO redesign, new FAQ section.</description>
+      <pubDate>Thu, 28 May 2026 00:00:00 +0000</pubDate>
+      <guid>https://wattcoin.ee/#update-v1-0-284</guid>
+    </item>
+    <item>
+      <title>Site redesigned for search visibility</title>
+      <link>https://wattcoin.ee/#latest</link>
+      <description>New homepage, structured data, FAQ schema, and performance improvements.</description>
+      <pubDate>Thu, 28 May 2026 00:00:00 +0000</pubDate>
+      <guid>https://wattcoin.ee/#update-seo-redesign</guid>
+    </item>
+    <item>
+      <title>Mainnet governance live</title>
+      <link>https://wattcoin.ee/wattcoin-whitepaper.html#governance</link>
+      <description>Vortex NFT holders can now submit PIPs and vote on-chain. Treasury transfers active.</description>
+      <pubDate>Thu, 28 May 2026 00:00:00 +0000</pubDate>
+      <guid>https://wattcoin.ee/#update-governance-live</guid>
+    </item>
+    <item>
+      <title>Public sale open — 333,333 WTC available</title>
+      <link>https://wattcoin.ee/wattcoin-whitepaper.html#buy</link>
+      <description>Public sale across three tiers. Staking rewards pool of 166,667 WTC live.</description>
+      <pubDate>Tue, 01 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>https://wattcoin.ee/#update-public-sale</guid>
+    </item>
+    <item>
+      <title>Wattcoin mainnet launched</title>
+      <link>https://wattcoin.ee/wattcoin-whitepaper.html</link>
+      <description>Proof-of-Energy consensus, 21M hard cap, 21 mining tiers.</description>
+      <pubDate>Tue, 01 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>https://wattcoin.ee/#update-mainnet-launch</guid>
+    </item>
+  </channel>
+</rss>

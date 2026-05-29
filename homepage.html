@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wattcoin — Proof-of-Energy Cryptocurrency | Mine WTC with CPU, GPU, or RAM</title>
+    <title>Wattcoin — Proof-of-Energy Cryptocurrency | Mine WTC with Any Hardware</title>
     <meta
       name="description"
-      content="Wattcoin is the first Proof-of-Energy cryptocurrency where every coin has a verifiable energy cost. Mine WTC with CPU, GPU, or RAM. 21M hard cap, 21 mining tiers, real hydro turbine backing. Download the free miner app."
+      content="Wattcoin is the first Proof-of-Energy cryptocurrency — every coin minted has a verifiable, non-negotiable energy cost. Mine fairly with any hardware. No ASIC advantage, no mining pools, no luck variance. 21M hard cap, 21 mining tiers, backed by a real 60 kW Vortex hydro turbine in Estonia. Download the free miner app."
     />
     <meta
       name="keywords"
@@ -32,7 +32,7 @@
     <meta name="twitter:title" content="Wattcoin — Proof-of-Energy Cryptocurrency | Mine WTC" />
     <meta
       name="twitter:description"
-      content="Mine WTC with CPU, GPU, or RAM. Every coin has a verifiable energy cost. 21M hard cap. Free miner app."
+      content="Wattcoin is the first Proof-of-Energy cryptocurrency. Every coin has a verifiable energy cost. Mine with any hardware — CPU, GPU, RAM, or server. 21M hard cap, backed by a real hydro turbine."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="assets/icons/icon.ico" />
@@ -40,8 +40,14 @@
     <link rel="icon" type="image/png" sizes="256x256" href="assets/icons/icon-256.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-256.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <link rel="alternate" type="application/rss+xml" title="Wattcoin Updates" href="/updates.xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap"
+    />
     <link
       href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap"
       rel="stylesheet"
@@ -55,7 +61,7 @@
             "@id": "https://wattcoin.ee/#website",
             "name": "Wattcoin",
             "url": "https://wattcoin.ee/",
-            "description": "Proof-of-Energy cryptocurrency secured by energy-backed consensus. Mine WTC with CPU, GPU, or RAM.",
+            "description": "Proof-of-Energy cryptocurrency where every coin has a verifiable energy cost. Mine with any hardware — CPU, GPU, RAM, or server.",
             "publisher": { "@type": "Organization", "name": "Wattcoin", "url": "https://wattcoin.ee" }
           },
           {
@@ -72,7 +78,7 @@
             "@type": "Product",
             "@id": "https://wattcoin.ee/#wtc",
             "name": "Wattcoin (WTC)",
-            "description": "Energy-backed cryptocurrency with 21M hard cap. Mineable with CPU, GPU, or RAM.",
+            "description": "Proof-of-Energy cryptocurrency with 21M hard cap. Mine with any hardware — CPU, GPU, RAM, or server.",
             "url": "https://wattcoin.ee/",
             "image": "https://wattcoin.ee/assets/new_icon.png",
             "brand": { "@type": "Brand", "name": "Wattcoin" },
@@ -233,7 +239,6 @@
         display: flex;
         gap: 20px;
         list-style: none;
-        align-items: center;
       }
       .nav-links a {
         font-family: 'DM Mono', monospace;
@@ -241,46 +246,49 @@
         color: #6b9a6b;
         letter-spacing: 0.1em;
         text-transform: uppercase;
+        text-decoration: none;
         transition: color 0.2s;
-        white-space: nowrap;
       }
       .nav-links a:hover {
         color: #4ade80;
       }
+      .nav-links a.nav-whitepaper {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .nav-links a.nav-whitepaper:hover {
+        color: #86efac;
+      }
       .nav-links a.nav-wallet {
         color: #fbbf24;
       }
-      .nav-links a.nav-download {
-        color: #4ade80;
-        font-weight: 700;
+      .nav-links a.nav-wallet:hover {
+        color: #fde68a;
       }
-      .nav-toggle {
-        display: none;
-        background: none;
-        border: none;
+      .nav-links a.nav-nft {
         color: #4ade80;
-        font-size: 24px;
-        cursor: pointer;
+        font-weight: 500;
+      }
+      .nav-links a.nav-nft:hover {
+        color: #86efac;
+      }
+      .nav-links li.nav-break {
+        display: none;
       }
 
       @media (max-width: 860px) {
+        nav {
+          height: auto;
+          min-height: 56px;
+          padding: 10px 16px;
+          flex-wrap: wrap;
+          gap: 8px 0;
+        }
         .nav-links {
-          display: none;
-          position: fixed;
-          top: 56px;
-          left: 0;
-          right: 0;
-          background: rgba(6, 14, 6, 0.98);
-          flex-direction: column;
-          padding: 20px 24px;
-          gap: 16px;
-          border-bottom: 1px solid #1a2a1a;
-        }
-        .nav-links.open {
-          display: flex;
-        }
-        .nav-toggle {
-          display: block;
+          width: 100%;
+          gap: 6px 10px;
+          flex-wrap: wrap;
+          justify-content: center;
         }
       }
 
@@ -640,14 +648,15 @@
 
       /* -- Footer -- */
       footer {
+        padding: 40px;
         text-align: center;
-        padding: 40px 24px;
-        font-size: 12px;
-        color: #3a5a3a;
-        border-top: 1px solid #1a2a1a;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        border-top: 1px solid #1e3a1e;
       }
       footer a {
-        color: #5a8a5a;
+        color: #7aaa7a;
       }
       footer a:hover {
         color: #4ade80;
@@ -673,13 +682,12 @@
     <!-- -- Navigation -- -->
     <nav>
       <a href="/" class="nav-logo">Watt<span>coin</span></a>
-      <button class="nav-toggle" id="navToggle" aria-label="Menu">&#9776;</button>
-      <ul class="nav-links" id="navLinks">
+      <ul class="nav-links">
         <li><a href="#how-it-works">How It Works</a></li>
         <li><a href="#features">Features</a></li>
-        <li><a href="/wattcoin-whitepaper.html">Whitepaper</a></li>
-        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
+        <li><a href="/wattcoin-whitepaper.html" class="nav-whitepaper">Whitepaper</a></li>
         <li><a href="#download" class="nav-download">Download</a></li>
+        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
       </ul>
     </nav>
 
@@ -707,7 +715,7 @@
         <p class="hero-tagline">Every Coin Has a Verifiable Energy Cost</p>
         <p class="hero-lead">
           The first Proof-of-Energy cryptocurrency — every miner pays the same estimated energy cost per coin,
-          regardless of hardware. Mine WTC with CPU, GPU, or RAM. No ASIC advantage, no mining pools, no luck variance.
+          regardless of hardware. Mine WTC with any hardware. No ASIC advantage, no mining pools, no luck variance.
         </p>
         <a href="#download" class="hero-cta">&#8595;&nbsp; Download for Windows</a>
         <br /><a href="/wattcoin-whitepaper.html" class="hero-cta-secondary">Read the Whitepaper &rarr;</a>
@@ -927,9 +935,10 @@
           <div class="download-platform">WINDOWS</div>
           <div class="download-name">Wattcoin Miner v1.0.284</div>
           <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
-          <a href="/releases/Wattcoin Miner Setup 1.0.284.exe" download class="hero-cta"
+          <a href="/releases/Wattcoin Miner Setup 1.0.284.exe" download class="hero-cta" id="download-btn"
             >&#8595;&nbsp; Download for Windows</a
           >
+          <div id="download-count" style="font-size: 11px; color: #5a8a5a; margin-top: 10px; text-align: center"></div>
         </div>
       </div>
     </section>
@@ -1068,14 +1077,10 @@
           /></svg
         >Github</a
       >
-      &nbsp;&mdash;&nbsp; MAY 2026
+      &nbsp;&mdash;&nbsp; MAY 2026 <br /><span id="page-visit-count" style="font-size: 10px; color: #3a5a3a"></span>
     </footer>
 
     <script>
-      document.getElementById('navToggle').addEventListener('click', function () {
-        document.getElementById('navLinks').classList.toggle('open');
-      });
-
       // -- Electricity Price Dial --------------------------------------------------
       (async function initElecDial() {
         const TIER1_WH = 20000;
@@ -1113,6 +1118,54 @@
           if (!j.ok || !Number.isFinite(j.price) || j.price <= 0) throw new Error('bad value');
           applyPrice(j.price, true);
         } catch (_) {}
+      })();
+    </script>
+    <script>
+      // ── Counters ────────────────────────────────────────────────────────────────
+      (function () {
+        'use strict';
+        var BASE = '/counter-api/?page=';
+        function fmtDl(n) {
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+          return n;
+        }
+        // Visit counter — increment once per session
+        var counted = sessionStorage.getItem('wtc_pg_home');
+        var method = counted ? 'GET' : 'POST';
+        if (!counted) sessionStorage.setItem('wtc_pg_home', '1');
+        fetch(BASE + 'whitepaper', { method: method })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('page-visit-count');
+            if (el && d.ok) el.textContent = fmtDl(d.count);
+          })
+          .catch(function () {});
+        // Download counter (shared with whitepaper page)
+        fetch(BASE + 'download', { method: 'GET' })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('download-count');
+            if (el && d.ok) el.textContent = fmtDl(d.count);
+          })
+          .catch(function () {});
+        var btn = document.getElementById('download-btn');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            fetch(BASE + 'download', { method: 'POST' })
+              .then(function (r) {
+                return r.json();
+              })
+              .then(function (d) {
+                var el = document.getElementById('download-count');
+                if (el && d.ok) el.textContent = fmtDl(d.count);
+              })
+              .catch(function () {});
+          });
+        }
       })();
     </script>
   </body>

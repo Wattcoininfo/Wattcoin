@@ -32,6 +32,7 @@ Wattcoin's Proof-of-Energy (PoE) consensus replaces wasteful hash-based mining w
 Download the latest installer from [wattcoin.ee](https://wattcoin.ee) and run `Wattcoin Miner Setup X.X.X.exe`.
 
 The installer will:
+
 1. Install the application to your chosen directory
 2. Add a Windows Firewall rule for peer-to-peer communication (port 39310)
 3. Create Start Menu and Desktop shortcuts
@@ -66,6 +67,7 @@ npm run electron:build:local
 ```
 
 The build script:
+
 1. Bumps the patch version
 2. Builds the Vite frontend
 3. Runs electron-builder to produce an NSIS installer
@@ -105,30 +107,81 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ## Project Structure
 
 ```
-├── electron-main.js          # Electron main process (RPC, networking, attestation)
-├── preload.js                # IPC preload bridge with channel allowlist
-├── wtc-node.js               # WTC blockchain node
-├── wtc-chain.js              # Block/chain data structures
-├── wtc-consensus.js          # BFT consensus (propose, vote, commit)
-├── wtc-accounts.js           # Account state (balances, nonces, maturity)
-├── wtc-address.js            # Address derivation, signing, verification
-├── wtc-mempool.js            # Transaction mempool
-├── wtc-staking-queue.js      # Staking logic
-├── wtc-sale-queue.js         # Sale order queue
-├── wtc-nfts.js               # NFT store
-├── probe-attestation.js      # Hardware probe attestation
-├── runtime-config.js          # Configuration loader
-├── Miner.jsx                 # Main mining UI component
-├── AppTabs.jsx               # Tab-based application shell
-├── Wattcoin.jsx              # Buy/stake/wallet UI
-├── MiningLog.jsx             # Mining log viewer
+├── homepage.html                 # Public-facing website (deployed as index.html)
+├── wallet.html                   # Web wallet page
+├── wattcoin-whitepaper.html      # Whitepaper page
+├── index.html                    # Vite SPA shell (desktop app entry)
+├── main.jsx                      # React entry point
+├── Miner.jsx                     # Mining UI component
+├── AppTabs.jsx                   # Tab-based application shell
+├── Wattcoin.jsx                  # Buy/stake/wallet UI
+├── Governance.jsx                # Governance UI component
+├── MiningLog.jsx                 # Mining log viewer
+│
+├── electron-main.js              # Electron main process (RPC, networking, attestation)
+├── electron-start.js             # Electron startup script
+├── preload.js                    # IPC preload bridge with channel allowlist
+├── electron-builder.config.js    # Electron-builder configuration
+├── vite.config.js                # Vite build configuration
+│
+├── wtc-node.js                   # WTC blockchain node
+├── wtc-chain.js                  # Block/chain data structures
+├── wtc-consensus.js              # BFT consensus (propose, vote, commit)
+├── wtc-accounts.js               # Account state (balances, nonces, maturity)
+├── wtc-address.js                # Address derivation, signing, verification
+├── wtc-mempool.js                # Transaction mempool
+├── wtc-staking-queue.js          # Staking logic
+├── wtc-sale-queue.js             # Sale order queue
+├── wtc-nfts.js                   # NFT store
+├── wtc-governance.js             # Governance logic
+├── probe-attestation.js          # Hardware probe attestation
+├── protocol-constants.js         # Network protocol constants
+├── peer-privacy.js               # Peer privacy & relay
+├── peer-self-filter.js           # Self-connection filter
+├── peer-discovery-observability.js
+├── peer-count-observability.js
+├── remote-seed-manifest.js       # Remote seed peer manifest
+├── requester-registration.js     # Requester registration
+├── local-subnet-discovery.js     # LAN peer discovery
+├── round-ledger.js               # Round event ledger
+├── runtime-config.js             # Configuration loader
+├── hardware-load-controller.js   # CPU/GPU load controller
+├── cpu-load-worker.js            # CPU load simulation worker
+├── ddr-load-worker.js            # RAM load simulation worker
+├── hardware-tables.cjs           # Hardware energy tables
+├── ops-health.js                 # Operational health checks
+├── backend-benchmark.js          # Backend benchmarking
+├── app-integrity-manifest.json   # Runtime integrity hashes
+│
+├── counter-api/                  # Visit/download counter API (PHP)
+│   ├── index.php
+│   └── .htaccess
+├── elec-price-api/               # Electricity price API (PHP)
+│   ├── index.php
+│   └── .htaccess
+├── sale-api/                     # Token sale API (PHP)
+│   ├── index.php
+│   └── .htaccess
+│
 ├── scripts/
-│   ├── release-build.js      # Build + deploy orchestrator
-│   ├── _sftp-deploy.js       # SFTP deployment
+│   ├── release-build.js          # Build + deploy orchestrator
+│   ├── _sftp-deploy.js           # SFTP deployment (primary)
+│   ├── deploy-files.js           # SFTP deployment (static files only)
+│   ├── deploy-seed-manifest.js   # Seed manifest deploy
 │   └── ...
-├── tests/                    # Test files (30 test suites)
-├── docs/                     # Operations documentation
-└── monitoring/               # Prometheus/Grafana monitoring stack
+├── assets/
+│   ├── whitepaper.css            # Whitepaper page styles
+│   ├── new_icon.png
+│   └── Vortex NFT *.jpg          # NFT collection images
+├── htdocs.htaccess               # Apache config (deployed as .htaccess)
+├── sitemap.xml                   # SEO sitemap
+├── robots.txt                    # Robots exclusion rules
+├── updates.xml                   # RSS feed
+├── site.webmanifest              # Web app manifest
+├── docs/                         # Operations documentation
+├── monitoring/                   # Prometheus/Grafana monitoring stack
+├── tests/                        # Test files (30+ test suites)
+└── releases/                     # Built installers
 ```
 
 ---
@@ -136,27 +189,48 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ## Architecture Overview
 
 ```
-┌──────────────────────────────────────────────────┐
-│                  Electron Renderer                 │
-│  (Miner.jsx, AppTabs.jsx, Wattcoin.jsx)           │
-│         ↕ IPC (preload.js allowlist)              │
-├──────────────────────────────────────────────────┤
-│               Electron Main Process               │
-│  (electron-main.js)                               │
-│  ┌──────────┬───────────┬──────────┬───────────┐  │
-│  │ Network  │ Attest.   │ Wallet   │ Updates   │  │
-│  │ Server   │ Engine    │ Manager  │ & Config  │  │
-│  ├──────────┴───────────┴──────────┴───────────┤  │
-│  │            WTC Node (wtc-node.js)            │  │
-│  │  ┌──────────┬──────────┬──────────────────┐  │  │
-│  │  │ Chain    │ Consensus│ Mempool/Accounts │  │  │
-│  │  │ (blocks) │ (BFT)    │ (state)          │  │  │
-│  │  └──────────┴──────────┴──────────────────┘  │  │
-│  │  ┌──────────┬──────────┬──────────────────┐  │  │
-│  │  │ Staking  │ NFTs     │ Sale Queue       │  │  │
-│  │  └──────────┴──────────┴──────────────────┘  │  │
-│  └───────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    Website (wattcoin.ee)                          │
+│  ┌──────────────────┐  ┌──────────────────────────────────────┐  │
+│  │ Static Pages      │  │ PHP APIs                             │  │
+│  │  - index.html     │  │  - counter-api/   (visits/downloads) │  │
+│  │  - wallet.html    │  │  - elec-price-api/(electricity cost) │  │
+│  │  - whitepaper.html│  │  - sale-api/      (token sale)      │  │
+│  │  - sitemap.xml    │  └──────────────────────────────────────┘  │
+│  │  - robots.txt     │  ┌──────────────────────────────────────┐  │
+│  │  - updates.xml    │  │ Apache (.htaccess)                    │  │
+│  └──────────────────┘  │  caching, gzip, CSP, redirects        │  │
+│                        └──────────────────────────────────────┘  │
+└──────────────────────────────┬───────────────────────────────────┘
+                               │  HTTPS / Releases
+┌──────────────────────────────┴───────────────────────────────────┐
+│                  Electron Desktop App                             │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │  Renderer Process                                           │  │
+│  │  (Miner.jsx, AppTabs.jsx, Wattcoin.jsx, Governance.jsx)     │  │
+│  │         ↕ IPC (preload.js allowlist)                        │  │
+│  ├────────────────────────────────────────────────────────────┤  │
+│  │  Main Process (electron-main.js)                            │  │
+│  │  ┌──────────┬───────────┬──────────┬──────────────────┐    │  │
+│  │  │ Network  │ Attest.   │ Wallet   │ Updates & Config │    │  │
+│  │  │ Server   │ Engine    │ Manager  │                  │    │  │
+│  │  ├──────────┴───────────┴──────────┴──────────────────┤    │  │
+│  │  │                WTC Node (wtc-node.js)               │    │  │
+│  │  │  ┌──────────┬──────────┬──────────────────────┐    │    │  │
+│  │  │  │ Chain    │ Consensus│ Mempool / Accounts   │    │    │  │
+│  │  │  │ (blocks) │ (BFT)    │ (state)              │    │    │  │
+│  │  │  ├──────────┼──────────┼──────────────────────┤    │    │  │
+│  │  │  │ Staking  │ NFTs     │ Sale Queue           │    │    │  │
+│  │  │  └──────────┴──────────┴──────────────────────┘    │    │  │
+│  │  └─────────────────────────────────────────────────────┘    │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                             ↕                                     │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │  Build & Deploy Pipeline                                   │  │
+│  │  release-build.js → electron-builder → _sftp-deploy.js     │  │
+│  │  Version bump → Vite build → NSIS package → SFTP upload   │  │
+│  └────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -183,5 +257,4 @@ MIT — see [LICENSE](LICENSE) for details.
 ## Links
 
 - **Website:** [https://wattcoin.ee](https://wattcoin.ee)
-- **Whitepaper:** [https://wattcoin.ee](https://wattcoin.ee)
-
+- **Whitepaper:** [https://wattcoin.ee/wattcoin-whitepaper.html](https://wattcoin.ee/wattcoin-whitepaper.html)
