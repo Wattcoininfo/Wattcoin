@@ -101,6 +101,9 @@ make_icon.py
 make_icons_nobg.py
 wattcoin-beta-config.json
 
+# Auto-generated PDF (regenerate via scripts/generate-whitepaper-pdf.js)
+assets/wattcoin-whitepaper.pdf
+
 # Local repository backups and temporary output
 
 # Local repository backups and temporary output
