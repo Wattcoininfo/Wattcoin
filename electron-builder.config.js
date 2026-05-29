@@ -132,7 +132,8 @@ const config = {
       ['resources/wtc-genesis.json', 'wtc-genesis.json'],
     ]
       .filter(([src]) => fs.existsSync(path.resolve(__dirname, src)))
-      .map(([src, dest]) => ({ from: src, to: dest }))],
+      .map(([src, dest]) => ({ from: src, to: dest })),
+  ],
   // electron-builder v26 applies fuses natively, including computing and embedding
   // the ASAR hash before flipping EnableEmbeddedAsarIntegrityValidation.
   // Windows ASAR integrity requires electron >= 30.0.0.
