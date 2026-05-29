@@ -126,19 +126,13 @@ const config = {
     'package.json',
   ],
   extraResources: [
-    {
-      from: 'wattcoin-beta-config.json',
-      to: 'wattcoin-beta-config.json',
-    },
-    {
-      from: 'docs/seed-peers.mainnet.json',
-      to: 'seed-peers.mainnet.json',
-    },
-    {
-      from: 'resources/wtc-genesis.json',
-      to: 'wtc-genesis.json',
-    },
-  ],
+    ...[
+      ['wattcoin-beta-config.json', 'wattcoin-beta-config.json'],
+      ['docs/seed-peers.mainnet.json', 'seed-peers.mainnet.json'],
+      ['resources/wtc-genesis.json', 'wtc-genesis.json'],
+    ]
+      .filter(([src]) => fs.existsSync(path.resolve(__dirname, src)))
+      .map(([src, dest]) => ({ from: src, to: dest }))],
   // electron-builder v26 applies fuses natively, including computing and embedding
   // the ASAR hash before flipping EnableEmbeddedAsarIntegrityValidation.
   // Windows ASAR integrity requires electron >= 30.0.0.
@@ -184,6 +178,7 @@ const config = {
     icon: 'assets/icons/icon.png',
     artifactName: 'Wattcoin-Miner-${version}.${ext}',
     category: 'Utility',
+    maintainer: 'Wattcoin Foundation <info@wattcoin.ee>',
     desktop: {
       entry: {
         Name: 'Wattcoin Miner',
