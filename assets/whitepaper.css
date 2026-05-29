@@ -1034,7 +1034,9 @@ input[type='range'] {
   gap: 24px;
 }
 .download-cards-row .download-card {
-  flex: 1 1 280px;
+  flex: 1 1 0;
+  min-width: 260px;
+  max-width: none;
 }
 .download-card {
   display: flex;
