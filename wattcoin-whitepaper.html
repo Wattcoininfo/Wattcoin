@@ -57,6 +57,11 @@
               "@type": "Organization",
               "name": "Wattcoin",
               "url": "https://wattcoin.ee",
+              "sameAs": [
+                "https://x.com/WattcoinInfo",
+                "https://t.me/+VfDsBLxrAGswNGM0",
+                "https://github.com/Wattcoininfo/Wattcoin"
+              ],
               "logo": {
                 "@type": "ImageObject",
                 "url": "https://wattcoin.ee/assets/new_icon.png"
@@ -90,68 +95,6 @@
                 "position": 2,
                 "name": "Whitepaper",
                 "item": "https://wattcoin.ee/wattcoin-whitepaper.html"
-              }
-            ]
-          },
-          {
-            "@type": "FAQPage",
-            "@id": "https://wattcoin.ee/#faq",
-            "mainEntity": [
-              {
-                "@type": "Question",
-                "name": "What is Wattcoin?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Wattcoin is an energy-backed cryptocurrency secured by Proof-of-Energy consensus. Every coin minted has a verifiable, non-negotiable energy cost. Unlike Bitcoin or Ethereum, Wattcoin replaces hash-based mining with software energy metering — your CPU, GPU and RAM estimates electrical energy expenditure through hardware performance metrics, and you are rewarded proportionally. 21 million total supply across 21 mining tiers."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "How do I mine WTC?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Download the Wattcoin Miner desktop app for Windows. Install it, launch it, and click 'Start Mining' to begin mining WTC using your CPU, GPU, or RAM. No configuration, no pools, no wallet setup required — the app generates a wallet for you on first launch. Every miner pays the same energy cost per coin regardless of hardware."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "What makes Wattcoin different from Bitcoin?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Bitcoin uses Proof-of-Work where the fastest hasher wins the block reward (lottery model). Wattcoin uses Proof-of-Energy where every miner is rewarded proportionally to their verified energy contribution. There is no hardware arms race — a CPU miner and a GPU miner both spend exactly 20 kWh to earn one WTC in Tier 1. Mining pools are obsolete by design."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "What is the WTC total supply?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Wattcoin has a hard cap of 21,000,000 WTC distributed across 21 tiers of 1,000,000 coins each. The hard cap is an immutable protocol constant that no governance process can change."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "What is a Vortex NFT?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Vortex NFTs are a limited collection of 60 NFTs (Gold, Silver, Bronze tiers) that grant holders a share of the electricity output from a real 60 kW Vortex Gravity Hydro Turbine in Estonia. NFT holders also receive voting power in the Wattcoin DAO governance system: Gold (5 votes), Silver (3 votes), Bronze (1 vote)."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "Can I buy WTC without mining?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Yes. Use the Wattcoin web wallet to buy WTC with USDC and check balances. You can also buy WTC directly through the Wattcoin Miner desktop app wallet using USDC. There is an ongoing public sale of 333,333 WTC. Both wallets let you buy WTC. You can also stake existing WTC to earn rewards."
-                }
-              },
-              {
-                "@type": "Question",
-                "name": "Is Wattcoin environmentally friendly?",
-                "acceptedAnswer": {
-                  "@type": "Answer",
-                  "text": "Wattcoin's energy expenditure is verifiable and non-negotiable, but it replaces the wasteful lottery model of Proof-of-Work with proportional rewards. The network is backed by a real hydro turbine that generates clean electricity. Old hardware that Bitcoin's SHA-256 arms race rendered obsolete — ASICs bound for landfill, GPUs from decommissioned rigs — can mine Wattcoin productively."
-                }
               }
             ]
           }
@@ -2220,85 +2163,6 @@
             <li>Blockchain Explorer</li>
             <li>Live Network Stats</li>
           </ul>
-        </div>
-      </div>
-    </section>
-
-    <!-- -- FAQ -- -->
-    <section id="faq">
-      <div class="container">
-        <div class="section-title">
-          <span class="section-num">FAQ</span>
-          <h2>Frequently Asked Questions</h2>
-        </div>
-        <div style="max-width: 760px; margin: 0 auto">
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">What is Wattcoin?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              Wattcoin is an energy-backed cryptocurrency secured by Proof-of-Energy consensus. Every coin minted has a
-              verifiable, non-negotiable energy cost. Unlike Bitcoin or Ethereum, Wattcoin replaces hash-based mining
-              with software energy metering &mdash; your CPU, GPU and RAM estimates electrical energy expenditure
-              through hardware performance metrics, and you are rewarded proportionally. 21 million total supply across
-              21 mining tiers.
-            </p>
-          </div>
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">How do I mine WTC?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              <a href="#download" style="color: #4ade80">Download the Wattcoin Miner desktop app</a> for Windows.
-              Install it, launch it, and click "Start Mining" to begin mining WTC using your CPU, GPU, or RAM. No
-              configuration, no pools, no wallet setup required &mdash; the app generates a wallet for you on first
-              launch. Every miner pays the same energy cost per coin regardless of hardware.
-            </p>
-          </div>
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">What makes Wattcoin different from Bitcoin?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              Bitcoin uses Proof-of-Work where the fastest hasher wins the block reward (lottery model). Wattcoin uses
-              <a href="#principles" style="color: #4ade80">Proof-of-Energy</a> where every miner is rewarded
-              proportionally to their verified energy contribution. There is no hardware arms race &mdash; a CPU miner
-              and a GPU miner both spend exactly 20 kWh to earn one WTC in Tier 1.
-              <a href="#comparison" style="color: #4ade80">See the full comparison</a>.
-            </p>
-          </div>
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">What is the WTC total supply?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              Wattcoin has a hard cap of 21,000,000 WTC distributed across 21 tiers of 1,000,000 coins each. See the
-              <a href="#tokenomics" style="color: #4ade80">Tokenomics section</a> for the full breakdown. The hard cap
-              is an immutable protocol constant.
-            </p>
-          </div>
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">What is a Vortex NFT?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              <a href="#nft-collection" style="color: #4ade80">Vortex NFTs</a> are a limited collection of 60 NFTs
-              (Gold, Silver, Bronze tiers) that grant holders a share of the electricity output from a real 60 kW
-              <a href="#vortex" style="color: #4ade80">Vortex Gravity Hydro Turbine</a> in Estonia. NFT holders also
-              receive voting power in the
-              <a href="#governance" style="color: #4ade80">Wattcoin DAO governance</a> system.
-            </p>
-          </div>
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">Can I buy WTC without mining?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              Yes. Use the <a href="wallet.html" style="color: #4ade80">Wattcoin web wallet</a> to buy WTC with USDC and
-              check balances. You can also buy WTC directly through the
-              <a href="#download" style="color: #4ade80">Wattcoin Miner desktop app</a> wallet using USDC. There is an
-              ongoing <a href="#tokenomics" style="color: #4ade80">public sale of 333,333 WTC</a>. Both wallets let you
-              buy WTC. You can also <a href="#staking" style="color: #4ade80">stake existing WTC</a> to earn rewards.
-            </p>
-          </div>
-          <div class="info-card" style="margin-bottom: 14px">
-            <div class="ic-title" style="font-size: 14px">Is Wattcoin environmentally friendly?</div>
-            <p style="font-size: 14px; line-height: 1.7; color: #7aaa7a; margin: 0">
-              Wattcoin's energy expenditure is verifiable and non-negotiable, but it replaces the wasteful lottery model
-              of Proof-of-Work with proportional rewards. The network will be
-              <a href="#vortex" style="color: #4ade80">backed by a real hydro turbine</a> that generates clean
-              electricity. Old hardware that Bitcoin's arms race rendered obsolete &mdash; ASICs bound for landfill,
-              GPUs from decommissioned rigs &mdash; can mine Wattcoin productively.
-            </p>
-          </div>
         </div>
       </div>
     </section>
