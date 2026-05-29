@@ -28,8 +28,9 @@
     Header set Expires "0"
   </FilesMatch>
 
-  # Cache whitepaper for Google snippets
+  # Canonical for whitepaper
   <FilesMatch "wattcoin-whitepaper\.html$">
+    Header set Link '<https://wattcoin.ee/wattcoin-whitepaper.html>; rel="canonical"'
     Header set Cache-Control "public, max-age=3600"
   </FilesMatch>
 
