@@ -2144,20 +2144,31 @@
           The Wattcoin Miner app is the all-in-one tool for mining WTC, buying from the public sale, staking, and
           exploring the blockchain. Available for Windows.
         </p>
-        <div class="download-card">
-          <div class="download-platform">WINDOWS</div>
-          <div class="download-name">Wattcoin Miner v1.0.284</div>
-          <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
-          <a href="/releases/Wattcoin Miner Setup 1.0.284.exe" download class="download-btn" id="download-btn"
-            >&#8595;&nbsp; Download for Windows</a
-          >
-          <div id="download-count" style="font-size: 11px; color: #5a8a5a; margin-top: 10px; text-align: center"></div>
-        </div>
-        <div class="download-card" style="margin-top: 16px">
-          <div class="download-platform">WHITEPAPER</div>
-          <div class="download-name">Wattcoin Whitepaper v1.0.284</div>
-          <div class="download-sub">PDF &nbsp;—&nbsp; 579 KB &nbsp;—&nbsp; 21 pages</div>
-          <a href="/assets/wattcoin-whitepaper.pdf" download class="download-btn">&#8595;&nbsp; Download PDF</a>
+        <div class="download-cards-row">
+          <div class="download-card">
+            <div class="download-platform">WINDOWS</div>
+            <div class="download-name">Wattcoin Miner v1.0.284</div>
+            <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
+            <a href="/releases/Wattcoin Miner Setup 1.0.284.exe" download class="download-btn" id="download-btn"
+              >&#8595;&nbsp; Download for Windows</a
+            >
+            <div
+              id="download-count"
+              style="font-size: 11px; color: #5a8a5a; margin-top: 10px; text-align: center"
+            ></div>
+          </div>
+          <div class="download-card">
+            <div class="download-platform">WHITEPAPER</div>
+            <div class="download-name">Wattcoin Whitepaper v1.0.284</div>
+            <div class="download-sub">PDF &nbsp;—&nbsp; 579 KB &nbsp;—&nbsp; 21 pages</div>
+            <a href="/assets/wattcoin-whitepaper.pdf" download class="download-btn" id="whitepaper-download-btn"
+              >&#8595;&nbsp; Download PDF</a
+            >
+            <div
+              id="whitepaper-download-count"
+              style="font-size: 11px; color: #5a8a5a; margin-top: 10px; text-align: center"
+            ></div>
+          </div>
         </div>
         <div class="download-includes">
           <div class="download-includes-title">WHAT'S INCLUDED</div>
@@ -2828,6 +2839,31 @@
               })
               .catch(function () {});
           });
+        }
+        // Whitepaper download counter
+        fetch(BASE + 'download', { method: 'GET' })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('whitepaper-download-count');
+            if (el && d.ok) el.textContent = fmtDl(d.count);
+          })
+          .catch(function () {});
+        var wpBtn = document.getElementById('whitepaper-download-btn');
+        if (wpBtn) {
+          wpBtn.addEventListener('click', function () {
+            fetch(BASE + 'download', { method: 'POST' })
+              .then(function (r) {
+                return r.json();
+              })
+              .then(function (d) {
+                var el = document.getElementById('whitepaper-download-count');
+                if (el && d.ok) el.textContent = fmtDl(d.count);
+              })
+              .catch(function () {});
+          });
+        }
         }
       })();
     </script>

@@ -1028,6 +1028,14 @@ input[type='range'] {
 }
 
 /* -- Download -- */
+.download-cards-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+.download-cards-row .download-card {
+  flex: 1 1 280px;
+}
 .download-card {
   display: flex;
   flex-direction: column;
