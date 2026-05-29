@@ -1029,13 +1029,16 @@ input[type='range'] {
 
 /* -- Download -- */
 .download-cards-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 24px;
 }
+@media (max-width: 700px) {
+  .download-cards-row {
+    grid-template-columns: 1fr;
+  }
+}
 .download-cards-row .download-card {
-  flex: 1 1 0;
-  min-width: 260px;
   max-width: none;
 }
 .download-card {
