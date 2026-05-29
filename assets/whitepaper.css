@@ -1036,6 +1036,7 @@ input[type='range'] {
 @media (max-width: 700px) {
   .download-cards-row {
     grid-template-columns: 1fr;
+    gap: 32px;
   }
 }
 .download-cards-row .download-card {
