@@ -21,7 +21,7 @@ Wattcoin's Proof-of-Energy (PoE) consensus replaces wasteful hash-based mining w
 
 ## System Requirements
 
-- **OS:** Windows 10 / 11 (x64)
+- **OS:** Windows 10 / 11 (x64), Linux (x64), macOS (ARM64 / x64)
 - **Network:** Internet connection (port 39310 for peer discovery)
 - **Storage:** ~200 MB for the application
 
@@ -58,22 +58,39 @@ This starts the Vite dev server and launches Electron with hot-reload.
 
 ### Build Installer
 
-```bash
-# Full build + deploy to wattcoin.ee (requires SFTP credentials)
-npm run electron:build
+Build the renderer first, then package with electron-builder for your platform:
 
-# Local build only (no upload — no credentials needed)
+```bash
+# 1. Build the Vite frontend
+npm run build
+
+# 2. Package platform-specific installer
+npx electron-builder --win    # Windows NSIS installer (.exe)
+npx electron-builder --linux  # Linux AppImage + .deb
+npx electron-builder --mac    # macOS DMG + ZIP
+```
+
+**Artifacts:**
+
+| Platform | Output |
+|----------|--------|
+| Windows  | `Releases/Wattcoin Miner Setup X.X.X.exe` |
+| Linux    | `Releases/Wattcoin-Miner-X.X.X.AppImage` + `.deb` |
+| macOS    | `Releases/Wattcoin-Miner-X.X.X.dmg` + `.zip` |
+
+**Local full build (Vite + electron-builder for current platform):**
+
+```bash
 npm run electron:build:local
 ```
 
-The build script:
+**Production release (version bump + build + SFTP deploy):**
 
-1. Bumps the patch version
-2. Builds the Vite frontend
-3. Runs electron-builder to produce an NSIS installer
-4. Signs the installer (if a dev certificate is present in `certs/`)
-5. Uploads to `wattcoin.ee` via SFTP (requires credentials) — skipped with `--local`
-6. Verifies deployed assets are reachable — skipped with `--local`
+```bash
+npm run electron:build
+```
+
+> **macOS code signing:** Omitted by default — the DMG/ZIP will be unsigned. Users can right-click → Open on first launch. To sign, set `CSC_LINK` and `CSC_KEY_PASSWORD` environment variables to your Apple Developer certificate.
 
 ### Lint
 
@@ -228,7 +245,7 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │  Build & Deploy Pipeline                                   │  │
 │  │  release-build.js → electron-builder → _sftp-deploy.js     │  │
-│  │  Version bump → Vite build → NSIS package → SFTP upload   │  │
+│  │  Version bump → Vite build → electron-builder → SFTP      │  │
 │  └────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```
