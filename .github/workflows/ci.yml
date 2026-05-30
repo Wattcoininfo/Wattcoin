@@ -216,6 +216,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-optional
 
+      - name: Install dmg-license for DMG build
+        run: npm install dmg-license --no-save
+
       - name: Build renderer
         run: npm run build
 
