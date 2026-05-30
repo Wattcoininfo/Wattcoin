@@ -219,6 +219,9 @@ jobs:
       - name: Install dmg-license for DMG build
         run: npm install dmg-license --no-save
 
+      - name: Remove cpu-features (incompatible with Electron 42 V8 on arm64)
+        run: rm -rf node_modules/cpu-features
+
       - name: Build renderer
         run: npm run build
 
