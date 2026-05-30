@@ -197,3 +197,41 @@ jobs:
           name: wattcoin-linux-deb
           path: Releases/Wattcoin-Miner-*.deb
           if-no-files-found: warn
+
+  build-macos:
+    name: Build macOS (dmg + zip)
+    runs-on: macos-latest
+    needs: [lint, audit, test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-optional
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Package macOS app
+        run: npx electron-builder --mac --config electron-builder.config.js --publish never
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: wattcoin-macos-dmg
+          path: Releases/Wattcoin-Miner-*.dmg
+          if-no-files-found: warn
+
+      - name: Upload ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: wattcoin-macos-zip
+          path: Releases/Wattcoin-Miner-*.zip
+          if-no-files-found: warn

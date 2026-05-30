@@ -174,6 +174,15 @@ const config = {
     uninstallerIcon: 'assets/icons/icon.ico',
     installerHeaderIcon: 'assets/icons/icon.ico',
   },
+  mac: {
+    target: ['dmg', 'zip'],
+    icon: 'assets/icons/icon.png',
+    artifactName: 'Wattcoin-Miner-${version}.${ext}',
+    category: 'public.app-category.utilities',
+    extendInfo: {
+      LSUIElement: true,
+    },
+  },
   linux: {
     target: ['AppImage', 'deb'],
     icon: 'assets/icons/icon.png',
