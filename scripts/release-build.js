@@ -448,10 +448,10 @@ function verifyAndArchiveInstaller(root, version) {
   console.log(`Installer verified (${stat.size} bytes) and archived to: ${installerPath}`);
 }
 
-function normalizeWhitepaperDownloadLink(html, version) {
+function normalizeDownloadLinks(html, version) {
   const expectedHref = `/releases/Wattcoin Miner Setup ${version}.exe`;
   return html.replace(
-    /(<a) href="[^"]*Wattcoin Miner Setup [^"]+\.exe"( download class="download-btn"[^>]*>)/,
+    /(<a) href="[^"]*Wattcoin Miner Setup [^"]+\.exe"([^>]*>)/g,
     `$1 href="${expectedHref}"$2`
   );
 }
@@ -469,7 +469,7 @@ function syncWhitepaperVersionLabels(html, version, monthName, year) {
   next = next.replace(/(VERSION \d+\.\d+\.\d+ &mdash; )[A-Z]+ \d{4}/g, `$1${monthName} ${year}`);
   next = next.replace(/v\d+\.\d+\.\d+(?=\s*&nbsp;&mdash;&nbsp;\s*<a href="mailto:info@wattcoin\.ee">)/g, `v${version}`);
   next = next.replace(/(&nbsp;&mdash;&nbsp;\s*)([A-Z]+ \d{4})(\s*<br\s*\/?>)/g, `$1${monthName} ${year}$3`);
-  return normalizeWhitepaperDownloadLink(next, version);
+  return normalizeDownloadLinks(next, version);
 }
 
 function verifyReleaseMetadata(root, version) {
