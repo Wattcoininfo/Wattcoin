@@ -540,7 +540,7 @@ function getPendingProbe() {
           ? { arraySeed: seed, iterations: PROBE_MEM_ITERS, entries: PROBE_MEM_ENTRIES }
           : type === 'gpu'
             ? { seed, size: PROBE_GPU_SIZE, shaderIterations: PROBE_GPU_ITERS }
-            : /* asic */ { },
+            : /* asic */ {},
   };
 
   // Pre-compute the expected GPU pixel hash in pure JS so submitProbeResult can
@@ -648,8 +648,8 @@ function submitProbeResult(result, peerTimed = false) {
       proofValid = false;
       issues.push(
         `asic probe: hashrate ${measuredTHs.toFixed(1)} TH/s is too low — ` +
-        `expected >= ${(expectedTHs * PROBE_ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
-        `for ${probeState.hardwareSpec.asicModel || 'declared model'}`,
+          `expected >= ${(expectedTHs * PROBE_ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
+          `for ${probeState.hardwareSpec.asicModel || 'declared model'}`,
       );
     } else {
       proofValid = measuredTHs > 0;

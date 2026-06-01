@@ -2192,7 +2192,10 @@ export default function Miner({
   }, [hardware.gpu, hardware.gpus]);
   const isWholeDeviceMiniPcModel = isWholeDeviceMiniPc(hardware);
   const allowGpuWorkloads =
-    hardware.deviceType !== 'Laptop' && hardware.deviceType !== 'ASIC' && !isWholeDeviceMiniPcModel && !hasOnlyIntegratedGpu(hardware);
+    hardware.deviceType !== 'Laptop' &&
+    hardware.deviceType !== 'ASIC' &&
+    !isWholeDeviceMiniPcModel &&
+    !hasOnlyIntegratedGpu(hardware);
 
   React.useEffect(() => {
     hardwareHoldUntilRef.current = hardwareHoldUntilMs;
@@ -3653,7 +3656,9 @@ export default function Miner({
                 asicHashrateTHs = Math.max(ghsAv, ghs5s) / 1000 || Math.max(mhsAv, mhs5s) / 1_000_000;
                 if (asicHashrateTHs > 0) break;
               }
-            } catch (_) { /* port not responding */ }
+            } catch (_) {
+              /* port not responding */
+            }
           }
           probeResult = {
             id: probe.id,
@@ -4906,7 +4911,8 @@ export default function Miner({
           break;
         }
       }
-      powerW = asicPower !== null ? asicPower : (laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500);
+      powerW =
+        asicPower !== null ? asicPower : laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500;
     } else if (
       hardware.deviceType === 'Desktop' ||
       hardware.deviceType === 'PC' ||
@@ -4995,7 +5001,8 @@ export default function Miner({
           break;
         }
       }
-      powerW = asicPower !== null ? asicPower : (laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500);
+      powerW =
+        asicPower !== null ? asicPower : laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500;
     } else if (hardware.deviceType === 'Mac') {
       powerW = laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 35;
     }

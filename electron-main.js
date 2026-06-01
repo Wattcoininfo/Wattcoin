@@ -40,7 +40,12 @@ const {
   getLocalProbeChain,
   setAsicHardwareSpec,
 } = require('./backend-benchmark');
-const { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs } = require('./hardware-tables.cjs');
+const {
+  getExpectedCpuSpeedOps,
+  getExpectedMemBandwidthMBps,
+  getAsicPowerW,
+  getAsicHashrateTHs,
+} = require('./hardware-tables.cjs');
 const {
   setHardwareLoadPercent,
   stopHardwareLoad,
@@ -265,7 +270,8 @@ function recordMinerStats(address, powerW, cpuOps) {
 // Returns true if this miner's power/cpu ratio is an outlier (>3σ from network mean).
 function isPowerCpuOutlier(address, powerW, cpuOps) {
   if (networkMiningStats.size < 3) return false;
-  let sumRatio = 0, count = 0;
+  let sumRatio = 0,
+    count = 0;
   for (const [addr, stats] of networkMiningStats) {
     if (addr === address || stats.count === 0) continue;
     const ratio = stats.totalCpuOps > 0 ? stats.totalPowerW / stats.totalCpuOps : 0;
@@ -815,7 +821,7 @@ async function verifyAsicFirmware(port, checkModel, _modelName) {
   if (identityValues.length >= 2 && uniqueIdentities.size > 1) {
     result.issues.push(
       `firmware model mismatch: conflicting identities [${[...new Set(identityValues)].join(', ')}]` +
-      ` across check/version/stats API commands — firmware may be modified`,
+        ` across check/version/stats API commands — firmware may be modified`,
     );
   }
 
@@ -5174,16 +5180,13 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
             `${livenessResult.bytesTotal} bytes (threshold 500ms)`,
         );
       } else {
-        console.log(
-          `[HW-Verify] ASIC liveness OK: ${livenessResult.elapsedMs}ms on port ${livenessResult.port}`,
-        );
+        console.log(`[HW-Verify] ASIC liveness OK: ${livenessResult.elapsedMs}ms on port ${livenessResult.port}`);
         // ── ASIC model verification: compare API-reported model against declared ─
         // A miner declaring a high-end ASIC (e.g. S21 XP, 3800W) while running
         // a low-end unit (e.g. S9, 1350W) would inflate their power ceiling.
         // The cgminer API returns the actual device type — verify it matches.
         const reportedModel = (livenessResult.asicType || '').trim();
-        if (reportedModel && _declaredAsicModel &&
-            !hardwareModelsMatch(reportedModel, _declaredAsicModel)) {
+        if (reportedModel && _declaredAsicModel && !hardwareModelsMatch(reportedModel, _declaredAsicModel)) {
           asicModelMismatch = true;
           // Look up the real model's TDP and clamp the ceiling.
           const realTdp = await fetchTdpFromBrave(reportedModel);
@@ -5251,13 +5254,13 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
             asicHashrateLow = true;
             console.warn(
               `[HW-Verify] ASIC hashrate too low: ${measuredHashrateTHs.toFixed(1)} TH/s measured, ` +
-              `expected >= ${(_expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
-              `for "${_declaredAsicModel}" — hash boards may be underperforming or misidentified`,
+                `expected >= ${(_expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
+                `for "${_declaredAsicModel}" — hash boards may be underperforming or misidentified`,
             );
           } else if (measuredHashrateTHs > 0) {
             console.log(
               `[HW-Verify] ASIC hashrate OK: ${measuredHashrateTHs.toFixed(1)} TH/s ` +
-              `(expected ${_expectedHashrateTHs} TH/s for "${_declaredAsicModel}")`,
+                `(expected ${_expectedHashrateTHs} TH/s for "${_declaredAsicModel}")`,
             );
           }
         }
@@ -5273,9 +5276,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         const firmwareAttest = await verifyAsicFirmware(livenessPort, livenessResult.asicType, _declaredAsicModel);
         if (!firmwareAttest.ok) {
           asicFirmwareIssue = true;
-          console.warn(
-            `[HW-Verify] ASIC firmware attestation failed: ${firmwareAttest.issues.join(', ')}`,
-          );
+          console.warn(`[HW-Verify] ASIC firmware attestation failed: ${firmwareAttest.issues.join(', ')}`);
         }
       }
     }
@@ -5301,7 +5302,11 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     if (_minerAddrForStats && !isBaseline && measuredCpu > 0 && declaredUnitPowerW > 0) {
       recordMinerStats(_minerAddrForStats, declaredUnitPowerW, measuredCpu);
     }
-    const minerIsOutlier = _minerAddrForStats && !isBaseline && measuredCpu > 0 && declaredUnitPowerW > 0 &&
+    const minerIsOutlier =
+      _minerAddrForStats &&
+      !isBaseline &&
+      measuredCpu > 0 &&
+      declaredUnitPowerW > 0 &&
       isPowerCpuOutlier(_minerAddrForStats, declaredUnitPowerW, measuredCpu);
 
     // ── Trust cap: no benchmark history → max trust 50 ───────────────────────
@@ -5329,7 +5334,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         ...(asicLivenessFailed ? ['asic liveness check failed — hash boards unresponsive'] : []),
         ...(asicModelMismatch ? ['asic model mismatch — declared model does not match hash board'] : []),
         ...(asicHashrateLow ? ['asic hashrate too low — hash boards underperforming or misidentified'] : []),
-        ...(asicFirmwareIssue ? ['asic firmware attestation failed — multiple API endpoints report conflicting device identity'] : []),
+        ...(asicFirmwareIssue
+          ? ['asic firmware attestation failed — multiple API endpoints report conflicting device identity']
+          : []),
         ...(minerIsOutlier ? ['network outlier — power/cpu ratio >3σ from mean'] : []),
       ];
       if (allIssues.length > 0) {
