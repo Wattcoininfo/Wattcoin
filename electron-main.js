@@ -648,7 +648,7 @@ function doubleSha256(buf) {
   return crypto.createHash('sha256').update(crypto.createHash('sha256').update(buf).digest()).digest('hex');
 }
 
-async function verifyAsicLiveness(modelName) {
+async function verifyAsicLiveness(_modelName) {
   const PORTS = [4028, 4029, 4030];
   const ROUNDS = 8;
   const CHUNK_BYTES = 1024;
@@ -732,7 +732,7 @@ function hardwareModelsMatch(osModel, declaredModel) {
 // A patched firmware must consistently lie across all of: check, version, stats.
 // If any endpoint reports a different model identity, the firmware is modified.
 // Also checks compile time and firmware version for consistency.
-async function verifyAsicFirmware(port, checkModel, modelName) {
+async function verifyAsicFirmware(port, checkModel, _modelName) {
   const result = {
     ok: true,
     identities: [], // model strings reported by each API command
@@ -5155,11 +5155,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     let asicModelMismatch = false;
     let asicHashrateLow = false;
     let asicFirmwareIssue = false;
-    let asicLivenessMs = 0;
     const _declaredAsicModel = String((request && request.declaredGpuModel) || '');
     if (_isAsicDevice) {
       const livenessResult = await verifyAsicLiveness(_declaredAsicModel);
-      asicLivenessMs = livenessResult.elapsedMs || 0;
       if (!livenessResult.ok) {
         asicLivenessFailed = true;
         // Liveness failure alone doesn't override the ceiling — the CPU bench

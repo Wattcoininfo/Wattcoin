@@ -402,8 +402,6 @@ const PROBE_LOCAL_SLACK = 3.0; // local (self-polled): 3x — same as peer; hash
 // the actual hashrate (TH/s) and compares against the expected rate for the model.
 // The hashrate must be >= 50 % of the expected rate — drops below this indicate
 // either a model mismatch (e.g. S9 claiming to be S21) or severe undervolting.
-const PROBE_ASIC_PORTS = [4028, 4029, 4030];
-const PROBE_ASIC_TIMEOUT_MS = 15000;
 const PROBE_ASIC_MIN_HASHRATE_RATIO = 0.85;
 
 function _nextProbeIntervalMs() {

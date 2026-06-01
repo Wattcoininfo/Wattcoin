@@ -3653,7 +3653,7 @@ export default function Miner({
                 asicHashrateTHs = Math.max(ghsAv, ghs5s) / 1000 || Math.max(mhsAv, mhs5s) / 1_000_000;
                 if (asicHashrateTHs > 0) break;
               }
-            } catch (_) {}
+            } catch (_) { /* port not responding */ }
           }
           probeResult = {
             id: probe.id,
