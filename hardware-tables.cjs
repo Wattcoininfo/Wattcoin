@@ -249,4 +249,118 @@ function getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks) {
   return Math.round(theoreticalMBps * efficiency);
 }
 
-module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps };
+// ── ASIC Power Lookup ─────────────────────────────────────────────────────────
+// Known ASIC miners and their rated power draw in watts.
+// Returns the power draw for a known ASIC model, or 0 if unknown.
+function getAsicPowerW(model) {
+  if (!model) return 0;
+  const m = model;
+
+  // ── Bitmain Antminer ────────────────────────────────────────────────────────
+  if (/Antminer.*S21\s*XP/i.test(m))         return 3800;
+  if (/Antminer.*S21/i.test(m))               return 3500;
+  if (/Antminer.*T21/i.test(m))               return 3610;
+  if (/Antminer.*S19\s*XP/i.test(m))          return 3010;
+  if (/Antminer.*S19\s*Pro\+/i.test(m))       return 3300;
+  if (/Antminer.*S19\s*Pro/i.test(m))         return 3250;
+  if (/Antminer.*S19j\s*Pro\+/i.test(m))      return 3220;
+  if (/Antminer.*S19j\s*Pro/i.test(m))        return 3050;
+  if (/Antminer.*S19j/i.test(m))              return 3100;
+  if (/Antminer.*S19/i.test(m))               return 3250;
+  if (/Antminer.*T19/i.test(m))               return 3150;
+  if (/Antminer.*S17\+/i.test(m))             return 2920;
+  if (/Antminer.*S17\s*Pro/i.test(m))         return 2090;
+  if (/Antminer.*T17\+/i.test(m))             return 2800;
+  if (/Antminer.*T17/i.test(m))               return 2200;
+  if (/Antminer.*S15/i.test(m))               return 1590;
+  if (/Antminer.*T15/i.test(m))               return 1540;
+  if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))  return 1400;
+  if (/Antminer.*S9/i.test(m))                return 1350;
+
+  // ── MicroBT Whatsminer ─────────────────────────────────────────────────────
+  if (/Whatsminer.*M66/i.test(m))             return 2988;
+  if (/Whatsminer.*M60S/i.test(m))            return 3500;
+  if (/Whatsminer.*M60/i.test(m))             return 3306;
+  if (/Whatsminer.*M56/i.test(m))             return 3400;
+  if (/Whatsminer.*M50S\+\+/i.test(m))        return 3470;
+  if (/Whatsminer.*M50S/i.test(m))            return 3500;
+  if (/Whatsminer.*M50/i.test(m))             return 3270;
+  if (/Whatsminer.*M30S\+\+/i.test(m))        return 3472;
+  if (/Whatsminer.*M30S\+/i.test(m))          return 3400;
+  if (/Whatsminer.*M30S/i.test(m))            return 3260;
+  if (/Whatsminer.*M30/i.test(m))             return 3260;
+  if (/Whatsminer.*M32/i.test(m))             return 3200;
+  if (/Whatsminer.*M31S/i.test(m))            return 2700;
+  if (/Whatsminer.*M21S/i.test(m))            return 2700;
+  if (/Whatsminer.*M20S/i.test(m))            return 2800;
+  if (/Whatsminer.*M20/i.test(m))             return 2800;
+
+  // ── Canaan Avalon ──────────────────────────────────────────────────────────
+  if (/Avalon.*A1466I/i.test(m))              return 3320;
+  if (/Avalon.*A1366I/i.test(m))              return 3250;
+  if (/Avalon.*A1266/i.test(m))               return 3420;
+  if (/Avalon.*A1166\s*Pro/i.test(m))         return 3400;
+  if (/Avalon.*A1166/i.test(m))               return 3250;
+  if (/Avalon.*A1066/i.test(m))               return 3200;
+
+  return 0; // unknown — caller should fall back to defaults
+}
+
+// ── ASIC Hashrate Lookup ─────────────────────────────────────────────────────
+// Known ASIC miners and their expected hashrate in TH/s.
+// Returns the expected hashrate for a known ASIC model, or 0 if unknown.
+function getAsicHashrateTHs(model) {
+  if (!model) return 0;
+  const m = model;
+
+  // ── Bitmain Antminer ────────────────────────────────────────────────────────
+  if (/Antminer.*S21\s*XP/i.test(m))         return 270;
+  if (/Antminer.*S21/i.test(m))               return 200;
+  if (/Antminer.*T21/i.test(m))               return 190;
+  if (/Antminer.*S19\s*XP/i.test(m))          return 141;
+  if (/Antminer.*S19\s*Pro\+/i.test(m))       return 120;
+  if (/Antminer.*S19\s*Pro/i.test(m))         return 110;
+  if (/Antminer.*S19j\s*Pro\+/i.test(m))      return 122;
+  if (/Antminer.*S19j\s*Pro/i.test(m))        return 100;
+  if (/Antminer.*S19j/i.test(m))              return 90;
+  if (/Antminer.*S19/i.test(m))               return 95;
+  if (/Antminer.*T19/i.test(m))               return 84;
+  if (/Antminer.*S17\+/i.test(m))             return 73;
+  if (/Antminer.*S17\s*Pro/i.test(m))         return 53;
+  if (/Antminer.*T17\+/i.test(m))             return 64;
+  if (/Antminer.*T17/i.test(m))               return 56;
+  if (/Antminer.*S15/i.test(m))               return 28;
+  if (/Antminer.*T15/i.test(m))               return 23;
+  if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))  return 14;
+  if (/Antminer.*S9/i.test(m))                return 13.5;
+
+  // ── MicroBT Whatsminer ─────────────────────────────────────────────────────
+  if (/Whatsminer.*M66/i.test(m))             return 290;
+  if (/Whatsminer.*M60S/i.test(m))            return 190;
+  if (/Whatsminer.*M60/i.test(m))             return 186;
+  if (/Whatsminer.*M56/i.test(m))             return 230;
+  if (/Whatsminer.*M50S\+\+/i.test(m))        return 126;
+  if (/Whatsminer.*M50S/i.test(m))            return 114;
+  if (/Whatsminer.*M50/i.test(m))             return 118;
+  if (/Whatsminer.*M30S\+\+/i.test(m))        return 112;
+  if (/Whatsminer.*M30S\+/i.test(m))          return 100;
+  if (/Whatsminer.*M30S/i.test(m))            return 86;
+  if (/Whatsminer.*M30/i.test(m))             return 80;
+  if (/Whatsminer.*M32/i.test(m))             return 60;
+  if (/Whatsminer.*M31S/i.test(m))            return 76;
+  if (/Whatsminer.*M21S/i.test(m))            return 56;
+  if (/Whatsminer.*M20S/i.test(m))            return 68;
+  if (/Whatsminer.*M20/i.test(m))             return 64;
+
+  // ── Canaan Avalon ──────────────────────────────────────────────────────────
+  if (/Avalon.*A1466I/i.test(m))              return 150;
+  if (/Avalon.*A1366I/i.test(m))              return 130;
+  if (/Avalon.*A1266/i.test(m))               return 90;
+  if (/Avalon.*A1166\s*Pro/i.test(m))         return 81;
+  if (/Avalon.*A1166/i.test(m))               return 70;
+  if (/Avalon.*A1066/i.test(m))               return 50;
+
+  return 0; // unknown — caller should fall back to defaults
+}
+
+module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs };

@@ -398,6 +398,13 @@ const PROBE_GPU_ITERS = 160; // more shader work improves timing stability
 // that the chained-proof replay guard catches any attempt to pre-compute answers.
 const PROBE_PEER_SLACK = 3.0; // peer: flag if < 1/3x or > 3x expected
 const PROBE_LOCAL_SLACK = 3.0; // local (self-polled): 3x — same as peer; hash check catches hardcoded answers
+// ASIC probe: queries the cgminer-compatible API for the `summary` command to get
+// the actual hashrate (TH/s) and compares against the expected rate for the model.
+// The hashrate must be >= 50 % of the expected rate — drops below this indicate
+// either a model mismatch (e.g. S9 claiming to be S21) or severe undervolting.
+const PROBE_ASIC_PORTS = [4028, 4029, 4030];
+const PROBE_ASIC_TIMEOUT_MS = 15000;
+const PROBE_ASIC_MIN_HASHRATE_RATIO = 0.85;
 
 function _nextProbeIntervalMs() {
   return Math.round(PROBE_INTERVAL_MIN_MS + Math.random() * (PROBE_INTERVAL_MAX_MS - PROBE_INTERVAL_MIN_MS));
@@ -472,6 +479,16 @@ function setProbeHardwareSpec(spec) {
   probeState.hardwareSpec = spec && typeof spec === 'object' ? { ...spec } : null;
 }
 
+// Called from electron-main after the ASIC hashrate benchmark to set the expected
+// hashrate for the declared model so periodic ASIC probes can compare against it.
+function setAsicHardwareSpec(spec) {
+  if (spec && typeof spec === 'object') {
+    probeState.hardwareSpec = probeState.hardwareSpec || {};
+    probeState.hardwareSpec.asicHashrateTHs = Number(spec.asicHashrateTHs) || 0;
+    probeState.hardwareSpec.asicModel = String(spec.asicModel || '');
+  }
+}
+
 // Called from mining loop in renderer (via IPC) � returns the next probe to run,
 // or null if it is too soon / no probe is currently pending.
 function getPendingProbe() {
@@ -502,8 +519,10 @@ function getPendingProbe() {
   if (now - probeState.lastIssuedAt < probeState.nextIntervalMs) return null;
 
   // Choose type at random; include 'gpu' only when hardware spec allows it.
+  // Include 'asic' only when the hardware spec has an expected hashrate for it.
   const allowGpu = !!(probeState.hardwareSpec && probeState.hardwareSpec.allowGpuWorkloads);
-  const types = ['cpu', 'memory', ...(allowGpu ? ['gpu'] : [])];
+  const hasAsic = !!(probeState.hardwareSpec && probeState.hardwareSpec.asicHashrateTHs > 0);
+  const types = ['cpu', 'memory', ...(allowGpu ? ['gpu'] : []), ...(hasAsic ? ['asic'] : [])];
   const type = types[Math.floor(Math.random() * types.length)];
   // Chain derivation: next seed is deterministically derived from the previous proof so
   // the worker cannot pre-compute answers without executing every prior probe in sequence.
@@ -521,7 +540,9 @@ function getPendingProbe() {
         ? { seed, iterations: PROBE_CPU_ITERS }
         : type === 'memory'
           ? { arraySeed: seed, iterations: PROBE_MEM_ITERS, entries: PROBE_MEM_ENTRIES }
-          : /* gpu */ { seed, size: PROBE_GPU_SIZE, shaderIterations: PROBE_GPU_ITERS },
+          : type === 'gpu'
+            ? { seed, size: PROBE_GPU_SIZE, shaderIterations: PROBE_GPU_ITERS }
+            : /* asic */ { },
   };
 
   // Pre-compute the expected GPU pixel hash in pure JS so submitProbeResult can
@@ -601,22 +622,42 @@ function submitProbeResult(result, peerTimed = false) {
   } else if (probe.type === 'gpu') {
     if (typeof result.pixelHash !== 'string' || result.pixelHash.length === 0) {
       proofValid = false;
-      issues.push('gpu probe: no pixel hash returned � WebGL unavailable or render was skipped');
+      issues.push('gpu probe: no pixel hash returned — WebGL unavailable or render was skipped');
     } else if (probe._expectedPixelHash) {
       // Algebraic verification: compare against the hash pre-computed at issuance using
-      // the pure-JS integer XOR-shift algorithm � identical to the GLSL shader output.
+      // the pure-JS integer XOR-shift algorithm — identical to the GLSL shader output.
       proofValid = result.pixelHash === probe._expectedPixelHash;
       if (!proofValid) {
         issues.push(`gpu probe: pixel hash mismatch (got ${result.pixelHash}, expected ${probe._expectedPixelHash})`);
       } else if (wallClockMs < 2) {
-        issues.push(`gpu probe completed impossibly fast (${wallClockMs}ms) � GPU render was likely skipped`);
+        issues.push(`gpu probe completed impossibly fast (${wallClockMs}ms) — GPU render was likely skipped`);
       }
     } else {
-      // No expected hash available (legacy path) � fall back to timing + presence check.
+      // No expected hash available (legacy path) — fall back to timing + presence check.
       proofValid = true;
       if (wallClockMs < 2)
-        issues.push(`gpu probe completed impossibly fast (${wallClockMs}ms) � GPU render was likely skipped`);
+        issues.push(`gpu probe completed impossibly fast (${wallClockMs}ms) — GPU render was likely skipped`);
     }
+  } else if (probe.type === 'asic') {
+    // ASIC probe: renderer queried the cgminer summary command and returned the
+    // measured hashrate (TH/s).  Compare against the expected rate from the model.
+    const measuredTHs = parseFloat(result.hashrateTHs) || 0;
+    const expectedTHs = probeState.hardwareSpec ? probeState.hardwareSpec.asicHashrateTHs : 0;
+    if (measuredTHs <= 0) {
+      proofValid = false;
+      issues.push('asic probe: no hashrate reported — cgminer summary unavailable');
+    } else if (expectedTHs > 0 && measuredTHs < expectedTHs * PROBE_ASIC_MIN_HASHRATE_RATIO) {
+      proofValid = false;
+      issues.push(
+        `asic probe: hashrate ${measuredTHs.toFixed(1)} TH/s is too low — ` +
+        `expected >= ${(expectedTHs * PROBE_ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
+        `for ${probeState.hardwareSpec.asicModel || 'declared model'}`,
+      );
+    } else {
+      proofValid = measuredTHs > 0;
+    }
+    // Use the hashrate string as the chain proof for continuity tracking.
+    result.proof = result.proof || String(measuredTHs.toFixed(2));
   }
 
   const ok = issues.length === 0;
@@ -1113,6 +1154,7 @@ module.exports = {
   getBenchmarkCapabilities,
   runBackendBenchmark,
   setProbeHardwareSpec,
+  setAsicHardwareSpec,
   getPendingProbe,
   submitProbeResult,
   getProbeHistory,

@@ -5,7 +5,7 @@
   RewriteCond %{THE_REQUEST} /index\.html [NC]
   RewriteRule ^(.*)index\.html$ /$1 [R=301,L]
 
-  # Redirect homepage.html → /
+  # Redirect legacy homepage.html → /
   RewriteCond %{THE_REQUEST} /homepage\.html [NC]
   RewriteRule ^homepage\.html$ / [R=301,L]
 </IfModule>
@@ -21,8 +21,8 @@
     Header set Link '<https://wattcoin.ee/>; rel="canonical"'
   </FilesMatch>
 
-  # No cache for HTML pages (version-sensitive)
-  <FilesMatch "^(index\.html|homepage\.html)$">
+  # No cache for index.html (version-sensitive content)
+  <FilesMatch "^index\.html$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"

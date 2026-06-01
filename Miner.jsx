@@ -155,13 +155,13 @@ function normalizeWattageText(text) {
 // Penalises values near "adapter", "charger", "power supply", "idle".
 function parseBestWattage(text) {
   const normalized = normalizeWattageText(text);
-  const re = /\b(\d{1,3}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/g;
+  const re = /\b(\d{1,4}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/g;
   let best = null,
     bestScore = -Infinity;
   let m;
   while ((m = re.exec(normalized)) !== null) {
     const w = parseFloat(m[1]);
-    if (w < 10 || w > 800) continue;
+    if (w < 10 || w > 5000) continue;
     // Look at ~80 chars surrounding the match for context clues
     const ctx = normalized.substring(Math.max(0, m.index - 80), m.index + m[0].length + 80).toLowerCase();
     let score = 0;
@@ -2192,7 +2192,7 @@ export default function Miner({
   }, [hardware.gpu, hardware.gpus]);
   const isWholeDeviceMiniPcModel = isWholeDeviceMiniPc(hardware);
   const allowGpuWorkloads =
-    hardware.deviceType !== 'Laptop' && !isWholeDeviceMiniPcModel && !hasOnlyIntegratedGpu(hardware);
+    hardware.deviceType !== 'Laptop' && hardware.deviceType !== 'ASIC' && !isWholeDeviceMiniPcModel && !hasOnlyIntegratedGpu(hardware);
 
   React.useEffect(() => {
     hardwareHoldUntilRef.current = hardwareHoldUntilMs;
@@ -3625,6 +3625,42 @@ export default function Miner({
             ? await runGpuProbe(probe.params.seed, probe.params.size, probe.params.shaderIterations)
             : null;
           probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult ? gpuResult.pixelHash : '' };
+        } else if (probe.type === 'asic') {
+          // ASIC probe: query the cgminer-compatible API for the summary command.
+          let asicHashrateTHs = 0;
+          for (const port of [4028, 4029, 4030]) {
+            try {
+              const ctrl = new AbortController();
+              const to = setTimeout(() => ctrl.abort(), 10000);
+              let r;
+              try {
+                r = await fetch(`http://127.0.0.1:${port}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ command: 'summary' }),
+                  signal: ctrl.signal,
+                });
+              } finally {
+                clearTimeout(to);
+              }
+              const json = await r.json();
+              const summary = json && json.SUMMARY && json.SUMMARY[0];
+              if (summary) {
+                const ghsAv = parseFloat(summary['GHS av'] || 0);
+                const ghs5s = parseFloat(summary['GHS 5s'] || 0);
+                const mhsAv = parseFloat(summary['MHS av'] || 0);
+                const mhs5s = parseFloat(summary['MHS 5s'] || 0);
+                asicHashrateTHs = Math.max(ghsAv, ghs5s) / 1000 || Math.max(mhsAv, mhs5s) / 1_000_000;
+                if (asicHashrateTHs > 0) break;
+              }
+            } catch (_) {}
+          }
+          probeResult = {
+            id: probe.id,
+            type: 'asic',
+            hashrateTHs: asicHashrateTHs,
+            proof: String(asicHashrateTHs.toFixed(2)),
+          };
         }
 
         if (!probeResult) return;
@@ -4587,10 +4623,10 @@ export default function Miner({
   }, [hardware, dynamicCPUTDPCache, hardwareLookupResetNonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Online whole-device system power lookup (measured wall-socket watts at max load).
-  // Used for laptops and mini PCs, where the machine is one thermal/power unit.
+  // Used for laptops, ASICs, and mini PCs, where the machine is one thermal/power unit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => {
-    if (hardware.deviceType !== 'Laptop' && !isWholeDeviceMiniPcModel) return;
+    if (hardware.deviceType !== 'Laptop' && hardware.deviceType !== 'ASIC' && !isWholeDeviceMiniPcModel) return;
     if (!hardware.source) return; // hardware not loaded yet
     // Check if we already have a fresh cached value.
     // Discard null-result cache entries immediately so a previously-blocked
@@ -4627,7 +4663,13 @@ export default function Miner({
     setTdpFetchingCount((n) => n + 1);
     (async () => {
       try {
-        const tdp = await fetchLaptopSystemPowerOnline(hardware.manufacturer, hardware.version, hardware.cpu, null);
+        const queryModel = hardware.deviceType === 'ASIC' ? hardware.gpu : null;
+        const tdp = await fetchLaptopSystemPowerOnline(
+          queryModel || hardware.manufacturer,
+          queryModel ? null : hardware.version,
+          queryModel ? null : hardware.cpu,
+          null,
+        );
         const entry = { tdp, ts: Date.now() };
         try {
           localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry));
@@ -4642,7 +4684,7 @@ export default function Miner({
           setLog((log) => [
             {
               time: now(),
-              msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: "${unitLabel}" → ${tdp} W (live, benchmark cap reset)`,
+              msg: `Online ${hardware.deviceType === 'ASIC' ? 'ASIC' : isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: "${unitLabel}" → ${tdp} W (live, benchmark cap reset)`,
               type: 'info',
             },
             ...log,
@@ -4651,7 +4693,7 @@ export default function Miner({
           setLog((log) => [
             {
               time: now(),
-              msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: no result found for "${unitLabel}", keeping static estimate`,
+              msg: `Online ${hardware.deviceType === 'ASIC' ? 'ASIC' : isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: no result found for "${unitLabel}", keeping static estimate`,
               type: 'warn',
             },
             ...log,
@@ -4661,7 +4703,7 @@ export default function Miner({
         setLog((log) => [
           {
             time: now(),
-            msg: `Online ${isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup failed for "${unitLabel}": ${e && e.message ? e.message : String(e)}`,
+            msg: `Online ${hardware.deviceType === 'ASIC' ? 'ASIC' : isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup failed for "${unitLabel}": ${e && e.message ? e.message : String(e)}`,
             type: 'warn',
           },
           ...log,
@@ -4676,6 +4718,7 @@ export default function Miner({
     hardware.manufacturer,
     hardware.version,
     hardware.cpu,
+    hardware.gpu,
     hardwareLookupResetNonce,
     isWholeDeviceMiniPcModel,
     setLog,
@@ -4707,6 +4750,50 @@ export default function Miner({
     { regex: /MacBook/i, power: 35 },
     { regex: /XPS|Latitude|EliteBook|Spectre|Yoga|Surface|IdeaPad|Aspire/i, power: 50 },
   ];
+  const asicPowerTable = [
+    { regex: /Antminer.*S21\s*XP/i, power: 3800 },
+    { regex: /Antminer.*S21/i, power: 3500 },
+    { regex: /Antminer.*T21/i, power: 3610 },
+    { regex: /Antminer.*S19\s*XP/i, power: 3010 },
+    { regex: /Antminer.*S19\s*Pro\+/i, power: 3300 },
+    { regex: /Antminer.*S19\s*Pro/i, power: 3250 },
+    { regex: /Antminer.*S19j\s*Pro\+/i, power: 3220 },
+    { regex: /Antminer.*S19j\s*Pro/i, power: 3050 },
+    { regex: /Antminer.*S19j/i, power: 3100 },
+    { regex: /Antminer.*S19/i, power: 3250 },
+    { regex: /Antminer.*T19/i, power: 3150 },
+    { regex: /Antminer.*S17\+/i, power: 2920 },
+    { regex: /Antminer.*S17\s*Pro/i, power: 2090 },
+    { regex: /Antminer.*T17\+/i, power: 2800 },
+    { regex: /Antminer.*T17/i, power: 2200 },
+    { regex: /Antminer.*S15/i, power: 1590 },
+    { regex: /Antminer.*T15/i, power: 1540 },
+    { regex: /Antminer.*S9[kji]|S9\s*\(/i, power: 1400 },
+    { regex: /Antminer.*S9/i, power: 1350 },
+    { regex: /Whatsminer.*M66/i, power: 2988 },
+    { regex: /Whatsminer.*M60S/i, power: 3500 },
+    { regex: /Whatsminer.*M60/i, power: 3306 },
+    { regex: /Whatsminer.*M56/i, power: 3400 },
+    { regex: /Whatsminer.*M50S\+\+/i, power: 3470 },
+    { regex: /Whatsminer.*M50S/i, power: 3500 },
+    { regex: /Whatsminer.*M50/i, power: 3270 },
+    { regex: /Whatsminer.*M30S\+\+/i, power: 3472 },
+    { regex: /Whatsminer.*M30S\+/i, power: 3400 },
+    { regex: /Whatsminer.*M30S/i, power: 3260 },
+    { regex: /Whatsminer.*M30/i, power: 3260 },
+    { regex: /Whatsminer.*M32/i, power: 3200 },
+    { regex: /Whatsminer.*M31S/i, power: 2700 },
+    { regex: /Whatsminer.*M21S/i, power: 2700 },
+    { regex: /Whatsminer.*M20S/i, power: 2800 },
+    { regex: /Whatsminer.*M20/i, power: 2800 },
+    { regex: /Avalon.*A1466I/i, power: 3320 },
+    { regex: /Avalon.*A1366I/i, power: 3250 },
+    { regex: /Avalon.*A1266/i, power: 3420 },
+    { regex: /Avalon.*A1166\s*Pro/i, power: 3400 },
+    { regex: /Avalon.*A1166/i, power: 3250 },
+    { regex: /Avalon.*A1066/i, power: 3200 },
+  ];
+
   const miniPcModelTable = [
     { regex: /ThinkCentre\s+M\d{3,4}[a-z]?q|ThinkCentre\s+Tiny/i, power: 42 },
     { regex: /OptiPlex\s+(?:Micro|Ultra)/i, power: 40 },
@@ -4810,11 +4897,20 @@ export default function Miner({
   }
 
   if (matched) {
-    if (
+    if (hardware.deviceType === 'ASIC') {
+      // ASICs are whole-device units — look up model power, don't decompose.
+      let asicPower = null;
+      for (const entry of asicPowerTable) {
+        if (entry.regex.test(hardware.gpu)) {
+          asicPower = entry.power;
+          break;
+        }
+      }
+      powerW = asicPower !== null ? asicPower : (laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500);
+    } else if (
       hardware.deviceType === 'Desktop' ||
       hardware.deviceType === 'PC' ||
       hardware.deviceType === 'Server' ||
-      hardware.deviceType === 'ASIC' ||
       hardware.deviceType === 'Mac'
     ) {
       if (cpuTDP !== null && gpuTDP !== null) powerW = cpuTDP + gpuTDP;
@@ -4892,7 +4988,14 @@ export default function Miner({
     } else if (hardware.deviceType === 'Server') {
       powerW = Math.max(cpuTDP || 0, 250) + memPowerW;
     } else if (hardware.deviceType === 'ASIC') {
-      powerW = laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 3500;
+      let asicPower = null;
+      for (const entry of asicPowerTable) {
+        if (entry.regex.test(hardware.gpu)) {
+          asicPower = entry.power;
+          break;
+        }
+      }
+      powerW = asicPower !== null ? asicPower : (laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500);
     } else if (hardware.deviceType === 'Mac') {
       powerW = laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 35;
     }

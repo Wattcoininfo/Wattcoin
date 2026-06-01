@@ -662,13 +662,13 @@ async function main() {
   const nextVersion = bumpPatchVersion(previousVersion);
   const { historyPath, versionLogPath } = getBuildLogPaths(root, nextVersion);
   const whitepaperPath = path.join(root, 'wattcoin-whitepaper.html');
-  const homepagePath = path.join(root, 'homepage.html');
+  const indexHtmlPath = path.join(root, 'index.html');
   const walletPath = path.join(root, 'wallet.html');
   const latestYmlPath = path.join(root, 'Releases', 'latest.yml');
   mutableReleaseBackups = snapshotFileContents([
     packageJsonPath,
     whitepaperPath,
-    homepagePath,
+    indexHtmlPath,
     walletPath,
     latestYmlPath,
     historyPath,
@@ -686,17 +686,17 @@ async function main() {
 
   console.log(`Version bumped: ${previousVersion} -> ${nextVersion}`);
 
-  // Update all version references in homepage.html, wattcoin-whitepaper.html and wallet.html
+  // Update all version references in index.html, wattcoin-whitepaper.html and wallet.html
   {
     const months = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
     const now = new Date();
     const monthName = months[now.getMonth()];
     const year = now.getFullYear();
-    if (fs.existsSync(homepagePath)) {
-      let hp = fs.readFileSync(homepagePath, 'utf8');
+    if (fs.existsSync(indexHtmlPath)) {
+      let hp = fs.readFileSync(indexHtmlPath, 'utf8');
       hp = syncWhitepaperVersionLabels(hp, nextVersion, monthName, year);
-      fs.writeFileSync(homepagePath, hp, 'utf8');
-      console.log(`homepage.html updated to ${nextVersion} — ${monthName} ${year}`);
+      fs.writeFileSync(indexHtmlPath, hp, 'utf8');
+      console.log(`index.html updated to ${nextVersion} — ${monthName} ${year}`);
     }
     if (fs.existsSync(whitepaperPath)) {
       let wp = fs.readFileSync(whitepaperPath, 'utf8');

@@ -7,7 +7,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';"
     />
-    <title>Wattcoin — Web Wallet | Create, Buy & Stake WTC</title>
+    <title>Wattcoin Wallet — Buy, Stake & Manage WTC</title>
     <meta
       name="description"
       content="Create a WTC wallet in your browser — your private key never leaves your device. Check balances, buy WTC with USDC, stake tokens for rewards, and manage Vortex NFTs. Client-side only, no server storage."
@@ -141,6 +141,13 @@
         transition: color 0.2s;
       }
       .nav-links a:hover {
+        color: #4ade80;
+      }
+      .nav-links a.nav-blog {
+        color: #6b9a6b;
+        font-weight: 500;
+      }
+      .nav-links a.nav-blog:hover {
         color: #4ade80;
       }
       .nav-links a.nav-wallet {
@@ -451,6 +458,7 @@
       <ul class="nav-links">
         <li><a href="index.html">Home</a></li>
         <li><a href="wattcoin-whitepaper.html">Whitepaper</a></li>
+        <li><a href="blog.html" class="nav-blog">Blog</a></li>
         <li><a href="wallet.html" class="nav-wallet">Wallet</a></li>
       </ul>
     </nav>

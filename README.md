@@ -124,7 +124,7 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ## Project Structure
 
 ```
-├── homepage.html                 # Public-facing website (deployed as index.html)
+├── index.html                    # Public-facing website (homepage)
 ├── wallet.html                   # Web wallet page
 ├── wattcoin-whitepaper.html      # Whitepaper page
 ├── index.html                    # Vite SPA shell (desktop app entry)
