@@ -638,6 +638,27 @@ async function main() {
     verifyAndArchiveInstaller(root, currentVersion);
     verifyReleaseMetadata(root, currentVersion);
 
+    // Sync version labels in HTML files before deploying (deploy-only mode
+    // is called independently and must never upload stale version strings)
+    {
+      const months = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+      const now = new Date();
+      const monthName = months[now.getMonth()];
+      const year = now.getFullYear();
+      const syncFiles = [
+        path.join(root, 'index.html'),
+        path.join(root, 'wattcoin-whitepaper.html'),
+        path.join(root, 'wallet.html'),
+      ];
+      for (const filePath of syncFiles) {
+        if (!fs.existsSync(filePath)) continue;
+        const content = fs.readFileSync(filePath, 'utf8');
+        const updated = syncWhitepaperVersionLabels(content, currentVersion, monthName, year);
+        fs.writeFileSync(filePath, updated, 'utf8');
+        console.log(`  Synced ${path.basename(filePath)} to ${currentVersion} — ${monthName} ${year}`);
+      }
+    }
+
     console.log(`[release-build] Deploy-only mode for version ${currentVersion}.`);
     console.log('[release-build] Deploying to server...');
     const deployScript = path.join(__dirname, '_sftp-deploy.js');
