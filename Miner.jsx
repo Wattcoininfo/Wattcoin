@@ -685,8 +685,13 @@ async function getHardwareInfo() {
         '| LaptopModelSource:',
         laptopModelCandidate.source,
       );
+      const LAPTOP_CHASSIS_CODES = ['8', '9', '10', '14'];
       let deviceType = 'Unknown';
-      if (/notebook|laptop|portable/i.test(chassisType) || LAPTOP_COMMERCIAL_MODEL_HINTS.test(modelStr)) {
+      if (
+        /notebook|laptop|portable/i.test(chassisType) ||
+        LAPTOP_CHASSIS_CODES.includes(chassisType) ||
+        LAPTOP_COMMERCIAL_MODEL_HINTS.test(modelStr)
+      ) {
         deviceType = 'Laptop';
       } else if (/server/i.test(chassisType) || /Server/i.test(modelStr)) {
         deviceType = 'Server';

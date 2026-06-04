@@ -363,4 +363,86 @@ function getAsicHashrateTHs(model) {
   return 0; // unknown — caller should fall back to defaults
 }
 
-module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs };
+// ── GPU TDP Lookup ───────────────────────────────────────────────────────
+// Returns the rated TDP (W) for a known GPU model string, or 0 if unknown.
+// Used by electron-main.js to cap GPU energy claims — the adapter name comes
+// from the native binary (gpu-miner.exe via DXGI) so the renderer cannot
+// lie about which GPU is installed.
+function getGpuTdpW(model) {
+  if (!model) return 0;
+  const m = model;
+  // ── NVIDIA RTX 40 series ─────────────────────────────────────────────────
+  if (/GeForce.*RTX 4090/i.test(m))                   return 450;
+  if (/GeForce.*RTX 4080 (SUPER|S)/i.test(m))         return 320;
+  if (/GeForce.*RTX 4080/i.test(m))                   return 320;
+  if (/GeForce.*RTX 4070 Ti SUPER/i.test(m))          return 285;
+  if (/GeForce.*RTX 4070 Ti/i.test(m))                return 285;
+  if (/GeForce.*RTX 4070 SUPER/i.test(m))             return 220;
+  if (/GeForce.*RTX 4070/i.test(m))                   return 200;
+  if (/GeForce.*RTX 4060 Ti/i.test(m))                return 165;
+  if (/GeForce.*RTX 4060/i.test(m))                   return 115;
+  if (/GeForce.*RTX 4050/i.test(m))                   return 50;
+  // ── NVIDIA RTX 30 series ─────────────────────────────────────────────────
+  if (/GeForce.*RTX 3090 Ti/i.test(m))                return 450;
+  if (/GeForce.*RTX 3090/i.test(m))                   return 350;
+  if (/GeForce.*RTX 3080 Ti/i.test(m))                return 350;
+  if (/GeForce.*RTX 3080/i.test(m))                   return 320;
+  if (/GeForce.*RTX 3070 Ti/i.test(m))                return 290;
+  if (/GeForce.*RTX 3070/i.test(m))                   return 220;
+  if (/GeForce.*RTX 3060 Ti/i.test(m))                return 200;
+  if (/GeForce.*RTX 3060/i.test(m))                   return 170;
+  if (/GeForce.*RTX 3050/i.test(m))                   return 130;
+  // ── NVIDIA GTX 16 / 10 series ────────────────────────────────────────────
+  if (/GeForce.*GTX 1660 Ti/i.test(m))                return 120;
+  if (/GeForce.*GTX 1660 SUPER/i.test(m))             return 125;
+  if (/GeForce.*GTX 1660/i.test(m))                   return 120;
+  if (/GeForce.*GTX 1650/i.test(m))                   return 75;
+  if (/GeForce.*GTX 1080 Ti/i.test(m))                return 250;
+  if (/GeForce.*GTX 1080/i.test(m))                   return 180;
+  if (/GeForce.*GTX 1070 Ti/i.test(m))                return 180;
+  if (/GeForce.*GTX 1070/i.test(m))                   return 150;
+  if (/GeForce.*GTX 1060/i.test(m))                   return 120;
+  if (/GeForce.*GTX 1050 Ti/i.test(m))                return 75;
+  // ── AMD RX 7000 series ───────────────────────────────────────────────────
+  if (/Radeon.*RX 7900 XTX/i.test(m))                 return 355;
+  if (/Radeon.*RX 7900 XT/i.test(m))                  return 300;
+  if (/Radeon.*RX 7900 GRE/i.test(m))                 return 260;
+  if (/Radeon.*RX 7800 XT/i.test(m))                  return 263;
+  if (/Radeon.*RX 7700 XT/i.test(m))                  return 245;
+  if (/Radeon.*RX 7600 XT/i.test(m))                  return 190;
+  if (/Radeon.*RX 7600/i.test(m))                     return 165;
+  // ── AMD RX 6000 series ───────────────────────────────────────────────────
+  if (/Radeon.*RX 6950 XT/i.test(m))                  return 335;
+  if (/Radeon.*RX 6900 XT/i.test(m))                  return 300;
+  if (/Radeon.*RX 6800 XT/i.test(m))                  return 300;
+  if (/Radeon.*RX 6800/i.test(m))                     return 250;
+  if (/Radeon.*RX 6750 XT/i.test(m))                  return 250;
+  if (/Radeon.*RX 6700 XT/i.test(m))                  return 230;
+  if (/Radeon.*RX 6700/i.test(m))                     return 175;
+  if (/Radeon.*RX 6650 XT/i.test(m))                  return 180;
+  if (/Radeon.*RX 6600 XT/i.test(m))                  return 160;
+  if (/Radeon.*RX 6600/i.test(m))                     return 132;
+  if (/Radeon.*RX 6500 XT/i.test(m))                  return 107;
+  if (/Radeon.*RX 6400/i.test(m))                     return 53;
+  // ── AMD RX 5000 series ───────────────────────────────────────────────────
+  if (/Radeon.*RX 5700 XT/i.test(m))                  return 225;
+  if (/Radeon.*RX 5700/i.test(m))                     return 180;
+  if (/Radeon.*RX 5600 XT/i.test(m))                  return 150;
+  if (/Radeon.*RX 5500 XT/i.test(m))                  return 130;
+  // ── Intel Arc ────────────────────────────────────────────────────────────
+  if (/Intel.*Arc A770/i.test(m))                     return 225;
+  if (/Intel.*Arc A750/i.test(m))                     return 225;
+  if (/Intel.*Arc A580/i.test(m))                     return 175;
+  if (/Intel.*Arc A380/i.test(m))                     return 75;
+  // ── Intel integrated (fallback — low TDP) ───────────────────────────────
+  if (/Intel.*UHD Graphics/i.test(m))                 return 15;
+  if (/Intel.*Iris Xe/i.test(m))                      return 15;
+  if (/Intel.*HD Graphics/i.test(m))                  return 10;
+  // ── Microsoft Basic Render / WARP (no real GPU) ─────────────────────────
+  if (/Microsoft Basic Render/i.test(m))              return 0;
+  if (/Microsoft.*WARP/i.test(m))                     return 0;
+  // Unknown — VRAM-based fallback
+  return 0;
+}
+
+module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW };

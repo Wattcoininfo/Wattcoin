@@ -1233,8 +1233,8 @@ export default function Wattcoin() {
                   <strong style={{ color: '#e8f5e8' }}>
                     Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)
                   </strong>
-                  . Benchmark proofs — CPU hash, memory walk, GPU pixel hash — measure actual computation throughput to
-                  validate the hardware claim. Any ledger peer independently re-derives each expected proof using the
+                  . Benchmark proofs — CPU hash, memory walk, GPU compute hash — measure actual computation throughput
+                  to validate the hardware claim. Any ledger peer independently re-derives each expected proof using the
                   same deterministic algorithm. No specialised hardware is required on the verifier side.
                 </p>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a' }}>
@@ -1425,7 +1425,7 @@ export default function Wattcoin() {
                 [
                   '02',
                   'BENCHMARK',
-                  'A ledger peer issues random computation challenges (CPU hash, GPU pixel hash, memory probe)',
+                  'A ledger peer issues random computation challenges (CPU hash, GPU compute hash, memory probe)',
                 ],
                 [
                   '03',
@@ -1736,7 +1736,10 @@ export default function Wattcoin() {
                     ['SUBMITTED', 'Proof commitment — SHA-256(blockHash + Wh + blocks), binds energy claim to block'],
                     ['BENCHMARK', 'CPU speed proof — deterministic IMUL/XOR hash, independently re-run by peers'],
                     ['BENCHMARK', 'Memory proof — seeded array-walk hash, independently re-run by peers'],
-                    ['BENCHMARK', 'GPU proof hash — deterministic XOR-shift pixel hash (WebGL2), verified in pure JS'],
+                    [
+                      'BENCHMARK',
+                      'GPU proof hash — deterministic XOR-shift via native DirectX compute shader, verified in pure JS',
+                    ],
                     [
                       'PROBE',
                       'Periodic in-mining probes — chain-derived seeds, peer algebraically verifies each answer',

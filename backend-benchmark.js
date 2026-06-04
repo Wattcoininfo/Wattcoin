@@ -295,9 +295,9 @@ function getBenchmarkCapabilities() {
       status: 'ready',
     },
     gpu: {
-      supported: false,
-      status: 'renderer-only',
-      note: 'GPU probe runs in the Electron renderer (WebGL) — not available in Node.js backend.',
+      supported: true,
+      status: 'native',
+      note: 'Native GPU binary (gpu-miner.exe) with D3D9/10/11/12 support.',
     },
   };
 }

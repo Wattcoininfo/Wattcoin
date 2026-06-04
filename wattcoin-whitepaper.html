@@ -142,7 +142,7 @@
       <div class="hero-grid"></div>
       <div class="container hero-content">
         <div class="hero-pill-row">
-          <div class="hero-pill">VERSION 1.0.287 — JUNE 2026</div>
+          <div class="hero-pill">VERSION 1.0.306 — JUNE 2026</div>
           <div
             class="elec-dial"
             id="hero-elec-dial"
@@ -511,7 +511,7 @@
             <p>
               Energy consumption is derived from hardware specifications scaled by the miner's configured duty-cycle
               load: <strong>Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</strong>. Benchmark
-              proofs &mdash; CPU hash, memory walk, GPU pixel hash &mdash; measure actual computation throughput to
+              proofs &mdash; CPU hash, memory walk, GPU compute hash &mdash; measure actual computation throughput to
               validate the hardware claim. Any ledger peer independently re-derives each expected proof using the same
               deterministic algorithm. No specialised hardware is required on the verifier side.
             </p>
@@ -1768,7 +1768,7 @@
             color: #1e3a1e;
           "
         >
-          WATTCOIN FOUNDATION &mdash; VERSION 1.0.287 &mdash; JUNE 2026
+          WATTCOIN FOUNDATION &mdash; VERSION 1.0.306 &mdash; JUNE 2026
         </div>
       </div>
     </section>
@@ -2147,9 +2147,9 @@
         <div class="download-cards-row">
           <div class="download-card">
             <div class="download-platform">WINDOWS</div>
-            <div class="download-name">Wattcoin Miner v1.0.287</div>
+            <div class="download-name">Wattcoin Miner v1.0.306</div>
             <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
-            <a href="/releases/Wattcoin Miner Setup 1.0.287.exe" download class="download-btn" id="download-btn"
+            <a href="/releases/Wattcoin Miner Setup 1.0.306.exe" download class="download-btn" id="download-btn"
               >&#8595;&nbsp; Download for Windows</a
             >
             <div
@@ -2235,7 +2235,7 @@
     </section>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.287 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.306 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer"
         ><svg
@@ -2422,7 +2422,7 @@
           [
             '02',
             'BENCHMARK',
-            'A ledger peer issues random computation challenges (CPU hash, GPU pixel hash, memory probe)',
+            'A ledger peer issues random computation challenges (CPU hash, GPU compute hash, memory probe)',
           ],
           [
             '03',
@@ -2609,7 +2609,10 @@
           ['SUBMITTED', 'Proof commitment — SHA-256(blockHash + Wh + blocks), binds energy claim to block'],
           ['BENCHMARK', 'CPU speed proof — deterministic IMUL/XOR hash, independently re-run by peers'],
           ['BENCHMARK', 'Memory proof — seeded array-walk hash, independently re-run by peers'],
-          ['BENCHMARK', 'GPU proof hash — deterministic XOR-shift pixel hash (WebGL2), verified in pure JS'],
+          [
+            'BENCHMARK',
+            'GPU proof hash — deterministic XOR-shift via native DirectX compute shader, verified in pure JS',
+          ],
           ['PROBE', 'Periodic in-mining probes — chain-derived seeds, peer algebraically verifies each answer'],
           ['ATTESTED', 'Power cap level — rises only by passing successive benchmark tiers'],
         ];

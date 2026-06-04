@@ -10,6 +10,7 @@ const APP_INTEGRITY_FILES = [
   'preload.js',
   'backend-benchmark.js',
   'hardware-load-controller.js',
+  'gpu-load-controller.js',
   'cpu-load-worker.js',
   'ddr-load-worker.js',
   'probe-attestation.js',
@@ -310,6 +311,33 @@ function removeExistingVersionArtifacts(root, version) {
     } catch (e) {
       throw new Error(`Failed to remove stale release artifact ${filePath}: ${e && e.message ? e.message : e}`);
     }
+  }
+}
+
+function removeStaleElectronBuilderOutput(root) {
+  const outputDir = path.join(root, 'Releases', 'win-unpacked');
+  if (!fs.existsSync(outputDir)) return;
+
+  try {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+    console.log(`[release-build] Removed stale electron-builder output: ${outputDir}`);
+  } catch (e) {
+    throw new Error(`Failed to clean stale electron-builder output ${outputDir}: ${e && e.message ? e.message : e}`);
+  }
+}
+
+function buildNativeGpuBinary(root) {
+  const gpuBinaryPath = path.join(root, 'native-gpu', 'build', 'gpu-miner.exe');
+  if (fs.existsSync(gpuBinaryPath)) {
+    console.log('[release-build] Native GPU helper already built.');
+    return;
+  }
+
+  console.log('[release-build] Native GPU helper missing; building native-gpu helper...');
+  runNpmExec(['run', 'native-gpu:build']);
+
+  if (!fs.existsSync(gpuBinaryPath)) {
+    throw new Error(`Native GPU build did not produce expected binary: ${gpuBinaryPath}`);
   }
 }
 
@@ -739,10 +767,16 @@ async function main() {
     runNpmExec(['exec', '--', 'vite', 'build']);
     verifyRendererSaleBundle(root);
     assertMainProcessRuntimeFilesPackaged(root);
+    if (process.platform === 'win32') {
+      buildNativeGpuBinary(root);
+    }
+    removeStaleElectronBuilderOutput(root);
     logPackagingChecklistReminder();
     runNpmExec(['exec', '--', 'electron-builder', '--config', 'electron-builder.config.js']);
     verifyAndArchiveInstaller(root, nextVersion);
     verifyReleaseMetadata(root, nextVersion);
+
+    buildSucceeded = true; // mark before deploy so abort during SFTP doesn't revert version
 
     if (!skipDeploy) {
       console.log('[release-build] Deploying to server...');
@@ -763,7 +797,6 @@ async function main() {
     } else {
       console.log('[release-build] --local: skipping deploy and remote verification.');
     }
-    buildSucceeded = true;
   } finally {
     restoreHardeningBackups(hardeningBackups);
     if (!buildSucceeded) {

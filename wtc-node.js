@@ -120,10 +120,15 @@ class WtcNode {
       const lastLog = this._lastBackoffLog.get(peerUrl) || 0;
       if (now - lastLog < WtcNode.PEER_BACKOFF_DIAGNOSTIC_MS) continue;
       this._lastBackoffLog.set(peerUrl, now);
-      console.warn(
-        `[WtcNode] Peer ${peerUrl} still in failure backoff (${fail.count} consecutive failures, last fail ${new Date(fail.lastFail).toISOString()})`,
-      );
+      // suppressed backoff diagnostic log to reduce terminal spam
     }
+  }
+
+  _warnPeerFailureOnce(peerUrl, message, errorMessage, now = Date.now()) {
+    const lastLog = this._lastBackoffLog.get(peerUrl) || 0;
+    if (now - lastLog < WtcNode.PEER_FAILURE_BACKOFF_MS) return;
+    this._lastBackoffLog.set(peerUrl, now);
+    // suppressed peer failure warning log to reduce terminal spam
   }
 
   _pendingTxsPath() {
@@ -690,6 +695,7 @@ class WtcNode {
       proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
         ? JSON.parse(JSON.stringify(proofData.probeReceipt))
         : null;
+    const probesAnswered = Math.max(0, Math.floor(Number(proofData.probesAnswered) || 0));
 
     const reward = this._chain.nextBlockReward();
     const rewardAddresses =
@@ -716,6 +722,7 @@ class WtcNode {
       proofCommitment,
       peerProbeVerified,
       probeReceipt,
+      probesAnswered,
       transactions,
       rewardAddresses,
       nftsRoot,
@@ -1036,7 +1043,8 @@ class WtcNode {
       } catch (e) {
         const fail = this._recordPeerFailure(peerUrl);
         if (fail.count === WtcNode.PEER_FAILURE_THRESHOLD) {
-          console.warn(
+          this._warnPeerFailureOnce(
+            peerUrl,
             `[WtcNode] Peer ${peerUrl} unreachable during tip poll (${fail.count} consecutive failures, backing off 30s):`,
             e && e.message,
           );
@@ -1099,7 +1107,8 @@ class WtcNode {
       } catch (e) {
         const fail = this._recordPeerFailure(peerUrl);
         if (fail.count === WtcNode.PEER_FAILURE_THRESHOLD) {
-          console.warn(
+          this._warnPeerFailureOnce(
+            peerUrl,
             `[WtcNode] Trusted peer ${peerUrl} unreachable during same-height poll (${fail.count} consecutive failures, backing off 30s):`,
             e && e.message,
           );

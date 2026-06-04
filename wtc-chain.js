@@ -342,7 +342,7 @@ class Chain {
    * Build an unsigned block proposal at the next height.
    * The returned block needs to go through BFT voting before being appended.
    *
-   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, transactions?, rewardAddresses, stateRoot? }} opts
+   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot? }} opts
    */
   buildBlock({
     proposer,
@@ -350,6 +350,7 @@ class Chain {
     proofCommitment,
     peerProbeVerified = false,
     probeReceipt = null,
+    probesAnswered = 0,
     transactions = [],
     rewardAddresses,
     stateRoot = '',
@@ -375,6 +376,7 @@ class Chain {
         peerProbeVerified,
         probeReceipt,
       }).probeReceipt,
+      probesAnswered: Math.max(0, Math.floor(Number(probesAnswered) || 0)),
       txsHash,
       transactions,
       rewardTotal: reward,

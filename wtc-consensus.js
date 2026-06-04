@@ -101,6 +101,7 @@ class Consensus {
     proofCommitment,
     peerProbeVerified = false,
     probeReceipt = null,
+    probesAnswered = 0,
     transactions,
     rewardAddresses,
     nftsRoot = '',
@@ -112,6 +113,7 @@ class Consensus {
       proofCommitment,
       peerProbeVerified,
       probeReceipt,
+      probesAnswered,
       transactions,
       rewardAddresses,
       stateRoot,
@@ -369,6 +371,8 @@ class Consensus {
       return `insufficient energyWh: required ${minEnergyWh}, got ${block.energyWh || 0}`;
     }
 
+    const contribs = this._getEnergyContributions();
+
     // Validate rewardAddresses: every entry must be a valid address with a
     // non-negative amount, and the sum must exactly equal rewardTotal.
     // Without this check a malicious peer could credit an arbitrary amount
@@ -385,6 +389,72 @@ class Consensus {
     }
     if (Math.abs(rewardSum - block.rewardTotal) > 0.001) {
       return `rewardAddresses sum (${rewardSum}) does not match rewardTotal (${block.rewardTotal})`;
+    }
+
+    // Cross-check rewardAddresses against witnessed round contributions.
+    // Every address credited in the block must have contributed energy in
+    // this round according to the local round ledger.  This prevents a
+    // malicious proposer from crediting fake addresses that never mined.
+    // If the peer has no contribution data yet (e.g. just joined), the
+    // check is skipped so valid blocks are not spuriously rejected.
+    const contribKeys = Object.keys(contribs);
+    if (contribKeys.length > 0) {
+      for (const addr of Object.keys(block.rewardAddresses || {})) {
+        const wh = Number(contribs[addr]) || 0;
+        if (wh <= 0) {
+          return `reward address ${addr} has no witnessed round contribution (${wh} Wh)`;
+        }
+      }
+
+      // Reward proportion validation: for every address where we have
+      // witnessed contribution data, verify the reward is proportional.
+      // This prevents a proposer from skewing the distribution to give
+      // themselves an outsized share at the expense of others.
+      // Uses the same proportional algorithm as buildRewardMapFromRoundSnapshot.
+      const rewardTotal = block.rewardTotal;
+      const eligible = Object.entries(contribs)
+        .map(([addr, wh]) => [addr, Math.max(0, Number(wh) || 0)])
+        .filter(([, wh]) => wh > 0);
+      if (eligible.length > 0 && rewardTotal > 0) {
+        const totalWh = eligible.reduce((s, [, wh]) => s + wh, 0);
+        if (totalWh > 0) {
+          let allocated = 0;
+          const expected = {};
+          eligible.forEach(([addr, wh], index) => {
+            const isLast = index === eligible.length - 1;
+            let share = isLast
+              ? Number((rewardTotal - allocated).toFixed(8))
+              : Number(((rewardTotal * wh) / totalWh).toFixed(8));
+            if (share < 0) share = 0;
+            allocated = Number((allocated + share).toFixed(8));
+            expected[addr] = Number(((expected[addr] || 0) + share).toFixed(8));
+          });
+          for (const [addr, expectedAmt] of Object.entries(expected)) {
+            const actualAmt = Number((block.rewardAddresses || {})[addr]) || 0;
+            // Allow small rounding differences (0.001 tokens) and a 10%
+            // tolerance for in-flight contributions the peer may have missed.
+            const tolerance = Math.max(0.001, expectedAmt * 0.1);
+            if (actualAmt < expectedAmt - tolerance) {
+              return `reward for ${addr}: got ${actualAmt}, expected ~${expectedAmt} based on witnessed contributions`;
+            }
+          }
+        }
+      }
+    }
+
+    // ProbesAnswered must not exceed what the round duration allows.
+    // Each probe requires at least PROBE_INTERVAL_MS (5 min) of real work.
+    // This prevents a proposer from claiming an impossible number of probes
+    // for the time elapsed since the previous block.  The +1 tolerance
+    // accounts for the probe that triggered the block proposal itself.
+    const PROBE_INTERVAL_MS = 5 * 60 * 1000;
+    const probesAnswered = Math.max(0, Math.floor(Number(block.probesAnswered) || 0));
+    if (probesAnswered > 0 && tip && tip.timestamp) {
+      const elapsedMs = Math.max(0, block.timestamp - tip.timestamp);
+      const maxPlausibleProbes = Math.ceil(elapsedMs / PROBE_INTERVAL_MS) + 1;
+      if (probesAnswered > maxPlausibleProbes) {
+        return `probesAnswered (${probesAnswered}) exceeds plausible max (${maxPlausibleProbes}) for round duration ${elapsedMs}ms`;
+      }
     }
 
     const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer });

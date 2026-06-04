@@ -122,6 +122,7 @@ const config = {
     'peer-self-filter.js',
     'local-subnet-discovery.js',
     'protocol-constants.js',
+    'gpu-load-controller.js',
     'app-integrity-manifest.json',
     'package.json',
   ],
@@ -130,6 +131,7 @@ const config = {
       ['wattcoin-beta-config.json', 'wattcoin-beta-config.json'],
       ['docs/seed-peers.mainnet.json', 'seed-peers.mainnet.json'],
       ['resources/wtc-genesis.json', 'wtc-genesis.json'],
+      ['native-gpu/build/gpu-miner.exe', 'native-gpu/gpu-miner.exe'],
     ]
       .filter(([src]) => fs.existsSync(path.resolve(__dirname, src)))
       .map(([src, dest]) => ({ from: src, to: dest })),

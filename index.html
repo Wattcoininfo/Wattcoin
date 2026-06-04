@@ -703,7 +703,7 @@
       <div class="hero-grid"></div>
       <div class="container hero-content">
         <div class="hero-pill-row">
-          <div class="hero-pill">VERSION 1.0.287 — JUNE 2026</div>
+          <div class="hero-pill">VERSION 1.0.306 — JUNE 2026</div>
           <div
             class="elec-dial"
             id="hero-elec-dial"
@@ -797,9 +797,10 @@
         <div style="max-width: 760px; margin: 0 auto; font-size: 15px; color: #6b8f6b; line-height: 1.8">
           <p style="margin-bottom: 16px">
             Proof-of-Energy replaces hash-based mining with verifiable energy expenditure. Instead of solving useless
-            hash puzzles, your hardware runs benchmark-verified computation tasks — CPU integer hashing, GPU pixel
-            shading, and memory stride walks — while the protocol estimates the electrical energy consumed using your
-            hardware's known power draw and duty cycle.
+            hash puzzles, your hardware runs benchmark-verified computation tasks — CPU integer hashing, GPU DirectX
+            compute shaders via a native Windows binary, and memory stride walks — while the protocol estimates the
+            electrical energy consumed using your hardware's known power draw and duty cycle. GPU power draw is
+            authoritatively read from the hardware via DXGI, not reported by the miner.
           </p>
           <p style="margin-bottom: 16px">
             Every miner, regardless of hardware type, pays the same estimated energy cost per coin. A CPU miner and a
@@ -896,6 +897,14 @@
           <div class="latest-item">
             <div class="latest-date">JUN 2026</div>
             <div class="latest-text">
+              <strong>v1.0.304 released</strong> — Native GPU mining with DirectX compute shaders, GPU benchmark and
+              proof via native binary, GPU TDP lookup via DXGI.
+              <a href="/wattcoin-whitepaper.html#download">Download</a>
+            </div>
+          </div>
+          <div class="latest-item">
+            <div class="latest-date">JUN 2026</div>
+            <div class="latest-text">
               <strong>v1.0.287 released</strong> — Blog launched, ASIC anti-cheat, whitepaper sync, nav updates.
               <a href="/wattcoin-whitepaper.html#download">Download</a>
             </div>
@@ -953,9 +962,9 @@
         </div>
         <div class="download-card">
           <div class="download-platform">WINDOWS</div>
-          <div class="download-name">Wattcoin Miner v1.0.287</div>
+          <div class="download-name">Wattcoin Miner v1.0.306</div>
           <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
-          <a href="/releases/Wattcoin Miner Setup 1.0.287.exe" download class="hero-cta" id="download-btn"
+          <a href="/releases/Wattcoin Miner Setup 1.0.306.exe" download class="hero-cta" id="download-btn"
             >&#8595;&nbsp; Download for Windows</a
           >
           <div
@@ -1067,7 +1076,7 @@
 
     <!-- -- Footer -- -->
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.287 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.306 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer"
         ><svg

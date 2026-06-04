@@ -97,7 +97,7 @@
             "url": "https://wattcoin.ee/blog.html#how-to-mine-cryptocurrency-with-gpu",
             "datePublished": "2026-05-31",
             "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-            "description": "Step-by-step guide to mining WTC with any GPU. Pixel shading workloads, multi-GPU rigs, and efficiency tips."
+            "description": "Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips."
           },
           {
             "@type": "BlogPosting",
@@ -559,8 +559,8 @@
           <div>
             <h3>How to Mine Cryptocurrency with GPU — Wattcoin Guide</h3>
             <p>
-              Step-by-step guide to mining WTC with any GPU. Pixel shading workloads, multi-GPU rigs, and efficiency
-              tips.
+              Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and
+              efficiency tips.
             </p>
           </div>
         </a>
@@ -607,7 +607,7 @@
         <p>
           Instead of racing to solve a hash puzzle, every miner runs benchmark-verified computational tasks that
           exercise specific hardware components — <strong>CPU integer hashing</strong>,
-          <strong>GPU pixel shading</strong>, and <strong>memory stride walks</strong>. The protocol estimates the
+          <strong>GPU compute shaders</strong>, and <strong>memory stride walks</strong>. The protocol estimates the
           electrical energy consumed using each hardware component's known power draw and the miner's configured
           duty-cycle load:
         </p>
@@ -1109,9 +1109,11 @@
         <h3>How GPU Mining Works on Wattcoin</h3>
 
         <p>
-          Proof-of-Energy uses <strong>GPU pixel shading</strong> as a verifiable workload. The miner dispatches compute
-          shaders that exercise the GPU's shading units at a configurable load level. The protocol estimates your energy
-          contribution from your GPU's thermal design power (TDP) and the configured duty cycle:
+          Proof-of-Energy exercises the GPU through a <strong>native DirectX compute shader</strong> workload. The miner
+          dispatches DirectX compute shaders (D3D11/D3D12) that run a verifiable floating-point vector math loop across
+          the GPU's compute units at a configurable load level. GPU proof hashes are generated via a deterministic
+          integer XOR-shift compute shader. The protocol estimates your energy contribution from your GPU's thermal
+          design power (TDP) and the configured duty cycle:
         </p>
 
         <div class="viz-box">
@@ -1148,7 +1150,7 @@
             <tr>
               <td>Workload type</td>
               <td>Integer hashing</td>
-              <td>Pixel shading</td>
+              <td>Compute shaders</td>
             </tr>
             <tr>
               <td>Energy per WTC (Tier 1)</td>
@@ -1194,7 +1196,7 @@
           </li>
           <li>
             <strong>Combine with CPU or RAM</strong><br />
-            The miner can run CPU integer hashing + GPU shading + memory stride walks simultaneously. All energy
+            The miner can run CPU integer hashing + GPU compute shaders + memory stride walks simultaneously. All energy
             contributions are summed for a larger share of the block reward.
           </li>
         </ol>
@@ -1226,11 +1228,6 @@
 
         <ul>
           <li>
-            <strong>Undervolt for efficiency.</strong> The protocol credits your GPU's rated TDP, not actual draw.
-            Undervolting reduces your real electricity cost without lowering your mining credit — improving effective
-            profit.
-          </li>
-          <li>
             <strong>Watch your thermals.</strong> GPU shading loads generate heat. Keep junction temperatures below
             95&deg;C. The miner throttles automatically if limits are exceeded.
           </li>
@@ -1243,8 +1240,8 @@
             your specific GPU, then increase in 10% steps every 30 minutes up to your target load.
           </li>
           <li>
-            <strong>Hybrid mining.</strong> Run GPU shading alongside CPU hashing and memory walks for maximum verified
-            energy per machine.
+            <strong>Hybrid mining.</strong> Run GPU compute shaders alongside CPU hashing and memory walks for maximum
+            verified energy per machine.
           </li>
         </ul>
 

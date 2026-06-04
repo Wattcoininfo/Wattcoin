@@ -17,6 +17,7 @@ function getDefaultState() {
       startedAtMs: Date.now(),
       contributionsWh: {},
       contributionUpdatedAtMs: {},
+      probeChainIndex: {},
     },
     rounds: [],
     balancesByAddress: {},
@@ -97,6 +98,7 @@ function createRoundLedger(options = {}) {
           id: state.nextRoundId || 1,
           startedAtMs: Date.now(),
           contributionsWh: {},
+          probeChainIndex: {},
         };
       }
       if (!state.currentRound.contributionsWh || typeof state.currentRound.contributionsWh !== 'object') {
@@ -107,6 +109,9 @@ function createRoundLedger(options = {}) {
         typeof state.currentRound.contributionUpdatedAtMs !== 'object'
       ) {
         state.currentRound.contributionUpdatedAtMs = {};
+      }
+      if (!state.currentRound.probeChainIndex || typeof state.currentRound.probeChainIndex !== 'object') {
+        state.currentRound.probeChainIndex = {};
       }
       if (!Array.isArray(state.rounds)) state.rounds = [];
       if (!state.balancesByAddress || typeof state.balancesByAddress !== 'object') {
@@ -180,7 +185,7 @@ function createRoundLedger(options = {}) {
     };
   }
 
-  function setRoundContribution(address, totalWh, updatedAtMs = Date.now()) {
+  function setRoundContribution(address, totalWh, updatedAtMs = Date.now(), probeChainIndex = -1) {
     const key = normalizeAddress(address);
     const nextTotal = Math.max(0, Number(totalWh) || 0);
     const normalizedUpdatedAtMs = Math.max(0, Math.floor(Number(updatedAtMs) || 0));
@@ -201,10 +206,13 @@ function createRoundLedger(options = {}) {
       };
     }
 
+    const normalizedChainIndex = Math.max(0, Math.floor(Number(probeChainIndex) || 0));
+
     if (nextTotal <= 0) {
       if (Object.prototype.hasOwnProperty.call(state.currentRound.contributionsWh, key)) {
         delete state.currentRound.contributionsWh[key];
         delete state.currentRound.contributionUpdatedAtMs[key];
+        delete state.currentRound.probeChainIndex[key];
         save();
       }
       return {
@@ -218,6 +226,9 @@ function createRoundLedger(options = {}) {
 
     state.currentRound.contributionsWh[key] = Number(nextTotal.toFixed(8));
     state.currentRound.contributionUpdatedAtMs[key] = normalizedUpdatedAtMs > 0 ? normalizedUpdatedAtMs : Date.now();
+    if (normalizedChainIndex >= 0) {
+      state.currentRound.probeChainIndex[key] = normalizedChainIndex;
+    }
     save();
     return {
       ok: true,
@@ -225,6 +236,7 @@ function createRoundLedger(options = {}) {
       address: key,
       roundId: state.currentRound.id,
       addressRoundWh: state.currentRound.contributionsWh[key],
+      probeChainIndex: state.currentRound.probeChainIndex[key],
     };
   }
 
@@ -257,6 +269,7 @@ function createRoundLedger(options = {}) {
       id: nextRoundId,
       startedAtMs: Number(startedAtMs) || Date.now(),
       contributionsWh: {},
+      probeChainIndex: {},
     };
     save();
     return getCurrentRoundSnapshot();
@@ -367,6 +380,7 @@ function createRoundLedger(options = {}) {
       id: state.nextRoundId,
       startedAtMs: Date.now(),
       contributionsWh: {},
+      probeChainIndex: {},
     };
 
     save();

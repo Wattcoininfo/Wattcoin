@@ -1,5 +1,13 @@
 # Wattcoin Miner
 
+<p>
+  <a href="https://github.com/Wattcoininfo/Wattcoin/actions"><img src="https://img.shields.io/github/actions/workflow/status/Wattcoininfo/Wattcoin/ci.yml?branch=main&label=CI&logo=github" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Wattcoininfo/Wattcoin?color=blue" alt="License"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node">
+  <a href="https://github.com/Wattcoininfo/Wattcoin/releases"><img src="https://img.shields.io/github/v/release/Wattcoininfo/Wattcoin?include_prereleases&label=release" alt="Release"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platform">
+</p>
+
 **Proof-of-Energy cryptocurrency miner** — a desktop application for mining WTC, the energy-backed cryptocurrency.
 
 Wattcoin's Proof-of-Energy (PoE) consensus replaces wasteful hash-based mining with **verifiable electrical energy consumption**. Miners are rewarded proportionally to the energy they contribute, creating a direct physical link between computational work and token value.
@@ -124,10 +132,11 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ## Project Structure
 
 ```
-├── index.html                    # Public-facing website (homepage)
+├── index.html                    # Website homepage (also Vite SPA shell for desktop app)
 ├── wallet.html                   # Web wallet page
+├── miner.html                    # Desktop miner app entry (Vite)
 ├── wattcoin-whitepaper.html      # Whitepaper page
-├── index.html                    # Vite SPA shell (desktop app entry)
+├── blog.html                     # Blog page
 ├── main.jsx                      # React entry point
 ├── Miner.jsx                     # Mining UI component
 ├── AppTabs.jsx                   # Tab-based application shell
@@ -162,13 +171,21 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ├── local-subnet-discovery.js     # LAN peer discovery
 ├── round-ledger.js               # Round event ledger
 ├── runtime-config.js             # Configuration loader
-├── hardware-load-controller.js   # CPU/GPU load controller
+├── hardware-load-controller.js   # CPU + DDR load controller
+├── gpu-load-controller.js        # Native GPU load controller (gpu-miner.exe)
 ├── cpu-load-worker.js            # CPU load simulation worker
 ├── ddr-load-worker.js            # RAM load simulation worker
 ├── hardware-tables.cjs           # Hardware energy tables
 ├── ops-health.js                 # Operational health checks
 ├── backend-benchmark.js          # Backend benchmarking
 ├── app-integrity-manifest.json   # Runtime integrity hashes
+│
+├── native-gpu/                   # Native GPU miner binary (C++)
+│   ├── src/
+│   │   ├── main.cpp              # Multi-DirectX backend, stdin/stdout JSON IPC
+│   │   ├── compute.hlsl          # GPU compute shader (float vector math)
+│   │   └── proof.hlsl            # GPU proof shader (integer XOR-shift)
+│   └── build.ps1                 # Build script (Visual Studio)
 │
 ├── counter-api/                  # Visit/download counter API (PHP)
 │   ├── index.php
@@ -197,7 +214,7 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ├── site.webmanifest              # Web app manifest
 ├── docs/                         # Operations documentation
 ├── monitoring/                   # Prometheus/Grafana monitoring stack
-├── tests/                        # Test files (30+ test suites)
+├── tests/                        # Test files (36 test suites)
 └── releases/                     # Built installers
 ```
 
@@ -209,17 +226,18 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ┌──────────────────────────────────────────────────────────────────┐
 │                    Website (wattcoin.ee)                          │
 │  ┌──────────────────┐  ┌──────────────────────────────────────┐  │
-│  │ Static Pages      │  │ PHP APIs                             │  │
-│  │  - index.html     │  │  - counter-api/   (visits/downloads) │  │
-│  │  - wallet.html    │  │  - elec-price-api/(electricity cost) │  │
-│  │  - whitepaper.html│  │  - sale-api/      (token sale)      │  │
-│  │  - sitemap.xml    │  └──────────────────────────────────────┘  │
-│  │  - robots.txt     │  ┌──────────────────────────────────────┐  │
-│  │  - updates.xml    │  │ Apache (.htaccess)                    │  │
-│  └──────────────────┘  │  caching, gzip, CSP, redirects        │  │
-│                        └──────────────────────────────────────┘  │
+│  │ Static Pages     │  │ PHP APIs                             │  │
+│  │  - index.html    │  │  - counter-api/   (visits/downloads) │  │
+│  │  - wallet.html   │  │  - elec-price-api/(electricity cost) │  │
+│  │  - miner.html    │  │  - sale-api/      (token sale)      │  │
+│  │  - whitepaper    │  └──────────────────────────────────────┘  │
+│  │  - blog.html     │  ┌──────────────────────────────────────┐  │
+│  │  - sitemap.xml   │  │ Apache (.htaccess)                   │  │
+│  │  - robots.txt    │  │  caching, gzip, CSP, redirects      │  │
+│  │  - updates.xml   │  └──────────────────────────────────────┘  │
+│  └──────────────────┘                                            │
 └──────────────────────────────┬───────────────────────────────────┘
-                               │  HTTPS / Releases
+                                │  HTTPS / Releases
 ┌──────────────────────────────┴───────────────────────────────────┐
 │                  Electron Desktop App                             │
 │  ┌────────────────────────────────────────────────────────────┐  │
@@ -229,8 +247,8 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │  ├────────────────────────────────────────────────────────────┤  │
 │  │  Main Process (electron-main.js)                            │  │
 │  │  ┌──────────┬───────────┬──────────┬──────────────────┐    │  │
-│  │  │ Network  │ Attest.   │ Wallet   │ Updates & Config │    │  │
-│  │  │ Server   │ Engine    │ Manager  │                  │    │  │
+│  │  │ Network  │ Attest.   │ Wallet   │ HW Load Ctrl     │    │  │
+│  │  │ Server   │ Engine    │ Manager  │ (CPU/DDR/GPU)    │    │  │
 │  │  ├──────────┴───────────┴──────────┴──────────────────┤    │  │
 │  │  │                WTC Node (wtc-node.js)               │    │  │
 │  │  │  ┌──────────┬──────────┬──────────────────────┐    │    │  │
@@ -240,12 +258,18 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │  │  │  │ Staking  │ NFTs     │ Sale Queue           │    │    │  │
 │  │  │  └──────────┴──────────┴──────────────────────┘    │    │  │
 │  │  └─────────────────────────────────────────────────────┘    │  │
+│  │           ↕                                                   │  │
+│  │  ┌─────────────────────────────────────────────────────────┐  │  │
+│  │  │  Native GPU Miner (gpu-miner.exe)                        │  │  │
+│  │  │  gpu-load-controller.js → DirectX compute/pixel shaders │  │  │
+│  │  └─────────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────┘  │
 │                             ↕                                     │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │  Build & Deploy Pipeline                                   │  │
-│  │  release-build.js → electron-builder → _sftp-deploy.js     │  │
+│  │  release-build.js → electron-builder → deploy-files.js    │  │
 │  │  Version bump → Vite build → electron-builder → SFTP      │  │
+│  │  deploy-files.js → SFTP static files (HTML, API, assets)  │  │
 │  └────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```

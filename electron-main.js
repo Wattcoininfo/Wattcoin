@@ -45,6 +45,7 @@ const {
   getExpectedMemBandwidthMBps,
   getAsicPowerW,
   getAsicHashrateTHs,
+  getGpuTdpW,
 } = require('./hardware-tables.cjs');
 const {
   setHardwareLoadPercent,
@@ -52,6 +53,16 @@ const {
   getHardwareLoadState,
   configurePhysicalCores,
 } = require('./hardware-load-controller');
+const {
+  ensureGpu,
+  getGpuInfo,
+  getGpuLoadState,
+  setGpuLoadPercent: setGpuLoadPercentFn,
+  stopGpuHardwareLoad,
+  shutdownGpu,
+  runGpuProof,
+  runGpuBenchmark,
+} = require('./gpu-load-controller');
 const si = require('systeminformation');
 const { createRoundLedger } = require('./round-ledger');
 const { buildOpsHealthResponse, checkLedgerNetworkAuth } = require('./ops-health');
@@ -238,6 +249,10 @@ let hwAuthority = {
   // Unix ms timestamp of the last successful search-cache clear.
   // Enforces a 3-day cooldown so TDP lookup data cannot be repeatedly wiped.
   lastSearchCacheClearAtMs: 0,
+  // GPU TDP reported by the native binary (gpu-miner.exe) via DXGI.
+  // Set when the main process reads getGpuInfo().adapter and looks it up
+  // in getGpuTdpW(). Overrides the renderer-supplied GPU power component.
+  nativeGpuTdpW: 0,
   // Rolling mean jitter derived from persistent jitterSamples history.
   // Used to widen the attestation threshold for machines that legitimately
   // run with higher OS-scheduler variance (e.g. background load, slow CPUs).
@@ -480,10 +495,12 @@ async function resolveOsHardwareIdentity() {
   // Chassis / device-type detection via systeminformation (main-process only).
   let chassisType = '';
   let deviceType = 'PC';
+  const LAPTOP_CHASSIS_CODES = ['8', '9', '10', '14'];
   try {
     const chassis = await si.chassis();
     chassisType = String((chassis && chassis.type) || '').trim();
-    if (/notebook|laptop|portable/i.test(chassisType)) deviceType = 'Laptop';
+    if (/notebook|laptop|portable/i.test(chassisType) || LAPTOP_CHASSIS_CODES.includes(chassisType))
+      deviceType = 'Laptop';
     else if (/server/i.test(chassisType)) deviceType = 'Server';
   } catch (_) {
     if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
@@ -1121,6 +1138,7 @@ const REVERSE_TUNNEL_CONNECT_TIMEOUT_MS = 30_000;
 const REVERSE_TUNNEL_REQUEST_TIMEOUT_MS = 20_000;
 const REVERSE_TUNNEL_MAX_PENDING = 64;
 const ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS = 1_000;
+const MIN_PROBE_VERIFIERS = 3;
 const REVERSE_TUNNEL_RECONNECT_BASE_MS = 3_000;
 const REVERSE_TUNNEL_RECONNECT_MAX_MS = 60_000;
 const REVERSE_TUNNEL_PING_INTERVAL_MS = 20_000;
@@ -1151,6 +1169,9 @@ const peerReachabilityCache = new Map(); // url -> { lastAttemptAtMs, lastSucces
 const peerChainTipCache = new Map(); // peerUrl -> { expiresAtMs, value }
 const peerChainTipInflight = new Map(); // peerUrl -> Promise
 const pendingRoundContributionBroadcasts = new Map(); // key -> { peerUrl, payload, timer }
+const witnessedProbeReceipts = new Map(); // workerAddress -> { maxChainIndex: number, receipts: Map<chainIndex, Map<verifierAddress, receipt>> }
+const peerAttestationHistory = new Map(); // peerIdentity -> Map<otherPeerIdentity, lastAttestedMs>
+const PEER_ATTESTATION_RECIPROCITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 let peerCountInspectionPromise = null; // concurrency guard for wattcoin-get-peer-count
 let peerCountCachedResult = null; // { expiresAtMs, value }
 const PEER_COUNT_CACHE_TTL_MS = 8_000; // re-use recent inspection result for 8 s
@@ -1747,7 +1768,8 @@ function getLocalTunnelPeerLiveness(peerUrl) {
   return null;
 }
 
-async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings()) {
+async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), localWorkerId = '') {
+  const localWorkerKey = String(localWorkerId || '').trim();
   const peers = getActivePeers(settings);
   const distinctPeerKeys = new Set();
   const onlinePeers = [];
@@ -1758,6 +1780,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings()) 
     if (liveTunnel && liveTunnel.live) {
       const peerIdentity = String(liveTunnel.peerIdentity || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) continue;
+      if (localWorkerKey && peerIdentity && hasRecentPeerAttestationRelation(localWorkerKey, peerIdentity)) continue;
       const peerKey = peerIdentity || normalizePeerUrl(peerUrl);
       if (distinctPeerKeys.has(peerKey)) continue;
       distinctPeerKeys.add(peerKey);
@@ -1779,6 +1802,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings()) 
       if (!tip || !tip.ok) return;
       const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) return;
+      if (localWorkerKey && peerIdentity && hasRecentPeerAttestationRelation(localWorkerKey, peerIdentity)) return;
       const peerKey = getPeerIdentityKey(peerUrl, tip);
       if (distinctPeerKeys.has(peerKey)) return;
       distinctPeerKeys.add(peerKey);
@@ -1806,6 +1830,44 @@ function pruneDiscoveredPeers(nowMs = Date.now()) {
   }
   if (changed) scheduleDiscoveredSeedPeerCacheSave();
   return changed;
+}
+
+function clearStalePeerAttestationHistory(nowMs = Date.now()) {
+  for (const [peerIdentity, relations] of peerAttestationHistory.entries()) {
+    if (!relations || relations.size === 0) {
+      peerAttestationHistory.delete(peerIdentity);
+      continue;
+    }
+    for (const [otherIdentity, ts] of relations.entries()) {
+      if (nowMs - Number(ts || 0) > PEER_ATTESTATION_RECIPROCITY_WINDOW_MS) {
+        relations.delete(otherIdentity);
+      }
+    }
+    if (!relations.size) peerAttestationHistory.delete(peerIdentity);
+  }
+}
+
+function recordPeerAttestation(verifierAddress, workerId) {
+  const verifierIdentity = String(verifierAddress || '').trim();
+  const workerIdentity = String(workerId || '').trim();
+  if (!verifierIdentity || !workerIdentity || verifierIdentity === workerIdentity) return;
+  const nowMs = Date.now();
+  if (!peerAttestationHistory.has(verifierIdentity)) {
+    peerAttestationHistory.set(verifierIdentity, new Map());
+  }
+  peerAttestationHistory.get(verifierIdentity).set(workerIdentity, nowMs);
+}
+
+function hasRecentPeerAttestationRelation(peerA, peerB, nowMs = Date.now()) {
+  const a = String(peerA || '').trim();
+  const b = String(peerB || '').trim();
+  if (!a || !b || a === b) return false;
+  clearStalePeerAttestationHistory(nowMs);
+  const aRelations = peerAttestationHistory.get(a);
+  if (aRelations && aRelations.has(b)) return true;
+  const bRelations = peerAttestationHistory.get(b);
+  if (bRelations && bRelations.has(a)) return true;
+  return false;
 }
 
 function loadDiscoveredSeedPeerCache() {
@@ -5283,6 +5345,41 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
 
     if (declaredUnitPowerW > 0) {
       const _allowGpuCalib = !!(request && request.allowGpuWorkloads);
+
+      // ── GPU TDP from native binary (authoritative — renderer cannot forge) ─
+      // The native gpu-miner.exe reports the GPU adapter name from DXGI.
+      // We look up its TDP from hardware-tables.cjs and use it to cap the
+      // GPU component of declaredUnitPowerW, ignoring whatever the renderer
+      // claimed.
+      hwAuthority.nativeGpuTdpW = 0;
+      if (_allowGpuCalib) {
+        try {
+          const gpuNativeInfo = getGpuInfo();
+          if (gpuNativeInfo && gpuNativeInfo.adapter) {
+            const nativeTdp = getGpuTdpW(gpuNativeInfo.adapter);
+            if (nativeTdp > 0) {
+              hwAuthority.nativeGpuTdpW = nativeTdp;
+              console.log(
+                `[HW-Verify] Native GPU TDP: ${nativeTdp}W (${gpuNativeInfo.adapter}) ` +
+                  `declared total=${declaredUnitPowerW}W`,
+              );
+              // If declared total exceeds a plausible CPU+GPU+memory overhead,
+              // cap it. Plausible max = native GPU TDP + 300W (generous CPU+mem).
+              const plausibleMax = nativeTdp + 300;
+              if (declaredUnitPowerW > plausibleMax) {
+                console.warn(
+                  `[HW-Verify] Declared power ${declaredUnitPowerW}W exceeds plausible ` +
+                    `max ${plausibleMax}W (GPU ${nativeTdp}W + 300W CPU/mem) — capping`,
+                );
+                declaredUnitPowerW = plausibleMax;
+              }
+            }
+          }
+        } catch (_) {
+          // Native binary not available — ignore
+        }
+      }
+
       // All devices including ASICs use the same benchmark-based calibration factor.
       // ASIC controllers have limited compute, so the calibration naturally reflects
       // the hardware's proven capability. Unknown ASICs get a conservative 0.8× cap
@@ -5630,23 +5727,21 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
 });
 
 // ── Peer probe IPC (worker mode) ──────────────────────────────────────────────
-// Renderer calls this to fetch a probe from the coordinator.  If coordinator is
-// unreachable or this node is not in worker mode, falls back to local self-probe.
+// Renderer calls this to fetch a probe from the coordinator. Peer attestation is
+// required and local fallback is disabled.
 ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
   const settings = getLedgerNetworkSettings();
   if (!settings.enabled || settings.mode !== 'peer') {
-    // Standalone mode: use local probe issuer.
-    return { ok: true, source: 'local', probe: getPendingProbe() };
+    return { ok: false, error: 'Peer attestation is required but peer mode is not enabled.' };
   }
 
-  const peers = await getOnlineAttestationPeers(settings);
+  const workerId = String((opts && opts.workerId) || walletAddressCache.address || 'unknown');
+  const peers = await getOnlineAttestationPeers(settings, workerId);
   if (!peers || peers.length === 0) {
-    console.warn('[PeerProbe] No online peer available for attestation, using local probe.');
-    return { ok: true, source: 'local', probe: getPendingProbe() };
+    return { ok: false, error: 'No online attestation peers available.' };
   }
 
   const candidatePeers = [...peers];
-  const workerId = String((opts && opts.workerId) || walletAddressCache.address || 'unknown');
   const allowGpu = !!(opts && opts.allowGpuWorkloads);
   while (candidatePeers.length > 0) {
     const index = Math.floor(Math.random() * candidatePeers.length);
@@ -5675,16 +5770,14 @@ ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
     }
   }
 
-  console.warn('[PeerProbe] Online attestation peers became unavailable, using local probe.');
-  return { ok: true, source: 'local', probe: getPendingProbe() };
+  return { ok: false, error: 'Online attestation peers became unavailable.' };
 });
 
 // Renderer calls this after completing a peer probe.
-// For cpu/memory proofs: coordinator verifies via /api/v1/probe/submit.
-// For GPU and local probes: falls back to local submitProbeResult.
+// Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
   const settings = getLedgerNetworkSettings();
-  const source = String((payload && payload.source) || 'local');
+  const source = String((payload && payload.source) || 'peer');
   const result = payload && payload.result ? payload.result : {};
   const hardwareSpec = payload && typeof payload.hardwareSpec === 'object' ? payload.hardwareSpec : null;
 
@@ -5713,11 +5806,11 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
       }
     }
   }
-  // Local fallback (standalone mode, GPU probe, or peer-unreachable fallback).
-  // A locally-self-timed probe is NEVER peer-verified, regardless of what source the
-  // renderer claimed.  Only the HTTP peer path above may set peerProbeVerifiedForRound.
-  const verdict = submitProbeResult(result, false);
-  return verdict;
+
+  return {
+    ok: false,
+    error: 'Peer probe result submission requires peer mode and a valid attestation peer URL.',
+  };
 });
 
 // ── Hardware-authority read-back (renderer uses for display only) ─────────────
@@ -6669,6 +6762,73 @@ ipcMain.handle('wattcoin-stop-hardware-load', () => {
   }
 });
 
+// ── Native GPU load control (gpu-miner.exe) ────────────────────────────────
+ipcMain.handle('wattcoin-gpu-info', async () => {
+  try {
+    const available = await ensureGpu();
+    if (!available) return { ok: false, error: 'GPU binary unavailable' };
+    const info = getGpuInfo();
+    return { ok: true, ...info, ...getGpuLoadState() };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'GPU info failed' };
+  }
+});
+
+ipcMain.handle('wattcoin-set-gpu-load', async (_event, percent) => {
+  try {
+    const appliedPercent = typeof setGpuLoadPercentFn === 'function' ? await setGpuLoadPercentFn(percent) : 0;
+    hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : Number(percent) || 0;
+    return { ok: true, appliedPercent, ...getGpuLoadState() };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Failed to set GPU load' };
+  }
+});
+
+ipcMain.handle('wattcoin-stop-gpu-load', () => {
+  try {
+    stopGpuHardwareLoad();
+    hwAuthority.currentLoadPercent = 0;
+    return { ok: true, ...getGpuLoadState() };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Failed to stop GPU load' };
+  }
+});
+
+ipcMain.handle('wattcoin-get-gpu-load-state', () => {
+  try {
+    return { ok: true, ...getGpuLoadState() };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Failed to read GPU load state' };
+  }
+});
+
+ipcMain.handle('wattcoin-gpu-benchmark', async () => {
+  try {
+    const result = await runGpuBenchmark();
+    if (!result || result.error) {
+      return { ok: false, error: (result && result.error) || 'GPU benchmark failed' };
+    }
+    return { ok: true, ...result };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'GPU benchmark exception' };
+  }
+});
+
+ipcMain.handle('wattcoin-gpu-proof', async (_event, payload = {}) => {
+  try {
+    const seed = Number(payload && payload.seed) | 0 || 1;
+    const size = Math.max(1, Math.min(1024, Number(payload && payload.size) || 128));
+    const iters = Math.max(1, Math.min(256, Number(payload && payload.shaderIterations) || 32));
+    const result = await runGpuProof(seed, size, iters);
+    if (!result) return { ok: false, error: 'GPU proof failed' };
+    // Convert native binary's uint32 hash (decimal) to 8-char hex to match computeGpuProbeExpectedHash
+    const hash = (Number(result.hash) >>> 0).toString(16).padStart(8, '0');
+    return { ok: true, hash, elapsedMs: result.elapsedMs, seed: result.seed };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'GPU proof exception' };
+  }
+});
+
 ipcMain.handle('wattcoin-get-hardware-load-state', () => {
   try {
     return { ok: true, ...getHardwareLoadState() };
@@ -6782,6 +6942,24 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
         code: 'PEER_PROBE_REQUIRED',
       };
     }
+    const probeReceipt =
+      proofData && proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
+        ? normalizeProbeReceipt(proofData.probeReceipt)
+        : null;
+    if (
+      probeReceipt &&
+      probeReceipt.verifierAddress &&
+      probeReceipt.workerId &&
+      hasRecentPeerAttestationRelation(probeReceipt.verifierAddress, probeReceipt.workerId)
+    ) {
+      return {
+        address: '',
+        mined: '',
+        error:
+          'Peer receipt comes from a peer with recent reciprocal attestation activity. Select a different verifier peer.',
+        code: 'RECIPROCAL_PEER_ATTESTATION',
+      };
+    }
     mineBlockBusy = true;
     try {
       const preferred = typeof selectedAddress === 'string' ? selectedAddress.trim() : '';
@@ -6804,6 +6982,7 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
             proofData && proofData.probeReceipt && typeof proofData.probeReceipt === 'object'
               ? normalizeProbeReceipt(proofData.probeReceipt)
               : null,
+          probesAnswered: Math.max(0, Math.floor(Number(proofData && proofData.probesAnswered) || 0)),
         },
         rewardMap,
       );
@@ -7210,7 +7389,13 @@ function getCurrentNetworkRoundId() {
 
 function alignRoundLedgerToChain(roundId = getCurrentNetworkRoundId()) {
   try {
-    return roundLedger.beginRound(roundId, 0);
+    const prevRoundId = roundLedger.getCurrentRoundSnapshot().id;
+    const result = roundLedger.beginRound(roundId, 0);
+    if (prevRoundId && prevRoundId !== roundId) {
+      // Round boundary crossed — purge witnessed probe receipts from prior round.
+      witnessedProbeReceipts.clear();
+    }
+    return result;
   } catch (_) {
     return roundLedger.getCurrentRoundSnapshot();
   }
@@ -7221,7 +7406,7 @@ function getSharedRoundSnapshot() {
   return roundLedger.getCurrentRoundSnapshot();
 }
 
-function buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs }) {
+function buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs, chainIndex }) {
   return JSON.stringify({
     prefix: ROUND_CONTRIBUTION_MESSAGE_PREFIX,
     network: getActiveNetwork(),
@@ -7229,6 +7414,7 @@ function buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs 
     roundId: Math.max(1, Math.floor(Number(roundId) || 0)),
     totalWh: Number(Math.max(0, Number(totalWh) || 0).toFixed(8)),
     updatedAtMs: Math.max(0, Math.floor(Number(updatedAtMs) || 0)),
+    chainIndex: Math.max(0, Math.floor(Number(chainIndex) || 0)),
   });
 }
 
@@ -7267,14 +7453,15 @@ function broadcastRoundContributionToPeers({ address, roundId, totalWh }) {
   const settings = getLedgerNetworkSettings();
   if (!settings.enabled) return;
   const peers = getActivePeers(settings);
-  if (!peers || peers.length === 0) return;
 
   const updatedAtMs = Date.now();
+  const chainIndex = Math.max(0, Math.floor(Number((getLocalProbeChain && getLocalProbeChain().chainIndex) || 0)));
   const message = buildRoundContributionMessage({
     address: normalizedAddress,
     roundId,
     totalWh,
     updatedAtMs,
+    chainIndex,
   });
 
   let signature = '';
@@ -7290,11 +7477,29 @@ function broadcastRoundContributionToPeers({ address, roundId, totalWh }) {
     roundId,
     totalWh: Number(Math.max(0, Number(totalWh) || 0).toFixed(8)),
     updatedAtMs,
+    chainIndex,
     message,
     signature,
   };
   for (const peerUrl of peers) {
     queueRoundContributionBroadcast(peerUrl, payload);
+  }
+}
+
+function broadcastProbeReceiptToPeers(receipt) {
+  if (!receipt || !receipt.workerId) return;
+  const settings = getLedgerNetworkSettings();
+  if (!settings || !settings.enabled) return;
+  const peers = getActivePeers(settings);
+  if (!peers || peers.length === 0) return;
+  const payload = { receipt };
+  for (const peerUrl of peers) {
+    requestPeerJson(peerUrl, 'POST', '/api/v1/probe/receipt', payload, undefined, {
+      trackReachability: false,
+      suppressPeerDiscovery: true,
+      source: 'probe-receipt',
+      timeout: 5000,
+    }).catch(() => {});
   }
 }
 
@@ -7475,6 +7680,39 @@ async function settleLocalLedgerRound(payload = {}) {
             `${chainBroken ? ', chain broken (+20%)' : ''} — ` +
             `forfeited ${(forfeitFraction * 100).toFixed(0)}% for ${minedAddress}, remaining=${partial.remaining} Wh.`,
         );
+      }
+    }
+  }
+
+  // Tier 4f: probe-rate energy capping.
+  // Each answered probe represents at most PROBE_INTERVAL_MS of online mining.
+  // The maximum credible energy for that interval is hardware TDP × interval.
+  // If claimed Wh exceeds this, the excess is forfeited — prevents injecting
+  // fake energy even after passing the one-time peer probe.
+  // The GPU TDP comes from the native binary (gpu-miner.exe via DXGI) so the
+  // renderer cannot lie about which GPU is installed or its power ceiling.
+  if (probeChain && minedAddress) {
+    const chainIndex = Math.max(0, Number(probeChain.chainIndex) || 0);
+    if (chainIndex > 0) {
+      // Hardware power: prefer native GPU TDP, fall back to CPU-calibrated power
+      const gpuPowerW = Math.max(0, Number(hwAuthority.nativeGpuTdpW) || 0);
+      const cpuPowerW = Math.max(0, Number(hwAuthority.calibratedUnitPowerW) || 100);
+      const hwPowerW = gpuPowerW > 0 ? gpuPowerW : cpuPowerW;
+      // Max Wh per probe: hwPowerW × (PROBE_INTERVAL_MS / 3600000)
+      const maxWhThisRound = chainIndex * hwPowerW * (PROBE_INTERVAL_MS / 3600000);
+      const currentWh = roundLedger.getRoundContribution(minedAddress);
+      if (currentWh > maxWhThisRound && maxWhThisRound > 0) {
+        const excessFraction = 1 - maxWhThisRound / currentWh;
+        const cappedFraction = Math.min(1, Math.max(0, excessFraction));
+        if (cappedFraction > 0.01) {
+          const partial = roundLedger.partialForfeit(minedAddress, cappedFraction);
+          console.warn(
+            `[Ledger] Tier 4f: energy cap — ${currentWh.toFixed(4)} Wh exceeds ` +
+              `${maxWhThisRound.toFixed(4)} Wh (${chainIndex} probes × ${hwPowerW}W) ` +
+              `for ${minedAddress} — forfeited ${(cappedFraction * 100).toFixed(0)}%, ` +
+              `remaining=${partial.remaining} Wh.`,
+          );
+        }
       }
     }
   }
@@ -8022,23 +8260,119 @@ function startLedgerNetworkServer() {
         const verdict = submitPeerProbeResult(probeResult, hardwareSpec);
         if (verdict && verdict.receipt && wtcNode && typeof wtcNode.signMessage === 'function') {
           const verifierAddress = String(verdict.receipt.verifierAddress || '').trim();
-          const signingPayload = getProbeReceiptSigningPayload(verdict.receipt);
-          if (verifierAddress && signingPayload) {
-            try {
-              const signed = wtcNode.signMessage(verifierAddress, signingPayload);
-              verdict.receipt = attachProbeReceiptSignature(verdict.receipt, signed && signed.signature);
-            } catch (error) {
-              console.warn('[PeerProbe] Failed to sign probe receipt:', error && error.message ? error.message : error);
-              verdict.ok = false;
-              verdict.issues = [
-                ...(Array.isArray(verdict.issues) ? verdict.issues : []),
-                'peer probe receipt signing failed',
-              ];
-              verdict.receipt = null;
+          const workerId = String(verdict.receipt.workerId || '').trim();
+          if (verifierAddress && workerId && verifierAddress === workerId) {
+            console.warn('[PeerProbe] Self-verification attempt detected: verifierAddress equals workerId.');
+            verdict.ok = false;
+            verdict.issues = [
+              ...(Array.isArray(verdict.issues) ? verdict.issues : []),
+              'self-verification is not allowed',
+            ];
+            verdict.receipt = null;
+          } else {
+            const signingPayload = getProbeReceiptSigningPayload(verdict.receipt);
+            if (verifierAddress && signingPayload) {
+              try {
+                const signed = wtcNode.signMessage(verifierAddress, signingPayload);
+                verdict.receipt = attachProbeReceiptSignature(verdict.receipt, signed && signed.signature);
+                if (verdict.receipt) {
+                  recordPeerAttestation(verifierAddress, workerId);
+                  broadcastProbeReceiptToPeers(verdict.receipt);
+                }
+              } catch (error) {
+                console.warn(
+                  '[PeerProbe] Failed to sign probe receipt:',
+                  error && error.message ? error.message : error,
+                );
+                verdict.ok = false;
+                verdict.issues = [
+                  ...(Array.isArray(verdict.issues) ? verdict.issues : []),
+                  'peer probe receipt signing failed',
+                ];
+                verdict.receipt = null;
+              }
             }
           }
         }
         sendJson(res, 200, verdict);
+        return;
+      }
+
+      // POST /api/v1/probe/receipt — receives a probe receipt broadcast from a
+      // verifier peer.  The receipt is signed by the verifier and attests to a
+      // worker having answered a specific probe.  Stores it so the worker's
+      // contribution chainIndex can be cross-checked.
+      if (req.method === 'POST' && reqUrl.pathname === '/api/v1/probe/receipt') {
+        const body = await readJsonBody(req);
+        const receipt = body && body.receipt && typeof body.receipt === 'object' ? body.receipt : null;
+        if (!receipt || !receipt.workerId || !receipt.chainIndex || !receipt.verifierAddress) {
+          sendJson(res, 400, { ok: false, code: 'INVALID_RECEIPT', message: 'Invalid probe receipt.' });
+          return;
+        }
+        // Verify the receipt signature — must be signed by the claimed verifier.
+        const normalizedReceipt = normalizeProbeReceipt(receipt);
+        if (!normalizedReceipt) {
+          sendJson(res, 400, { ok: false, code: 'INVALID_RECEIPT', message: 'Could not normalize receipt.' });
+          return;
+        }
+        if (normalizedReceipt.verifierAddress === normalizedReceipt.workerId) {
+          sendJson(res, 400, {
+            ok: false,
+            code: 'SELF_VERIFICATION',
+            message: 'Verifier cannot attest to its own worker receipt.',
+          });
+          return;
+        }
+        if (
+          !normalizedReceipt.signature ||
+          typeof normalizedReceipt.signature !== 'string' ||
+          normalizedReceipt.signature.length < 130
+        ) {
+          sendJson(res, 400, {
+            ok: false,
+            code: 'INVALID_SIGNATURE',
+            message: 'Missing or invalid receipt signature.',
+          });
+          return;
+        }
+        const payload_no_sig = getProbeReceiptSigningPayload(normalizedReceipt);
+        if (!payload_no_sig) {
+          sendJson(res, 400, { ok: false, code: 'INVALID_PAYLOAD', message: 'Invalid receipt payload.' });
+          return;
+        }
+        const verified = wtcNode.verifyMessage(
+          normalizedReceipt.verifierAddress,
+          normalizedReceipt.signature,
+          payload_no_sig,
+        );
+        if (!verified) {
+          sendJson(res, 403, {
+            ok: false,
+            code: 'SIGNATURE_MISMATCH',
+            message: 'Receipt signature verification failed.',
+          });
+          return;
+        }
+        recordPeerAttestation(normalizedReceipt.verifierAddress, normalizedReceipt.workerId);
+        // Store the receipt keyed by worker address + chainIndex.
+        const workerAddr = normalizedReceipt.workerId;
+        const chainIdx = Math.max(0, Math.floor(Number(normalizedReceipt.chainIndex) || 0));
+        if (!witnessedProbeReceipts.has(workerAddr)) {
+          witnessedProbeReceipts.set(workerAddr, { maxChainIndex: 0, receipts: new Map() });
+        }
+        const entry = witnessedProbeReceipts.get(workerAddr);
+        if (chainIdx > (entry.maxChainIndex || 0)) {
+          entry.maxChainIndex = chainIdx;
+        }
+        const receiptsForIndex = entry.receipts.get(chainIdx) || new Map();
+        receiptsForIndex.set(String(normalizedReceipt.verifierAddress || '').trim(), normalizedReceipt);
+        entry.receipts.set(chainIdx, receiptsForIndex);
+        // Evict old entries to prevent unbounded growth (keep last 500 chain indexes per worker).
+        if (entry.receipts.size > 500) {
+          const oldest = [...entry.receipts.keys()].sort((a, b) => a - b).slice(0, 100);
+          for (const k of oldest) entry.receipts.delete(k);
+        }
+        sendJson(res, 200, { ok: true });
         return;
       }
 
@@ -8142,6 +8476,7 @@ function startLedgerNetworkServer() {
         const roundId = Math.max(1, Math.floor(Number(body && body.roundId) || 0));
         const totalWh = Number(Math.max(0, Number(body && body.totalWh) || 0).toFixed(8));
         const updatedAtMs = Math.max(0, Math.floor(Number(body && body.updatedAtMs) || 0));
+        const chainIndex = Math.max(-1, Math.floor(Number(body && body.chainIndex) || -1));
         const message = String((body && body.message) || '');
         const signature = String((body && body.signature) || '').trim();
         const expectedRoundId = getCurrentNetworkRoundId();
@@ -8157,7 +8492,7 @@ function startLedgerNetworkServer() {
           });
           return;
         }
-        const expectedMessage = buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs });
+        const expectedMessage = buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs, chainIndex });
         if (!message || message !== expectedMessage) {
           sendJson(res, 400, { ok: false, code: 'INVALID_MESSAGE', message: 'Contribution message invalid.' });
           return;
@@ -8166,13 +8501,52 @@ function startLedgerNetworkServer() {
           sendJson(res, 403, { ok: false, code: 'INVALID_SIGNATURE', message: 'Contribution signature invalid.' });
           return;
         }
+
+        // Cross-check chainIndex against verifier-witnessed probe receipts.
+        // The worker's claimed chainIndex must be attested by multiple verifiers,
+        // and it must not exceed the highest verified chain index by more than 1.
+        const MAX_WH_PER_PROBE = (500 * 5 * 60 * 1000) / 3600000; // ~41.7 Wh
+        if (chainIndex >= 0 && witnessedProbeReceipts.has(address)) {
+          const verifiedEntry = witnessedProbeReceipts.get(address);
+          const receiptsForClaimedIndex = verifiedEntry.receipts.get(chainIndex) || new Map();
+          if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
+            sendJson(res, 409, {
+              ok: false,
+              code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
+              message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}`,
+            });
+            return;
+          }
+          const verifiedMax = Math.max(0, verifiedEntry.maxChainIndex || 0);
+          if (chainIndex > verifiedMax + 1) {
+            sendJson(res, 409, {
+              ok: false,
+              code: 'PROBE_CHAIN_EXCEEDS_VERIFIED',
+              message: `claimed chainIndex (${chainIndex}) exceeds verified max (${verifiedMax}) by more than 1`,
+            });
+            return;
+          }
+          const maxWhForChainIndex = chainIndex * MAX_WH_PER_PROBE;
+          if (totalWh > maxWhForChainIndex) {
+            sendJson(res, 409, {
+              ok: false,
+              code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT',
+              message: `totalWh (${totalWh}) exceeds max (${maxWhForChainIndex.toFixed(2)}) for chainIndex ${chainIndex}`,
+            });
+            return;
+          }
+        }
+
         alignRoundLedgerToChain(roundId);
-        const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs);
+        const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs, chainIndex);
         if (!applied || applied.ok === false) {
           sendJson(res, 409, {
             ok: false,
             code: applied && applied.code ? applied.code : 'STALE_CONTRIBUTION',
-            message: 'Contribution update is older than the latest accepted total for this round.',
+            message:
+              applied && applied.reason
+                ? applied.reason
+                : 'Contribution update is older than the latest accepted total for this round.',
             roundId,
             addressRoundWh: applied && typeof applied.addressRoundWh === 'number' ? applied.addressRoundWh : 0,
             updatedAtMs: applied && typeof applied.updatedAtMs === 'number' ? applied.updatedAtMs : 0,
@@ -9696,9 +10070,25 @@ if (app.isPackaged) {
   // then re-check every 4 h so long-running miners don't miss updates.
   app.whenReady().then(() => {
     setTimeout(() => {
-      checkForUpdatesWithFallback().catch(() => {});
-      setInterval(() => checkForUpdatesWithFallback().catch(() => {}), 4 * 60 * 60_000);
+      checkForUpdatesWithFallback().catch(() => undefined);
+      setInterval(() => checkForUpdatesWithFallback().catch(() => undefined), 4 * 60 * 60_000);
     }, 30_000);
+  });
+
+  // Clean up native GPU process on exit
+  process.on('exit', () => {
+    try {
+      shutdownGpu();
+    } catch (_) {
+      return undefined;
+    }
+  });
+  app.on('before-quit', () => {
+    try {
+      shutdownGpu();
+    } catch (_) {
+      return undefined;
+    }
   });
 }
 

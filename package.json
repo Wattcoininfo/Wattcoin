@@ -1,6 +1,6 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.287",
+  "version": "1.0.306",
   "description": "Wattcoin Miner — energy-backed cryptocurrency miner",
   "author": "Wattcoin",
   "license": "MIT",
@@ -45,6 +45,7 @@
     "mainnet:explain-peer-system": "node scripts/explain-peer-system.js",
     "mainnet:verify-seed-endpoint": "node scripts/verify-seed-endpoint.js",
     "mainnet:verify-peer-exchange": "node scripts/verify-peer-exchange.js",
+    "native-gpu:build": "powershell -ExecutionPolicy Bypass -File native-gpu/build.ps1",
     "electron:dev": "concurrently \"vite\" \"electron electron-start.js\"",
     "electron:build": "node scripts/release-build.js",
     "electron:build:local": "node scripts/release-build.js --local",
