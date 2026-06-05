@@ -3526,8 +3526,6 @@ export default function Miner({
     return () => clearTimeout(timeoutId);
   }, [sliderAdjustNonce, isHardwareOnHold, hardware, runBenchmark]);
 
-
-
   // ─── Runtime hardware probe polling ──────────────────────────────────────────
   // While mining is active, poll every 30 s for a hardware probe job.
   //
@@ -6863,7 +6861,7 @@ export default function Miner({
                   console.log('[MinerSimulator] Start Mining button clicked, setting mining to true');
                   setMining(true);
                 }}
-                  disabled={
+                disabled={
                   mining ||
                   !hardwareRecognitionFinished ||
                   benchmarkState.running ||
