@@ -7419,6 +7419,8 @@ async function pullContributionsFromPeers() {
   const currentRoundId = getCurrentNetworkRoundId();
   if (currentRoundId <= 0) return;
 
+  // Collect snapshots from all peers first
+  const snapshots = [];
   for (const peerUrl of peers) {
     try {
       const res = await requestPeerJson(peerUrl, 'GET', '/api/v1/round/contribution', undefined, undefined, {
@@ -7427,17 +7429,80 @@ async function pullContributionsFromPeers() {
         suppressPeerDiscovery: true,
         source: 'pull-contributions',
       });
-      if (!res || !res.ok || !res.snapshot) continue;
-      if (Number(res.snapshot.id) !== currentRoundId) continue;
-
-      alignRoundLedgerToChain(currentRoundId);
-      for (const [address, totalWh] of Object.entries(res.snapshot.contributionsWh || {})) {
-        const updatedAtMs = (res.snapshot.contributionUpdatedAtMs || {})[address] || 0;
-        roundLedger.setRoundContribution(address, totalWh, updatedAtMs);
+      if (res && res.ok && res.snapshot && Number(res.snapshot.id) === currentRoundId) {
+        snapshots.push(res.snapshot);
       }
     } catch (_) {
       // Peer unreachable or returned error — skip
     }
+  }
+  if (snapshots.length === 0) return;
+
+  alignRoundLedgerToChain(currentRoundId);
+
+  // Collect all unique addresses across snapshots
+  const allAddresses = new Set();
+  for (const snap of snapshots) {
+    for (const addr of Object.keys(snap.contributionsWh || {})) {
+      if (addr) allAddresses.add(addr);
+    }
+  }
+
+  for (const address of allAddresses) {
+    let bestVerifiedWh = 0;
+    let bestVerifiedTime = 0;
+
+    // Pass 1: accept values with a valid cryptographic signature
+    // (prevents third-party inflation — a peer cannot forge another wallet's signature)
+    for (const snap of snapshots) {
+      const totalWh = Number((snap.contributionsWh || {})[address] || 0);
+      if (totalWh <= 0) continue;
+      const updatedAtMs = Number((snap.contributionUpdatedAtMs || {})[address] || 0);
+      const message = (snap.contributionMessage || {})[address];
+      const signature = (snap.contributionSignature || {})[address];
+      if (message && signature) {
+        try {
+          if (wtcNode.verifyMessage(address, signature, message)) {
+            if (updatedAtMs > bestVerifiedTime) {
+              bestVerifiedWh = totalWh;
+              bestVerifiedTime = updatedAtMs;
+            }
+          }
+          // Invalid signature → skip (peer tampered with stored value)
+        } catch (_) {
+          // Verification error → skip
+        }
+      }
+    }
+
+    if (bestVerifiedTime > 0) {
+      roundLedger.setRoundContribution(address, bestVerifiedWh, bestVerifiedTime);
+      continue;
+    }
+
+    // Pass 2: no valid signatures — use majority voting across peers
+    // (protects against self-inflation when the wallet owner controls a peer)
+    const tally = {};
+    for (const snap of snapshots) {
+      const totalWh = Number((snap.contributionsWh || {})[address] || 0);
+      if (totalWh > 0) {
+        tally[totalWh] = (tally[totalWh] || 0) + 1;
+      }
+    }
+    const values = Object.keys(tally);
+    if (values.length > 0) {
+      // Most frequent value wins
+      let bestCount = 0;
+      let bestValue = 0;
+      for (const [value, count] of Object.entries(tally)) {
+        if (Number(count) > bestCount) {
+          bestCount = Number(count);
+          bestValue = Number(value);
+        }
+      }
+      roundLedger.setRoundContribution(address, bestValue, Date.now());
+    }
+    // If no snapshots contain this address, skip it (nothing to restore)
   }
 }
 
@@ -8571,7 +8636,7 @@ function startLedgerNetworkServer() {
         }
 
         alignRoundLedgerToChain(roundId);
-        const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs, chainIndex);
+        const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs, chainIndex, message, signature);
         if (!applied || applied.ok === false) {
           sendJson(res, 409, {
             ok: false,
