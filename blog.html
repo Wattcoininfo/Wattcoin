@@ -1557,24 +1557,25 @@
 
         <p>
           If you delete the Wattcoin app or reinstall your operating system, your local mining data is gone. Your wallet
-          can be recovered from your seed phrase — but what about the mid-round contributions you already made? In early
-          versions of Wattcoin, those contributions lived only in your local round ledger. After reinstall, you had to
-          wait for the next round to start earning again.
+          can be recovered from your seed phrase — but what about the mid-round contributions you already made? Those
+          contributions were always broadcast to your peers and stored in their round ledgers, but there was no way to
+          retrieve them after a reinstall. You had to wait for the next round to start earning again.
         </p>
 
         <p>
-          As of v1.0.307, Wattcoin now supports <strong>peer-to-peer contribution recovery</strong>. When you start
+          A recent patch on top of v1.0.307 adds <strong>peer-to-peer contribution recovery</strong>. When you start
           mining after a reinstall, your app automatically pulls your existing mid-round contributions from your peers.
           Here is how it works.
         </p>
 
-        <h3>The Old Approach: Local Only</h3>
+        <h3>The Gap: Stored but Not Retrievable</h3>
 
         <p>
-          Every mining round, your app broadcasts your contribution to all connected peers. Peers validate and store it
-          in their local round ledgers. This validation is critical to consensus — but until recently, only the round
-          settlement data (rewards) was permanently committed to the chain. Mid-round contributions were stored locally
-          and broadcast peer-to-peer, but there was no mechanism to recover them if your local data was lost.
+          Even before this patch, every mining round your app broadcast your contribution to all connected peers. Peers
+          validated and stored it in their local round ledgers. This validation is critical to consensus — but the
+          mechanism was one-way. Your contributions safely existed on every peer's machine, but your app could not ask
+          for them back after a local data loss. The round settlement data (rewards) was permanently committed to the
+          chain, but mid-round progress was stranded on other nodes unless you never lost your local copy.
         </p>
 
         <div class="info-callout">
