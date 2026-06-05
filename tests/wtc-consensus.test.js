@@ -210,21 +210,21 @@ describe('wtc-consensus — receiveVote', () => {
 });
 
 describe('wtc-consensus — validateBlock (internal)', () => {
-  it('rejects non-object block', () => {
+  it('rejects non-object block', async () => {
     const c = makeConsensus();
-    const err = c._validateBlock(null);
+    const err = await c._validateBlock(null);
     assert.ok(err);
   });
 
-  it('rejects block missing required fields', () => {
+  it('rejects block missing required fields', async () => {
     const c = makeConsensus();
-    const err = c._validateBlock({});
+    const err = await c._validateBlock({});
     assert.ok(err);
   });
 
-  it('rejects block with hash mismatch', () => {
+  it('rejects block with hash mismatch', async () => {
     const c = makeConsensus();
-    const err = c._validateBlock({
+    const err = await c._validateBlock({
       height: 1,
       prevHash: '0'.repeat(64),
       proposer: 'wtc1q',

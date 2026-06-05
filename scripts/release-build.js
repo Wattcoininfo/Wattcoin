@@ -677,6 +677,7 @@ async function main() {
         path.join(root, 'index.html'),
         path.join(root, 'wattcoin-whitepaper.html'),
         path.join(root, 'wallet.html'),
+        path.join(root, 'blog.html'),
       ];
       for (const filePath of syncFiles) {
         if (!fs.existsSync(filePath)) continue;
@@ -714,11 +715,13 @@ async function main() {
   const indexHtmlPath = path.join(root, 'index.html');
   const walletPath = path.join(root, 'wallet.html');
   const latestYmlPath = path.join(root, 'Releases', 'latest.yml');
+  const blogPath = path.join(root, 'blog.html');
   mutableReleaseBackups = snapshotFileContents([
     packageJsonPath,
     whitepaperPath,
     indexHtmlPath,
     walletPath,
+    blogPath,
     latestYmlPath,
     historyPath,
     versionLogPath,
@@ -758,6 +761,12 @@ async function main() {
       wl = syncWhitepaperVersionLabels(wl, nextVersion, monthName, year);
       fs.writeFileSync(walletPath, wl, 'utf8');
       console.log(`wallet.html updated to ${nextVersion} — ${monthName} ${year}`);
+    }
+    if (fs.existsSync(blogPath)) {
+      let bl = fs.readFileSync(blogPath, 'utf8');
+      bl = syncWhitepaperVersionLabels(bl, nextVersion, monthName, year);
+      fs.writeFileSync(blogPath, bl, 'utf8');
+      console.log(`blog.html updated to ${nextVersion} — ${monthName} ${year}`);
     }
   }
 

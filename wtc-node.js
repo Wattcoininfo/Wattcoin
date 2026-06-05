@@ -696,6 +696,11 @@ class WtcNode {
         ? JSON.parse(JSON.stringify(proofData.probeReceipt))
         : null;
     const probesAnswered = Math.max(0, Math.floor(Number(proofData.probesAnswered) || 0));
+    const cpuSpeedInitialSeed = Number(proofData.cpuSpeedInitialSeed) || 0;
+    const cpuSpeedProof = String(proofData.cpuSpeedProof || '');
+    const memProof = String(proofData.memProof || '');
+    const gpuProof = String(proofData.gpuProof || '');
+    const gpuProofSeed = Number(proofData.gpuProofSeed) || 0;
 
     const reward = this._chain.nextBlockReward();
     const rewardAddresses =
@@ -726,6 +731,11 @@ class WtcNode {
       transactions,
       rewardAddresses,
       nftsRoot,
+      cpuSpeedInitialSeed,
+      cpuSpeedProof,
+      memProof,
+      gpuProof,
+      gpuProofSeed,
     });
 
     if (!committed || committed.ok === false) {

@@ -35,6 +35,7 @@
 
 const { computeBlockHash, energyForHeight } = require('./wtc-chain');
 const { validateBlockProbeAttestation } = require('./probe-attestation');
+const { verifyCpuSpeedProof, verifyMemProof } = require('./backend-benchmark');
 const { sign: wtcSign, verifySignature: wtcVerify, isValidAddress, txHash } = require('./wtc-address');
 
 const VOTE_TIMEOUT_MS = 2500; // how long to wait for peer votes
@@ -105,6 +106,11 @@ class Consensus {
     transactions,
     rewardAddresses,
     nftsRoot = '',
+    cpuSpeedInitialSeed = 0,
+    cpuSpeedProof = '',
+    memProof = '',
+    gpuProof = '',
+    gpuProofSeed = 0,
   }) {
     const stateRoot = this._accounts.stateHash();
     const block = this._chain.buildBlock({
@@ -118,9 +124,14 @@ class Consensus {
       rewardAddresses,
       stateRoot,
       nftsRoot,
+      cpuSpeedInitialSeed,
+      cpuSpeedProof,
+      memProof,
+      gpuProof,
+      gpuProofSeed,
     });
 
-    const validationError = this._validateBlock(block);
+    const validationError = await this._validateBlock(block);
     if (validationError) {
       return {
         ok: false,
@@ -178,8 +189,7 @@ class Consensus {
    * @param {string} fromPeer — base URL of the proposing peer (for logging)
    * @returns {{ ok: boolean, signer?: string, sig?: string, reason?: string }}
    */
-  receiveProposal(block, _fromPeer) {
-    // Deduplicate already-committed blocks
+  async receiveProposal(block, _fromPeer) {
     if (this._committed.has(block && block.hash)) {
       return { ok: false, reason: 'already committed' };
     }
@@ -187,7 +197,7 @@ class Consensus {
       return { ok: false, reason: 'already on chain' };
     }
 
-    const err = this._validateBlock(block);
+    const err = await this._validateBlock(block);
     if (err) return { ok: false, reason: err };
 
     // If we're already tracking this proposal, just re-issue our vote
@@ -344,7 +354,7 @@ class Consensus {
    * Validate block structure and chain linkage.
    * Returns null on success, or an error string on failure.
    */
-  _validateBlock(block) {
+  async _validateBlock(block) {
     if (!block || typeof block !== 'object') return 'block must be an object';
     if (typeof block.height !== 'number') return 'missing height';
     if (typeof block.prevHash !== 'string') return 'missing prevHash';
@@ -460,6 +470,21 @@ class Consensus {
     const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer });
     if (!attestationCheck.ok) {
       return attestationCheck.reason;
+    }
+
+    const cpuSeed = Number(block.cpuSpeedInitialSeed) || 0;
+    const cpuProof = String(block.cpuSpeedProof || '');
+    if (cpuSeed > 0 && cpuProof) {
+      if (!(await verifyCpuSpeedProof(cpuSeed, cpuProof))) {
+        return `CPU proof re-verification failed for block at height ${block.height}`;
+      }
+    }
+
+    const memProof = String(block.memProof || '');
+    if (memProof) {
+      if (!(await verifyMemProof(memProof, block.proposer))) {
+        return `Memory proof re-verification failed for block at height ${block.height}`;
+      }
     }
 
     // Validate every transaction signature in the block.

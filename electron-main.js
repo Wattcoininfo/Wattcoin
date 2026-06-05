@@ -6983,6 +6983,11 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
               ? normalizeProbeReceipt(proofData.probeReceipt)
               : null,
           probesAnswered: Math.max(0, Math.floor(Number(proofData && proofData.probesAnswered) || 0)),
+          cpuSpeedInitialSeed: Number(proofData && proofData.cpuSpeedInitialSeed) || 0,
+          cpuSpeedProof: String((proofData && proofData.cpuSpeedProof) || ''),
+          memProof: String((proofData && proofData.memProof) || ''),
+          gpuProof: String((proofData && proofData.gpuProof) || ''),
+          gpuProofSeed: Number(proofData && proofData.gpuProofSeed) || 0,
         },
         rewardMap,
       );
@@ -7616,7 +7621,7 @@ async function settleLocalLedgerRound(payload = {}) {
   const cpuSpeedProof = String((payload && payload.cpuSpeedProof) || '');
   const memProof = String((payload && payload.memProof) || '');
   if (cpuSpeedInitialSeed > 0 && cpuSpeedProof) {
-    const coordCpuOk = verifyCpuSpeedProof(cpuSpeedInitialSeed, cpuSpeedProof);
+    const coordCpuOk = await verifyCpuSpeedProof(cpuSpeedInitialSeed, cpuSpeedProof);
     if (!coordCpuOk && minedAddress) {
       const forfeited = roundLedger.forfeitContribution(minedAddress);
       console.warn(
@@ -7625,7 +7630,7 @@ async function settleLocalLedgerRound(payload = {}) {
     }
   }
   if (memProof) {
-    const coordMemOk = verifyMemProof(memProof, minedAddress);
+    const coordMemOk = await verifyMemProof(memProof, minedAddress);
     if (!coordMemOk && minedAddress) {
       const forfeited = roundLedger.forfeitContribution(minedAddress);
       console.warn(
@@ -7634,7 +7639,7 @@ async function settleLocalLedgerRound(payload = {}) {
     }
   }
 
-  // Tier 4d (item 4): standalone nodes (no peer probe) get 50% contribution credit.
+  // Tier 4d (item 4): solo mining is not allowed — a peer probe is required.
   // Peer probes are the only external timing verification; without one, we can't
   // confirm the CPU/memory claims with independent wall-clock measurement.
   // The main process tracks peerProbeVerifiedForRound via IPC — the renderer
@@ -7642,10 +7647,8 @@ async function settleLocalLedgerRound(payload = {}) {
   const peerProbeVerified = hwAuthority.peerProbeVerifiedForRound;
   hwAuthority.peerProbeVerifiedForRound = false; // reset for next round
   if (!peerProbeVerified && minedAddress) {
-    const partial = roundLedger.partialForfeit(minedAddress, 0.5);
-    console.log(
-      `[Ledger] Tier 4d: no peer probe for ${minedAddress} - halved contribution to ${partial.remaining} Wh.`,
-    );
+    roundLedger.partialForfeit(minedAddress, 1);
+    console.log(`[Ledger] Tier 4d: no peer probe for ${minedAddress} — all contribution forfeited.`);
   }
 
   // Tier 4e: coverage-ratio penalty based on chained-probe continuity.
@@ -8257,7 +8260,7 @@ function startLedgerNetworkServer() {
           pixelHash: body && body.pixelHash ? String(body.pixelHash) : '',
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
-        const verdict = submitPeerProbeResult(probeResult, hardwareSpec);
+        const verdict = await submitPeerProbeResult(probeResult, hardwareSpec);
         if (verdict && verdict.receipt && wtcNode && typeof wtcNode.signMessage === 'function') {
           const verifierAddress = String(verdict.receipt.verifierAddress || '').trim();
           const workerId = String(verdict.receipt.workerId || '').trim();
@@ -8774,6 +8777,18 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
       code: 'NEVER_BENCHMARKED',
       message: 'No benchmark data on record. Complete a full hardware benchmark before mining.',
     };
+  }
+
+  // Block contributions when no peers are online — solo mining is not allowed.
+  if (wtcNode) {
+    const activePeersForContributionCheck = getActivePeers(getLedgerNetworkSettings());
+    if (activePeersForContributionCheck.length === 0) {
+      return {
+        ok: false,
+        code: 'NO_PEERS',
+        message: 'At least one peer must be connected before mining. Waiting for peer connection...',
+      };
+    }
   }
 
   // ── deltaWh ceiling: clamp to one second of trust-capped calibrated power ───

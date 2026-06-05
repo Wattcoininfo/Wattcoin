@@ -104,6 +104,22 @@ function computeBlockHash(block) {
     canon.peerProbeVerified = attestation.peerProbeVerified;
     canon.probeReceipt = attestation.probeReceipt;
   }
+  // Raw CPU proof included in hash so consensus re-verification is binding
+  if (block.cpuSpeedInitialSeed) {
+    canon.cpuSpeedInitialSeed = block.cpuSpeedInitialSeed;
+  }
+  if (block.cpuSpeedProof) {
+    canon.cpuSpeedProof = block.cpuSpeedProof;
+  }
+  if (block.memProof) {
+    canon.memProof = block.memProof;
+  }
+  if (block.gpuProof) {
+    canon.gpuProof = block.gpuProof;
+  }
+  if (block.gpuProofSeed) {
+    canon.gpuProofSeed = block.gpuProofSeed;
+  }
   // nftsRoot only included when non-empty so old block hashes remain stable
   if (block.nftsRoot) {
     canon.nftsRoot = block.nftsRoot;
@@ -342,7 +358,7 @@ class Chain {
    * Build an unsigned block proposal at the next height.
    * The returned block needs to go through BFT voting before being appended.
    *
-   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot? }} opts
+   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot?, cpuSpeedInitialSeed?, cpuSpeedProof?, memProof?, gpuProof?, gpuProofSeed? }} opts
    */
   buildBlock({
     proposer,
@@ -355,6 +371,11 @@ class Chain {
     rewardAddresses,
     stateRoot = '',
     nftsRoot = '',
+    cpuSpeedInitialSeed = 0,
+    cpuSpeedProof = '',
+    memProof = '',
+    gpuProof = '',
+    gpuProofSeed = 0,
   }) {
     const height = this._blocks.length;
     const tip = this.getTip();
@@ -377,6 +398,11 @@ class Chain {
         probeReceipt,
       }).probeReceipt,
       probesAnswered: Math.max(0, Math.floor(Number(probesAnswered) || 0)),
+      cpuSpeedInitialSeed: Number(cpuSpeedInitialSeed) || 0,
+      cpuSpeedProof: String(cpuSpeedProof || ''),
+      memProof: String(memProof || ''),
+      gpuProof: String(gpuProof || ''),
+      gpuProofSeed: Number(gpuProofSeed) || 0,
       txsHash,
       transactions,
       rewardTotal: reward,

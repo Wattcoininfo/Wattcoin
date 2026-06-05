@@ -13,7 +13,6 @@ const BENCHMARK_HOLD_DURATION_MS = 5 * 60 * 1000; // 5 minutes on-hold after ret
 const HW_HOLD_STORAGE_KEY = 'wattcoin-hw-hold-until-v1';
 const ENABLE_HARDWARE_HOLD = true;
 const ENABLE_BACKGROUND_BENCHMARKS = true;
-const BACKGROUND_BENCH_INTERVAL_MS = 6 * 60 * 1000; // 6-minute scheduled benchmarks while mining
 const SUSPICIOUS_BENCH_EVAL_INTERVAL_MS = 30_000; // evaluate surprise benchmark chance every 30 s while mining
 
 const FINGERPRINT_HASH_STORAGE_KEY = 'wattcoin-fingerprint-hash-v2';
@@ -3527,30 +3526,7 @@ export default function Miner({
     return () => clearTimeout(timeoutId);
   }, [sliderAdjustNonce, isHardwareOnHold, hardware, runBenchmark]);
 
-  // Scheduled background benchmarks while mining is active (every 6 minutes).
-  // Not dashboard-gated: keep benchmark cadence while user is on another tab.
-  React.useEffect(() => {
-    if (!ENABLE_BACKGROUND_BENCHMARKS) return;
-    if (isHardwareOnHold) return;
-    if (!mining) return;
-    let cancelled = false;
-    let timer = null;
 
-    const scheduleNext = (delayMs) => {
-      timer = setTimeout(async () => {
-        if (cancelled) return;
-        await runBenchmark('scheduled');
-        if (!cancelled) scheduleNext(BACKGROUND_BENCH_INTERVAL_MS);
-      }, delayMs);
-    };
-
-    // First benchmark after a 30-second warm-up, then every 6 minutes.
-    scheduleNext(30_000);
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [isHardwareOnHold, mining, runBenchmark]);
 
   // ─── Runtime hardware probe polling ──────────────────────────────────────────
   // While mining is active, poll every 30 s for a hardware probe job.
@@ -3601,31 +3577,46 @@ export default function Miner({
         let probeResult = null;
 
         if (probe.type === 'cpu') {
-          // Must exactly match cpuSpeedStep in backend-benchmark.js.
-          // Runs for ~1000-4000 ms intentionally - do NOT add await/yield inside this loop.
           let x = probe.params.seed | 0 || 1;
           const N = probe.params.iterations | 0;
-          for (let i = 0; i < N; i++) {
-            x = (Math.imul(x, 48271) + 9973) | 0;
-            x ^= x << 13;
-            x ^= x >> 17;
-            x ^= x << 5;
-            x &= 0x7fffffff;
+          const BATCH = Math.max(1, Math.min(N, 5_000_000));
+          let remaining = N;
+          while (remaining > 0) {
+            const n = Math.min(remaining, BATCH);
+            for (let i = 0; i < n; i++) {
+              x = (Math.imul(x, 48271) + 9973) | 0;
+              x ^= x << 13;
+              x ^= x >> 17;
+              x ^= x << 5;
+              x &= 0x7fffffff;
+            }
+            remaining -= n;
+            if (remaining > 0) await new Promise((r) => setTimeout(r, 0));
           }
           probeResult = { id: probe.id, type: 'cpu', proof: (x >>> 0).toString(16).padStart(8, '0') };
         } else if (probe.type === 'memory') {
-          // Must exactly match runMemProbe in backend-benchmark.js.
-          // Use the coordinator-provided array size so the renderer stays aligned
-          // with backend-benchmark.js when probe sizing changes.
           const ENTRIES = Math.max(1, Number(probe.params.entries) || 1 << 24);
           const s = probe.params.arraySeed | 0 || 1;
           const arr = new Uint32Array(ENTRIES);
-          for (let i = 0; i < ENTRIES; i++) {
-            arr[i] = ((i * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
+          const FILL_BATCH = Math.max(1, Math.min(ENTRIES, 1_000_000));
+          let fillIdx = 0;
+          while (fillIdx < ENTRIES) {
+            const end = Math.min(fillIdx + FILL_BATCH, ENTRIES);
+            for (; fillIdx < end; fillIdx++) {
+              arr[fillIdx] = ((fillIdx * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
+            }
+            if (fillIdx < ENTRIES) await new Promise((r) => setTimeout(r, 0));
           }
           let idx = arr[0];
           const N = probe.params.iterations | 0;
-          for (let i = 0; i < N; i++) idx = arr[idx & (ENTRIES - 1)];
+          const WALK_BATCH = Math.max(1, Math.min(N, 500_000));
+          let remaining = N;
+          while (remaining > 0) {
+            const n = Math.min(remaining, WALK_BATCH);
+            for (let i = 0; i < n; i++) idx = arr[idx & (ENTRIES - 1)];
+            remaining -= n;
+            if (remaining > 0) await new Promise((r) => setTimeout(r, 0));
+          }
           probeResult = { id: probe.id, type: 'memory', proof: (idx >>> 0).toString(16).padStart(8, '0') };
         } else if (probe.type === 'gpu') {
           // GPU probe: backend-defined render size with readPixels() for true synchronous completion.
@@ -6872,12 +6863,14 @@ export default function Miner({
                   console.log('[MinerSimulator] Start Mining button clicked, setting mining to true');
                   setMining(true);
                 }}
-                disabled={
+                  disabled={
                   mining ||
                   !hardwareRecognitionFinished ||
                   benchmarkState.running ||
                   startupBenchmarkPending ||
-                  isHardwareOnHold
+                  isHardwareOnHold ||
+                  peerCount === null ||
+                  peerCount === 0
                 }
                 style={{
                   width: '100%',
@@ -6886,7 +6879,9 @@ export default function Miner({
                     !hardwareRecognitionFinished ||
                     benchmarkState.running ||
                     startupBenchmarkPending ||
-                    isHardwareOnHold
+                    isHardwareOnHold ||
+                    peerCount === null ||
+                    peerCount === 0
                       ? '#7aa88a'
                       : '#4ade80',
                   color: '#0d1a0d',
@@ -6900,7 +6895,9 @@ export default function Miner({
                     !hardwareRecognitionFinished ||
                     benchmarkState.running ||
                     startupBenchmarkPending ||
-                    isHardwareOnHold
+                    isHardwareOnHold ||
+                    peerCount === null ||
+                    peerCount === 0
                       ? 'not-allowed'
                       : 'pointer',
                 }}
@@ -6911,9 +6908,11 @@ export default function Miner({
                     ? 'Mining active'
                     : benchmarkState.running || startupBenchmarkPending
                       ? 'Benchmarking...'
-                      : hardwareRecognitionFinished
-                        ? 'Start mining'
-                        : 'Detecting hardware...'}
+                      : peerCount === null || peerCount === 0
+                        ? 'No peers'
+                        : hardwareRecognitionFinished
+                          ? 'Start mining'
+                          : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>

@@ -62,26 +62,16 @@ function average(values) {
   return sum / values.length;
 }
 
-function simpleHash(value) {
-  const str = String(value || '');
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i += 1) {
-    h ^= str.charCodeAt(i);
-    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-  }
-  return (h >>> 0).toString(16).padStart(8, '0');
-}
-
 // Derive the next probe seed deterministically from the previous verified proof hash.
 // Only a worker who ran the last probe knows the correct chainHead; the pre-image is
 // bound to the prior sequential computation so seeds cannot be pre-computed without
 // executing every preceding step in order.
 function deriveProbeSeed(chainHead, chainIndex) {
-  const raw = simpleHash(`${chainHead}|${chainIndex}`);
-  return parseInt(raw, 16) >>> 0;
+  const raw = crypto.createHash('sha256').update(`${chainHead}|${chainIndex}`).digest('hex');
+  return parseInt(raw.slice(0, 8), 16) >>> 0;
 }
 
-function runCpuAndMemoryBenchmark(request = {}) {
+async function runCpuAndMemoryBenchmark(request = {}) {
   const challengeSeed = Number.isFinite(Number(request.challengeSeed))
     ? Math.floor(Number(request.challengeSeed))
     : crypto.randomBytes(4).readUInt32BE(0) % 1_000_000_000;
@@ -95,36 +85,45 @@ function runCpuAndMemoryBenchmark(request = {}) {
   for (let phase = 0; phase < phaseCount; phase += 1) {
     const phaseStart = performance.now();
     let ops = 0;
+    const CPU_YIELD_INTERVAL = 5_000_000;
     while (performance.now() - phaseStart < phaseDurationMs) {
-      x = (x * 48271 + (phase + 1) * 9973) % 2147483647;
-      x ^= x << 13;
-      x ^= x >>> 17;
-      x ^= x << 5;
-      ops += 1;
+      for (let j = 0; j < CPU_YIELD_INTERVAL; j++) {
+        x = (x * 48271 + (phase + 1) * 9973) % 2147483647;
+        x ^= x << 13;
+        x ^= x >>> 17;
+        x ^= x << 5;
+      }
+      ops += CPU_YIELD_INTERVAL;
+      if (performance.now() - phaseStart < phaseDurationMs) await new Promise((r) => setImmediate(r));
     }
     const elapsed = Math.max(1, performance.now() - phaseStart);
     cpuSamples.push((ops * 1000) / elapsed);
+    if (phase + 1 < phaseCount) await new Promise((r) => setImmediate(r));
   }
 
   const cpuOpsPerSec = average(cpuSamples);
-  // Sequential memory bandwidth: use a 32 MB buffer with stride-64 writes.
-  // Run 4 passes and average to reduce OS-scheduler jitter (a single ~1-3ms pass
-  // produces 3x swings on the same machine; averaging gives stable results).
   const memBytes = Number.isFinite(Number(request.memBytes))
     ? Math.max(1024, Number(request.memBytes))
     : 32 * 1024 * 1024;
   const memArr = new Uint8Array(memBytes);
   const MEM_PASSES = 4;
   const memSamples = [];
+  const MEM_YIELD_INTERVAL = Math.max(1, Math.min(memArr.length / 64, 500_000));
   for (let pass = 0; pass < MEM_PASSES; pass++) {
     const passStart = performance.now();
-    for (let i = 0; i < memArr.length; i += 64) {
-      memArr[i] = (memArr[i] + (i & 0xff) + x) & 0xff;
+    let i = 0;
+    while (i < memArr.length) {
+      const end = Math.min(i + MEM_YIELD_INTERVAL * 64, memArr.length);
+      for (; i < end; i += 64) {
+        memArr[i] = (memArr[i] + (i & 0xff) + x) & 0xff;
+      }
+      if (i < memArr.length) await new Promise((r) => setImmediate(r));
     }
     const passElapsedMs = Math.max(1, performance.now() - passStart);
     memSamples.push(memBytes / (1024 * 1024) / (passElapsedMs / 1000));
+    if (pass + 1 < MEM_PASSES) await new Promise((r) => setImmediate(r));
   }
-  const _memElapsedMs = 1; // kept for API compatibility; individual pass times used above
+  const _memElapsedMs = 1;
   const memoryMBps = average(memSamples);
 
   const variance =
@@ -144,16 +143,10 @@ function runCpuAndMemoryBenchmark(request = {}) {
 // Stays in DRAM on most systems (exceeds L2/L3 on entry-level CPUs), so the
 // result is dominated by memory-bus latency, not L3 hit rate.
 // Reported as "effective bandwidth" of 4-byte random reads; also estimates latency.
-function runRandomMemoryBenchmark(walletAddress) {
-  // Use the same 64 MB working set as the peer-probe so the calibrated latency
-  // reflects true DRAM access time rather than L3-cached latency (the previous
-  // 16 MB array could fit entirely in L3 on modern CPUs, giving an optimistically
-  // low latency estimate that made every peer-probe appear "too slow").
-  const ENTRIES = 1 << 24; // 16M x4 bytes = 64 MB – must match MEM_ENTRIES/PROBE_MEM_ENTRIES
-  const MASK = ENTRIES - 1; // 0xFFFFFF -- was 0x3FFFFF for 16 MB
+async function runRandomMemoryBenchmark(walletAddress) {
+  const ENTRIES = 1 << 24;
+  const MASK = ENTRIES - 1;
 
-  // Derive a 32-bit salt from the wallet address so the proof is unique per miner.
-  // A cheater cannot hardcode the answer without knowing which address will be used.
   const addrStr = typeof walletAddress === 'string' && walletAddress.trim() ? walletAddress.trim() : '';
   let addrSalt = 0;
   for (let i = 0; i < addrStr.length; i++) {
@@ -161,22 +154,29 @@ function runRandomMemoryBenchmark(walletAddress) {
   }
   addrSalt = addrSalt >>> 0;
   const arr = new Uint32Array(ENTRIES);
-  // Fill with values that point somewhere else in the array (permutation-like),
-  // XOR with addrSalt so the traversal path is unique per wallet.
-  for (let i = 0; i < ENTRIES; i++) {
-    arr[i] = ((i * 1664525 + 1013904223) ^ addrSalt) & MASK; // stay within ENTRIES
+  const FILL_BATCH = Math.max(1, Math.min(ENTRIES, 1_000_000));
+  let fillIdx = 0;
+  while (fillIdx < ENTRIES) {
+    const end = Math.min(fillIdx + FILL_BATCH, ENTRIES);
+    for (; fillIdx < end; fillIdx++) {
+      arr[fillIdx] = ((fillIdx * 1664525 + 1013904223) ^ addrSalt) & MASK;
+    }
+    if (fillIdx < ENTRIES) await new Promise((r) => setImmediate(r));
   }
-  // 2 M iterations ≈ 160 ms on DDR4 @ 80 ns/access – large enough to swamp
-  // OS scheduler jitter, which caused the estimate to vary by ±25 % with the
-  // previous 500 K count (~25 ms window on cached 16 MB data).
+
   const ITERS = 2_000_000;
   let idx = arr[0];
   const start = performance.now();
-  for (let i = 0; i < ITERS; i++) {
-    idx = arr[idx & MASK];
+  const WALK_BATCH = Math.max(1, Math.min(ITERS, 500_000));
+  let remaining = ITERS;
+  while (remaining > 0) {
+    const n = Math.min(remaining, WALK_BATCH);
+    for (let i = 0; i < n; i++) idx = arr[idx & MASK];
+    remaining -= n;
+    if (remaining > 0) await new Promise((r) => setImmediate(r));
   }
   const elapsed = Math.max(1, performance.now() - start);
-  const latencyNs = (elapsed * 1e6) / ITERS; // ns per access
+  const latencyNs = (elapsed * 1e6) / ITERS;
   const randomBandwidthMBps = Math.round((ITERS * 4) / (elapsed / 1000) / (1024 * 1024));
   return {
     randomBandwidthMBps,
@@ -203,8 +203,7 @@ function cpuSpeedStep(x) {
   x &= 0x7fffffff;
   return x;
 }
-function runCpuSpeedBenchmark(seed, runs = CPU_SPEED_DEFAULT_RUNS) {
-  // Use provided seed if valid; otherwise pick a random one.
+async function runCpuSpeedBenchmark(seed, runs = CPU_SPEED_DEFAULT_RUNS) {
   const initialSeed =
     Number.isFinite(seed) && seed > 0 ? seed | 0 || 1 : (crypto.randomBytes(4).readUInt32BE(0) % 999_999_999) + 1;
   const runCount = Math.max(
@@ -215,16 +214,24 @@ function runCpuSpeedBenchmark(seed, runs = CPU_SPEED_DEFAULT_RUNS) {
   let proof = '';
   let totalElapsed = 0;
 
+  const BATCH = Math.max(1, Math.min(CPU_SPEED_N, 5_000_000));
   for (let r = 0; r < runCount; r++) {
     let x = initialSeed;
     const start = performance.now();
-    for (let i = 0; i < CPU_SPEED_N; i++) x = cpuSpeedStep(x);
+    let remaining = CPU_SPEED_N;
+    while (remaining > 0) {
+      const n = Math.min(remaining, BATCH);
+      for (let i = 0; i < n; i++) x = cpuSpeedStep(x);
+      remaining -= n;
+      if (remaining > 0) await new Promise((r) => setImmediate(r));
+    }
     const elapsed = Math.max(1, performance.now() - start);
     totalElapsed += elapsed;
     samples.push(Math.round(CPU_SPEED_N / (elapsed / 1000)));
     if (!proof) {
       proof = (x >>> 0).toString(16).padStart(8, '0');
     }
+    if (r + 1 < runCount) await new Promise((r) => setImmediate(r));
   }
 
   const sortedSamples = [...samples].sort((a, b) => a - b);
@@ -243,10 +250,17 @@ function runCpuSpeedBenchmark(seed, runs = CPU_SPEED_DEFAULT_RUNS) {
 // Verification: given the initialSeed that was used, re-run the identical N-step
 // chain and confirm the proof matches.  Takes ~same wall-clock time as the benchmark
 // itself but guarantees tamper-evidence in the Node process.
-function verifyCpuSpeedProof(initialSeed, expectedProof) {
+async function verifyCpuSpeedProof(initialSeed, expectedProof) {
   try {
     let x = initialSeed | 0 || 1;
-    for (let i = 0; i < CPU_SPEED_N; i++) x = cpuSpeedStep(x);
+    const BATCH = Math.max(1, Math.min(CPU_SPEED_N, 5_000_000));
+    let remaining = CPU_SPEED_N;
+    while (remaining > 0) {
+      const n = Math.min(remaining, BATCH);
+      for (let i = 0; i < n; i++) x = cpuSpeedStep(x);
+      remaining -= n;
+      if (remaining > 0) await new Promise((r) => setImmediate(r));
+    }
     return (x >>> 0).toString(16).padStart(8, '0') === expectedProof;
   } catch (_) {
     return false;
@@ -260,7 +274,7 @@ const MEM_ENTRIES = 1 << 24; // must match runRandomMemoryBenchmark (64 MB)
 const MEM_MASK = MEM_ENTRIES - 1; // 0xFFFFFF
 const MEM_ITERS = 2_000_000;
 const _memProofCache = new Map(); // addrSalt (string) → proof hex
-function verifyMemProof(expectedProof, walletAddress) {
+async function verifyMemProof(expectedProof, walletAddress) {
   try {
     const addrStr = typeof walletAddress === 'string' && walletAddress.trim() ? walletAddress.trim() : '';
     let addrSalt = 0;
@@ -272,11 +286,24 @@ function verifyMemProof(expectedProof, walletAddress) {
     let cached = _memProofCache.get(cacheKey);
     if (cached === undefined) {
       const arr = new Uint32Array(MEM_ENTRIES);
-      for (let i = 0; i < MEM_ENTRIES; i++) {
-        arr[i] = ((i * 1664525 + 1013904223) ^ addrSalt) & MEM_MASK;
+      const FILL_BATCH = Math.max(1, Math.min(MEM_ENTRIES, 1_000_000));
+      let fillIdx = 0;
+      while (fillIdx < MEM_ENTRIES) {
+        const end = Math.min(fillIdx + FILL_BATCH, MEM_ENTRIES);
+        for (; fillIdx < end; fillIdx++) {
+          arr[fillIdx] = ((fillIdx * 1664525 + 1013904223) ^ addrSalt) & MEM_MASK;
+        }
+        if (fillIdx < MEM_ENTRIES) await new Promise((r) => setImmediate(r));
       }
       let idx = arr[0];
-      for (let i = 0; i < MEM_ITERS; i++) idx = arr[idx & MEM_MASK];
+      const WALK_BATCH = Math.max(1, Math.min(MEM_ITERS, 500_000));
+      let remaining = MEM_ITERS;
+      while (remaining > 0) {
+        const n = Math.min(remaining, WALK_BATCH);
+        for (let i = 0; i < n; i++) idx = arr[idx & MEM_MASK];
+        remaining -= n;
+        if (remaining > 0) await new Promise((r) => setImmediate(r));
+      }
       cached = (idx >>> 0).toString(16).padStart(8, '0');
       _memProofCache.set(cacheKey, cached);
     }
@@ -302,25 +329,22 @@ function getBenchmarkCapabilities() {
   };
 }
 
-function runBackendBenchmark(_request = {}) {
+async function runBackendBenchmark(_request = {}) {
   const request = _request || {};
   const walletAddress = typeof request.walletAddress === 'string' ? request.walletAddress.trim() : '';
   const startedAt = performance.now();
   try {
-    const cpuMem = runCpuAndMemoryBenchmark(request);
-    // Use challengeSeed as the CPU speed seed so a server can independently verify:
-    // given (challengeSeed, N=20M, algorithm) ? expected proof.
+    const cpuMem = await runCpuAndMemoryBenchmark(request);
     const cpuSpeedRuns = Number.isFinite(Number(request.cpuSpeedRuns))
       ? Number(request.cpuSpeedRuns)
       : CPU_SPEED_DEFAULT_RUNS;
-    const cpuSpeed = runCpuSpeedBenchmark(cpuMem.challengeSeed, cpuSpeedRuns);
-    const randMem = runRandomMemoryBenchmark(walletAddress);
+    const cpuSpeed = await runCpuSpeedBenchmark(cpuMem.challengeSeed, cpuSpeedRuns);
+    const randMem = await runRandomMemoryBenchmark(walletAddress);
 
-    // Verify both proofs inside Node � catches any code-level corruption or patching.
-    // verifyCpuSpeedProof re-runs 20M iterations from the same seed; verifyMemProof
-    // re-runs the deterministic traversal keyed by wallet address.
-    const cpuSpeedProofVerified = verifyCpuSpeedProof(cpuSpeed.initialSeed, cpuSpeed.proof);
-    const memProofVerified = verifyMemProof(randMem.proof, walletAddress);
+    const [cpuSpeedProofVerified, memProofVerified] = await Promise.all([
+      verifyCpuSpeedProof(cpuSpeed.initialSeed, cpuSpeed.proof),
+      verifyMemProof(randMem.proof, walletAddress),
+    ]);
 
     return {
       ok: true,
@@ -335,7 +359,7 @@ function runBackendBenchmark(_request = {}) {
       gpuProvider: 'none',
       gpuProofHash: '',
       gpuProofWorkload: 'none',
-      gpuProofError: '', // renderer-only; GPU probes use the probe system, not backend benchmarks
+      gpuProofError: '',
       cpuSamples: cpuMem.cpuSamples,
       logicalCoresHint: os.cpus().length,
       cpuSpeedOpsPerSec: cpuSpeed.opsPerSec,
@@ -431,10 +455,17 @@ function _runCpuProbe(seed, iterations) {
   return { proof: (x >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed) };
 }
 
-function verifyCpuProbe(seed, iterations, expectedProof) {
+async function verifyCpuProbe(seed, iterations, expectedProof) {
   try {
     let x = seed | 0 || 1;
-    for (let i = 0; i < iterations; i++) x = cpuSpeedStep(x);
+    const BATCH = Math.max(1, Math.min(iterations, 5_000_000));
+    let remaining = iterations;
+    while (remaining > 0) {
+      const n = Math.min(remaining, BATCH);
+      for (let i = 0; i < n; i++) x = cpuSpeedStep(x);
+      remaining -= n;
+      if (remaining > 0) await new Promise((r) => setImmediate(r));
+    }
     return (x >>> 0).toString(16).padStart(8, '0') === expectedProof;
   } catch (_) {
     return false;
@@ -456,16 +487,29 @@ function _runMemProbe(arraySeed, iterations) {
   return { proof: (idx >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed) };
 }
 
-function verifyMemProbe(arraySeed, iterations, expectedProof) {
+async function verifyMemProbe(arraySeed, iterations, expectedProof) {
   try {
     const ENTRIES = PROBE_MEM_ENTRIES;
     const s = arraySeed | 0 || 1;
     const arr = new Uint32Array(ENTRIES);
-    for (let i = 0; i < ENTRIES; i++) {
-      arr[i] = ((i * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
+    const FILL_BATCH = Math.max(1, Math.min(ENTRIES, 1_000_000));
+    let i = 0;
+    while (i < ENTRIES) {
+      const end = Math.min(i + FILL_BATCH, ENTRIES);
+      for (; i < end; i++) {
+        arr[i] = ((i * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
+      }
+      if (i < ENTRIES) await new Promise((r) => setImmediate(r));
     }
     let idx = arr[0];
-    for (let i = 0; i < iterations; i++) idx = arr[idx & (ENTRIES - 1)];
+    const WALK_BATCH = Math.max(1, Math.min(iterations, 1_000_000));
+    let remaining = iterations;
+    while (remaining > 0) {
+      const n = Math.min(remaining, WALK_BATCH);
+      for (let j = 0; j < n; j++) idx = arr[idx & (ENTRIES - 1)];
+      remaining -= n;
+      if (remaining > 0) await new Promise((r) => setImmediate(r));
+    }
     return (idx >>> 0).toString(16).padStart(8, '0') === expectedProof;
   } catch (_) {
     return false;
@@ -567,7 +611,7 @@ function getPendingProbe() {
 
 // Called when the renderer returns a completed probe.
 // peerTimed=true means wallClockMs was measured by the coordinator (trusted external clock).
-function submitProbeResult(result, peerTimed = false) {
+async function submitProbeResult(result, peerTimed = false) {
   if (!result || !probeState.pending) {
     return { ok: false, issues: ['no pending probe'] };
   }
@@ -584,7 +628,7 @@ function submitProbeResult(result, peerTimed = false) {
 
   if (probe.type === 'cpu') {
     // Re-run exact same computation � proof MUST match for an honest node.
-    proofValid = verifyCpuProbe(probe.params.seed, probe.params.iterations, result.proof || '');
+    proofValid = await verifyCpuProbe(probe.params.seed, probe.params.iterations, result.proof || '');
     if (!proofValid) {
       issues.push('cpu probe: proof hash mismatch � computation was tampered or skipped');
     } else if (probeState.hardwareSpec && probeState.hardwareSpec.measuredCpuOpsPerSec > 0) {
@@ -601,7 +645,7 @@ function submitProbeResult(result, peerTimed = false) {
         );
     }
   } else if (probe.type === 'memory') {
-    proofValid = verifyMemProbe(probe.params.arraySeed, probe.params.iterations, result.proof || '');
+    proofValid = await verifyMemProbe(probe.params.arraySeed, probe.params.iterations, result.proof || '');
     if (!proofValid) {
       issues.push('memory probe: proof hash mismatch � computation was tampered or skipped');
     } else if (probeState.hardwareSpec && probeState.hardwareSpec.measuredMemLatencyNs > 0) {
@@ -755,6 +799,10 @@ function computeGpuProbeExpectedHash(seed, size, shaderIterations) {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+// GPU proof parameters — must match Miner.jsx constants.
+const GPU_PROOF_SIZE = 128;
+const GPU_PROOF_ITERS = 32;
+
 // A separate peerProbeIssuances map is used so multiple workers can have concurrent
 // in-flight probes.  Key = probeId, value = { probe, issuedAt, workerId, expectedPixelHash? }.
 const peerProbeIssuances = new Map(); // probeId ? { probe, issuedAt, workerId, expectedPixelHash? }
@@ -890,7 +938,7 @@ function issuePeerProbe(workerId, allowGpuWorkloads) {
 
 // Receive and verify a worker's probe result (called by coordinator HTTP handler).
 // wallClockMs is the coordinator's own measurement: Date.now() - entry.issuedAt.
-function submitPeerProbeResult(result, hardwareSpec) {
+async function submitPeerProbeResult(result, hardwareSpec) {
   if (!result || !result.id) return { ok: false, issues: ['missing probe id'] };
   const entry = peerProbeIssuances.get(result.id);
   if (!entry) return { ok: false, issues: ['unknown or expired probe id'] };
@@ -902,7 +950,7 @@ function submitPeerProbeResult(result, hardwareSpec) {
   let proofValid = false;
 
   if (probe.type === 'cpu') {
-    proofValid = verifyCpuProbe(probe.params.seed, probe.params.iterations, result.proof || '');
+    proofValid = await verifyCpuProbe(probe.params.seed, probe.params.iterations, result.proof || '');
     if (!proofValid) {
       issues.push('cpu peer-probe: proof hash mismatch');
     } else if (hardwareSpec && hardwareSpec.measuredCpuOpsPerSec > 0) {
@@ -926,7 +974,7 @@ function submitPeerProbeResult(result, hardwareSpec) {
         );
     }
   } else if (probe.type === 'memory') {
-    proofValid = verifyMemProbe(probe.params.arraySeed, probe.params.iterations, result.proof || '');
+    proofValid = await verifyMemProbe(probe.params.arraySeed, probe.params.iterations, result.proof || '');
     if (!proofValid) {
       issues.push('memory peer-probe: proof hash mismatch');
     } else if (hardwareSpec && hardwareSpec.measuredMemLatencyNs > 0) {
@@ -1165,6 +1213,8 @@ module.exports = {
   verifyMemProof,
   computeGpuProbeExpectedHash,
   setCoordinatorIdentityKey,
+  GPU_PROOF_SIZE,
+  GPU_PROOF_ITERS,
   // Exported so settlement logic can compute expected probe count per round
   PROBE_INTERVAL_MS,
   // Authoritative probe chain state (cannot be spoofed by renderer)
