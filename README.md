@@ -1,7 +1,7 @@
 # Wattcoin Miner
 
 <p>
-  <a href="https://github.com/Wattcoininfo/Wattcoin/actions"><img src="https://img.shields.io/github/actions/workflow/status/Wattcoininfo/Wattcoin/ci.yml?branch=main&label=CI&logo=github" alt="CI"></a>
+  <a href="https://github.com/Wattcoininfo/Wattcoin/actions"><img src="https://img.shields.io/github/actions/workflow/status/Wattcoininfo/Wattcoin/ci.yml?branch=master&label=CI&logo=github" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Wattcoininfo/Wattcoin?color=blue" alt="License"></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js" alt="Node">
   <a href="https://github.com/Wattcoininfo/Wattcoin/releases"><img src="https://img.shields.io/github/v/release/Wattcoininfo/Wattcoin?include_prereleases&label=release" alt="Release"></a>
@@ -278,6 +278,8 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 
 ## Security
 
+See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability reporting process.
+
 - **Attestation:** Hardware identity is HMAC-SHA256 signed with an encrypted device secret (DPAPI on Windows)
 - **Wallet Encryption:** AES-256-GCM encrypted with key derived from device identity
 - **IPC Security:** Preload script uses an explicit channel allowlist; unlisted channels are rejected
@@ -286,6 +288,12 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 - **Electron Fuses:** ASAR integrity validation, cookie encryption, disabled Node CLI inspect
 - **Integrity Manifest:** SHA-256 hashes of all main-process JS files verified at runtime
 - **Binary Signing:** All bundled executables and DLLs are Authenticode-signed (dev cert supported)
+
+---
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, testing, and pull requests.
 
 ---
 
@@ -299,3 +307,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 - **Website:** [https://wattcoin.ee](https://wattcoin.ee)
 - **Whitepaper:** [https://wattcoin.ee/wattcoin-whitepaper.html](https://wattcoin.ee/wattcoin-whitepaper.html)
+- **GitHub:** [https://github.com/Wattcoininfo/Wattcoin](https://github.com/Wattcoininfo/Wattcoin)
