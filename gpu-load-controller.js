@@ -1,6 +1,5 @@
 const { spawn } = require('child_process');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
 const fs = require('fs');
 
@@ -50,10 +49,6 @@ function xorEncrypt(buf) {
   return out;
 }
 
-function xorDecrypt(buf) {
-  return xorEncrypt(buf); // XOR is symmetric
-}
-
 function generateSessionKey() {
   const raw = crypto.randomBytes(32);
   xorKey = raw.toString('hex');
@@ -93,7 +88,9 @@ function findGpuBinary() {
     try {
       require('fs').accessSync(p, require('fs').constants.F_OK);
       return p;
-    } catch (_) {}
+    } catch (_) {
+      /* not found */
+    }
   }
   return null;
 }
@@ -194,7 +191,9 @@ function processRawBuffer() {
         try {
           const msg = JSON.parse(line);
           handleMessage(msg);
-        } catch (_) {}
+        } catch (_) {
+          /* ignore malformed */
+        }
       }
       lineStart = i + 1;
     }
@@ -363,7 +362,9 @@ async function stopGpuLoad() {
   if (!gpuProcess) return;
   try {
     await sendCommand({ stop: true });
-  } catch (_) {}
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 async function runGpuProof(seed, size, iters) {
@@ -483,7 +484,9 @@ function shutdownGpu() {
     try {
       const payload = JSON.stringify({ quit: true }) + '\n';
       gpuProcess.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8')));
-    } catch (_) {}
+    } catch (_) {
+      /* write may fail if pipe closed */
+    }
     setTimeout(() => {
       if (gpuProcess) {
         gpuProcess.kill();
