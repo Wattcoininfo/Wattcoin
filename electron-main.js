@@ -7411,6 +7411,36 @@ function getSharedRoundSnapshot() {
   return roundLedger.getCurrentRoundSnapshot();
 }
 
+async function pullContributionsFromPeers() {
+  const settings = getLedgerNetworkSettings();
+  if (!settings || !settings.enabled || !wtcNode) return;
+  const peers = getActivePeers(settings);
+  if (!peers || peers.length === 0) return;
+  const currentRoundId = getCurrentNetworkRoundId();
+  if (currentRoundId <= 0) return;
+
+  for (const peerUrl of peers) {
+    try {
+      const res = await requestPeerJson(peerUrl, 'GET', '/api/v1/round/contribution', undefined, undefined, {
+        timeoutMs: 5000,
+        trackReachability: false,
+        suppressPeerDiscovery: true,
+        source: 'pull-contributions',
+      });
+      if (!res || !res.ok || !res.snapshot) continue;
+      if (Number(res.snapshot.id) !== currentRoundId) continue;
+
+      alignRoundLedgerToChain(currentRoundId);
+      for (const [address, totalWh] of Object.entries(res.snapshot.contributionsWh || {})) {
+        const updatedAtMs = (res.snapshot.contributionUpdatedAtMs || {})[address] || 0;
+        roundLedger.setRoundContribution(address, totalWh, updatedAtMs);
+      }
+    } catch (_) {
+      // Peer unreachable or returned error — skip
+    }
+  }
+}
+
 function buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs, chainIndex }) {
   return JSON.stringify({
     prefix: ROUND_CONTRIBUTION_MESSAGE_PREFIX,
@@ -8563,6 +8593,17 @@ function startLedgerNetworkServer() {
           addressRoundWh: applied.addressRoundWh,
           totalWh: snapshot.totalWh,
         });
+        return;
+      }
+
+      // GET /api/v1/round/contribution — pull current round snapshot from this peer
+      if (req.method === 'GET' && reqUrl.pathname === '/api/v1/round/contribution') {
+        if (!wtcNode) {
+          sendJson(res, 503, { ok: false, code: 'NODE_NOT_READY', message: 'Node not ready.' });
+          return;
+        }
+        const snapshot = roundLedger.getCurrentRoundSnapshot();
+        sendJson(res, 200, { ok: true, snapshot });
         return;
       }
 
@@ -9847,6 +9888,12 @@ app.whenReady().then(() => {
   startWtcPeerSyncLoop();
   startWalletSyncStateLoop();
   startOpsMetricsLoop();
+
+  // Pull current round contributions from peers so a fresh install
+  // recovers mid-round contributions that were broadcast before data loss.
+  setTimeout(() => {
+    pullContributionsFromPeers().catch(() => {});
+  }, 10000);
 
   // ── WTC Sale queue ───────────────────────────────────────────────────────
   // Init only after wtcNode is ready so balance reads work immediately.
