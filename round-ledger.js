@@ -193,7 +193,14 @@ function createRoundLedger(options = {}) {
     };
   }
 
-  function setRoundContribution(address, totalWh, updatedAtMs = Date.now(), probeChainIndex = -1, message = '', signature = '') {
+  function setRoundContribution(
+    address,
+    totalWh,
+    updatedAtMs = Date.now(),
+    probeChainIndex = -1,
+    message = '',
+    signature = '',
+  ) {
     const key = normalizeAddress(address);
     const nextTotal = Math.max(0, Number(totalWh) || 0);
     const normalizedUpdatedAtMs = Math.max(0, Math.floor(Number(updatedAtMs) || 0));
