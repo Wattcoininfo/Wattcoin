@@ -1973,6 +1973,7 @@ export default function Miner({
     lastAvgCpuPct: null,
     lastAvgMemPct: null,
     lastAvgGpuPct: null,
+    lastWasBaseline: false,
   });
   const [loadPercent, setLoadPercent] = React.useState(() => {
     try {
@@ -3080,6 +3081,7 @@ export default function Miner({
           lastAvgCpuPct,
           lastAvgMemPct,
           lastAvgGpuPct,
+          lastWasBaseline: isBaselineBenchmark,
         });
 
         // Persist proof data so the next mineBlock call can include it in the OP_RETURN
@@ -6143,7 +6145,24 @@ export default function Miner({
               benchmarkState.lastScore !== null &&
               (benchmarkState.lastAvgCpuPct !== null ||
                 benchmarkState.lastAvgMemPct !== null ||
-                benchmarkState.lastAvgGpuPct !== null) && (
+                benchmarkState.lastAvgGpuPct !== null) &&
+              (benchmarkState.lastWasBaseline ? (
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                  <span key="cpu" style={{ marginLeft: 4 }}>
+                    CPU baseline
+                  </span>
+                  {benchmarkState.lastAvgMemPct !== null && (
+                    <span key="mem" style={{ marginLeft: 4 }}>
+                      Mem baseline
+                    </span>
+                  )}
+                  {benchmarkState.lastAvgGpuPct !== null && (
+                    <span key="gpu" style={{ marginLeft: 4 }}>
+                      GPU baseline
+                    </span>
+                  )}
+                </div>
+              ) : (
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
                   avg
                   {[
@@ -6182,7 +6201,7 @@ export default function Miner({
                       })(),
                   ].filter(Boolean)}
                 </div>
-              )}
+              ))}
             {!benchmarkState.running && !startupBenchmarkPending && benchmarkState.lastScore !== null && (
               <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                 {benchmarkState.lastTrustDelta !== null && (

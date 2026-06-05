@@ -4966,8 +4966,12 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     // Stored in userData (device-scoped), not keyed by wallet address.
     // History is cleared when hardware changes (fingerprint detects new device).
     const benchmarkHistory = loadBenchmarkHistory();
-    if (measuredCpu > 0) benchmarkHistory.cpuSamples = appendBenchmarkSample(benchmarkHistory.cpuSamples, measuredCpu);
-    if (measuredMem > 0) benchmarkHistory.memSamples = appendBenchmarkSample(benchmarkHistory.memSamples, measuredMem);
+    if (!isBaseline) {
+      if (measuredCpu > 0)
+        benchmarkHistory.cpuSamples = appendBenchmarkSample(benchmarkHistory.cpuSamples, measuredCpu);
+      if (measuredMem > 0)
+        benchmarkHistory.memSamples = appendBenchmarkSample(benchmarkHistory.memSamples, measuredMem);
+    }
     // Jitter history: accumulate per-device jitter samples (rolling 20) so the attestation
     // handler can adapt the threshold to this machine's natural OS-scheduler variance.
     // Jitter is [0,1]; outlier rejection reuses the same logic as cpu/mem but with
