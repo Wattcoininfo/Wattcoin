@@ -5344,6 +5344,65 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           asicFirmwareIssue = true;
           console.warn(`[HW-Verify] ASIC firmware attestation failed: ${firmwareAttest.issues.join(', ')}`);
         }
+        // ── ASIC temperature consistency check ─────────────────────────────────────
+        // Query the stats command for temperature data and verify the values are
+        // realistic for real hash board hardware.  A fake cgminer responder would
+        // need to return plausible per-chip temperatures that vary realistically.
+        if (!asicLivenessFailed) {
+          try {
+            const tCtrl = new AbortController();
+            const tTo = setTimeout(() => tCtrl.abort(), 10000);
+            let tRes;
+            try {
+              tRes = await fetch(`http://127.0.0.1:${livenessPort}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command: 'stats' }),
+                signal: tCtrl.signal,
+              });
+            } finally {
+              clearTimeout(tTo);
+            }
+            const tJson = await tRes.json();
+            const tRecords = tJson && tJson.STATS;
+            const allTemps = [];
+            if (Array.isArray(tRecords)) {
+              for (const rec of tRecords) {
+                if (!rec || rec.id === 0) continue;
+                for (const key of Object.keys(rec)) {
+                  if (/^temp\d*$/i.test(key)) {
+                    const val = Number(rec[key]);
+                    if (Number.isFinite(val) && val > 0) allTemps.push(val);
+                  }
+                }
+              }
+            }
+            if (allTemps.length > 0) {
+              const avgTemp = allTemps.reduce((a, b) => a + b, 0) / allTemps.length;
+              const minTemp = Math.min(...allTemps);
+              const maxTemp = Math.max(...allTemps);
+              // Real ASIC hash board temps typically range 40-85°C.
+              if (avgTemp < 30 || avgTemp > 95) {
+                asicFirmwareIssue = true;
+                console.warn(`[HW-Verify] ASIC temperature range suspicious: avg=${avgTemp.toFixed(0)}°C (range ${minTemp.toFixed(0)}-${maxTemp.toFixed(0)}°C) — expected 30-95°C`);
+              }
+              if (allTemps.length >= 3) {
+                const uniqueTemps = new Set(allTemps.map((t) => Math.round(t)));
+                // Real hash boards rarely have all sensors at identical temperatures.
+                // All sensors reporting the exact same value suggests a fake responder.
+                if (uniqueTemps.size <= 1) {
+                  asicFirmwareIssue = true;
+                  console.warn(`[HW-Verify] ASIC temperature consistency suspicious: all ${allTemps.length} sensors report ~${Math.round(allTemps[0])}°C — expected variation across chips`);
+                }
+              }
+            } else {
+              // No temperature data at all — could be a pre-prod unit but also a fake.
+              console.warn(`[HW-Verify] ASIC temperature data not available — may indicate fake cgminer responder`);
+            }
+          } catch (_e) {
+            console.warn(`[HW-Verify] ASIC temperature check failed: ${String(_e.message || _e).slice(0, 80)}`);
+          }
+        }
       }
     }
 
@@ -5436,7 +5495,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         ...(asicModelMismatch ? ['asic model mismatch — declared model does not match hash board'] : []),
         ...(asicHashrateLow ? ['asic hashrate too low — hash boards underperforming or misidentified'] : []),
         ...(asicFirmwareIssue
-          ? ['asic firmware attestation failed — multiple API endpoints report conflicting device identity']
+          ? ['asic firmware attestation or temperature consistency check failed — hash board identity or thermal behavior does not match expected values']
           : []),
         ...(minerIsOutlier ? ['network outlier — power/cpu ratio >3σ from mean'] : []),
       ];
@@ -6282,7 +6341,7 @@ ipcMain.handle('wattcoin-sale-compute-price', async (_event, { wtcAmount, electr
 });
 
 // Place an order (buyer is the logged-in WTC address)
-ipcMain.handle('wattcoin-sale-place-order', (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
+ipcMain.handle('wattcoin-sale-place-order', async (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
   // Basic input sanitisation
   const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
   const amount = Number(wtcAmount);
@@ -6291,6 +6350,16 @@ ipcMain.handle('wattcoin-sale-place-order', (_event, { wtcAddress, wtcAmount, us
   if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
     return { ok: false, error: 'Invalid WTC address' };
   }
+  const confirmResult = await dialog.showMessageBox(getFocusedWindow(), {
+    type: 'warning',
+    buttons: ['Cancel', 'Confirm Purchase'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Confirm Sale Order',
+    message: `Place sale order for ${amount.toLocaleString()} WTC at ${usdc.toLocaleString()} USDC?`,
+    detail: `Buyer address: ${addr}`,
+  });
+  if (confirmResult.response !== 1) return { ok: false, code: 'CANCELED', message: 'Purchase order canceled.' };
   return saleQueue.placeSaleOrder({
     wtcAddress: addr,
     wtcAmount: amount,
@@ -6347,7 +6416,7 @@ ipcMain.handle('wattcoin-staking-status', (_event) => {
 });
 
 // Place a staking entry
-ipcMain.handle('wattcoin-staking-stake', (_event, { fromAddress, wtcAmount }) => {
+ipcMain.handle('wattcoin-staking-stake', async (_event, { fromAddress, wtcAmount }) => {
   const addr = typeof fromAddress === 'string' ? fromAddress.trim() : '';
   const amount = Number(wtcAmount);
   if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
@@ -6368,6 +6437,16 @@ ipcMain.handle('wattcoin-staking-stake', (_event, { fromAddress, wtcAmount }) =>
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   }
+  const confirmResult = await dialog.showMessageBox(getFocusedWindow(), {
+    type: 'warning',
+    buttons: ['Cancel', 'Confirm Stake'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Confirm Stake',
+    message: `Stake ${amount.toLocaleString()} WTC from address ${addr.slice(0, 12)}...?`,
+    detail: `These tokens will be locked for the staking period. Staking rewards are paid in WTC.`,
+  });
+  if (confirmResult.response !== 1) return { ok: false, code: 'CANCELED', message: 'Staking canceled.' };
   return stakingQueue.stakeWtc({ fromAddress: addr, wtcAmount: amount });
 });
 
@@ -6425,13 +6504,23 @@ ipcMain.handle('wattcoin-nft-collection', (_event) => {
 });
 
 // Transfer an NFT to another address
-ipcMain.handle('wattcoin-nft-transfer', (_event, { nftId, fromAddress, toAddress }) => {
+ipcMain.handle('wattcoin-nft-transfer', async (_event, { nftId, fromAddress, toAddress }) => {
   try {
     if (!wtcNode) return { ok: false, error: 'Node not ready' };
     const id = typeof nftId === 'string' ? nftId.trim() : '';
     const from = typeof fromAddress === 'string' ? fromAddress.trim() : '';
     const to = typeof toAddress === 'string' ? toAddress.trim() : '';
     if (!id || !from || !to) return { ok: false, error: 'nftId, fromAddress, toAddress required' };
+    const confirmResult = await dialog.showMessageBox(getFocusedWindow(), {
+      type: 'warning',
+      buttons: ['Cancel', 'Confirm Transfer'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Confirm NFT Transfer',
+      message: `Transfer NFT #${id} from ${from.slice(0, 12)}... to ${to.slice(0, 12)}...?`,
+      detail: `This action cannot be undone. The NFT will be permanently moved to the recipient address.`,
+    });
+    if (confirmResult.response !== 1) return { ok: false, code: 'CANCELED', message: 'NFT transfer canceled.' };
     return wtcNode.transferNft({ nftId: id, fromAddress: from, toAddress: to });
   } catch (e) {
     return { ok: false, error: String(e && e.message) };
@@ -6558,13 +6647,24 @@ ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
   }
 });
 
-ipcMain.handle('wattcoin-governance-vote', (_event, pipId, voteData) => {
+ipcMain.handle('wattcoin-governance-vote', async (_event, pipId, voteData) => {
   try {
     if (!wtcNode) return { ok: false, error: 'Node not ready' };
 
     // Step 1: compute real voting power from NFT store (never trust self-reported)
     const vp = wtcNode.getGovernanceVotingPower(voteData.voter);
     if (!vp.hasNft) return { ok: false, error: `${voteData.voter.slice(0, 12)}... does not own any Vortex NFTs` };
+
+    const confirmResult = await dialog.showMessageBox(getFocusedWindow(), {
+      type: 'warning',
+      buttons: ['Cancel', 'Confirm Vote'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Confirm Governance Vote',
+      message: `Vote "${String(voteData.vote || '').toUpperCase()}" on PIP-${pipId}?`,
+      detail: `Voter: ${voteData.voter.slice(0, 12)}... | Voting power: ${vp.bestPower} (${vp.bestTier} tier)`,
+    });
+    if (confirmResult.response !== 1) return { ok: false, code: 'CANCELED', message: 'Vote canceled.' };
 
     // Step 2: sign the vote WITH the computed power and tier so both are
     // cryptographically committed and can't be tampered with in transit.
@@ -8359,7 +8459,8 @@ function startLedgerNetworkServer() {
           pixelHash: body && body.pixelHash ? String(body.pixelHash) : '',
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
-        const verdict = await submitPeerProbeResult(probeResult, hardwareSpec);
+        const probeRoundId = getCurrentNetworkRoundId();
+        const verdict = await submitPeerProbeResult(probeResult, hardwareSpec, probeRoundId);
         if (verdict && verdict.receipt && wtcNode && typeof wtcNode.signMessage === 'function') {
           const verifierAddress = String(verdict.receipt.verifierAddress || '').trim();
           const workerId = String(verdict.receipt.workerId || '').trim();
@@ -9254,7 +9355,6 @@ ipcMain.handle('wattcoin-export-wallet-backup', async (_, options = {}) => {
 ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
   const defaultWalletName = 'wattminer';
   const passphrase = options && typeof options.passphrase === 'string' ? options.passphrase : '';
-  const allowOverwrite = !!(options && options.allowOverwrite);
   if (!validatePassphrase(passphrase)) {
     return { ok: false, code: 'INVALID_PASSPHRASE', message: 'Passphrase must be at least 8 characters.' };
   }
@@ -9306,13 +9406,19 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
     }
     const walletFilePath = path.join(getWalletDataDir(), 'wtc-wallet.json');
     const walletDir = path.dirname(walletFilePath);
-    if (!allowOverwrite && fs.existsSync(walletFilePath)) {
-      return {
-        ok: false,
-        code: 'WALLET_EXISTS',
-        backupPath,
-        message: `Wallet already exists at ${walletFilePath}. Confirm overwrite in the UI.`,
-      };
+    if (fs.existsSync(walletFilePath)) {
+      const overwriteResult = await dialog.showMessageBox(getFocusedWindow(), {
+        type: 'warning',
+        buttons: ['Cancel Restore', 'Overwrite Wallet'],
+        defaultId: 0,
+        cancelId: 0,
+        title: 'Wallet Already Exists',
+        message: 'A wallet already exists at this location.',
+        detail: `${walletFilePath}\n\nRestoring this backup will replace your current wallet. Make sure you have exported a backup of your current wallet first.`,
+      });
+      if (overwriteResult.response !== 1) {
+        return { ok: false, code: 'CANCELED', message: 'Restore canceled.' };
+      }
     }
     try {
       stopHardwareLoad();

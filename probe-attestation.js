@@ -35,6 +35,7 @@ function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
     ok: !!receipt.ok,
     wallClockMs: Math.max(0, Math.round(toSafeNumber(receipt.wallClockMs))),
     ts: Math.max(0, Math.round(toSafeNumber(receipt.ts))),
+    roundId: Math.max(0, Math.round(toSafeNumber(receipt.roundId))),
     chainIndex: Math.max(0, Math.round(toSafeNumber(receipt.chainIndex))),
     chainHead: receipt.chainHead === null || receipt.chainHead === undefined ? null : String(receipt.chainHead).trim(),
   };
@@ -68,7 +69,7 @@ function parseSignatureHex(signatureHex) {
   };
 }
 
-function verifyProbeReceipt(receipt, { expectedWorkerId = '', requireSuccess = true } = {}) {
+function verifyProbeReceipt(receipt, { expectedWorkerId = '', requireSuccess = true, expectedRoundId } = {}) {
   const normalized = normalizeProbeReceipt(receipt);
   if (!normalized) return { ok: false, reason: 'missing probe receipt' };
   if (!normalized.probeId) return { ok: false, reason: 'missing probeId' };
@@ -83,6 +84,12 @@ function verifyProbeReceipt(receipt, { expectedWorkerId = '', requireSuccess = t
   }
   if (requireSuccess && !normalized.ok) {
     return { ok: false, reason: 'probe receipt is not successful' };
+  }
+  // Round binding: the receipt must belong to the expected round.
+  // This prevents replaying a receipt from a previous round across round boundaries.
+  const expectedRound = Number.isFinite(expectedRoundId) ? Math.floor(expectedRoundId) : -1;
+  if (expectedRound >= 0 && normalized.roundId !== expectedRound) {
+    return { ok: false, reason: `receipt roundId ${normalized.roundId} does not match expected round ${expectedRound}` };
   }
   const sig = parseSignatureHex(normalized.signature);
   if (!sig) return { ok: false, reason: 'missing or invalid receipt signature' };
@@ -110,7 +117,7 @@ function normalizeBlockProbeAttestation(block) {
   };
 }
 
-function validateBlockProbeAttestation(block, { expectedWorkerId = '' } = {}) {
+function validateBlockProbeAttestation(block, { expectedWorkerId = '', expectedRoundId } = {}) {
   const rawVersion = Math.max(0, Math.floor(toSafeNumber(block && block.attestationVersion)));
   const hasLegacySidecar = !!(block && (block.peerProbeVerified || block.probeReceipt));
   if (rawVersion < BLOCK_ATTESTATION_VERSION) {
@@ -135,6 +142,7 @@ function validateBlockProbeAttestation(block, { expectedWorkerId = '' } = {}) {
   const verified = verifyProbeReceipt(attestation.probeReceipt, {
     expectedWorkerId,
     requireSuccess: true,
+    expectedRoundId,
   });
   if (!verified.ok) return verified;
   return {

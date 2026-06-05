@@ -938,7 +938,7 @@ function issuePeerProbe(workerId, allowGpuWorkloads) {
 
 // Receive and verify a worker's probe result (called by coordinator HTTP handler).
 // wallClockMs is the coordinator's own measurement: Date.now() - entry.issuedAt.
-async function submitPeerProbeResult(result, hardwareSpec) {
+async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   if (!result || !result.id) return { ok: false, issues: ['missing probe id'] };
   const entry = peerProbeIssuances.get(result.id);
   if (!entry) return { ok: false, issues: ['unknown or expired probe id'] };
@@ -1065,6 +1065,7 @@ async function submitPeerProbeResult(result, hardwareSpec) {
         ok,
         wallClockMs,
         ts: Date.now(),
+        roundId: Math.max(0, Math.round(Number(currentRoundId) || 0)),
         chainIndex: workerChainEntry.chainIndex,
         chainHead: workerChainEntry.chainHead,
       },

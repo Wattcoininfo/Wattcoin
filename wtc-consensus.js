@@ -467,7 +467,7 @@ class Consensus {
       }
     }
 
-    const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer });
+    const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer, expectedRoundId: block.height });
     if (!attestationCheck.ok) {
       return attestationCheck.reason;
     }

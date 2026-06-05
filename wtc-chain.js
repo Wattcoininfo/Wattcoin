@@ -435,7 +435,7 @@ class Chain {
     if (block.hash !== expectedHash) {
       throw new Error(`append: block hash mismatch at height ${block.height}`);
     }
-    const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer });
+    const attestationCheck = validateBlockProbeAttestation(block, { expectedWorkerId: block.proposer, expectedRoundId: block.height });
     if (!attestationCheck.ok) {
       throw new Error(`append: ${attestationCheck.reason}`);
     }
@@ -462,7 +462,7 @@ class Chain {
       if (b.prevHash !== expectedPrev) return { ok: false, reason: `prevHash mismatch at height ${i}` };
       if (b.hash !== computeBlockHash(b)) return { ok: false, reason: `hash mismatch at height ${i}` };
       if (i > 0) {
-        const attestationCheck = validateBlockProbeAttestation(b, { expectedWorkerId: b.proposer });
+        const attestationCheck = validateBlockProbeAttestation(b, { expectedWorkerId: b.proposer, expectedRoundId: b.height });
         if (!attestationCheck.ok) {
           return { ok: false, reason: `probe attestation invalid at height ${i}: ${attestationCheck.reason}` };
         }
