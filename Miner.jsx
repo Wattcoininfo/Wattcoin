@@ -6784,12 +6784,8 @@ export default function Miner({
                     lastSliderCommitAtMsRef.current = nowMs;
                     setSliderAdjustNonce((n) => n + 1);
                   }}
-                  onBlur={() => {
-                    const nowMs = Date.now();
-                    if (nowMs - lastSliderCommitAtMsRef.current < 100) return;
-                    lastSliderCommitAtMsRef.current = nowMs;
-                    setSliderAdjustNonce((n) => n + 1);
-                  }}
+                  // onBlur intentionally omitted: tab-switch would trigger it and
+                  // cause a redundant slider-stop benchmark after adjusting the slider.
                   style={{ width: '100%', accentColor: '#4ade80', cursor: 'pointer' }}
                 />
                 <div
