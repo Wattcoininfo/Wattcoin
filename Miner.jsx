@@ -3494,7 +3494,7 @@ export default function Miner({
     if (benchmarkState.startupDone || benchmarkState.running) return;
     const timeoutId = setTimeout(() => {
       runBenchmark('startup');
-    }, 1200);
+    }, 4000);
     return () => clearTimeout(timeoutId);
   }, [
     isHardwareOnHold,
