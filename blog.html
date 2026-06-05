@@ -603,6 +603,16 @@
             </p>
           </div>
         </a>
+        <a href="#recover-contributions-after-reinstall" class="post-card">
+          <div class="post-card-num">08</div>
+          <div>
+            <h3>Recovering Contributions After Reinstall</h3>
+            <p>
+              What happens to your mid-round mining progress when you reinstall the app — and how peer-to-peer recovery
+              ensures you never lose unclaimed contributions.
+            </p>
+          </div>
+        </a>
       </div>
 
       <!-- ──── Post 1 ──── -->
@@ -1525,6 +1535,116 @@
           <strong>Key takeaway:</strong> ASICs are first-class citizens on Wattcoin. Their high power draw makes them
           powerful mining machines — but their hashing advantage is irrelevant. Any ASIC, old or new, contributes purely
           through the electricity it consumes. The arms race becomes a race toward cheaper power, not newer silicon.
+        </div>
+
+        <p>
+          <a href="/wattcoin-whitepaper.html"
+            >Read the whitepaper for the complete Proof-of-Energy specification &rarr;</a
+          >
+        </p>
+      </article>
+
+      <!-- ──── Post 8 ──── -->
+      <article class="blog-post" id="recover-contributions-after-reinstall">
+        <a href="#" class="back-link">&larr; Back to all posts</a>
+        <div class="tag-row">
+          <span class="tag">Network</span>
+          <span class="tag">Recovery</span>
+          <span class="tag">Peers</span>
+        </div>
+        <h2>Recovering Contributions After Reinstall</h2>
+        <div class="meta">June 5, 2026 &nbsp;&mdash;&nbsp; 4 min read</div>
+
+        <p>
+          If you delete the Wattcoin app or reinstall your operating system, your local mining data is gone. Your wallet
+          can be recovered from your seed phrase — but what about the mid-round contributions you already made? In early
+          versions of Wattcoin, those contributions lived only in your local round ledger. After reinstall, you had to
+          wait for the next round to start earning again.
+        </p>
+
+        <p>
+          As of v1.0.307, Wattcoin now supports <strong>peer-to-peer contribution recovery</strong>. When you start
+          mining after a reinstall, your app automatically pulls your existing mid-round contributions from your peers.
+          Here is how it works.
+        </p>
+
+        <h3>The Old Approach: Local Only</h3>
+
+        <p>
+          Every mining round, your app broadcasts your contribution to all connected peers. Peers validate and store it
+          in their local round ledgers. This validation is critical to consensus — but until recently, only the round
+          settlement data (rewards) was permanently committed to the chain. Mid-round contributions were stored locally
+          and broadcast peer-to-peer, but there was no mechanism to recover them if your local data was lost.
+        </p>
+
+        <div class="info-callout">
+          <strong>Important:</strong> Once a round settles and rewards are committed to the chain, those rewards are
+          permanent and recoverable during blockchain sync. The recovery mechanism described here only applies to
+          <em>unsettled</em> mid-round contributions.
+        </div>
+
+        <h3>How Peer Recovery Works</h3>
+
+        <p>
+          The recovery process is automatic. Ten seconds after your app connects to the peer network, it queries every
+          connected peer for their current round snapshot:
+        </p>
+
+        <ol class="step-list">
+          <li>
+            <strong>Connect to peers</strong><br />
+            Your app connects to the Wattcoin peer network using your configured seed nodes.
+          </li>
+          <li>
+            <strong>Request round snapshots</strong><br />
+            After a brief stabilisation delay (10 seconds), your app sends a <code>GET /api/v1/round/contribution</code>
+            request to every connected peer.
+          </li>
+          <li>
+            <strong>Merge contributions</strong><br />
+            Each peer responds with their current round ledger — a snapshot of every miner's contribution for the
+            current round. Your app scans the responses for contributions matching your wallet address and merges them
+            into your local round ledger. If multiple peers report different values, the most recent (highest-timestamp)
+            entry wins.
+          </li>
+          <li>
+            <strong>Resume mining</strong><br />
+            Your contribution total is restored. Mining continues from where you left off within the current round.
+          </li>
+        </ol>
+
+        <h3>Why Peer Recovery Matters</h3>
+
+        <p>
+          In a Proof-of-Energy network, every kilowatt-hour of verified energy expenditure earns rewards proportionally.
+          Losing mid-round contributions meant losing the energy you already spent — and the rewards it would have
+          earned at round settlement. For miners who reinstall mid-round, peer recovery closes this gap entirely.
+        </p>
+
+        <p>
+          This mechanism also improves network robustness. Because every peer stores a copy of every miner's
+          contribution for the current round, the network can tolerate individual node failures without losing
+          contribution data. As long as at least one peer remains online, your contributions are recoverable.
+        </p>
+
+        <h3>What Happens If No Peers Are Online?</h3>
+
+        <p>
+          If your app starts and no peers are reachable, mining will not begin. The button shows "No peers" and the app
+          waits until at least one peer connects. This is intentional — without peers, there is no one to validate your
+          contributions, and no round snapshot to recover from. Once a peer comes online, the recovery process runs and
+          mining can start.
+        </p>
+
+        <p>
+          This is also why standalone mining was removed: Wattcoin is a peer-to-peer network, and fair energy accounting
+          requires cross-verification. Every contribution is validated by multiple peers before it counts.
+        </p>
+
+        <div class="info-callout">
+          <strong>Key takeaway:</strong> Peer-to-peer recovery means you never lose mid-round mining progress after a
+          reinstall. Your contributions are stored across the network, not just on your machine. As long as at least one
+          peer is online, your unclaimed work is safe.
         </div>
 
         <p>
