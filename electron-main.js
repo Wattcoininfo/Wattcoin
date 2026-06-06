@@ -5384,7 +5384,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
               // Real ASIC hash board temps typically range 40-85°C.
               if (avgTemp < 30 || avgTemp > 95) {
                 asicFirmwareIssue = true;
-                console.warn(`[HW-Verify] ASIC temperature range suspicious: avg=${avgTemp.toFixed(0)}°C (range ${minTemp.toFixed(0)}-${maxTemp.toFixed(0)}°C) — expected 30-95°C`);
+                console.warn(
+                  `[HW-Verify] ASIC temperature range suspicious: avg=${avgTemp.toFixed(0)}°C (range ${minTemp.toFixed(0)}-${maxTemp.toFixed(0)}°C) — expected 30-95°C`,
+                );
               }
               if (allTemps.length >= 3) {
                 const uniqueTemps = new Set(allTemps.map((t) => Math.round(t)));
@@ -5392,7 +5394,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
                 // All sensors reporting the exact same value suggests a fake responder.
                 if (uniqueTemps.size <= 1) {
                   asicFirmwareIssue = true;
-                  console.warn(`[HW-Verify] ASIC temperature consistency suspicious: all ${allTemps.length} sensors report ~${Math.round(allTemps[0])}°C — expected variation across chips`);
+                  console.warn(
+                    `[HW-Verify] ASIC temperature consistency suspicious: all ${allTemps.length} sensors report ~${Math.round(allTemps[0])}°C — expected variation across chips`,
+                  );
                 }
               }
             } else {
@@ -5495,7 +5499,9 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         ...(asicModelMismatch ? ['asic model mismatch — declared model does not match hash board'] : []),
         ...(asicHashrateLow ? ['asic hashrate too low — hash boards underperforming or misidentified'] : []),
         ...(asicFirmwareIssue
-          ? ['asic firmware attestation or temperature consistency check failed — hash board identity or thermal behavior does not match expected values']
+          ? [
+              'asic firmware attestation or temperature consistency check failed — hash board identity or thermal behavior does not match expected values',
+            ]
           : []),
         ...(minerIsOutlier ? ['network outlier — power/cpu ratio >3σ from mean'] : []),
       ];
@@ -6341,32 +6347,35 @@ ipcMain.handle('wattcoin-sale-compute-price', async (_event, { wtcAmount, electr
 });
 
 // Place an order (buyer is the logged-in WTC address)
-ipcMain.handle('wattcoin-sale-place-order', async (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
-  // Basic input sanitisation
-  const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
-  const amount = Number(wtcAmount);
-  const usdc = Number(usdcRequired);
+ipcMain.handle(
+  'wattcoin-sale-place-order',
+  async (_event, { wtcAddress, wtcAmount, usdcRequired, buyerEthAddress }) => {
+    // Basic input sanitisation
+    const addr = typeof wtcAddress === 'string' ? wtcAddress.trim() : '';
+    const amount = Number(wtcAmount);
+    const usdc = Number(usdcRequired);
 
-  if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
-    return { ok: false, error: 'Invalid WTC address' };
-  }
-  const confirmResult = await dialog.showMessageBox(getFocusedWindow(), {
-    type: 'warning',
-    buttons: ['Cancel', 'Confirm Purchase'],
-    defaultId: 0,
-    cancelId: 0,
-    title: 'Confirm Sale Order',
-    message: `Place sale order for ${amount.toLocaleString()} WTC at ${usdc.toLocaleString()} USDC?`,
-    detail: `Buyer address: ${addr}`,
-  });
-  if (confirmResult.response !== 1) return { ok: false, code: 'CANCELED', message: 'Purchase order canceled.' };
-  return saleQueue.placeSaleOrder({
-    wtcAddress: addr,
-    wtcAmount: amount,
-    usdcRequired: usdc,
-    buyerEthAddress: typeof buyerEthAddress === 'string' ? buyerEthAddress.trim() : null,
-  });
-});
+    if (!addr || !addr.startsWith('wtc1q') || addr.length !== 43) {
+      return { ok: false, error: 'Invalid WTC address' };
+    }
+    const confirmResult = await dialog.showMessageBox(getFocusedWindow(), {
+      type: 'warning',
+      buttons: ['Cancel', 'Confirm Purchase'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Confirm Sale Order',
+      message: `Place sale order for ${amount.toLocaleString()} WTC at ${usdc.toLocaleString()} USDC?`,
+      detail: `Buyer address: ${addr}`,
+    });
+    if (confirmResult.response !== 1) return { ok: false, code: 'CANCELED', message: 'Purchase order canceled.' };
+    return saleQueue.placeSaleOrder({
+      wtcAddress: addr,
+      wtcAmount: amount,
+      usdcRequired: usdc,
+      buyerEthAddress: typeof buyerEthAddress === 'string' ? buyerEthAddress.trim() : null,
+    });
+  },
+);
 
 // Get a specific order status
 ipcMain.handle('wattcoin-sale-get-order', (_event, orderId) => {

@@ -89,7 +89,10 @@ function verifyProbeReceipt(receipt, { expectedWorkerId = '', requireSuccess = t
   // This prevents replaying a receipt from a previous round across round boundaries.
   const expectedRound = Number.isFinite(expectedRoundId) ? Math.floor(expectedRoundId) : -1;
   if (expectedRound >= 0 && normalized.roundId !== expectedRound) {
-    return { ok: false, reason: `receipt roundId ${normalized.roundId} does not match expected round ${expectedRound}` };
+    return {
+      ok: false,
+      reason: `receipt roundId ${normalized.roundId} does not match expected round ${expectedRound}`,
+    };
   }
   const sig = parseSignatureHex(normalized.signature);
   if (!sig) return { ok: false, reason: 'missing or invalid receipt signature' };
