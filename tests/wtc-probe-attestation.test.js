@@ -133,5 +133,5 @@ async function run() {
 
 run().catch((error) => {
   console.error(error && error.stack ? error.stack : error);
-  process.exit(1);
+  process.exitCode = 1;
 });
