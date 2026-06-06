@@ -683,6 +683,11 @@ async function main() {
         path.join(root, 'wallet.html'),
         path.join(root, 'blog.html'),
       ];
+      const deployBlogDir = path.join(root, 'blog');
+      if (fs.existsSync(deployBlogDir)) {
+        const posts = fs.readdirSync(deployBlogDir).filter(f => f.endsWith('.html')).map(f => path.join(deployBlogDir, f));
+        syncFiles.push(...posts);
+      }
       for (const filePath of syncFiles) {
         if (!fs.existsSync(filePath)) continue;
         const content = fs.readFileSync(filePath, 'utf8');
@@ -720,12 +725,18 @@ async function main() {
   const walletPath = path.join(root, 'wallet.html');
   const latestYmlPath = path.join(root, 'Releases', 'latest.yml');
   const blogPath = path.join(root, 'blog.html');
+  const blogDir = path.join(root, 'blog');
+  let blogPostPaths = [];
+  if (fs.existsSync(blogDir)) {
+    blogPostPaths = fs.readdirSync(blogDir).filter(f => f.endsWith('.html')).map(f => path.join(blogDir, f));
+  }
   mutableReleaseBackups = snapshotFileContents([
     packageJsonPath,
     whitepaperPath,
     indexHtmlPath,
     walletPath,
     blogPath,
+    ...blogPostPaths,
     latestYmlPath,
     historyPath,
     versionLogPath,
@@ -771,6 +782,12 @@ async function main() {
       bl = syncWhitepaperVersionLabels(bl, nextVersion, monthName, year);
       fs.writeFileSync(blogPath, bl, 'utf8');
       console.log(`blog.html updated to ${nextVersion} — ${monthName} ${year}`);
+    }
+    for (const postPath of blogPostPaths) {
+      let content = fs.readFileSync(postPath, 'utf8');
+      content = syncWhitepaperVersionLabels(content, nextVersion, monthName, year);
+      fs.writeFileSync(postPath, content, 'utf8');
+      console.log(`${path.basename(postPath)} updated to ${nextVersion} — ${monthName} ${year}`);
     }
   }
 
