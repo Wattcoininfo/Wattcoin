@@ -641,6 +641,10 @@ function autoConfigureDevSigning(root) {
 
 async function main() {
   const root = path.resolve(__dirname, '..');
+
+  // Regenerate sitemap before any deploy so lastmod dates are always current
+  require('./generate-sitemap.js');
+
   let hardeningBackups = new Map();
   let mutableReleaseBackups = new Map();
   let buildSucceeded = false;

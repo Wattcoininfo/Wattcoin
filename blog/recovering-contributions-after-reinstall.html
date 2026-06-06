@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wattcoin Blog — Mining Guides, Protocol Updates & Tutorials</title>
-    <meta name="description" content="Wattcoin mining guides, protocol updates, and hardware tutorials for CPU, GPU, and ASIC mining. Proof-of-Energy explained." />
-    <link rel="canonical" href="https://wattcoin.ee/blog.html" />
-    <meta property="og:title" content="Wattcoin Blog — Mining Guides & Protocol Updates" />
-    <meta property="og:description" content="Deep dives into Proof-of-Energy consensus, comparisons with Bitcoin, GPU/CPU/server/ASIC mining guides, and the Vortex hydro turbine project." />
-    <meta property="og:url" content="https://wattcoin.ee/blog.html" />
-    <meta property="og:type" content="website" />
+    <title>Recovering Contributions After Reinstall | Wattcoin Blog</title>
+    <meta name="description" content="How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app." />
+    <link rel="canonical" href="https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html" />
+    <meta property="og:title" content="Recovering Contributions After Reinstall" />
+    <meta property="og:description" content="How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app." />
+    <meta property="og:url" content="https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html" />
+    <meta property="og:type" content="article" />
     <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <meta property="og:image:width" content="1024" />
     <meta property="og:image:height" content="1024" />
@@ -18,8 +18,8 @@
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Wattcoin Foundation" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Wattcoin Blog — Mining Guides & Protocol Updates" />
-    <meta name="twitter:description" content="Proof-of-Energy consensus, crypto mining guides, Vortex hydro turbine updates — all from the Wattcoin team." />
+    <meta name="twitter:title" content="Recovering Contributions After Reinstall | Wattcoin Blog" />
+    <meta name="twitter:description" content="How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app." />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
@@ -27,92 +27,53 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-    <script type="application/ld+json">
-    {
+        <script type="application/ld+json">
+{
       "@context": "https://schema.org",
       "@graph": [
         {
-          "@type": "Blog",
-          "@id": "https://wattcoin.ee/blog.html#blog",
-          "name": "Wattcoin Blog",
-          "url": "https://wattcoin.ee/blog.html",
-          "description": "Deep dives into Proof-of-Energy consensus, energy-backed cryptocurrency, mining guides, and the Vortex hydro turbine project.",
-          "publisher": { "@type": "Organization", "name": "Wattcoin", "url": "https://wattcoin.ee" },
-          "blogPost": [
-        {
-          "@type": "BlogPosting",
-          "headline": "What Is Proof-of-Energy Consensus?",
-          "url": "https://wattcoin.ee/blog/proof-of-energy-consensus.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "What Is the Vortex Initiative?",
-          "url": "https://wattcoin.ee/blog/vortex-initiative.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "The 60 kW Vortex Gravity Hydro Turbine in Estonia — how real physical infrastructure backs the Wattcoin network with verifiable on-chain electricity revenue."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "Energy-Backed Crypto vs Bitcoin — A Fair Comparison",
-          "url": "https://wattcoin.ee/blog/energy-backed-crypto-vs-bitcoin.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "How Wattcoin Proof-of-Energy compares to Bitcoin Proof-of-Work on energy efficiency, hardware fairness, value floor, and e-waste."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "How to Mine Cryptocurrency with CPU — Wattcoin Guide",
-          "url": "https://wattcoin.ee/blog/mine-cryptocurrency-with-cpu.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "Step-by-step guide to mining WTC with any CPU. No ASICs, no pools, no luck variance — just fair energy-based mining on Wattcoin."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "How to Mine Cryptocurrency with GPU — Wattcoin Guide",
-          "url": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "Enterprise Mining — Server Hardware on Wattcoin",
-          "url": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "ASIC Mining and Wattcoin — How ASICs Work on PoE",
-          "url": "https://wattcoin.ee/blog/asic-mining-wattcoin.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "How ASICs work with Proof-of-Energy — model-specific power lookup, no hash-rate obsolescence, and why the ASIC era is over."
-        },
-        {
-          "@type": "BlogPosting",
+          "@type": "Article",
+          "@id": "https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html#article",
           "headline": "Recovering Contributions After Reinstall",
           "url": "https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html",
           "datePublished": "2026-06-05",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app."
+          "author": {
+            "@type": "Organization",
+            "name": "Wattcoin Foundation"
+          },
+          "publisher": {
+            "@id": "https://wattcoin.ee/#organization"
+          },
+          "description": "How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app.",
+          "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://wattcoin.ee/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Blog",
+              "item": "https://wattcoin.ee/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Recovering Contributions After Reinstall",
+              "item": "https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html"
+            }
+          ]
         }
-      ]
-    },
-    {
-      "@type": "BreadcrumbList",
-      "@id": "https://wattcoin.ee/blog.html#breadcrumb",
-      "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://wattcoin.ee/" },
-        { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://wattcoin.ee/blog.html" }
-      ]
-    }
       ]
     }
     </script>
@@ -160,6 +121,7 @@
         background: rgba(6, 14, 6, 0.92);
         backdrop-filter: blur(10px);
         border-bottom: 1px solid #1a2a1a;
+        
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -305,7 +267,9 @@
 
       .blog-post {
         padding: 60px 0;
+        
       }
+      
       .blog-post h2 {
         font-family: 'Playfair Display', serif;
         font-size: clamp(24px, 3.5vw, 32px);
@@ -523,81 +487,120 @@
         <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
       </ul>
     </nav>
-
-    <div class="blog-header">
+    <div style="padding-top: 100px">
       <div class="container">
-        <div class="hero-pill-row">
-          <div class="hero-pill">VERSION 1.0.308 — JUNE 2026</div>
+        <article class="blog-post" id="recover-contributions-after-reinstall">
+        <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
+        <div class="tag-row">
+          <span class="tag">Network</span>
+          <span class="tag">Recovery</span>
+          <span class="tag">Peers</span>
         </div>
-        <h1>Wattcoin <span>Blog</span></h1>
+        <h1>Recovering Contributions After Reinstall</h1>
+        <div class="meta">June 5, 2026 &nbsp;&mdash;&nbsp; 4 min read</div>
+
         <p>
-          Deep dives into Proof-of-Energy consensus, energy-backed cryptocurrency, CPU/GPU/server/ASIC mining guides,
-          and the Vortex hydro turbine project.
+          If you delete the Wattcoin app or reinstall your operating system, your local mining data is gone. Your wallet
+          can be recovered from your seed phrase — but what about the mid-round contributions you already made? Those
+          contributions were always broadcast to your peers and stored in their round ledgers, but there was no way to
+          retrieve them after a reinstall. You had to wait for the next round to start earning again.
         </p>
+
+        <p>
+          A recent patch on top of v1.0.307 adds <strong>peer-to-peer contribution recovery</strong>. When you start
+          mining after a reinstall, your app automatically pulls your existing mid-round contributions from your peers.
+          Here is how it works.
+        </p>
+
+        <h3>The Gap: Stored but Not Retrievable</h3>
+
+        <p>
+          Even before this patch, every mining round your app broadcast your contribution to all connected peers. Peers
+          validated and stored it in their local round ledgers. This validation is critical to consensus — but the
+          mechanism was one-way. Your contributions safely existed on every peer's machine, but your app could not ask
+          for them back after a local data loss. The round settlement data (rewards) was permanently committed to the
+          chain, but mid-round progress was stranded on other nodes unless you never lost your local copy.
+        </p>
+
+        <div class="info-callout">
+          <strong>Important:</strong> Once a round settles and rewards are committed to the chain, those rewards are
+          permanent and recoverable during blockchain sync. The recovery mechanism described here only applies to
+          <em>unsettled</em> mid-round contributions.
+        </div>
+
+        <h3>How Peer Recovery Works</h3>
+
+        <p>
+          The recovery process is automatic. Ten seconds after your app connects to the peer network, it queries every
+          connected peer for their current round snapshot:
+        </p>
+
+        <ol class="step-list">
+          <li>
+            <strong>Connect to peers</strong><br />
+            Your app connects to the Wattcoin peer network using your configured seed nodes.
+          </li>
+          <li>
+            <strong>Request round snapshots</strong><br />
+            After a brief stabilisation delay (10 seconds), your app sends a <code>GET /api/v1/round/contribution</code>
+            request to every connected peer.
+          </li>
+          <li>
+            <strong>Merge contributions</strong><br />
+            Each peer responds with their current round ledger — a snapshot of every miner's contribution for the
+            current round. Your app scans the responses for contributions matching your wallet address and merges them
+            into your local round ledger. If multiple peers report different values, the most recent (highest-timestamp)
+            entry wins.
+          </li>
+          <li>
+            <strong>Resume mining</strong><br />
+            Your contribution total is restored. Mining continues from where you left off within the current round.
+          </li>
+        </ol>
+
+        <h3>Why Peer Recovery Matters</h3>
+
+        <p>
+          In a Proof-of-Energy network, every kilowatt-hour of verified energy expenditure earns rewards proportionally.
+          Losing mid-round contributions meant losing the energy you already spent — and the rewards it would have
+          earned at round settlement. For miners who reinstall mid-round, peer recovery closes this gap entirely.
+        </p>
+
+        <p>
+          This mechanism also improves network robustness. Because every peer stores a copy of every miner's
+          contribution for the current round, the network can tolerate individual node failures without losing
+          contribution data. As long as at least one peer remains online, your contributions are recoverable.
+        </p>
+
+        <h3>What Happens If No Peers Are Online?</h3>
+
+        <p>
+          If your app starts and no peers are reachable, mining will not begin. The button shows "No peers" and the app
+          waits until at least one peer connects. This is intentional — without peers, there is no one to validate your
+          contributions, and no round snapshot to recover from. Once a peer comes online, the recovery process runs and
+          mining can start.
+        </p>
+
+        <p>
+          This is also why standalone mining was removed: Wattcoin is a peer-to-peer network, and fair energy accounting
+          requires cross-verification. Every contribution is validated by multiple peers before it counts.
+        </p>
+
+        <div class="info-callout">
+          <strong>Key takeaway:</strong> Peer-to-peer recovery means you never lose mid-round mining progress after a
+          reinstall. Your contributions are stored across the network, not just on your machine. As long as at least one
+          peer is online, your unclaimed work is safe.
+        </div>
+
+        <p>
+          <a href="/wattcoin-whitepaper.html"
+            >Read the whitepaper for the complete Proof-of-Energy specification &rarr;</a
+          >
+        </p>
+        <a href="/blog.html" class="back-link" style="display:inline-block;margin-top:32px">&larr; Back to all posts</a>
+</article>
       </div>
     </div>
-
-    <div class="container">
-      <div class="post-list">
-        <a href="/blog/proof-of-energy-consensus.html" class="post-card">
-          <div class="post-card-num">01</div>
-          <div>
-            <h3>What Is Proof-of-Energy Consensus?</h3>
-            <p>A complete guide to Proof-of-Energy consensus</p>
-          </div>
-        </a>
-        <a href="/blog/vortex-initiative.html" class="post-card">
-          <div class="post-card-num">02</div>
-          <div>
-            <h3>What Is the Vortex Initiative?</h3>
-            <p>The 60 kW Vortex Gravity Hydro Turbine in Estonia</p>
-          </div>
-        </a>
-        <a href="/blog/energy-backed-crypto-vs-bitcoin.html" class="post-card">
-          <div class="post-card-num">03</div>
-          <div>
-            <h3>Energy-Backed Crypto vs Bitcoin — A Fair Comparison</h3>
-            <p>How Wattcoin Proof-of-Energy compares to Bitcoin Proof-of-Work on energy efficiency, hardware fairness, value floor, and e-waste.</p>
-          </div>
-        </a>
-        <a href="/blog/mine-cryptocurrency-with-cpu.html" class="post-card">
-          <div class="post-card-num">04</div>
-          <div>
-            <h3>How to Mine Cryptocurrency with CPU — Wattcoin Guide</h3>
-            <p>Step-by-step guide to mining WTC with any CPU. No ASICs, no pools, no luck variance</p>
-          </div>
-        </a>
-        <a href="/blog/mine-cryptocurrency-with-gpu.html" class="post-card">
-          <div class="post-card-num">05</div>
-          <div>
-            <h3>How to Mine Cryptocurrency with GPU — Wattcoin Guide</h3>
-            <p>Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining.</p>
-          </div>
-        </a>
-        <a href="/blog/enterprise-mining-server-hardware.html" class="post-card">
-          <div class="post-card-num">06</div>
-          <div>
-            <h3>Enterprise Mining — Server Hardware on Wattcoin</h3>
-            <p>Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.</p>
-          </div>
-        </a>
-        <a href="/blog/asic-mining-wattcoin.html" class="post-card">
-          <div class="post-card-num">07</div>
-          <div>
-            <h3>ASIC Mining and Wattcoin — How ASICs Work on PoE</h3>
-            <p>How ASICs work with Proof-of-Energy</p>
-          </div>
-        </a>
-        <a href="/blog/recovering-contributions-after-reinstall.html" class="post-card">
-          <div class="post-card-num">08</div>
-          <div>
-            <h3>Recovering Contributions After Reinstall</h3>
-            <p>How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app.</p>
-          </div>
-        </a>
-      </div>
-    </div>
-
     <footer>
       WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.308 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
@@ -630,5 +633,8 @@
           .catch(function () {});
       })();
     </script>
+  </body>
+</html>
+
   </body>
 </html>

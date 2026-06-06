@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wattcoin Blog — Mining Guides, Protocol Updates & Tutorials</title>
-    <meta name="description" content="Wattcoin mining guides, protocol updates, and hardware tutorials for CPU, GPU, and ASIC mining. Proof-of-Energy explained." />
-    <link rel="canonical" href="https://wattcoin.ee/blog.html" />
-    <meta property="og:title" content="Wattcoin Blog — Mining Guides & Protocol Updates" />
-    <meta property="og:description" content="Deep dives into Proof-of-Energy consensus, comparisons with Bitcoin, GPU/CPU/server/ASIC mining guides, and the Vortex hydro turbine project." />
-    <meta property="og:url" content="https://wattcoin.ee/blog.html" />
-    <meta property="og:type" content="website" />
+    <title>What Is Proof-of-Energy Consensus? | Wattcoin Blog</title>
+    <meta name="description" content="A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards." />
+    <link rel="canonical" href="https://wattcoin.ee/blog/proof-of-energy-consensus.html" />
+    <meta property="og:title" content="What Is Proof-of-Energy Consensus?" />
+    <meta property="og:description" content="A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards." />
+    <meta property="og:url" content="https://wattcoin.ee/blog/proof-of-energy-consensus.html" />
+    <meta property="og:type" content="article" />
     <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <meta property="og:image:width" content="1024" />
     <meta property="og:image:height" content="1024" />
@@ -18,8 +18,8 @@
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Wattcoin Foundation" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Wattcoin Blog — Mining Guides & Protocol Updates" />
-    <meta name="twitter:description" content="Proof-of-Energy consensus, crypto mining guides, Vortex hydro turbine updates — all from the Wattcoin team." />
+    <meta name="twitter:title" content="What Is Proof-of-Energy Consensus? | Wattcoin Blog" />
+    <meta name="twitter:description" content="A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards." />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
@@ -27,92 +27,53 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="stylesheet" href="/assets/fonts/fonts.css" />
-    <script type="application/ld+json">
-    {
+        <script type="application/ld+json">
+{
       "@context": "https://schema.org",
       "@graph": [
         {
-          "@type": "Blog",
-          "@id": "https://wattcoin.ee/blog.html#blog",
-          "name": "Wattcoin Blog",
-          "url": "https://wattcoin.ee/blog.html",
-          "description": "Deep dives into Proof-of-Energy consensus, energy-backed cryptocurrency, mining guides, and the Vortex hydro turbine project.",
-          "publisher": { "@type": "Organization", "name": "Wattcoin", "url": "https://wattcoin.ee" },
-          "blogPost": [
-        {
-          "@type": "BlogPosting",
+          "@type": "Article",
+          "@id": "https://wattcoin.ee/blog/proof-of-energy-consensus.html#article",
           "headline": "What Is Proof-of-Energy Consensus?",
           "url": "https://wattcoin.ee/blog/proof-of-energy-consensus.html",
           "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
+          "author": {
+            "@type": "Organization",
+            "name": "Wattcoin Foundation"
+          },
+          "publisher": {
+            "@id": "https://wattcoin.ee/#organization"
+          },
+          "description": "A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards.",
+          "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://wattcoin.ee/blog/proof-of-energy-consensus.html"
+          }
         },
         {
-          "@type": "BlogPosting",
-          "headline": "What Is the Vortex Initiative?",
-          "url": "https://wattcoin.ee/blog/vortex-initiative.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "The 60 kW Vortex Gravity Hydro Turbine in Estonia — how real physical infrastructure backs the Wattcoin network with verifiable on-chain electricity revenue."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "Energy-Backed Crypto vs Bitcoin — A Fair Comparison",
-          "url": "https://wattcoin.ee/blog/energy-backed-crypto-vs-bitcoin.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "How Wattcoin Proof-of-Energy compares to Bitcoin Proof-of-Work on energy efficiency, hardware fairness, value floor, and e-waste."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "How to Mine Cryptocurrency with CPU — Wattcoin Guide",
-          "url": "https://wattcoin.ee/blog/mine-cryptocurrency-with-cpu.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "Step-by-step guide to mining WTC with any CPU. No ASICs, no pools, no luck variance — just fair energy-based mining on Wattcoin."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "How to Mine Cryptocurrency with GPU — Wattcoin Guide",
-          "url": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "Enterprise Mining — Server Hardware on Wattcoin",
-          "url": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "ASIC Mining and Wattcoin — How ASICs Work on PoE",
-          "url": "https://wattcoin.ee/blog/asic-mining-wattcoin.html",
-          "datePublished": "2026-05-31",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "How ASICs work with Proof-of-Energy — model-specific power lookup, no hash-rate obsolescence, and why the ASIC era is over."
-        },
-        {
-          "@type": "BlogPosting",
-          "headline": "Recovering Contributions After Reinstall",
-          "url": "https://wattcoin.ee/blog/recovering-contributions-after-reinstall.html",
-          "datePublished": "2026-06-05",
-          "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
-          "description": "How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app."
+          "@type": "BreadcrumbList",
+          "@id": "https://wattcoin.ee/blog/proof-of-energy-consensus.html#breadcrumb",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://wattcoin.ee/"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Blog",
+              "item": "https://wattcoin.ee/blog.html"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "What Is Proof-of-Energy Consensus?",
+              "item": "https://wattcoin.ee/blog/proof-of-energy-consensus.html"
+            }
+          ]
         }
-      ]
-    },
-    {
-      "@type": "BreadcrumbList",
-      "@id": "https://wattcoin.ee/blog.html#breadcrumb",
-      "itemListElement": [
-        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://wattcoin.ee/" },
-        { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://wattcoin.ee/blog.html" }
-      ]
-    }
       ]
     }
     </script>
@@ -160,6 +121,7 @@
         background: rgba(6, 14, 6, 0.92);
         backdrop-filter: blur(10px);
         border-bottom: 1px solid #1a2a1a;
+        
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -305,7 +267,9 @@
 
       .blog-post {
         padding: 60px 0;
+        
       }
+      
       .blog-post h2 {
         font-family: 'Playfair Display', serif;
         font-size: clamp(24px, 3.5vw, 32px);
@@ -523,81 +487,122 @@
         <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
       </ul>
     </nav>
-
-    <div class="blog-header">
+    <div style="padding-top: 100px">
       <div class="container">
-        <div class="hero-pill-row">
-          <div class="hero-pill">VERSION 1.0.308 — JUNE 2026</div>
+        <article class="blog-post" id="what-is-proof-of-energy-consensus">
+        <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
+        <div class="tag-row">
+          <span class="tag">Consensus</span>
+          <span class="tag">Proof-of-Energy</span>
+          <span class="tag">Technology</span>
         </div>
-        <h1>Wattcoin <span>Blog</span></h1>
+        <h1>What Is Proof-of-Energy Consensus?</h1>
+        <div class="meta">May 31, 2026 &nbsp;&mdash;&nbsp; 6 min read</div>
+
         <p>
-          Deep dives into Proof-of-Energy consensus, energy-backed cryptocurrency, CPU/GPU/server/ASIC mining guides,
-          and the Vortex hydro turbine project.
+          Bitcoin proved that consensus can emerge from energy expenditure. But it chose a different kind of energy —
+          useless, repetitive hash computation that consumes electricity without producing anything of intrinsic value.
+          <strong>Proof-of-Energy (PoE)</strong> corrects this by tying consensus directly to
+          <strong>verifiable electrical energy consumption</strong>, measured in kilowatt-hours rather than abstract
+          hash counts.
         </p>
+
+        <h3>How Proof-of-Energy Works</h3>
+
+        <p>
+          Instead of racing to solve a hash puzzle, every miner runs benchmark-verified computational tasks that
+          exercise specific hardware components — <strong>CPU integer hashing</strong>,
+          <strong>GPU compute shaders</strong>, and <strong>memory stride walks</strong>. The protocol estimates the
+          electrical energy consumed using each hardware component's known power draw and the miner's configured
+          duty-cycle load:
+        </p>
+
+        <div class="viz-box">
+          <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
+            <div>Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</div>
+            <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
+              // Every miner, every hardware type — same formula
+            </div>
+          </div>
+        </div>
+
+        <p>
+          The critical insight: <strong>hardware determines speed, not cost</strong>. A CPU miner and a GPU miner both
+          spend approximately 20 kWh to earn one WTC in Tier 1. The GPU completes the work faster, but the energy bill
+          is identical. This eliminates the ASIC arms race entirely.
+        </p>
+
+        <h3>The Tier Ratchet</h3>
+
+        <p>
+          Wattcoin has 21 mining tiers of 1,000,000 coins each. The energy required to mine one coin
+          <strong>doubles every tier</strong>:
+        </p>
+
+        <div class="viz-box">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px">
+            <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 6px; padding: 10px">
+              <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a">Tier 1</div>
+              <div style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #4ade80">
+                20 kWh
+              </div>
+            </div>
+            <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 6px; padding: 10px">
+              <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a">Tier 2</div>
+              <div style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #4ade80">
+                40 kWh
+              </div>
+            </div>
+            <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 6px; padding: 10px">
+              <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a">Tier 3</div>
+              <div style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #4ade80">
+                80 kWh
+              </div>
+            </div>
+            <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 6px; padding: 10px">
+              <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a">Tier 4</div>
+              <div style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #4ade80">
+                160 kWh
+              </div>
+            </div>
+            <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 6px; padding: 10px">
+              <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a">Tier 5</div>
+              <div style="font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: #4ade80">
+                320 kWh
+              </div>
+            </div>
+          </div>
+          <div class="caption">Energy required per coin doubles with each tier advance</div>
+        </div>
+
+        <p>
+          When the network advances from Tier N to Tier N+1, the mining cost floor for new coins doubles. Since no
+          rational miner sells below their cost, the effective market floor for <strong>all WTC</strong> — including
+          coins mined in earlier tiers — is pulled upward by every tier advance.
+        </p>
+
+        <h3>Proportional Block Rewards</h3>
+
+        <p>
+          Unlike Bitcoin where one miner wins the entire block reward, Wattcoin splits every block's reward
+          <strong>proportionally</strong> by verified energy contribution. Every miner gets paid every block. No luck,
+          no lottery, no mining pools.
+        </p>
+
+        <div class="info-callout">
+          <strong>Key takeaway:</strong> Proof-of-Energy replaces the hash arms race with a level playing field.
+          Hardware speed determines how fast you mine; energy cost determines what you pay. Every miner, regardless of
+          hardware, pays the same rate per coin.
+        </div>
+
+        <p>
+          <a href="/wattcoin-whitepaper.html">Read the full Wattcoin whitepaper &rarr;</a> for the complete technical
+          specification, including tokenomics, attack vectors, and verification algorithms.
+        </p>
+        <a href="/blog.html" class="back-link" style="display:inline-block;margin-top:32px">&larr; Back to all posts</a>
+</article>
       </div>
     </div>
-
-    <div class="container">
-      <div class="post-list">
-        <a href="/blog/proof-of-energy-consensus.html" class="post-card">
-          <div class="post-card-num">01</div>
-          <div>
-            <h3>What Is Proof-of-Energy Consensus?</h3>
-            <p>A complete guide to Proof-of-Energy consensus</p>
-          </div>
-        </a>
-        <a href="/blog/vortex-initiative.html" class="post-card">
-          <div class="post-card-num">02</div>
-          <div>
-            <h3>What Is the Vortex Initiative?</h3>
-            <p>The 60 kW Vortex Gravity Hydro Turbine in Estonia</p>
-          </div>
-        </a>
-        <a href="/blog/energy-backed-crypto-vs-bitcoin.html" class="post-card">
-          <div class="post-card-num">03</div>
-          <div>
-            <h3>Energy-Backed Crypto vs Bitcoin — A Fair Comparison</h3>
-            <p>How Wattcoin Proof-of-Energy compares to Bitcoin Proof-of-Work on energy efficiency, hardware fairness, value floor, and e-waste.</p>
-          </div>
-        </a>
-        <a href="/blog/mine-cryptocurrency-with-cpu.html" class="post-card">
-          <div class="post-card-num">04</div>
-          <div>
-            <h3>How to Mine Cryptocurrency with CPU — Wattcoin Guide</h3>
-            <p>Step-by-step guide to mining WTC with any CPU. No ASICs, no pools, no luck variance</p>
-          </div>
-        </a>
-        <a href="/blog/mine-cryptocurrency-with-gpu.html" class="post-card">
-          <div class="post-card-num">05</div>
-          <div>
-            <h3>How to Mine Cryptocurrency with GPU — Wattcoin Guide</h3>
-            <p>Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining.</p>
-          </div>
-        </a>
-        <a href="/blog/enterprise-mining-server-hardware.html" class="post-card">
-          <div class="post-card-num">06</div>
-          <div>
-            <h3>Enterprise Mining — Server Hardware on Wattcoin</h3>
-            <p>Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.</p>
-          </div>
-        </a>
-        <a href="/blog/asic-mining-wattcoin.html" class="post-card">
-          <div class="post-card-num">07</div>
-          <div>
-            <h3>ASIC Mining and Wattcoin — How ASICs Work on PoE</h3>
-            <p>How ASICs work with Proof-of-Energy</p>
-          </div>
-        </a>
-        <a href="/blog/recovering-contributions-after-reinstall.html" class="post-card">
-          <div class="post-card-num">08</div>
-          <div>
-            <h3>Recovering Contributions After Reinstall</h3>
-            <p>How peer-to-peer contribution recovery ensures you never lose mid-round mining progress after reinstalling the Wattcoin Miner app.</p>
-          </div>
-        </a>
-      </div>
-    </div>
-
     <footer>
       WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.308 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
@@ -630,5 +635,8 @@
           .catch(function () {});
       })();
     </script>
+  </body>
+</html>
+
   </body>
 </html>

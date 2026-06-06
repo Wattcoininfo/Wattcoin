@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';"
     />
     <title>Wattcoin Wallet — Buy, Stake & Manage WTC</title>
     <meta
@@ -39,20 +39,33 @@
       content="Create a WTC wallet in your browser. Buy with USDC, stake for rewards, manage NFTs. Private key never leaves your device."
     />
     <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Wattcoin Wallet",
-        "url": "https://wattcoin.ee/wallet.html",
-        "description": "Wattcoin web wallet — check balances, stake WTC, manage Vortex NFTs, and purchase WTC via USDC.",
-        "applicationCategory": "CryptocurrencyWallet",
-        "operatingSystem": "All",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "@id": "https://wattcoin.ee/wallet.html#webapp",
+          "name": "Wattcoin Wallet",
+          "url": "https://wattcoin.ee/wallet.html",
+          "description": "Wattcoin web wallet — check balances, stake WTC, manage Vortex NFTs, and purchase WTC via USDC.",
+          "applicationCategory": "CryptocurrencyWallet",
+          "operatingSystem": "All",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://wattcoin.ee/wallet.html#breadcrumb",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://wattcoin.ee/" },
+            { "@type": "ListItem", "position": 2, "name": "Wallet", "item": "https://wattcoin.ee/wallet.html" }
+          ]
         }
-      }
+      ]
+    }
     </script>
     <script
       src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.6.1/elliptic.min.js"
@@ -61,12 +74,7 @@
     ></script>
     <link rel="icon" type="image/x-icon" href="assets/icons/icon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/icon-32.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
     <style>
       *,
       *::before,

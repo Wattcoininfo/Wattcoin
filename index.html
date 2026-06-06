@@ -41,37 +41,35 @@
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/icon-256.png" />
     <link rel="manifest" href="/site.webmanifest" />
     <link rel="alternate" type="application/rss+xml" title="Wattcoin Updates" href="/updates.xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://wattcoin.ee/#organization",
+            "name": "Wattcoin",
+            "url": "https://wattcoin.ee",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://wattcoin.ee/assets/new_icon.png",
+              "width": 1024,
+              "height": 1024
+            },
+            "sameAs": [
+              "https://x.com/WattcoinInfo",
+              "https://t.me/+VfDsBLxrAGswNGM0",
+              "https://github.com/Wattcoininfo/Wattcoin"
+            ]
+          },
           {
             "@type": "WebSite",
             "@id": "https://wattcoin.ee/#website",
             "name": "Wattcoin",
             "url": "https://wattcoin.ee/",
             "description": "Proof-of-Energy cryptocurrency where every coin has a verifiable energy cost. Mine with any hardware — CPU, GPU, RAM, or server.",
-            "publisher": {
-              "@type": "Organization",
-              "name": "Wattcoin",
-              "url": "https://wattcoin.ee",
-              "sameAs": [
-                "https://x.com/WattcoinInfo",
-                "https://t.me/+VfDsBLxrAGswNGM0",
-                "https://github.com/Wattcoininfo/Wattcoin"
-              ]
-            }
+            "publisher": { "@id": "https://wattcoin.ee/#organization" }
           },
           {
             "@type": "SoftwareApplication",

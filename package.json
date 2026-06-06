@@ -51,7 +51,9 @@
     "electron:build:local": "node scripts/release-build.js --local",
     "deploy:whitepaper": "node scripts/_deploy-whitepaper.js",
     "deploy:seed-manifest": "node scripts/deploy-seed-manifest.js",
-    "deploy:elec-price-api": "node scripts/deploy-elec-price-api.js"
+    "deploy:elec-price-api": "node scripts/deploy-elec-price-api.js",
+    "sitemap": "node scripts/generate-sitemap.js",
+    "deploy:files": "npm run sitemap && node scripts/deploy-files.js"
   },
   "dependencies": {
     "electron-updater": "^6.8.3",
