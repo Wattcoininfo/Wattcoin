@@ -728,7 +728,7 @@ class GovernanceStore {
     if (!tx.from || !tx.to || !tx.sig) return false;
     if (!tx.governanceData || !tx.governanceData.pipId || !tx.governanceData.outcome) return false;
 
-    const sigInput = _sortedJson({
+    const sigFields = {
       id: tx.id,
       type: tx.type,
       from: tx.from,
@@ -736,8 +736,12 @@ class GovernanceStore {
       amount: tx.amount,
       fee: tx.fee,
       nonce: tx.nonce,
-      governanceData: tx.governanceData,
-    });
+    };
+    if (tx.chainId) {
+      sigFields.chainId = tx.chainId;
+    }
+    sigFields.governanceData = tx.governanceData;
+    const sigInput = _sortedJson(sigFields);
 
     try {
       const hash = txHash(sigInput);

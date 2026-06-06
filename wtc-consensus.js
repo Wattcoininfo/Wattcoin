@@ -484,8 +484,9 @@ class Consensus {
     }
 
     const memProof = String(block.memProof || '');
+    const memProofSeed = Number(block.memProofSeed) || 0;
     if (memProof) {
-      if (!(await verifyMemProof(memProof, block.proposer))) {
+      if (!(await verifyMemProof(memProof, block.proposer, memProofSeed))) {
         return `Memory proof re-verification failed for block at height ${block.height}`;
       }
     }
@@ -510,6 +511,9 @@ class Consensus {
           fee: tx.fee,
           nonce: tx.nonce,
         };
+        if (tx.chainId) {
+          sigFields.chainId = tx.chainId;
+        }
         // Governance wallet transfers include governanceTransferRef in the
         // signed data so the authorization (passed proposal) cannot be stripped.
         if (tx.governanceTransferRef) {

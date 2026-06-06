@@ -114,6 +114,9 @@ function computeBlockHash(block) {
   if (block.memProof) {
     canon.memProof = block.memProof;
   }
+  if (block.memProofSeed) {
+    canon.memProofSeed = block.memProofSeed;
+  }
   if (block.gpuProof) {
     canon.gpuProof = block.gpuProof;
   }
@@ -358,7 +361,7 @@ class Chain {
    * Build an unsigned block proposal at the next height.
    * The returned block needs to go through BFT voting before being appended.
    *
-   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot?, cpuSpeedInitialSeed?, cpuSpeedProof?, memProof?, gpuProof?, gpuProofSeed? }} opts
+   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot?, cpuSpeedInitialSeed?, cpuSpeedProof?, memProof?, memProofSeed?, gpuProof?, gpuProofSeed? }} opts
    */
   buildBlock({
     proposer,
@@ -374,6 +377,7 @@ class Chain {
     cpuSpeedInitialSeed = 0,
     cpuSpeedProof = '',
     memProof = '',
+    memProofSeed = 0,
     gpuProof = '',
     gpuProofSeed = 0,
   }) {
@@ -401,6 +405,7 @@ class Chain {
       cpuSpeedInitialSeed: Number(cpuSpeedInitialSeed) || 0,
       cpuSpeedProof: String(cpuSpeedProof || ''),
       memProof: String(memProof || ''),
+      memProofSeed: Number(memProofSeed) || 0,
       gpuProof: String(gpuProof || ''),
       gpuProofSeed: Number(gpuProofSeed) || 0,
       txsHash,
@@ -506,14 +511,18 @@ class Chain {
             return { ok: false, reason: `tx ${j} invalid sig format in block ${b.height}` };
           // Non-standard tx types (nft, governance) use their own sigInput format
           if (tx.type === 'nft_mint' || tx.type === 'nft_transfer' || tx.type === 'governance_result') continue;
-          const sigInput = JSON.stringify({
+          const sigFields = {
             id: tx.id,
             from: tx.from,
             to: tx.to,
             amount: tx.amount,
             fee: tx.fee,
             nonce: tx.nonce,
-          });
+          };
+          if (tx.chainId) {
+            sigFields.chainId = tx.chainId;
+          }
+          const sigInput = JSON.stringify(sigFields);
           if (!wtcVerify(txHash(sigInput), tx.sig, tx.from))
             return { ok: false, reason: `tx ${j} signature mismatch in block ${b.height}` };
         }

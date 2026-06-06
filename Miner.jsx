@@ -3192,6 +3192,7 @@ export default function Miner({
           cpuSpeedProof: backendBench.cpuSpeedProof || '',
           cpuSpeedInitialSeed: Number(backendBench.cpuSpeedInitialSeed) || 0,
           memProof: backendBench.memProof || '',
+          memProofSeed: Number(backendBench.memProofSeed) || 0,
           memLatencyNs: Math.max(0, Number(backendBench.memLatencyNs) || 0),
           gpuProof: gpuProofHash || '',
           gpuProofSeed: gpuProofHash ? challengeSeed : 0,

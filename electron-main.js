@@ -5470,6 +5470,23 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         }
       }
 
+      // Fallback when native GPU info is unavailable (Linux, macOS, or binary
+      // failure): cap declared power to a CPU-benchmark-based estimate instead of
+      // accepting the renderer's claim up to 600 W.  A renderer on any platform
+      // without native GPU attestation cannot declare more power than the
+      // main-process-verified CPU benchmark suggests the machine can draw.
+      if (_allowGpuCalib && hwAuthority.nativeGpuTdpW === 0 && measuredCpu > 0) {
+        const cpuBasedPower = Math.round(measuredCpu / 2_000_000);
+        const plausibleMax = Math.min(Math.max(cpuBasedPower, 65), 300);
+        if (declaredUnitPowerW > plausibleMax) {
+          console.warn(
+            `[HW-Verify] Native GPU info unavailable — capping declared ` +
+              `${declaredUnitPowerW}W to CPU-based estimate ${plausibleMax}W (measuredCpu=${(measuredCpu / 1e6).toFixed(0)}M ops/s)`,
+          );
+          declaredUnitPowerW = plausibleMax;
+        }
+      }
+
       // All devices including ASICs use the same benchmark-based calibration factor.
       // ASIC controllers have limited compute, so the calibration naturally reflects
       // the hardware's proven capability. Unknown ASICs get a conservative 0.8× cap
@@ -6989,8 +7006,9 @@ function buildPowerProofCommitment(proofData) {
   // Canonicalise: only include fields we care about, sorted.
   // cpuSpeedInitialSeed + cpuSpeedProof allow any peer to independently verify the
   // computation: re-run cpuSpeedStep(initialSeed) × CPU_SPEED_N and confirm the hash.
-  // memProof is unique per wallet address (derived salt); a peer verifies it by
-  // re-running the deterministic traversal seeded with the submitting miner's address.
+  // memProof is unique per (wallet address × challengeSeed); a peer verifies it by
+  // re-running the deterministic traversal seeded with the miner's address and
+  // the challengeSeed embedded in this commitment.
   const canonical = {
     benchmarkTs: Number(proofData.benchmarkTs) || 0,
     challengeSeed: Number(proofData.challengeSeed) || 0,
@@ -7122,6 +7140,7 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
           cpuSpeedInitialSeed: Number(proofData && proofData.cpuSpeedInitialSeed) || 0,
           cpuSpeedProof: String((proofData && proofData.cpuSpeedProof) || ''),
           memProof: String((proofData && proofData.memProof) || ''),
+          memProofSeed: Number(proofData && proofData.memProofSeed) || 0,
           gpuProof: String((proofData && proofData.gpuProof) || ''),
           gpuProofSeed: Number(proofData && proofData.gpuProofSeed) || 0,
         },
@@ -7851,6 +7870,7 @@ async function settleLocalLedgerRound(payload = {}) {
   const cpuSpeedInitialSeed = Number(payload && payload.cpuSpeedInitialSeed) || 0;
   const cpuSpeedProof = String((payload && payload.cpuSpeedProof) || '');
   const memProof = String((payload && payload.memProof) || '');
+  const memProofSeed = Number(payload && payload.memProofSeed) || 0;
   if (cpuSpeedInitialSeed > 0 && cpuSpeedProof) {
     const coordCpuOk = await verifyCpuSpeedProof(cpuSpeedInitialSeed, cpuSpeedProof);
     if (!coordCpuOk && minedAddress) {
@@ -7861,7 +7881,7 @@ async function settleLocalLedgerRound(payload = {}) {
     }
   }
   if (memProof) {
-    const coordMemOk = await verifyMemProof(memProof, minedAddress);
+    const coordMemOk = await verifyMemProof(memProof, minedAddress, memProofSeed);
     if (!coordMemOk && minedAddress) {
       const forfeited = roundLedger.forfeitContribution(minedAddress);
       console.warn(

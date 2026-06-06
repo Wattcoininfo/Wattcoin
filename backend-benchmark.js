@@ -143,7 +143,7 @@ async function runCpuAndMemoryBenchmark(request = {}) {
 // Stays in DRAM on most systems (exceeds L2/L3 on entry-level CPUs), so the
 // result is dominated by memory-bus latency, not L3 hit rate.
 // Reported as "effective bandwidth" of 4-byte random reads; also estimates latency.
-async function runRandomMemoryBenchmark(walletAddress) {
+async function runRandomMemoryBenchmark(walletAddress, seed = 0) {
   const ENTRIES = 1 << 24;
   const MASK = ENTRIES - 1;
 
@@ -152,7 +152,7 @@ async function runRandomMemoryBenchmark(walletAddress) {
   for (let i = 0; i < addrStr.length; i++) {
     addrSalt = (Math.imul(addrSalt, 31) + addrStr.charCodeAt(i)) | 0;
   }
-  addrSalt = addrSalt >>> 0;
+  addrSalt = (addrSalt ^ (Number(seed) >>> 0)) >>> 0;
   const arr = new Uint32Array(ENTRIES);
   const FILL_BATCH = Math.max(1, Math.min(ENTRIES, 1_000_000));
   let fillIdx = 0;
@@ -277,14 +277,14 @@ const MEM_ENTRIES = 1 << 24; // must match runRandomMemoryBenchmark (64 MB)
 const MEM_MASK = MEM_ENTRIES - 1; // 0xFFFFFF
 const MEM_ITERS = 2_000_000;
 const _memProofCache = new Map(); // addrSalt (string) → proof hex
-async function verifyMemProof(expectedProof, walletAddress) {
+async function verifyMemProof(expectedProof, walletAddress, seed = 0) {
   try {
     const addrStr = typeof walletAddress === 'string' && walletAddress.trim() ? walletAddress.trim() : '';
     let addrSalt = 0;
     for (let i = 0; i < addrStr.length; i++) {
       addrSalt = (Math.imul(addrSalt, 31) + addrStr.charCodeAt(i)) | 0;
     }
-    addrSalt = addrSalt >>> 0;
+    addrSalt = (addrSalt ^ (Number(seed) >>> 0)) >>> 0;
     const cacheKey = String(addrSalt);
     let cached = _memProofCache.get(cacheKey);
     if (cached === undefined) {
@@ -342,11 +342,11 @@ async function runBackendBenchmark(_request = {}) {
       ? Number(request.cpuSpeedRuns)
       : CPU_SPEED_DEFAULT_RUNS;
     const cpuSpeed = await runCpuSpeedBenchmark(cpuMem.challengeSeed, cpuSpeedRuns);
-    const randMem = await runRandomMemoryBenchmark(walletAddress);
+    const randMem = await runRandomMemoryBenchmark(walletAddress, cpuMem.challengeSeed);
 
     const [cpuSpeedProofVerified, memProofVerified] = await Promise.all([
       verifyCpuSpeedProof(cpuSpeed.initialSeed, cpuSpeed.proof),
-      verifyMemProof(randMem.proof, walletAddress),
+      verifyMemProof(randMem.proof, walletAddress, cpuMem.challengeSeed),
     ]);
 
     return {
@@ -375,6 +375,7 @@ async function runBackendBenchmark(_request = {}) {
       randomMemBandwidthMBps: randMem.randomBandwidthMBps,
       memLatencyNs: randMem.latencyNs,
       memProof: randMem.proof,
+      memProofSeed: cpuMem.challengeSeed,
       memProofVerified,
     };
   } catch (error) {

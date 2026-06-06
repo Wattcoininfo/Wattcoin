@@ -699,6 +699,7 @@ class WtcNode {
     const cpuSpeedInitialSeed = Number(proofData.cpuSpeedInitialSeed) || 0;
     const cpuSpeedProof = String(proofData.cpuSpeedProof || '');
     const memProof = String(proofData.memProof || '');
+    const memProofSeed = Number(proofData.memProofSeed) || 0;
     const gpuProof = String(proofData.gpuProof || '');
     const gpuProofSeed = Number(proofData.gpuProofSeed) || 0;
 
@@ -734,6 +735,7 @@ class WtcNode {
       cpuSpeedInitialSeed,
       cpuSpeedProof,
       memProof,
+      memProofSeed,
       gpuProof,
       gpuProofSeed,
     });
@@ -789,6 +791,8 @@ class WtcNode {
 
     // Sign the transaction — cover id (which binds timestamp) so a peer
     // cannot reassign a different timestamp to reuse this signature.
+    // chainId prevents cross-network replay.
+    tx.chainId = 'wtc-mainnet';
     const privBuf = Buffer.from(kp.privateKey, 'hex');
     const sigInput = JSON.stringify({
       id: tx.id,
@@ -797,6 +801,7 @@ class WtcNode {
       amount: tx.amount,
       fee: tx.fee,
       nonce: tx.nonce,
+      chainId: tx.chainId,
     });
     tx.sig = sign(txHash(sigInput), privBuf);
 
@@ -1471,6 +1476,9 @@ class WtcNode {
         fee: tx.fee,
         nonce: tx.nonce,
       };
+      if (tx.chainId) {
+        sigFields.chainId = tx.chainId;
+      }
       if (tx.governanceTransferRef) {
         sigFields.governanceTransferRef = tx.governanceTransferRef;
       }
@@ -1522,15 +1530,18 @@ class WtcNode {
     const nonce = this._nfts.getNonce(fromAddress);
     const tx = NftStore.buildTransferTx({ nftId, from: fromAddress, to: toAddress, nonce });
 
+    tx.chainId = 'wtc-mainnet';
     const privBuf = Buffer.from(kp.privateKey, 'hex');
-    const sigInput = JSON.stringify({
+    const sigFields = {
       id: tx.id,
       type: tx.type,
       nftId: tx.nftId,
       from: tx.from,
       to: tx.to,
       nonce: tx.nonce,
-    });
+      chainId: tx.chainId,
+    };
+    const sigInput = JSON.stringify(sigFields);
     tx.sig = sign(txHash(sigInput), privBuf);
 
     const result = this._mempool.add(tx);
@@ -1561,15 +1572,18 @@ class WtcNode {
     const nonce = this._nfts.getNonce(MINTER_ADDRESS);
     const tx = NftStore.buildMintTx({ nftId, from: MINTER_ADDRESS, to, nonce });
 
+    tx.chainId = 'wtc-mainnet';
     const privBuf = Buffer.from(kp.privateKey, 'hex');
-    const sigInput = JSON.stringify({
+    const sigFields = {
       id: tx.id,
       type: tx.type,
       nftId: tx.nftId,
       from: tx.from,
       to: tx.to,
       nonce: tx.nonce,
-    });
+      chainId: tx.chainId,
+    };
+    const sigInput = JSON.stringify(sigFields);
     tx.sig = sign(txHash(sigInput), privBuf);
 
     const result = this._mempool.add(tx);
@@ -1605,14 +1619,17 @@ class WtcNode {
       const nonce = this._nfts.getNonce(MINTER_ADDRESS) + minted.length;
       const tx = NftStore.buildMintTx({ nftId: def.nftId, from: MINTER_ADDRESS, to: MINTER_ADDRESS, nonce });
 
-      const sigInput = JSON.stringify({
+      tx.chainId = 'wtc-mainnet';
+      const sigFields = {
         id: tx.id,
         type: tx.type,
         nftId: tx.nftId,
         from: tx.from,
         to: tx.to,
         nonce: tx.nonce,
-      });
+        chainId: tx.chainId,
+      };
+      const sigInput = JSON.stringify(sigFields);
       tx.sig = sign(txHash(sigInput), privBuf);
 
       const result = this._mempool.add(tx);
@@ -1758,19 +1775,20 @@ class WtcNode {
 
       const kp = this._wallet.keys.find((k) => k.address === voter);
       if (kp) {
-        const sigInput = JSON.stringify(
-          {
-            id: tx.id,
-            type: tx.type,
-            from: tx.from,
-            to: tx.to,
-            amount: tx.amount,
-            fee: tx.fee,
-            nonce: tx.nonce,
-            governanceData: tx.governanceData,
-          },
-          Object.keys({ id: 1, type: 1, from: 1, to: 1, amount: 1, fee: 1, nonce: 1, governanceData: 1 }).sort(),
-        );
+        tx.chainId = 'wtc-mainnet';
+        const sigFields = {
+          id: tx.id,
+          type: tx.type,
+          from: tx.from,
+          to: tx.to,
+          amount: tx.amount,
+          fee: tx.fee,
+          nonce: tx.nonce,
+          chainId: tx.chainId,
+          governanceData: tx.governanceData,
+        };
+        const sortedKeys = Object.keys(sigFields).sort();
+        const sigInput = JSON.stringify(sigFields, sortedKeys);
         const privBuf = Buffer.from(kp.privateKey, 'hex');
         tx.sig = sign(txHash(sigInput), privBuf);
 
@@ -1832,19 +1850,20 @@ class WtcNode {
         transferAmount: ep.transferAmount,
       });
 
-      const sigInput = JSON.stringify(
-        {
-          id: tx.id,
-          type: tx.type,
-          from: tx.from,
-          to: tx.to,
-          amount: tx.amount,
-          fee: tx.fee,
-          nonce: tx.nonce,
-          governanceData: tx.governanceData,
-        },
-        Object.keys({ id: 1, type: 1, from: 1, to: 1, amount: 1, fee: 1, nonce: 1, governanceData: 1 }).sort(),
-      );
+      tx.chainId = 'wtc-mainnet';
+      const sigFields = {
+        id: tx.id,
+        type: tx.type,
+        from: tx.from,
+        to: tx.to,
+        amount: tx.amount,
+        fee: tx.fee,
+        nonce: tx.nonce,
+        chainId: tx.chainId,
+        governanceData: tx.governanceData,
+      };
+      const sortedKeys = Object.keys(sigFields).sort();
+      const sigInput = JSON.stringify(sigFields, sortedKeys);
       const privBuf = Buffer.from(kp.privateKey, 'hex');
       tx.sig = sign(txHash(sigInput), privBuf);
 
@@ -1902,6 +1921,7 @@ class WtcNode {
       tx.governanceTransferRef = governanceTransferRef;
 
       // Sign — include governanceTransferRef so the signature covers it
+      tx.chainId = 'wtc-mainnet';
       const privBuf = Buffer.from(govKey.privateKey, 'hex');
       const sigInput = JSON.stringify({
         id: tx.id,
@@ -1910,6 +1930,7 @@ class WtcNode {
         amount: tx.amount,
         fee: tx.fee,
         nonce: tx.nonce,
+        chainId: tx.chainId,
         governanceTransferRef,
       });
       tx.sig = sign(txHash(sigInput), privBuf);

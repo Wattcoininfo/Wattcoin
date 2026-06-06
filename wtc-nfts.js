@@ -332,14 +332,18 @@ class NftStore {
     }
 
     try {
-      const sigInput = JSON.stringify({
+      const sigFields = {
         id: tx.id,
         type: tx.type,
         nftId: tx.nftId,
         from: tx.from,
         to: tx.to,
         nonce: tx.nonce,
-      });
+      };
+      if (tx.chainId) {
+        sigFields.chainId = tx.chainId;
+      }
+      const sigInput = JSON.stringify(sigFields);
       return verifySignature(txHash(sigInput), tx.sig, tx.from);
     } catch (_) {
       return false;
