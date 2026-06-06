@@ -1974,6 +1974,9 @@ export default function Miner({
     lastAvgMemPct: null,
     lastAvgGpuPct: null,
     lastWasBaseline: false,
+    cpuPenaltyPct: -1,
+    memPenaltyPct: -1,
+    gpuPenaltyPct: -1,
   });
   const [loadPercent, setLoadPercent] = React.useState(() => {
     try {
@@ -2371,6 +2374,35 @@ export default function Miner({
       // so the baseline benchmark runs at the same load ceiling as live mining.
       const _trustFBench = Math.min(1.0, 0.6 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.4);
       const benchLoadPct = Math.min(_rawBenchLoad, Math.round(_trustFBench * 100));
+
+      // Poll the hardware load state until the ramp completes and duty cycle
+      // reaches near the target, so the benchmark measures settled conditions
+      // even on cold startup where the CPU may need extra time to reach boost.
+      const settleHardwareLoad = async (targetPct, minWaitMs, timeoutMs) => {
+        const targetFrac = targetPct / 100;
+        const start = Date.now();
+        if (minWaitMs > 0) await new Promise((r) => setTimeout(r, minWaitMs));
+        while (Date.now() - start < timeoutMs) {
+          let settled = false;
+          try {
+            if (window.wattcoinHardware && window.wattcoinHardware.getHardwareLoadState) {
+              const hwState = await window.wattcoinHardware.getHardwareLoadState();
+              if (hwState && hwState.ok && !hwState.rampingUp) {
+                const duty = Math.max(0, Math.min(1, Number(hwState.avgCpuWorkerDuty) || 0));
+                const currPct = Math.max(0, Math.min(100, Number(hwState.currentPercent) || 0));
+                if (currPct >= targetPct * 0.9 && duty >= targetFrac * 0.85) settled = true;
+              }
+            } else {
+              settled = true;
+            }
+          } catch (_) {
+            settled = true;
+          }
+          if (settled) break;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      };
+
       if (benchLoadPct > 0 && !wasMiningAtStart) {
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad) {
@@ -2379,13 +2411,12 @@ export default function Miner({
         } catch (_) {
           if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
-        // Wait for the full 3-second hardware load ramp to complete before measuring.
-        await new Promise((r) => setTimeout(r, 3200));
+        // Wait for the hardware load ramp to complete, then poll until settled.
+        await settleHardwareLoad(benchLoadPct, 3000, 10000);
       } else if (isBaselineBench && wasMiningAtStart && benchLoadPct > 0) {
         // Mining: syncHardwareLoadTarget already started the ramp when the slider changed,
-        // but only ~1500ms ago (the slider-stop debounce). The ramp takes 3000ms total, so
-        // wait for the remaining ~1700ms to ensure load is fully settled before measuring.
-        await new Promise((r) => setTimeout(r, 1700));
+        // but only ~1500ms ago (the slider-stop debounce). Wait for remaining ramp + settle.
+        await settleHardwareLoad(benchLoadPct, 1700, 8000);
       }
 
       try {
@@ -2456,7 +2487,7 @@ export default function Miner({
                   allowGpuWorkloads,
                   phaseCount: 4,
                   phaseDurationMs: extended ? 200 : 100,
-                  cpuSpeedRuns: reason === 'startup' || reason === 'slider-stop' ? 3 : 2,
+                  cpuSpeedRuns: reason === 'startup' || reason === 'slider-stop' ? 5 : 2,
                   memBytes: 128 * 1024 * 1024, // 128 MB — exceeds L3 cache on virtually all consumer
                   // CPUs (Intel max ~36 MB, standard AMD max ~64 MB),
                   // ensuring DRAM bandwidth is measured, not L3 cache.
@@ -2551,7 +2582,66 @@ export default function Miner({
         // (claimed hardware that would be physically impossible at the reported ops/s)
         // and calibrates the TDP power estimate using the actual performance fraction.
         const cpuKey = hardware.cpu ? hardware.cpu.split(' (')[0] : '';
-        const expectedSpeedOps = getExpectedCpuSpeedOps(cpuKey);
+        let expectedSpeedOps = getExpectedCpuSpeedOps(cpuKey);
+        if (expectedSpeedOps <= 0) {
+          // Fallback: estimate expected ops/s from CPU model tier + generation.
+          // Uses piecewise per-generation values calibrated to the database.
+          const m = cpuKey;
+          let tierEstimate = 0;
+          // ── Intel ──────────────────────────────────────────────────────
+          // Extract tier (3/5/7/9) and generation prefix from model number.
+          // "i7-14700KF" → tier=7, model="14700", gen=14.
+          // "i5-1035G1" → tier=5, model="1035", gen=10.
+          const intelMatch = m.match(/Core.*\bi([3579])\D(\d{4,5})/i);
+          if (intelMatch) {
+            const tier = Number(intelMatch[1]);
+            const modelStr = intelMatch[2];
+            const genPrefix = modelStr.length >= 5 ? Number(modelStr.slice(0, 2)) : Number(modelStr.slice(0, 1));
+            const perGen = [
+              // [minGen, {tier → ops/s}]
+              [13, { 3: 460e6, 5: 520e6, 7: 560e6, 9: 600e6 }], // Raptor Lake Refresh
+              [12, { 3: 420e6, 5: 470e6, 7: 490e6, 9: 520e6 }], // Alder Lake
+              [10, { 3: 390e6, 5: 440e6, 7: 470e6, 9: 480e6 }], // Comet / Rocket Lake
+              [8, { 3: 340e6, 5: 380e6, 7: 420e6, 9: 450e6 }], // Coffee Lake
+              [6, { 3: 300e6, 5: 350e6, 7: 380e6, 9: 400e6 }], // Skylake / Kaby Lake
+              [0, { 3: 250e6, 5: 300e6, 7: 340e6, 9: 380e6 }], // Sandy / Ivy / Haswell
+            ];
+            for (const [minGen, map] of perGen) {
+              if (genPrefix >= minGen) {
+                tierEstimate = map[tier];
+                break;
+              }
+            }
+          }
+          // ── AMD Ryzen ──────────────────────────────────────────────────
+          // "Ryzen 7 7800X3D" → tier=7, 7000 series
+          const amdMatch = m.match(/Ryzen\s+(\d+)\s+(\d)/i);
+          if (amdMatch && !tierEstimate) {
+            const tier = Number(amdMatch[1]);
+            const series = Number(amdMatch[2]);
+            const perSeries = [
+              [9, { 3: 400e6, 5: 540e6, 7: 560e6, 9: 580e6 }], // Zen 5
+              [7, { 3: 380e6, 5: 520e6, 7: 520e6, 9: 560e6 }], // Zen 4
+              [5, { 3: 385e6, 5: 440e6, 7: 450e6, 9: 470e6 }], // Zen 3
+              [3, { 3: 370e6, 5: 400e6, 7: 410e6, 9: 420e6 }], // Zen 2
+              [0, { 3: 280e6, 5: 320e6, 7: 330e6, 9: 350e6 }], // Zen+
+            ];
+            for (const [minSeries, map] of perSeries) {
+              if (series >= minSeries) {
+                tierEstimate = map[tier];
+                break;
+              }
+            }
+          }
+          // ── Apple Silicon ──────────────────────────────────────────────
+          const appleMatch = m.match(/M(\d)/i);
+          if (appleMatch && !tierEstimate) {
+            const gen = Number(appleMatch[1]);
+            tierEstimate = gen >= 4 ? 620e6 : gen >= 3 ? 550e6 : gen >= 2 ? 500e6 : 440e6;
+          }
+          // ── Generic fallback ──────────────────────────────────────────
+          expectedSpeedOps = Math.max(50_000_000, tierEstimate || 300_000_000);
+        }
         let hardwareOpsRatio = 1.0; // default: no calibration data
         if (expectedSpeedOps > 0 && cpuSpeedOpsPerSec > 0) {
           hardwareOpsRatio = cpuSpeedOpsPerSec / expectedSpeedOps;
@@ -3069,6 +3159,14 @@ export default function Miner({
             ? Math.round((gpuScoreRatio / (personalMeanGpuRatio > 0 ? personalMeanGpuRatio : 1.0) - 1) * 100)
             : null;
 
+        const cpuPenaltyPct =
+          expectedSpeedOps > 0 ? Math.max(0, 100 - Math.round((cpuSpeedOpsPerSec / expectedSpeedOps) * 100)) : -1;
+        const memPenaltyPct =
+          expectedMemBwMBps > 0 ? Math.max(0, 100 - Math.round((memoryMBps / expectedMemBwMBps) * 100)) : -1;
+        const gpuPenaltyPct =
+          allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0
+            ? Math.max(0, 100 - Math.round((gpuScore / maxExpectedGpuScore) * 100))
+            : -1;
         setBenchmarkState({
           running: false,
           startupDone: true,
@@ -3082,6 +3180,9 @@ export default function Miner({
           lastAvgMemPct,
           lastAvgGpuPct,
           lastWasBaseline: isBaselineBenchmark,
+          cpuPenaltyPct,
+          memPenaltyPct,
+          gpuPenaltyPct,
         });
 
         // Persist proof data so the next mineBlock call can include it in the OP_RETURN
@@ -6148,19 +6249,35 @@ export default function Miner({
                 benchmarkState.lastAvgGpuPct !== null) &&
               (benchmarkState.lastWasBaseline ? (
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                  <span key="cpu" style={{ marginLeft: 4 }}>
-                    CPU baseline
-                  </span>
-                  {benchmarkState.lastAvgMemPct !== null && (
-                    <span key="mem" style={{ marginLeft: 4 }}>
-                      Mem baseline
-                    </span>
-                  )}
-                  {benchmarkState.lastAvgGpuPct !== null && (
-                    <span key="gpu" style={{ marginLeft: 4 }}>
-                      GPU baseline
-                    </span>
-                  )}
+                  {(() => {
+                    const p = benchmarkState.cpuPenaltyPct;
+                    const clr = p <= 10 ? '#a7ffb0' : p <= 20 ? '#facc15' : '#f97316';
+                    return (
+                      <span key="cpu" style={{ marginLeft: 4, color: clr }}>
+                        {p < 0 ? 'CPU baseline' : `CPU ${p}%`}
+                      </span>
+                    );
+                  })()}
+                  {benchmarkState.lastAvgMemPct !== null &&
+                    (() => {
+                      const p = benchmarkState.memPenaltyPct;
+                      const clr = p <= 10 ? '#a7ffb0' : p <= 20 ? '#facc15' : '#f97316';
+                      return (
+                        <span key="mem" style={{ marginLeft: 4, color: clr }}>
+                          {p < 0 ? 'Mem baseline' : `Mem ${p}%`}
+                        </span>
+                      );
+                    })()}
+                  {benchmarkState.lastAvgGpuPct !== null &&
+                    (() => {
+                      const p = benchmarkState.gpuPenaltyPct;
+                      const clr = p <= 10 ? '#a7ffb0' : p <= 20 ? '#facc15' : '#f97316';
+                      return (
+                        <span key="gpu" style={{ marginLeft: 4, color: clr }}>
+                          {p < 0 ? 'GPU baseline' : `GPU ${p}%`}
+                        </span>
+                      );
+                    })()}
                 </div>
               ) : (
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>

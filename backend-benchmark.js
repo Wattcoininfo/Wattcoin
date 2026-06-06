@@ -187,14 +187,15 @@ async function runRandomMemoryBenchmark(walletAddress) {
 
 // Fixed-N CPU speed benchmark: no performance.now() in the inner loop, so the
 // result reflects genuine CPU integer throughput (imul + XOR-shift dependency chain)
-// rather than OS timer call overhead.  Expected range: ~100M�700M ops/s depending
+// rather than OS timer call overhead.  Expected range: ~100M‑700M ops/s depending
 // on CPU generation and clock speed.
 //
 // Pass a known seed (e.g. challengeSeed from the server) so the proof is server-
 // verifiable: given initialSeed + N, any independent runner can recompute the
 // expected proof hash and confirm this computation actually happened.
+//
 const CPU_SPEED_N = 20_000_000;
-const CPU_SPEED_DEFAULT_RUNS = 3;
+const CPU_SPEED_DEFAULT_RUNS = 5;
 function cpuSpeedStep(x) {
   x = (Math.imul(x, 48271) + 9973) | 0;
   x ^= x << 13;
@@ -215,6 +216,7 @@ async function runCpuSpeedBenchmark(seed, runs = CPU_SPEED_DEFAULT_RUNS) {
   let totalElapsed = 0;
 
   const BATCH = Math.max(1, Math.min(CPU_SPEED_N, 5_000_000));
+
   for (let r = 0; r < runCount; r++) {
     let x = initialSeed;
     const start = performance.now();
@@ -227,19 +229,20 @@ async function runCpuSpeedBenchmark(seed, runs = CPU_SPEED_DEFAULT_RUNS) {
     }
     const elapsed = Math.max(1, performance.now() - start);
     totalElapsed += elapsed;
-    samples.push(Math.round(CPU_SPEED_N / (elapsed / 1000)));
+    const sampleOps = Math.round(CPU_SPEED_N / (elapsed / 1000));
+    samples.push(sampleOps);
+
     if (!proof) {
       proof = (x >>> 0).toString(16).padStart(8, '0');
     }
     if (r + 1 < runCount) await new Promise((r) => setImmediate(r));
   }
 
-  const sortedSamples = [...samples].sort((a, b) => a - b);
-  const medianOps = sortedSamples[Math.floor(sortedSamples.length / 2)] || 0;
+  const maxOps = samples.reduce((a, b) => Math.max(a, b), 0) || 0;
 
   return {
     initialSeed,
-    opsPerSec: medianOps,
+    opsPerSec: maxOps,
     samples,
     proof,
     elapsedMs: Math.round(totalElapsed / runCount),

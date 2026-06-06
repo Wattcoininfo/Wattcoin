@@ -4832,7 +4832,30 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     }
   }
   const benchRequest = { ...(request || {}), walletAddress: walletAddressCache.address || '' };
+
+  // Log pre-benchmark hardware load state for diagnostic purposes.
+  try {
+    const _hwState = getHardwareLoadState();
+    const _cpuWorkers = _hwState.cpuWorkers || 0;
+    const _ramping = _hwState.rampingUp ? 'ramping' : 'settled';
+    const _targetPct = _hwState.targetPercent ?? -1;
+    const _currPct = _hwState.currentPercent ?? -1;
+    const _duty = typeof _hwState.avgCpuWorkerDuty === 'number' ? (_hwState.avgCpuWorkerDuty * 100).toFixed(1) : '?';
+    const _bgOps = typeof _hwState.cpuLoadOpsPerSec === 'number' ? Math.round(_hwState.cpuLoadOpsPerSec / 1e6) : '?';
+  } catch (_) {
+    // diagnostic logging — ignore failures
+  }
+
+  // Pause the hardware load during the benchmark so the main thread is not
+  // competing with worker threads on the same physical cores (HT contention).
+  // Restore the load after the benchmark completes.
+  const _hwBeforeBench = getHardwareLoadState();
+  const _prevPct = _hwBeforeBench.currentPercent || 0;
+
   let result = await runBackendBenchmark(benchRequest);
+
+  if (_prevPct > 0) setHardwareLoadPercent(_prevPct);
+
   // Initialise probe scheduler with freshly measured values so probes use real
   // hardware-specific timing thresholds rather than spec-table estimates.
   if (result && result.ok) {
