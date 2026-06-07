@@ -35,7 +35,13 @@
 
 const { computeBlockHash, energyForHeight } = require('./wtc-chain');
 const { validateBlockProbeAttestation } = require('./probe-attestation');
-const { verifyCpuSpeedProof, verifyMemProof, computeGpuProbeExpectedHash, GPU_PROOF_SIZE, GPU_PROOF_ITERS } = require('./backend-benchmark');
+const {
+  verifyCpuSpeedProof,
+  verifyMemProof,
+  computeGpuProbeExpectedHash,
+  GPU_PROOF_SIZE,
+  GPU_PROOF_ITERS,
+} = require('./backend-benchmark');
 const { sign: wtcSign, verifySignature: wtcVerify, isValidAddress, txHash } = require('./wtc-address');
 const { GOVERNANCE_MIN_RESERVE } = require('./wtc-governance');
 
@@ -81,10 +87,13 @@ class Consensus {
     this._privKey = privateKey; // Buffer — secp256k1 private key
     this._allowPartialQuorumCommit = !!allowPartialQuorumCommit;
     this._getEnergyContributions = typeof getEnergyContributions === 'function' ? getEnergyContributions : () => ({});
-    this._verifyCpuSpeedProof = typeof verifyCpuSpeedProofFn === 'function' ? verifyCpuSpeedProofFn : verifyCpuSpeedProof;
+    this._verifyCpuSpeedProof =
+      typeof verifyCpuSpeedProofFn === 'function' ? verifyCpuSpeedProofFn : verifyCpuSpeedProof;
     this._verifyMemProof = typeof verifyMemProofFn === 'function' ? verifyMemProofFn : verifyMemProof;
-    this._verifyGpuProof = typeof verifyGpuProofFn === 'function' ? verifyGpuProofFn : (seed, proof) =>
-      proof === computeGpuProbeExpectedHash(seed, GPU_PROOF_SIZE, GPU_PROOF_ITERS);
+    this._verifyGpuProof =
+      typeof verifyGpuProofFn === 'function'
+        ? verifyGpuProofFn
+        : (seed, proof) => proof === computeGpuProbeExpectedHash(seed, GPU_PROOF_SIZE, GPU_PROOF_ITERS);
 
     this._localAddr = ''; // set by setLocalAddress()
     this._pending = new Map(); // blockHash → { block, votes: Map(addr → sigHex), voteWeight: Number }

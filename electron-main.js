@@ -5209,9 +5209,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       const bravePower = await fetchTdpFromBrave(_declaredAsicModel);
       const tablePower = getAsicPowerW(_declaredAsicModel);
       if (bravePower === null && tablePower === 0) {
-        console.warn(
-          `[HW-Verify] Unknown ASIC model "${_declaredAsicModel}" — no power data available, rejecting`,
-        );
+        console.warn(`[HW-Verify] Unknown ASIC model "${_declaredAsicModel}" — no power data available, rejecting`);
         return {
           ok: false,
           unknownAsic: true,
@@ -6610,7 +6608,14 @@ ipcMain.handle('wattcoin-nft-transfer', async (_event, { nftId, fromAddress, toA
 
 ipcMain.handle('wattcoin-governance-status', (_event) => {
   try {
-    if (!wtcNode) return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140, governanceWallet: { confirmed: 0, pending: 0, address: 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw' } };
+    if (!wtcNode)
+      return {
+        ok: false,
+        distributedPower: 0,
+        passThreshold: 0,
+        totalPossible: 140,
+        governanceWallet: { confirmed: 0, pending: 0, address: 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw' },
+      };
     const status = wtcNode.getGovernanceStatus();
     // Include governance wallet balance
     const walletBal = wtcNode.getGovernanceWalletBalance();
@@ -6894,7 +6899,15 @@ ipcMain.handle('wattcoin-team-edit', (_event, address, memberId, updates) => {
     const isVhpn1 = userHasVhpn1(wtcNode, address);
     const ownsNft = targetNftId && userOwnsNft(wtcNode, address, targetNftId);
     if (!isVhpn1 && !ownsNft) return { ok: false, error: 'Not authorized to edit this member' };
-    members[idx] = { ...members[idx], ...updates, id: members[idx].id, nftId: members[idx].nftId, address: members[idx].address, addedBy: members[idx].addedBy, addedAt: members[idx].addedAt };
+    members[idx] = {
+      ...members[idx],
+      ...updates,
+      id: members[idx].id,
+      nftId: members[idx].nftId,
+      address: members[idx].address,
+      addedBy: members[idx].addedBy,
+      addedAt: members[idx].addedAt,
+    };
     writeTeamData(members);
     broadcastTeamDocsToPeers();
     return { ok: true, member: members[idx] };

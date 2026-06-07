@@ -501,9 +501,9 @@ async function testFlushZeroRewardForSmallStake() {
   });
   await silenceLogsAsync(() => sq.flushStakingQueue());
   const entry = sq.getAllEntries()[0];
-  assert.strictEqual(entry.status, 'rewarded', 'entry must be rewarded even when reward rounds to 0');
-  assert.strictEqual(entry.rewardAmount, 0, 'reward amount must be 0 when stake × APY < 1 WTC');
-  assert.strictEqual(entry.apyAtFlush, 0.01);
+  assert.strictEqual(entry.status, 'pending', 'entry stays pending when reward rounds to 0');
+  assert.strictEqual(entry.rewardAmount, null, 'reward amount must be null when deferred');
+  assert.strictEqual(entry.apyAtFlush, null, 'apyAtFlush must be null when deferred');
   assert.strictEqual(node._calls.length, 0, 'send must not be called when reward is 0');
 }
 

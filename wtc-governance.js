@@ -412,12 +412,16 @@ class GovernanceStore {
     if (!principleCheck.ok) {
       // If useReserveOverride is set, the treasury minimum reserve principle
       // is intentionally bypassed — the checkbox serves as explicit consent.
-      if (!useReserveOverride || !principleCheck.violations?.some(v => v.id === 'governance_treasury')) {
+      if (!useReserveOverride || !principleCheck.violations?.some((v) => v.id === 'governance_treasury')) {
         return principleCheck;
       }
-      const remaining = principleCheck.violations.filter(v => v.id !== 'governance_treasury');
+      const remaining = principleCheck.violations.filter((v) => v.id !== 'governance_treasury');
       if (remaining.length > 0) {
-        return { ok: false, error: `Proposal violates immutable principles: ${remaining.map(v => v.id).join(', ')}`, violations: remaining };
+        return {
+          ok: false,
+          error: `Proposal violates immutable principles: ${remaining.map((v) => v.id).join(', ')}`,
+          violations: remaining,
+        };
       }
     }
 

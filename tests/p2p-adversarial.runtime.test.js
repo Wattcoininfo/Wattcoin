@@ -136,7 +136,14 @@ async function mineN(node, n) {
       throw new Error(`unable to mine ${n} blocks after ${attempts} attempts`);
     }
     try {
-      await node.mineBlock(addr, { energyWh: ENERGY_WH_PER_BLOCK, proofCommitment: `test-${Date.now()}-${mined}`, cpuSpeedInitialSeed: 1, cpuSpeedProof: 'abc123', memProof: 'def456', memProofSeed: 0 });
+      await node.mineBlock(addr, {
+        energyWh: ENERGY_WH_PER_BLOCK,
+        proofCommitment: `test-${Date.now()}-${mined}`,
+        cpuSpeedInitialSeed: 1,
+        cpuSpeedProof: 'abc123',
+        memProof: 'def456',
+        memProofSeed: 0,
+      });
       mined += 1;
     } catch (err) {
       const msg = err && err.message ? String(err.message) : '';

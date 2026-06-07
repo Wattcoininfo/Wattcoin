@@ -93,7 +93,14 @@ function createNode(id, dataDir, net) {
 
 async function mineOneBlock(node) {
   const addr = node.getPrimaryAddress();
-  await node.mineBlock(addr, { energyWh: ENERGY_WH_PER_BLOCK, proofCommitment: 'legacy-state-root-test', cpuSpeedInitialSeed: 1, cpuSpeedProof: 'abc123', memProof: 'def456', memProofSeed: 0 });
+  await node.mineBlock(addr, {
+    energyWh: ENERGY_WH_PER_BLOCK,
+    proofCommitment: 'legacy-state-root-test',
+    cpuSpeedInitialSeed: 1,
+    cpuSpeedProof: 'abc123',
+    memProof: 'def456',
+    memProofSeed: 0,
+  });
 }
 
 function injectLegacyStateRoot(node) {
