@@ -46,8 +46,8 @@ function createStandaloneNode(id, dataDir) {
     requestPeerJson: () => {
       throw new Error('unexpected peer RPC in standalone test');
     },
-    verifyCpuSpeedProof: async () => true,
-    verifyMemProof: async () => true,
+    verifyCpuSpeedProof: () => Promise.resolve(true),
+    verifyMemProof: () => Promise.resolve(true),
   });
 }
 

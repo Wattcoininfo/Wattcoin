@@ -37,8 +37,8 @@ function createStandaloneNode(id, dataDir) {
     dataDir,
     signingSecret: `tier1-threshold-${id}`,
     allowPartialQuorumCommit: false,
-    verifyCpuSpeedProof: async () => true,
-    verifyMemProof: async () => true,
+    verifyCpuSpeedProof: () => Promise.resolve(true),
+    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => [],
     requestPeerJson: () => {
       throw new Error('unexpected peer RPC in standalone test');

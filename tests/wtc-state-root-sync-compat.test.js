@@ -81,8 +81,8 @@ function createNode(id, dataDir, net) {
     dataDir,
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: false,
-    verifyCpuSpeedProof: async () => true,
-    verifyMemProof: async () => true,
+    verifyCpuSpeedProof: () => Promise.resolve(true),
+    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => net.getActivePeers(id),
     requestPeerJson: (peerUrl, method, routePath, payload, query) =>
       net.request(id, peerUrl, method, routePath, payload, query),
