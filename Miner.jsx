@@ -1956,6 +1956,8 @@ export default function Miner({
 
   const [_baselinePowerW, setBaselinePowerW] = React.useState(0);
   const [showRebenchPrompt, setShowRebenchPrompt] = React.useState(false);
+  const rebenchRef = React.useRef(false);
+  React.useEffect(() => { rebenchRef.current = showRebenchPrompt; }, [showRebenchPrompt]);
   const [benchmarkState, setBenchmarkState] = React.useState({
     running: false,
     startupDone: (() => {
@@ -7049,10 +7051,12 @@ export default function Miner({
             <div style={{ flex: 1 }}>
               <button
                 onClick={() => {
-                  if (showRebenchPrompt) {
+                  if (rebenchRef.current) {
+                    rebenchRef.current = false;
                     setShowRebenchPrompt(false);
                     runBenchmark('startup');
                   } else {
+                    if (showRebenchPrompt) return;
                     console.log('[MinerSimulator] Start Mining button clicked, setting mining to true');
                     setMining(true);
                   }
