@@ -1957,7 +1957,9 @@ export default function Miner({
   const [_baselinePowerW, setBaselinePowerW] = React.useState(0);
   const [showRebenchPrompt, setShowRebenchPrompt] = React.useState(false);
   const rebenchRef = React.useRef(false);
-  React.useEffect(() => { rebenchRef.current = showRebenchPrompt; }, [showRebenchPrompt]);
+  React.useEffect(() => {
+    rebenchRef.current = showRebenchPrompt;
+  }, [showRebenchPrompt]);
   const [benchmarkState, setBenchmarkState] = React.useState({
     running: false,
     startupDone: (() => {
