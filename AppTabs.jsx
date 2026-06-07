@@ -1910,39 +1910,632 @@ function _computeCoinsFromEnergyWallet(energyWh) {
   return Math.min(TOTAL_COINS, minedCoins);
 }
 
-function ExplorerView({
-  blocks,
-  total,
-  offset,
-  busy,
-  status,
-  selectedBlock,
-  selectedBlockData,
-  blockBusy,
-  pageSize,
-  onLoad,
-  onSelectBlock,
-}) {
-  const hasPrev = offset + pageSize < total;
+const PAGE_SIZE = 20;
+
+function shortHash(h) {
+  if (!h || h.length < 16) return h || '-';
+  return h.slice(0, 8) + '\u2026' + h.slice(-6);
+}
+
+function formatTs(ms) {
+  if (!ms) return '-';
+  try {
+    return new Date(ms).toLocaleString();
+  } catch (_) {
+    return '-';
+  }
+}
+
+function proofColor(type) {
+  switch (type) {
+    case 'gpu':
+      return '#a78bfa';
+    case 'memory':
+      return '#60a5fa';
+    default:
+      return '#4ade80';
+  }
+}
+
+function proofLabel(type) {
+  switch (type) {
+    case 'gpu':
+      return 'GPU';
+    case 'memory':
+      return 'MEM';
+    default:
+      return 'CPU';
+  }
+}
+
+function ExplorerView() {
+  // Block list state
+  const [blocks, setBlocks] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
+  const [selectedBlock, setSelectedBlock] = useState(null);
+  const [selectedBlockData, setSelectedBlockData] = useState(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+
+  // Stats state
+  const [stats, setStats] = useState(null);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchResult, setSearchResult] = useState(null);
+
+  // Jump to height
+  const [jumpHeight, setJumpHeight] = useState('');
+
+  // Sub-views: 'blocks', 'address', 'tx'
+  const [subView, setSubView] = useState('blocks');
+  const [addressData, setAddressData] = useState(null);
+  const [addressBusy, setAddressBusy] = useState(false);
+  const [txData, setTxData] = useState(null);
+  const [txBusy, setTxBusy] = useState(false);
+
+  const hasPrev = offset + PAGE_SIZE < total;
   const hasNext = offset > 0;
 
-  React.useEffect(() => {
-    onLoad(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadBlocks = useCallback(async (off) => {
+    if (!window.wattcoinHardware?.invoke) {
+      setStatus('API unavailable.');
+      return;
+    }
+    setBusy(true);
+    setStatus('');
+    try {
+      const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-blocks', {
+        offset: off,
+        limit: PAGE_SIZE,
+      });
+      if (res?.ok) {
+        setBlocks(res.blocks || []);
+        setTotal(res.total || 0);
+        setOffset(off);
+        setSelectedBlock(null);
+        setSelectedBlockData(null);
+      } else setStatus('Failed to load blocks.');
+    } catch (e) {
+      setStatus('Error: ' + e?.message);
+    }
+    setBusy(false);
   }, []);
 
-  function formatTs(ms) {
-    if (!ms) return '-';
+  const loadStats = useCallback(async () => {
+    if (!window.wattcoinHardware?.invoke) return;
     try {
-      return new Date(ms).toLocaleString();
+      const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-stats');
+      if (res?.ok) setStats(res);
     } catch (_) {
-      return '-';
+      /* ignore */
     }
+  }, []);
+
+  const loadBlockDetail = useCallback(async (height) => {
+    if (!window.wattcoinHardware?.invoke) return;
+    setBlockBusy(true);
+    try {
+      const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-block', { height });
+      if (res?.ok) setSelectedBlockData(res.block);
+    } catch (_) {
+      /* ignore */
+    }
+    setBlockBusy(false);
+  }, []);
+
+  const loadAddress = useCallback(async (address) => {
+    if (!window.wattcoinHardware?.invoke) return;
+    setAddressBusy(true);
+    setAddressData(null);
+    try {
+      const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-address', { address });
+      if (res?.ok) setAddressData(res);
+    } catch (_) {
+      /* ignore */
+    }
+    setAddressBusy(false);
+  }, []);
+
+  const loadTx = useCallback(async (txid) => {
+    if (!window.wattcoinHardware?.invoke) return;
+    setTxBusy(true);
+    setTxData(null);
+    try {
+      const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-tx-detail', { txid });
+      if (res?.ok) setTxData(res.tx || res);
+    } catch (_) {
+      /* ignore */
+    }
+    setTxBusy(false);
+  }, []);
+
+  useEffect(() => {
+    loadBlocks(0);
+    loadStats();
+  }, [loadBlocks, loadStats]);
+
+  // Auto-refresh: poll stats every 30s, reload blocks when at offset 0
+  useEffect(() => {
+    const iv = setInterval(() => {
+      loadStats();
+      if (offset === 0) loadBlocks(0);
+    }, 30_000);
+    return () => clearInterval(iv);
+  }, [loadStats, loadBlocks, offset]);
+
+  function handleSearch() {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setSearchBusy(true);
+    setSearchResult(null);
+    window.wattcoinHardware
+      .invoke('wattcoin-explorer-search', { query: q })
+      .then((res) => {
+        setSearchResult(res);
+        if (res?.type === 'block') {
+          setSelectedBlock(res.block.height);
+          setSelectedBlockData(res.block);
+        } else if (res?.type === 'address') {
+          setSubView('address');
+          loadAddress(res.address);
+        } else if (res?.type === 'tx') {
+          setSubView('tx');
+          setTxData(res.tx);
+        }
+      })
+      .catch(() => setSearchResult({ type: 'not_found', message: 'Search failed.' }))
+      .finally(() => setSearchBusy(false));
   }
 
-  function shortHash(h) {
-    if (!h || h.length < 16) return h || '-';
-    return h.slice(0, 8) + '…' + h.slice(-6);
+  function handleJumpToHeight() {
+    const h = parseInt(jumpHeight, 10);
+    if (isNaN(h) || h < 0) return;
+    setSearchQuery(String(h));
+    setJumpHeight('');
+    handleSearchRef.current = true;
+  }
+
+  const handleSearchRef = useRef(false);
+  useEffect(() => {
+    if (handleSearchRef.current) {
+      handleSearchRef.current = false;
+      handleSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  function handleSelectBlock(height) {
+    if (selectedBlock === height) {
+      setSelectedBlock(null);
+      setSelectedBlockData(null);
+      return;
+    }
+    setSelectedBlock(height);
+    setSelectedBlockData(null);
+    loadBlockDetail(height);
+  }
+
+  function handleAddressClick(address) {
+    if (!address || address === 'genesis') return;
+    setSubView('address');
+    loadAddress(address);
+  }
+
+  function handleTxClick(txid) {
+    if (!txid) return;
+    setSubView('tx');
+    loadTx(txid);
+  }
+
+  function handleBack() {
+    setSubView('blocks');
+    setAddressData(null);
+    setTxData(null);
+    setSearchResult(null);
+  }
+
+  const btnStyle = (disabled) => ({
+    background: disabled ? '#1a2e1a' : '#1e3a1e',
+    color: disabled ? '#456045' : '#b7f5bc',
+    border: 'none',
+    borderRadius: 6,
+    padding: '5px 10px',
+    fontWeight: 700,
+    cursor: disabled ? 'default' : 'pointer',
+    fontSize: 12,
+  });
+
+  // ── Address Detail view ─────────────────────────────────────────────
+  function renderAddressDetail() {
+    const d = addressData;
+    if (addressBusy) return <div style={{ color: '#9ac79f', fontSize: 13 }}>Loading address…</div>;
+    if (!d) return <div style={{ color: '#fca5a5', fontSize: 13 }}>No data.</div>;
+    return (
+      <div>
+        <div style={{ fontSize: 14, color: '#4ade80', fontWeight: 700, marginBottom: 8 }}>Address Detail</div>
+        <Row label="Address" value={d.address} mono />
+        <Row label="Balance" value={`${(d.balance?.confirmed || 0).toLocaleString()} WTC`} />
+        {d.balance?.unmatured > 0 && (
+          <Row label="Unmatured" value={`${(d.balance?.unmatured || 0).toLocaleString()} WTC`} />
+        )}
+        <Row
+          label="Mined"
+          value={`${(d.minedStats?.totalWTC || 0).toLocaleString()} WTC (${d.minedStats?.totalBlocks || 0} blocks)`}
+        />
+        <Row label="Transactions" value={d.totalTransactions} />
+        {d.minedBlocks?.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ color: '#4ade80', fontWeight: 700, marginBottom: 4, fontSize: 12 }}>Mined Blocks</div>
+            {d.minedBlocks.map((mb) => (
+              <div
+                key={mb.height}
+                onClick={() => {
+                  setSubView('blocks');
+                  handleSelectBlock(mb.height);
+                }}
+                style={{ cursor: 'pointer', fontSize: 11, color: '#60a5fa', fontFamily: 'monospace', marginBottom: 2 }}
+              >
+                #{mb.height} — {formatTs(mb.timestamp)} — +
+                {(mb.rewardTotal || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} WTC
+              </div>
+            ))}
+          </div>
+        )}
+        {d.transactions?.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ color: '#4ade80', fontWeight: 700, marginBottom: 4, fontSize: 12 }}>Recent Transactions</div>
+            {d.transactions.map((tx, i) => (
+              <div
+                key={tx.id || tx.txid || i}
+                onClick={() => handleTxClick(tx.id || tx.txid)}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  color: '#60a5fa',
+                  fontFamily: 'monospace',
+                  marginBottom: 3,
+                  wordBreak: 'break-all',
+                }}
+              >
+                {tx.category === 'mine' ? '⛏ ' : ''}
+                {(tx.id || tx.txid || '-').slice(0, 20)}… —{' '}
+                {tx.amount != null ? `${Number(tx.amount).toLocaleString()} WTC` : ''}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Tx Detail view ──────────────────────────────────────────────────
+  function renderTxDetail() {
+    const tx = txData;
+    if (txBusy) return <div style={{ color: '#9ac79f', fontSize: 13 }}>Loading transaction…</div>;
+    if (!tx) return <div style={{ color: '#fca5a5', fontSize: 13 }}>No data.</div>;
+    return (
+      <div style={{ fontSize: 12, display: 'grid', gap: 5 }}>
+        <div style={{ fontSize: 14, color: '#4ade80', fontWeight: 700, marginBottom: 4 }}>Transaction Detail</div>
+        <Row label="ID" value={tx.id || tx.txid || '-'} mono />
+        {tx.from !== undefined && <Row label="From" value={tx.from} mono />}
+        {tx.to !== undefined && <Row label="To" value={tx.to} mono />}
+        {tx.amount != null && (
+          <Row
+            label="Amount"
+            value={`${Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })} WTC`}
+          />
+        )}
+        {tx.fee != null && <Row label="Fee" value={`${Number(tx.fee).toLocaleString()} WTC`} />}
+        {tx.nonce != null && <Row label="Nonce" value={tx.nonce} />}
+        {tx.blockHeight != null && (
+          <Row
+            label="Block"
+            value={
+              <span
+                onClick={() => {
+                  setSubView('blocks');
+                  handleSelectBlock(tx.blockHeight);
+                }}
+                style={{ color: '#60a5fa', cursor: 'pointer' }}
+              >
+                #{tx.blockHeight}
+              </span>
+            }
+          />
+        )}
+        {tx.blockHash && <Row label="Block Hash" value={shortHash(tx.blockHash)} mono />}
+        {tx.timestamp && <Row label="Time" value={formatTs(tx.timestamp)} />}
+        {tx.type && <Row label="Type" value={tx.type} />}
+        {tx.sig && (
+          <div style={{ marginTop: 4 }}>
+            <Row label="Signature" value={tx.sig} mono />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Stats Panel ─────────────────────────────────────────────────────
+  function renderStats() {
+    if (!stats || stats.height < 0) return null;
+    const s = stats;
+    let avgBlockTime = '-';
+    let hashrate = '-';
+    if (s.latestBlocks?.length >= 2) {
+      const recent = s.latestBlocks;
+      const oldest = recent[recent.length - 1];
+      const newest = recent[0];
+      const dt = (newest.timestamp - oldest.timestamp) / 1000;
+      const n = recent.length - 1;
+      if (dt > 0) {
+        avgBlockTime = (dt / n).toFixed(1) + 's';
+        hashrate = (n / (dt / 3600)).toFixed(1) + ' blk/h';
+      }
+    }
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px 16px',
+          marginBottom: 10,
+          fontSize: 12,
+          color: '#9ac79f',
+          background: '#0a150a',
+          border: '1px solid #1e3a1e',
+          borderRadius: 8,
+          padding: '8px 12px',
+        }}
+      >
+        <span>
+          Height: <strong style={{ color: '#d7ffd9' }}>{s.height}</strong>
+        </span>
+        <span>
+          Supply: <strong style={{ color: '#fbbf24' }}>{(s.totalSupply || 0).toLocaleString()} / 21,000,000 WTC</strong>
+        </span>
+        <span>
+          Peers: <strong style={{ color: '#4ade80' }}>{s.peerCount}</strong>
+        </span>
+        <span>
+          Block Time: <strong style={{ color: '#86efac' }}>{avgBlockTime}</strong>
+        </span>
+        <span>
+          Rate: <strong style={{ color: '#86efac' }}>{hashrate}</strong>
+        </span>
+      </div>
+    );
+  }
+
+  // ── Search + Jump bar ───────────────────────────────────────────────
+  function renderSearchBar() {
+    return (
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSearch();
+          }}
+          placeholder="Height / hash / address…"
+          style={{
+            flex: 1,
+            minWidth: 160,
+            background: '#0d1a0d',
+            border: '1px solid #224022',
+            borderRadius: 6,
+            padding: '5px 10px',
+            color: '#d7ffd9',
+            fontSize: 12,
+            outline: 'none',
+          }}
+        />
+        <button
+          onClick={handleSearch}
+          disabled={searchBusy || !searchQuery.trim()}
+          style={btnStyle(searchBusy || !searchQuery.trim())}
+        >
+          {searchBusy ? '…' : 'Search'}
+        </button>
+        <input
+          value={jumpHeight}
+          onChange={(e) => setJumpHeight(e.target.value.replace(/\D/g, ''))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleJumpToHeight();
+          }}
+          placeholder="Go to height…"
+          style={{
+            width: 110,
+            background: '#0d1a0d',
+            border: '1px solid #224022',
+            borderRadius: 6,
+            padding: '5px 10px',
+            color: '#d7ffd9',
+            fontSize: 12,
+            outline: 'none',
+          }}
+        />
+        <button onClick={handleJumpToHeight} disabled={!jumpHeight} style={btnStyle(!jumpHeight)}>
+          Go
+        </button>
+      </div>
+    );
+  }
+
+  // ── Search Result Banner ────────────────────────────────────────────
+  function renderSearchResult() {
+    if (!searchResult) return null;
+    if (searchResult.type === 'not_found') {
+      return (
+        <div
+          style={{
+            marginBottom: 8,
+            fontSize: 12,
+            color: '#fca5a5',
+            background: '#1a0d0d',
+            border: '1px solid #5a2020',
+            borderRadius: 6,
+            padding: '6px 10px',
+          }}
+        >
+          {searchResult.message}
+          <button
+            onClick={() => setSearchResult(null)}
+            style={{
+              marginLeft: 10,
+              background: 'none',
+              border: 'none',
+              color: '#9ac79f',
+              cursor: 'pointer',
+              fontSize: 11,
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      );
+    }
+    return null;
+  }
+
+  // ── Block Row ───────────────────────────────────────────────────────
+  function renderBlockRow(b) {
+    const expanded = selectedBlock === b.height;
+    return (
+      <div key={b.height}>
+        <div
+          onClick={() => handleSelectBlock(b.height)}
+          style={{
+            background: expanded ? '#112a11' : '#0d1a0d',
+            border: expanded ? '1px solid #4ade80' : '1px solid #224022',
+            borderRadius: expanded && selectedBlockData ? '8px 8px 0 0' : 8,
+            padding: '9px 12px',
+            cursor: 'pointer',
+            display: 'grid',
+            gridTemplateColumns: '3.5rem 1fr auto',
+            gap: '0 12px',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 13, color: '#4ade80', fontWeight: 700 }}>#{b.height}</span>
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                padding: '1px 5px',
+                borderRadius: 4,
+                color: '#001008',
+                background: proofColor(b.proofType),
+              }}
+            >
+              {proofLabel(b.proofType)}
+            </span>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: '#9ac79f',
+                  fontFamily: 'monospace',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {shortHash(b.hash)}
+              </span>
+              {b.hash && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigator.clipboard.writeText(b.hash).catch(() => {});
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#708870',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                    padding: 0,
+                    flexShrink: 0,
+                  }}
+                  title="Copy hash"
+                >
+                  📋
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: '#708870', marginTop: 2 }}>
+              {formatTs(b.timestamp)} &nbsp;·&nbsp; {b.txCount} tx &nbsp;·&nbsp;
+              {b.proposer === 'genesis' ? (
+                'genesis'
+              ) : (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddressClick(b.proposer);
+                  }}
+                  style={{ color: '#60a5fa', cursor: 'pointer' }}
+                >
+                  {b.proposer ? shortHash(b.proposer) : '-'}
+                </span>
+              )}
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: '#86efac', fontWeight: 700, whiteSpace: 'nowrap' }}>
+            +{(b.rewardTotal || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} WTC
+          </span>
+        </div>
+
+        {expanded && (
+          <div
+            style={{
+              background: '#0a150a',
+              border: '1px solid #4ade80',
+              borderTop: 'none',
+              borderRadius: '0 0 8px 8px',
+              padding: '10px 14px',
+            }}
+          >
+            {blockBusy ? (
+              <div style={{ fontSize: 13, color: '#9ac79f' }}>Loading block…</div>
+            ) : selectedBlockData ? (
+              <BlockDetail block={selectedBlockData} onAddressClick={handleAddressClick} onTxClick={handleTxClick} />
+            ) : (
+              <div style={{ fontSize: 13, color: '#fca5a5' }}>Failed to load block detail.</div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Main render ───────────────────────────────────────────────────
+  if (subView === 'address') {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <button onClick={handleBack} style={{ ...btnStyle(false), marginBottom: 8 }}>
+          ← Back to Explorer
+        </button>
+        {renderAddressDetail()}
+      </div>
+    );
+  }
+
+  if (subView === 'tx') {
+    return (
+      <div style={{ marginTop: 4 }}>
+        <button onClick={handleBack} style={{ ...btnStyle(false), marginBottom: 8 }}>
+          ← Back to Explorer
+        </button>
+        {renderTxDetail()}
+      </div>
+    );
   }
 
   return (
@@ -1951,39 +2544,21 @@ function ExplorerView({
         <div style={{ fontSize: 16, color: '#4ade80', fontWeight: 700 }}>WTC Block Explorer</div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button
-            onClick={() => onLoad(offset + pageSize)}
+            onClick={() => loadBlocks(offset + PAGE_SIZE)}
             disabled={busy || !hasPrev}
-            style={{
-              background: busy || !hasPrev ? '#1a2e1a' : '#1e3a1e',
-              color: busy || !hasPrev ? '#456045' : '#b7f5bc',
-              border: 'none',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontWeight: 700,
-              cursor: busy || !hasPrev ? 'default' : 'pointer',
-              fontSize: 12,
-            }}
+            style={btnStyle(busy || !hasPrev)}
           >
             ← Older
           </button>
           <button
-            onClick={() => onLoad(Math.max(0, offset - pageSize))}
+            onClick={() => loadBlocks(Math.max(0, offset - PAGE_SIZE))}
             disabled={busy || !hasNext}
-            style={{
-              background: busy || !hasNext ? '#1a2e1a' : '#1e3a1e',
-              color: busy || !hasNext ? '#456045' : '#b7f5bc',
-              border: 'none',
-              borderRadius: 6,
-              padding: '5px 10px',
-              fontWeight: 700,
-              cursor: busy || !hasNext ? 'default' : 'pointer',
-              fontSize: 12,
-            }}
+            style={btnStyle(busy || !hasNext)}
           >
             Newer →
           </button>
           <button
-            onClick={() => onLoad(0)}
+            onClick={() => loadBlocks(0)}
             disabled={busy}
             style={{
               background: busy ? '#275a2f' : '#4ade80',
@@ -1996,10 +2571,14 @@ function ExplorerView({
               fontSize: 12,
             }}
           >
-            {busy ? 'Loading…' : 'Latest'}
+            {busy ? 'Loading\u2026' : 'Latest'}
           </button>
         </div>
       </div>
+
+      {renderStats()}
+      {renderSearchBar()}
+      {renderSearchResult()}
 
       {total > 0 && (
         <div style={{ fontSize: 12, color: '#9ac79f', marginBottom: 8 }}>
@@ -2011,67 +2590,7 @@ function ExplorerView({
       {status && <div style={{ marginBottom: 8, fontSize: 13, color: '#fca5a5' }}>{status}</div>}
 
       <div style={{ display: 'grid', gap: 6 }}>
-        {blocks.map((b) => (
-          <div key={b.height}>
-            <div
-              onClick={() => onSelectBlock(b.height)}
-              style={{
-                background: selectedBlock === b.height ? '#112a11' : '#0d1a0d',
-                border: selectedBlock === b.height ? '1px solid #4ade80' : '1px solid #224022',
-                borderRadius: selectedBlock === b.height && selectedBlockData ? '8px 8px 0 0' : 8,
-                padding: '9px 12px',
-                cursor: 'pointer',
-                display: 'grid',
-                gridTemplateColumns: '3.5rem 1fr auto',
-                gap: '0 12px',
-                alignItems: 'center',
-              }}
-            >
-              <span style={{ fontSize: 13, color: '#4ade80', fontWeight: 700 }}>#{b.height}</span>
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: '#9ac79f',
-                    fontFamily: 'monospace',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {shortHash(b.hash)}
-                </div>
-                <div style={{ fontSize: 11, color: '#708870', marginTop: 2 }}>
-                  {formatTs(b.timestamp)} &nbsp;·&nbsp; {b.txCount} tx &nbsp;·&nbsp;{' '}
-                  {b.proposer === 'genesis' ? 'genesis' : b.proposer ? b.proposer.slice(0, 12) + '…' : '-'}
-                </div>
-              </div>
-              <span style={{ fontSize: 12, color: '#86efac', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                +{(b.rewardTotal || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} WTC
-              </span>
-            </div>
-
-            {selectedBlock === b.height && (
-              <div
-                style={{
-                  background: '#0a150a',
-                  border: '1px solid #4ade80',
-                  borderTop: 'none',
-                  borderRadius: '0 0 8px 8px',
-                  padding: '10px 14px',
-                }}
-              >
-                {blockBusy ? (
-                  <div style={{ fontSize: 13, color: '#9ac79f' }}>Loading block…</div>
-                ) : selectedBlockData ? (
-                  <BlockDetail block={selectedBlockData} />
-                ) : (
-                  <div style={{ fontSize: 13, color: '#fca5a5' }}>Failed to load block detail.</div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+        {blocks.map(renderBlockRow)}
         {blocks.length === 0 && !busy && (
           <div style={{ fontSize: 13, color: '#9ac79f', padding: '12px 0' }}>No blocks yet.</div>
         )}
@@ -2080,25 +2599,62 @@ function ExplorerView({
   );
 }
 
-function BlockDetail({ block }) {
-  function formatTs(ms) {
-    if (!ms) return '-';
-    try {
-      return new Date(ms).toLocaleString();
-    } catch (_) {
-      return '-';
-    }
-  }
+function BlockDetail({ block, onAddressClick, onTxClick }) {
   const rewardEntries = block.rewardAddresses ? Object.entries(block.rewardAddresses) : [];
   const txs = block.transactions || [];
   const votes = block.votes ? Object.keys(block.votes) : [];
+
+  function shortHash(h) {
+    return h?.length >= 16 ? h.slice(0, 8) + '\u2026' + h.slice(-6) : h || '-';
+  }
+
+  const copyBtn = (val) => (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(val).catch(() => {});
+      }}
+      style={{
+        background: 'none',
+        border: 'none',
+        color: '#708870',
+        cursor: 'pointer',
+        fontSize: 10,
+        padding: 0,
+        marginLeft: 4,
+        verticalAlign: 'middle',
+      }}
+      title="Copy"
+    >
+      📋
+    </button>
+  );
+
   return (
     <div style={{ fontSize: 12, display: 'grid', gap: 5 }}>
       <Row label="Height" value={block.height} />
-      <Row label="Hash" value={block.hash} mono />
-      <Row label="PrevHash" value={block.prevHash} mono />
+      <Row label="Hash" value={block.hash} mono extra={copyBtn(block.hash)} />
+      <Row
+        label="PrevHash"
+        value={shortHash(block.prevHash)}
+        mono
+        extra={block.prevHash ? copyBtn(block.prevHash) : null}
+      />
       <Row label="Time" value={formatTs(block.timestamp)} />
-      <Row label="Proposer" value={block.proposer} mono />
+      <Row
+        label="Proposer"
+        value={
+          block.proposer === 'genesis' ? (
+            'genesis'
+          ) : (
+            <span onClick={() => onAddressClick?.(block.proposer)} style={{ color: '#60a5fa', cursor: 'pointer' }}>
+              {block.proposer}
+            </span>
+          )
+        }
+        mono
+        extra={block.proposer && block.proposer !== 'genesis' ? copyBtn(block.proposer) : null}
+      />
       <Row
         label="Energy"
         value={`${(block.energyWh || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} Wh`}
@@ -2107,6 +2663,9 @@ function BlockDetail({ block }) {
         label="Reward"
         value={`${(block.rewardTotal || 0).toLocaleString(undefined, { maximumFractionDigits: 8 })} WTC`}
       />
+      {block.proofCommitment && (
+        <Row label="Proof" value={shortHash(block.proofCommitment)} mono extra={copyBtn(block.proofCommitment)} />
+      )}
       {rewardEntries.length > 0 && (
         <div style={{ marginTop: 4 }}>
           <div style={{ color: '#4ade80', fontWeight: 700, marginBottom: 3 }}>Reward distribution</div>
@@ -2122,7 +2681,11 @@ function BlockDetail({ block }) {
                 wordBreak: 'break-all',
               }}
             >
-              <span style={{ marginRight: 8, flex: 1 }}>{addr}</span>
+              <span style={{ marginRight: 8, flex: 1 }}>
+                <span onClick={() => onAddressClick?.(addr)} style={{ color: '#60a5fa', cursor: 'pointer' }}>
+                  {addr}
+                </span>
+              </span>
               <span style={{ whiteSpace: 'nowrap', color: '#86efac' }}>
                 {amt.toLocaleString(undefined, { maximumFractionDigits: 8 })} WTC
               </span>
@@ -2144,13 +2707,40 @@ function BlockDetail({ block }) {
                 marginBottom: 4,
               }}
             >
-              <div style={{ color: '#9ac79f', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }}>
-                ID: {tx.id || '-'}
+              <div
+                style={{
+                  color: '#60a5fa',
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  wordBreak: 'break-all',
+                  cursor: 'pointer',
+                }}
+                onClick={() => onTxClick?.(tx.id || tx.txid)}
+              >
+                ID: {tx.id || tx.txid || '-'} {copyBtn(tx.id || tx.txid)}
               </div>
               <div style={{ color: '#708870', fontSize: 11, marginTop: 2 }}>
-                {tx.from && <span>From: {tx.from} &nbsp;</span>}
-                {tx.to && <span>To: {tx.to} &nbsp;</span>}
-                {tx.amount != null && <span>Amount: {tx.amount} WTC</span>}
+                {tx.from && (
+                  <span>
+                    From:{' '}
+                    <span onClick={() => onAddressClick?.(tx.from)} style={{ color: '#60a5fa', cursor: 'pointer' }}>
+                      {tx.from}
+                    </span>{' '}
+                    &nbsp;
+                  </span>
+                )}
+                {tx.to && (
+                  <span>
+                    To:{' '}
+                    <span onClick={() => onAddressClick?.(tx.to)} style={{ color: '#60a5fa', cursor: 'pointer' }}>
+                      {tx.to}
+                    </span>{' '}
+                    &nbsp;
+                  </span>
+                )}
+                {tx.amount != null && (
+                  <span>Amount: {Number(tx.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })} WTC</span>
+                )}
               </div>
             </div>
           ))}
@@ -2160,8 +2750,9 @@ function BlockDetail({ block }) {
         <div style={{ marginTop: 4 }}>
           <div style={{ color: '#4ade80', fontWeight: 700, marginBottom: 3 }}>BFT Votes ({votes.length})</div>
           {votes.map((v) => (
-            <div key={v} style={{ fontSize: 11, color: '#708870', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+            <div key={v} style={{ fontSize: 10, color: '#708870', fontFamily: 'monospace', wordBreak: 'break-all' }}>
               {v}
+              {copyBtn(v)}
             </div>
           ))}
         </div>
@@ -2170,7 +2761,7 @@ function BlockDetail({ block }) {
   );
 }
 
-function Row({ label, value, mono }) {
+function Row({ label, value, mono, extra }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
       <span style={{ color: '#9ac79f', minWidth: 70, flexShrink: 0 }}>{label}:</span>
@@ -2184,6 +2775,7 @@ function Row({ label, value, mono }) {
       >
         {String(value ?? '-')}
       </span>
+      {extra || null}
     </div>
   );
 }
@@ -3969,20 +4561,10 @@ function WalletTab({
   const [addrValidation, setAddrValidation] = React.useState({ state: 'empty', reason: '' }); // 'empty'|'checking'|'valid'|'invalid'
   const addrValidationTimer = React.useRef(null);
   const [showSendConfirm, setShowSendConfirm] = React.useState(false);
-  const [explorerBlocks, setExplorerBlocks] = React.useState([]);
-  const [explorerTotal, setExplorerTotal] = React.useState(0);
-  const [explorerOffset, setExplorerOffset] = React.useState(0);
-  const [explorerBusy, setExplorerBusy] = React.useState(false);
-  const [explorerStatus, setExplorerStatus] = React.useState('');
-  const [explorerSelectedBlock, setExplorerSelectedBlock] = React.useState(null);
-  const [explorerSelectedBlockData, setExplorerSelectedBlockData] = React.useState(null);
-  const [explorerBlockBusy, setExplorerBlockBusy] = React.useState(false);
   const [queuedSaleOrders, setQueuedSaleOrders] = React.useState([]);
   const [orderId, setOrderId] = React.useState(null);
   const [orderStatus, setOrderStatus] = React.useState(null);
   const [orderPollRef] = React.useState({ iv: null });
-  const EXPLORER_PAGE_SIZE = 20;
-
   // Vortex NFT state
   const [nfts, setNfts] = React.useState([]);
   const [nftsBusy, setNftsBusy] = React.useState(false);
@@ -4959,63 +5541,7 @@ function WalletTab({
         </>
       )}
 
-      {walletView === 'explorer' && (
-        <ExplorerView
-          blocks={explorerBlocks}
-          total={explorerTotal}
-          offset={explorerOffset}
-          busy={explorerBusy}
-          status={explorerStatus}
-          selectedBlock={explorerSelectedBlock}
-          selectedBlockData={explorerSelectedBlockData}
-          blockBusy={explorerBlockBusy}
-          pageSize={EXPLORER_PAGE_SIZE}
-          onLoad={async (off) => {
-            if (!(window.wattcoinHardware && window.wattcoinHardware.invoke)) {
-              setExplorerStatus('Explorer API unavailable.');
-              return;
-            }
-            setExplorerBusy(true);
-            setExplorerStatus('');
-            try {
-              const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-blocks', {
-                offset: off,
-                limit: EXPLORER_PAGE_SIZE,
-              });
-              if (res && res.ok) {
-                setExplorerBlocks(res.blocks || []);
-                setExplorerTotal(res.total || 0);
-                setExplorerOffset(off);
-                setExplorerSelectedBlock(null);
-                setExplorerSelectedBlockData(null);
-              } else {
-                setExplorerStatus('Failed to load blocks.');
-              }
-            } catch (e) {
-              setExplorerStatus('Error: ' + (e && e.message));
-            }
-            setExplorerBusy(false);
-          }}
-          onSelectBlock={async (height) => {
-            if (explorerSelectedBlock === height) {
-              setExplorerSelectedBlock(null);
-              setExplorerSelectedBlockData(null);
-              return;
-            }
-            if (!(window.wattcoinHardware && window.wattcoinHardware.invoke)) return;
-            setExplorerSelectedBlock(height);
-            setExplorerSelectedBlockData(null);
-            setExplorerBlockBusy(true);
-            try {
-              const res = await window.wattcoinHardware.invoke('wattcoin-explorer-get-block', { height });
-              if (res && res.ok) setExplorerSelectedBlockData(res.block);
-            } catch (_) {
-              /* istanbul ignore next */
-            }
-            setExplorerBlockBusy(false);
-          }}
-        />
-      )}
+      {walletView === 'explorer' && <ExplorerView />}
 
       {walletView === 'sale' && (
         <SaleView

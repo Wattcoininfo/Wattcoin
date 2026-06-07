@@ -6998,6 +6998,9 @@ ipcMain.handle('wattcoin-explorer-get-blocks', (_event, { offset = 0, limit = 20
     for (let h = end; h >= start; h--) {
       const b = wtcNode.getBlock(h);
       if (!b) continue;
+      let proofType = 'cpu';
+      if (b.gpuProof) proofType = 'gpu';
+      else if (b.memProof) proofType = 'memory';
       blocks.push({
         height: b.height,
         hash: b.hash,
@@ -7005,9 +7008,11 @@ ipcMain.handle('wattcoin-explorer-get-blocks', (_event, { offset = 0, limit = 20
         timestamp: b.timestamp,
         proposer: b.proposer,
         energyWh: b.energyWh,
+        proofCommitment: b.proofCommitment || '',
         rewardTotal: b.rewardTotal,
         txCount: (b.transactions || []).length,
         voterCount: b.votes ? Object.keys(b.votes).length : 0,
+        proofType,
       });
     }
     return { ok: true, blocks, total };
@@ -7024,6 +7029,146 @@ ipcMain.handle('wattcoin-explorer-get-block', (_event, { height } = {}) => {
     return { ok: true, block: b };
   } catch (e) {
     return { ok: false, block: null, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-explorer-get-stats', () => {
+  try {
+    if (!wtcNode) return { ok: false, error: 'Node not ready' };
+    const height = wtcNode.getHeight();
+    if (height < 0) return { ok: true, height: -1, totalSupply: 0, peerCount: 0, latestBlocks: [] };
+
+    const peerCount = getActivePeers(getLedgerNetworkSettings()).length;
+
+    const { cumulativeSupplyAtHeight } = require('./wtc-chain');
+    const totalSupply = cumulativeSupplyAtHeight(height);
+
+    const latestBlocks = [];
+    const start = Math.max(0, height - 19);
+    for (let h = height; h >= start; h--) {
+      const b = wtcNode.getBlock(h);
+      if (!b) continue;
+      latestBlocks.push({
+        height: b.height,
+        timestamp: b.timestamp,
+        proposer: b.proposer,
+        rewardTotal: b.rewardTotal,
+        txCount: (b.transactions || []).length,
+        energyWh: b.energyWh,
+        proofCommitment: b.proofCommitment || '',
+        hasCpuProof: !!b.cpuSpeedProof,
+        hasMemProof: !!b.memProof,
+        hasGpuProof: !!b.gpuProof,
+      });
+    }
+
+    return { ok: true, height, totalSupply, peerCount, latestBlocks };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-explorer-get-address', (_event, { address } = {}) => {
+  try {
+    if (!wtcNode) return { ok: false, error: 'Node not ready' };
+    if (!address || typeof address !== 'string') return { ok: false, error: 'Invalid address' };
+
+    const bal = wtcNode.getBalance(address);
+    const stats = wtcNode.getMinedStats(address);
+    const height = wtcNode.getHeight();
+    const txs = wtcNode.listTransactions(address, 50);
+    const minedBlocks = [];
+    for (let h = 0; h <= height; h++) {
+      const b = wtcNode.getBlock(h);
+      if (b && b.proposer === address) {
+        minedBlocks.push({
+          height: b.height,
+          hash: b.hash,
+          timestamp: b.timestamp,
+          rewardTotal: b.rewardTotal,
+          txCount: (b.transactions || []).length,
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      address,
+      balance: bal ? { confirmed: bal.confirmed, unmatured: bal.unmatured } : { confirmed: 0, unmatured: 0 },
+      minedStats: stats || { totalBlocks: 0, totalWTC: 0, maturedBlocks: 0 },
+      totalTransactions: txs.length,
+      transactions: txs.slice(0, 20),
+      minedBlocks: minedBlocks.slice(-20).reverse(),
+    };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-explorer-search', (_event, { query } = {}) => {
+  try {
+    if (!wtcNode) return { ok: false, error: 'Node not ready' };
+    if (!query || typeof query !== 'string') return { ok: false, error: 'Invalid query' };
+    const trimmed = query.trim();
+
+    // Height search
+    const heightNum = Number(trimmed);
+    if (Number.isInteger(heightNum) && heightNum >= 0) {
+      const b = wtcNode.getBlock(heightNum);
+      if (b) {
+        return { ok: true, type: 'block', block: b };
+      }
+      return { ok: true, type: 'not_found', message: `Block at height ${heightNum} not found.` };
+    }
+
+    // Hash search
+    if (/^[0-9a-f]{64}$/i.test(trimmed)) {
+      const b = wtcNode.getBlockByHash(trimmed.toLowerCase());
+      if (b) return { ok: true, type: 'block', block: b };
+      return { ok: true, type: 'not_found', message: 'Block with that hash not found.' };
+    }
+
+    // Address search (wtc1q...)
+    if (/^wtc1q[a-z0-9]{38}$/i.test(trimmed)) {
+      const addr = trimmed.toLowerCase();
+      const bal = wtcNode.getBalance(addr);
+      if (bal && (bal.confirmed > 0 || bal.unmatured > 0)) {
+        return { ok: true, type: 'address', address: addr };
+      }
+      const stats = wtcNode.getMinedStats(addr);
+      if (stats && stats.totalBlocks > 0) {
+        return { ok: true, type: 'address', address: addr };
+      }
+      return { ok: true, type: 'not_found', message: 'Address not found on chain.' };
+    }
+
+    return {
+      ok: true,
+      type: 'not_found',
+      message: 'Unrecognised search format. Use block height, 64-char hex hash, or wtc1q address.',
+    };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-explorer-get-tx-detail', (_event, { txid } = {}) => {
+  try {
+    if (!wtcNode) return { ok: false, error: 'Node not ready' };
+    if (!txid || typeof txid !== 'string') return { ok: false, error: 'Invalid txid' };
+    const height = wtcNode.getHeight();
+    for (let h = 0; h <= height; h++) {
+      const b = wtcNode.getBlock(h);
+      if (!b || !b.transactions) continue;
+      for (const tx of b.transactions) {
+        if (tx.id === txid || tx.txid === txid) {
+          return { ok: true, tx: { ...tx, blockHeight: h, blockHash: b.hash, timestamp: b.timestamp } };
+        }
+      }
+    }
+    return { ok: true, type: 'not_found', message: 'Transaction not found.' };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
   }
 });
 

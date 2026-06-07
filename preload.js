@@ -154,6 +154,10 @@ try {
           'wattcoin-docs-list',
           'wattcoin-docs-upload',
           'wattcoin-docs-delete',
+          'wattcoin-explorer-get-stats',
+          'wattcoin-explorer-get-address',
+          'wattcoin-explorer-search',
+          'wattcoin-explorer-get-tx-detail',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));
