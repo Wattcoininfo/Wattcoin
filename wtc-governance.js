@@ -400,6 +400,7 @@ class GovernanceStore {
     transferTo,
     transferAmount,
     transferPurpose,
+    useReserveOverride,
   }) {
     if (this._proposals[pipId]) return { ok: true, pipId, isNew: false };
 
@@ -408,7 +409,17 @@ class GovernanceStore {
     }
 
     const principleCheck = this.validateProposalContent(title, description);
-    if (!principleCheck.ok) return principleCheck;
+    if (!principleCheck.ok) {
+      // If useReserveOverride is set, the treasury minimum reserve principle
+      // is intentionally bypassed — the checkbox serves as explicit consent.
+      if (!useReserveOverride || !principleCheck.violations?.some(v => v.id === 'governance_treasury')) {
+        return principleCheck;
+      }
+      const remaining = principleCheck.violations.filter(v => v.id !== 'governance_treasury');
+      if (remaining.length > 0) {
+        return { ok: false, error: `Proposal violates immutable principles: ${remaining.map(v => v.id).join(', ')}`, violations: remaining };
+      }
+    }
 
     // If this is a governance transfer proposal, validate it
     if (transferTo || transferAmount) {
@@ -450,6 +461,9 @@ class GovernanceStore {
       proposal.transferTo = transferTo;
       proposal.transferAmount = transferAmount;
       proposal.transferPurpose = transferPurpose || '';
+      if (useReserveOverride) {
+        proposal.useReserveOverride = true;
+      }
     }
 
     this._proposals[pipId] = proposal;

@@ -108,6 +108,8 @@ function createNode(id, dataDir, net, opts = {}) {
     dataDir,
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: false,
+    verifyCpuSpeedProof: async () => true,
+    verifyMemProof: async () => true,
     getActivePeers: () => net.getActivePeers(id),
     getTrustedPeerTargets: typeof opts.getTrustedPeerTargets === 'function' ? opts.getTrustedPeerTargets : undefined,
     requestPeerJson: (peerUrl, method, routePath, payload, query) => {
@@ -134,7 +136,7 @@ async function mineN(node, n) {
       throw new Error(`unable to mine ${n} blocks after ${attempts} attempts`);
     }
     try {
-      await node.mineBlock(addr, { energyWh: ENERGY_WH_PER_BLOCK, proofCommitment: `test-${Date.now()}-${mined}` });
+      await node.mineBlock(addr, { energyWh: ENERGY_WH_PER_BLOCK, proofCommitment: `test-${Date.now()}-${mined}`, cpuSpeedInitialSeed: 1, cpuSpeedProof: 'abc123', memProof: 'def456', memProofSeed: 0 });
       mined += 1;
     } catch (err) {
       const msg = err && err.message ? String(err.message) : '';
@@ -163,6 +165,10 @@ async function mineNWithFallback(nodes, n) {
         await node.mineBlock(addr, {
           energyWh: ENERGY_WH_PER_BLOCK,
           proofCommitment: `fallback-${Date.now()}-${mined}`,
+          cpuSpeedInitialSeed: 1,
+          cpuSpeedProof: 'abc123',
+          memProof: 'def456',
+          memProofSeed: 0,
         });
         committed = true;
         mined += 1;

@@ -202,6 +202,8 @@ class WtcNode {
     isSelfPeerUrl,
     getConnectedPeerCount,
     getEnergyContributions,
+    verifyCpuSpeedProof,
+    verifyMemProof,
   }) {
     const privBuf = Buffer.from(this._wallet.primaryKey.privateKey, 'hex');
 
@@ -216,6 +218,8 @@ class WtcNode {
       privateKey: privBuf,
       allowPartialQuorumCommit,
       getEnergyContributions,
+      verifyCpuSpeedProof,
+      verifyMemProof,
     });
     this._isLiveLocalTunnelPeer = typeof isLiveLocalTunnelPeer === 'function' ? isLiveLocalTunnelPeer : null;
     this._isSelfPeerUrl = typeof isSelfPeerUrl === 'function' ? isSelfPeerUrl : null;
@@ -2009,6 +2013,8 @@ function createWtcNode({
   isSelfPeerUrl,
   getConnectedPeerCount,
   getEnergyContributions,
+  verifyCpuSpeedProof,
+  verifyMemProof,
 }) {
   const node = new WtcNode({ dataDir, signingSecret, peerIdentity, walletKey });
   node.init({
@@ -2022,6 +2028,8 @@ function createWtcNode({
     isSelfPeerUrl,
     getConnectedPeerCount,
     getEnergyContributions,
+    verifyCpuSpeedProof,
+    verifyMemProof,
   });
   return node;
 }

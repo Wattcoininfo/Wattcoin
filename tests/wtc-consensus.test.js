@@ -17,6 +17,10 @@ function makeChainStub() {
   return {
     buildBlock: (opts) => {
       const h = height + 1;
+      const cpuSpeedInitialSeed = opts.cpuSpeedInitialSeed !== undefined ? Number(opts.cpuSpeedInitialSeed) || 0 : 1;
+      const cpuSpeedProof = opts.cpuSpeedProof !== undefined ? String(opts.cpuSpeedProof) || '' : 'abc123';
+      const memProof = opts.memProof !== undefined ? String(opts.memProof) || '' : 'def456';
+      const memProofSeed = opts.memProofSeed !== undefined ? Number(opts.memProofSeed) || 0 : 0;
       const block = {
         height: h,
         prevHash: tip ? tip.hash : '0'.repeat(64),
@@ -32,6 +36,12 @@ function makeChainStub() {
         rewardTotal: h <= 2000 ? 500 : h <= 6000 ? 250 : 0,
         stateRoot: opts.stateRoot || crypto.createHash('sha256').update('stub').digest('hex'),
         nftsRoot: opts.nftsRoot || '',
+        cpuSpeedInitialSeed,
+        cpuSpeedProof,
+        memProof,
+        memProofSeed,
+        gpuProof: opts.gpuProof || '',
+        gpuProofSeed: opts.gpuProofSeed || 0,
       };
       block.hash = computeBlockHash(block);
       return block;
@@ -98,6 +108,8 @@ function makeConsensus(opts = {}) {
     allowPartialQuorumCommit: opts.allowPartialQuorumCommit !== false,
     nfts: opts.nfts || null,
     getEnergyContributions: opts.getEnergyContributions || (() => ({})),
+    verifyCpuSpeedProof: opts.verifyCpuSpeedProof || (async () => true),
+    verifyMemProof: opts.verifyMemProof || (async () => true),
   });
 }
 
@@ -133,6 +145,9 @@ describe('wtc-consensus — proposeBlock with no peers', () => {
       proposer: kp.address,
       energyWh: 10000000,
       proofCommitment: 'proof123',
+      cpuSpeedInitialSeed: 1,
+      cpuSpeedProof: 'abc123',
+      memProof: 'def456',
       transactions: [],
       rewardAddresses: { [kp.address]: 500 },
       rewardTotal: 500,
@@ -149,6 +164,9 @@ describe('wtc-consensus — proposeBlock with no peers', () => {
       proposer: 'wtc1qproposer',
       energyWh: 0,
       proofCommitment: '',
+      cpuSpeedInitialSeed: 1,
+      cpuSpeedProof: 'abc123',
+      memProof: 'def456',
       peerProbeVerified: false,
       probeReceipt: null,
       transactions: [],
@@ -170,6 +188,9 @@ describe('wtc-consensus — receiveProposal', () => {
     const block = chain.buildBlock({
       proposer: kp.address,
       energyWh: 10000000,
+      cpuSpeedInitialSeed: 1,
+      cpuSpeedProof: 'abc123',
+      memProof: 'def456',
       rewardAddresses: { [kp.address]: 500 },
       rewardTotal: 500,
     });

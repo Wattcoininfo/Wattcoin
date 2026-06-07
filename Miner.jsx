@@ -2372,7 +2372,7 @@ export default function Miner({
         : 0;
       // Apply the same trust cap used by syncHardwareLoadTarget and effectiveLoadPercent
       // so the baseline benchmark runs at the same load ceiling as live mining.
-      const _trustFBench = Math.min(1.0, 0.6 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.4);
+      const _trustFBench = Math.min(1.0, 0.2 + (trustScoreRef.current / 100) * 0.8);
       const benchLoadPct = Math.min(_rawBenchLoad, Math.round(_trustFBench * 100));
 
       // Poll the hardware load state until the ramp completes and duty cycle
@@ -3446,7 +3446,7 @@ export default function Miner({
       if (benchmarkInFlightRef.current) return;
       const clamped = Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0));
       // Cap physical OS load at the trust ceiling so the machine doesn't do work that won't be credited.
-      const trustF = Math.min(1.0, 0.6 + Math.max(0, (trustScoreRef.current - 50) / 50) * 0.4);
+      const trustF = Math.min(1.0, 0.2 + (trustScoreRef.current / 100) * 0.8);
       const trustCappedLoad = Math.min(clamped, Math.round(trustF * 100));
       try {
         if (isHardwareOnHold) {
@@ -5191,7 +5191,7 @@ export default function Miner({
   // the trust-adjusted unit TDP ceiling, not a potentially lower early-benchmark reading.
   // Each TDP component is scaled by its own calibration factor (CPU speed ratio, memory bandwidth
   // ratio, and GPU ALU score ratio).  Blend formula: 0.5 + 0.5×ratio, clamped 0.20–1.20.
-  const trustFactor = Math.min(1.0, 0.6 + Math.max(0, (trustScore - 50) / 50) * 0.4);
+  const trustFactor = Math.min(1.0, 0.2 + (trustScore / 100) * 0.8);
   // Calibrated component breakdown (used for both unitFullPowerW and display).
   const calibratedCpuTDP = (cpuTDP !== null ? cpuTDP : 0) * benchmarkOpsCalibration;
   const calibratedGpuTDP = (gpuTDP !== null ? gpuTDP : 0) * benchmarkGpuCalibration;

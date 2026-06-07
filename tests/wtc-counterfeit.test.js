@@ -59,6 +59,8 @@ function makeNode(id, dir) {
     requestPeerJson: () => {
       throw new Error('no peers in counterfeit test');
     },
+    verifyCpuSpeedProof: async () => true,
+    verifyMemProof: async () => true,
   });
 }
 
@@ -66,6 +68,10 @@ function mineOne(node) {
   return node.mineBlock(node.getPrimaryAddress(), {
     energyWh: TIER1_ENERGY,
     proofCommitment: `test-proof-${Date.now()}`,
+    cpuSpeedInitialSeed: 1,
+    cpuSpeedProof: 'abc123',
+    memProof: 'def456',
+    memProofSeed: 0,
   });
 }
 
@@ -198,6 +204,10 @@ async function run() {
         {
           energyWh: TIER1_ENERGY,
           proofCommitment: 'redirect-test',
+          cpuSpeedInitialSeed: 1,
+          cpuSpeedProof: 'abc123',
+          memProof: 'def456',
+          memProofSeed: 0,
         },
         { [attacker.address]: 500 },
       );
@@ -221,6 +231,10 @@ async function run() {
             .mineBlock(node.getPrimaryAddress(), {
               energyWh: TIER1_ENERGY - 1,
               proofCommitment: 'low-energy-attack',
+              cpuSpeedInitialSeed: 1,
+              cpuSpeedProof: 'abc123',
+              memProof: 'def456',
+              memProofSeed: 0,
             })
             .then((r) => {
               if (r && r.ok === false) throw new Error(r.reason);

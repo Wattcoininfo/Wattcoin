@@ -141,11 +141,19 @@ try {
           'wattcoin-nft-get',
           'wattcoin-nft-collection',
           'wattcoin-nft-transfer',
+          'wattcoin-governance-status',
           'wattcoin-governance-list',
           'wattcoin-governance-get-vote',
           'wattcoin-governance-get-tallies',
           'wattcoin-governance-propose',
           'wattcoin-governance-vote',
+          'wattcoin-team-list',
+          'wattcoin-team-add',
+          'wattcoin-team-edit',
+          'wattcoin-team-delete',
+          'wattcoin-docs-list',
+          'wattcoin-docs-upload',
+          'wattcoin-docs-delete',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

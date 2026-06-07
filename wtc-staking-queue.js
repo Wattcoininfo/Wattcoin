@@ -492,10 +492,13 @@ async function flushStakingQueue() {
 
     const reward = Math.floor((entry.wtcAmount * apy) / 100);
     if (reward <= 0) {
-      entry.status = 'rewarded';
-      entry.rewardAtMs = Date.now();
-      entry.rewardAmount = 0;
-      entry.apyAtFlush = apy;
+      // Reward rounds to 0 — skip this entry so it stays pending and gets
+      // re-evaluated on the next flush when APY may be higher.  Without this
+      // guard the entry would be marked rewarded (consumed) with nothing paid.
+      console.log(
+        `[StakingQueue] Deferred entry ${entry.id}: ${entry.wtcAmount} WTC @ ${apy}% APY ` +
+          `= ${reward} WTC reward — waiting for higher APY`,
+      );
       continue;
     }
     const livePool = poolAvailable();
@@ -538,9 +541,11 @@ async function flushStakingQueue() {
     const update = { entryId: entry.id };
     const reward = Math.floor((stakedAmt * apy) / 100);
     if (reward <= 0) {
-      update.status = 'rewarded';
-      update.rewardAmount = 0;
-      update.apyAtFlush = apy;
+      console.log(
+        `[StakingQueue] Deferred web entry ${entry.id}: ${stakedAmt} WTC @ ${apy}% APY ` +
+          `= ${reward} WTC reward — waiting for higher APY`,
+      );
+      continue;
     } else {
       const livePool = poolAvailable();
       if (livePool !== null && reward > livePool) {

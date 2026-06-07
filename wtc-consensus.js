@@ -35,8 +35,9 @@
 
 const { computeBlockHash, energyForHeight } = require('./wtc-chain');
 const { validateBlockProbeAttestation } = require('./probe-attestation');
-const { verifyCpuSpeedProof, verifyMemProof } = require('./backend-benchmark');
+const { verifyCpuSpeedProof, verifyMemProof, computeGpuProbeExpectedHash, GPU_PROOF_SIZE, GPU_PROOF_ITERS } = require('./backend-benchmark');
 const { sign: wtcSign, verifySignature: wtcVerify, isValidAddress, txHash } = require('./wtc-address');
+const { GOVERNANCE_MIN_RESERVE } = require('./wtc-governance');
 
 const VOTE_TIMEOUT_MS = 2500; // how long to wait for peer votes
 const QUORUM_FRACTION = 2 / 3; // BFT majority fraction
@@ -66,6 +67,9 @@ class Consensus {
     nfts = null,
     governance = null,
     getEnergyContributions,
+    verifyCpuSpeedProof: verifyCpuSpeedProofFn,
+    verifyMemProof: verifyMemProofFn,
+    verifyGpuProof: verifyGpuProofFn,
   }) {
     this._chain = chain;
     this._accounts = accounts;
@@ -77,6 +81,10 @@ class Consensus {
     this._privKey = privateKey; // Buffer — secp256k1 private key
     this._allowPartialQuorumCommit = !!allowPartialQuorumCommit;
     this._getEnergyContributions = typeof getEnergyContributions === 'function' ? getEnergyContributions : () => ({});
+    this._verifyCpuSpeedProof = typeof verifyCpuSpeedProofFn === 'function' ? verifyCpuSpeedProofFn : verifyCpuSpeedProof;
+    this._verifyMemProof = typeof verifyMemProofFn === 'function' ? verifyMemProofFn : verifyMemProof;
+    this._verifyGpuProof = typeof verifyGpuProofFn === 'function' ? verifyGpuProofFn : (seed, proof) =>
+      proof === computeGpuProbeExpectedHash(seed, GPU_PROOF_SIZE, GPU_PROOF_ITERS);
 
     this._localAddr = ''; // set by setLocalAddress()
     this._pending = new Map(); // blockHash → { block, votes: Map(addr → sigHex), voteWeight: Number }
@@ -477,17 +485,27 @@ class Consensus {
 
     const cpuSeed = Number(block.cpuSpeedInitialSeed) || 0;
     const cpuProof = String(block.cpuSpeedProof || '');
-    if (cpuSeed > 0 && cpuProof) {
-      if (!(await verifyCpuSpeedProof(cpuSeed, cpuProof))) {
-        return `CPU proof re-verification failed for block at height ${block.height}`;
-      }
+    if (!cpuSeed || !cpuProof) {
+      return `CPU proof missing for block at height ${block.height}`;
+    }
+    if (!(await this._verifyCpuSpeedProof(cpuSeed, cpuProof))) {
+      return `CPU proof re-verification failed for block at height ${block.height}`;
     }
 
     const memProof = String(block.memProof || '');
     const memProofSeed = Number(block.memProofSeed) || 0;
-    if (memProof) {
-      if (!(await verifyMemProof(memProof, block.proposer, memProofSeed))) {
-        return `Memory proof re-verification failed for block at height ${block.height}`;
+    if (!memProof) {
+      return `Memory proof missing for block at height ${block.height}`;
+    }
+    if (!(await this._verifyMemProof(memProof, block.proposer, memProofSeed))) {
+      return `Memory proof re-verification failed for block at height ${block.height}`;
+    }
+
+    const gpuProof = String(block.gpuProof || '');
+    const gpuProofSeed = Number(block.gpuProofSeed) || 0;
+    if (gpuProofSeed > 0 && gpuProof) {
+      if (!this._verifyGpuProof(gpuProofSeed, gpuProof)) {
+        return `GPU proof re-verification failed for block at height ${block.height}`;
       }
     }
 
@@ -650,6 +668,27 @@ class Consensus {
             if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
             if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
             throw new Error(`Governance proposal ${ref.pipId} already used for a prior transfer`);
+          }
+          // Check 6: minimum treasury reserve — the governance wallet must
+          // retain at least GOVERNANCE_MIN_RESERVE WTC after the transfer
+          // to ensure continued operations.  Prevents accidental draining.
+          // Can be bypassed if the proposal explicitly opts in with
+          // useReserveOverride (checkbox in the governance tab).
+          if (!proposal.useReserveOverride) {
+            const govBalance = this._accounts.getBalance('wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw');
+            if (govBalance < GOVERNANCE_MIN_RESERVE) {
+              console.error(
+                `[Consensus] SECURITY: governance wallet balance ${govBalance} WTC after transfer ` +
+                  `would fall below minimum reserve ${GOVERNANCE_MIN_RESERVE} WTC — rejecting block`,
+              );
+              this._chain.rollback();
+              this._accounts.rebuildFromBlocks(this._chain.getBlocks());
+              if (this._nfts) this._nfts.rebuildFromBlocks(this._chain.getBlocks());
+              if (this._governance) this._governance.rebuildFromBlocks(this._chain.getBlocks());
+              throw new Error(
+                `Governance wallet transfer would violate minimum reserve of ${GOVERNANCE_MIN_RESERVE} WTC`,
+              );
+            }
           }
         }
       }

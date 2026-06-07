@@ -46,6 +46,8 @@ function createStandaloneNode(id, dataDir) {
     requestPeerJson: () => {
       throw new Error('unexpected peer RPC in standalone test');
     },
+    verifyCpuSpeedProof: async () => true,
+    verifyMemProof: async () => true,
   });
 }
 
@@ -92,6 +94,10 @@ async function run() {
     await miner.mineBlock(proposer, {
       energyWh: ENERGY_WH_PER_BLOCK,
       proofCommitment: 'probe-attestation-test',
+      cpuSpeedInitialSeed: 1,
+      cpuSpeedProof: 'abc123',
+      memProof: 'def456',
+      memProofSeed: 0,
       peerProbeVerified: true,
       probeReceipt,
     });

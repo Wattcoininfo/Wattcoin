@@ -5191,6 +5191,36 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       saveHwAuthState();
     }
 
+    // ── Unknown ASIC detection: reject mining if model has no known power ──
+    // If the device claims ASIC but the model has no power data in any
+    // lookup source (Brave AI or local hardware table), the energy model
+    // cannot bound the miner's contribution — reject outright.
+    if (_isAsicDevice) {
+      const _declaredAsicModel = String((request && request.declaredGpuModel) || '');
+      if (!_declaredAsicModel) {
+        console.warn(`[HW-Verify] ASIC declared but no model specified — rejecting`);
+        return {
+          ok: false,
+          unknownAsic: true,
+          message: 'ASIC declared but no model name provided. Please specify the ASIC miner model (e.g. Antminer S21).',
+        };
+      }
+      // Check both lookup sources (cache hit avoids re-query on mismatch path).
+      const bravePower = await fetchTdpFromBrave(_declaredAsicModel);
+      const tablePower = getAsicPowerW(_declaredAsicModel);
+      if (bravePower === null && tablePower === 0) {
+        console.warn(
+          `[HW-Verify] Unknown ASIC model "${_declaredAsicModel}" — no power data available, rejecting`,
+        );
+        return {
+          ok: false,
+          unknownAsic: true,
+          asicModel: _declaredAsicModel,
+          message: `Unknown ASIC model "${_declaredAsicModel}". This miner is not recognised by the Wattcoin hardware database. Mining is blocked until the model is added. Please contact support.`,
+        };
+      }
+    }
+
     // ── VM detection: block mining entirely ─────────────────────────────────
     // VMs can spoof CPUID, SMBIOS, and GPU identity — all OS-level checks
     // become unreliable.  A VM has no physical power draw (the host bears the
@@ -6580,7 +6610,7 @@ ipcMain.handle('wattcoin-nft-transfer', async (_event, { nftId, fromAddress, toA
 
 ipcMain.handle('wattcoin-governance-status', (_event) => {
   try {
-    if (!wtcNode) return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140 };
+    if (!wtcNode) return { ok: false, distributedPower: 0, passThreshold: 0, totalPossible: 140, governanceWallet: { confirmed: 0, pending: 0, address: 'wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw' } };
     const status = wtcNode.getGovernanceStatus();
     // Include governance wallet balance
     const walletBal = wtcNode.getGovernanceWalletBalance();
@@ -6731,6 +6761,213 @@ ipcMain.handle('wattcoin-governance-vote', async (_event, pipId, voteData) => {
       signature: signed.signature,
     });
     return result;
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+// ── Governance Team IPC handlers ─────────────────────────────────────────────
+
+const TEAM_FILE = 'wtc-team.json';
+const DOCS_FILE = 'wtc-docs.json';
+
+function getTeamFilePath() {
+  return path.join(getWalletDataDir(), TEAM_FILE);
+}
+
+function getDocsFilePath() {
+  return path.join(getWalletDataDir(), DOCS_FILE);
+}
+
+function readTeamData() {
+  try {
+    const fp = getTeamFilePath();
+    if (!fs.existsSync(fp)) return [];
+    return JSON.parse(fs.readFileSync(fp, 'utf8'));
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeTeamData(members) {
+  const fp = getTeamFilePath();
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, JSON.stringify(members, null, 2), 'utf8');
+}
+
+function readDocsData() {
+  try {
+    const fp = getDocsFilePath();
+    if (!fs.existsSync(fp)) return [];
+    return JSON.parse(fs.readFileSync(fp, 'utf8'));
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeDocsData(docs) {
+  const fp = getDocsFilePath();
+  fs.mkdirSync(path.dirname(fp), { recursive: true });
+  fs.writeFileSync(fp, JSON.stringify(docs, null, 2), 'utf8');
+}
+
+function userHasVhpn1(wtcNode, address) {
+  if (!wtcNode || !address) return false;
+  const nft = wtcNode.getNft('vhpn-1');
+  return nft && nft.owner === address;
+}
+
+function userHasAnyNft(wtcNode, address) {
+  if (!wtcNode || !address) return false;
+  const nfts = wtcNode.getNftsForAddress(address);
+  return nfts.length > 0;
+}
+
+function userOwnsNft(wtcNode, address, nftId) {
+  if (!wtcNode || !address || !nftId) return false;
+  const nft = wtcNode.getNft(nftId);
+  return nft && nft.owner === address;
+}
+
+function userOwnedNftIds(wtcNode, address) {
+  if (!wtcNode || !address) return new Set();
+  const nfts = wtcNode.getNftsForAddress(address);
+  return new Set(nfts.map((n) => n.nftId));
+}
+
+ipcMain.handle('wattcoin-team-list', (_event, address) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, members: [], error: 'Node not ready' };
+    if (!userHasAnyNft(wtcNode, address)) return { ok: false, members: [], error: 'Not authorized' };
+    return { ok: true, members: readTeamData() };
+  } catch (e) {
+    return { ok: false, members: [], error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-team-add', (_event, address, member) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, error: 'Node not ready' };
+    if (!userHasAnyNft(wtcNode, address)) return { ok: false, error: 'Not authorized' };
+    if (!member || !member.name || !member.name.trim()) return { ok: false, error: 'Name is required' };
+    const nftId = member.nftId;
+    if (!nftId) return { ok: false, error: 'NFT ID is required' };
+    if (!userOwnsNft(wtcNode, address, nftId)) return { ok: false, error: 'You do not own this NFT' };
+    const members = readTeamData();
+    const isVhpn1 = nftId === 'vhpn-1';
+    const existingForNft = members.find((m) => m.nftId === nftId);
+    if (existingForNft) return { ok: false, error: 'This NFT already has a team member entry' };
+    if (!isVhpn1 && nftId !== 'vhpn-1') {
+      const existingAny = members.find((m) => {
+        const owned = userOwnedNftIds(wtcNode, address);
+        return owned.has(m.nftId);
+      });
+      if (existingAny) return { ok: false, error: 'You have already added a team member with one of your NFTs' };
+    }
+    const entry = {
+      id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      nftId,
+      name: member.name.trim(),
+      role: (member.role || '').trim(),
+      description: (member.description || '').trim(),
+      picture: (member.picture || '').trim(),
+      address,
+      addedBy: address,
+      addedAt: Date.now(),
+    };
+    members.push(entry);
+    writeTeamData(members);
+    broadcastTeamDocsToPeers();
+    return { ok: true, member: entry };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-team-edit', (_event, address, memberId, updates) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, error: 'Node not ready' };
+    const members = readTeamData();
+    const idx = members.findIndex((m) => m.id === memberId);
+    if (idx === -1) return { ok: false, error: 'Member not found' };
+    const targetNftId = members[idx].nftId;
+    const isVhpn1 = userHasVhpn1(wtcNode, address);
+    const ownsNft = targetNftId && userOwnsNft(wtcNode, address, targetNftId);
+    if (!isVhpn1 && !ownsNft) return { ok: false, error: 'Not authorized to edit this member' };
+    members[idx] = { ...members[idx], ...updates, id: members[idx].id, nftId: members[idx].nftId, address: members[idx].address, addedBy: members[idx].addedBy, addedAt: members[idx].addedAt };
+    writeTeamData(members);
+    broadcastTeamDocsToPeers();
+    return { ok: true, member: members[idx] };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-team-delete', (_event, address, memberId) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, error: 'Node not ready' };
+    const members = readTeamData();
+    const idx = members.findIndex((m) => m.id === memberId);
+    if (idx === -1) return { ok: false, error: 'Member not found' };
+    const targetNftId = members[idx].nftId;
+    const isVhpn1 = userHasVhpn1(wtcNode, address);
+    const ownsNft = targetNftId && userOwnsNft(wtcNode, address, targetNftId);
+    if (!isVhpn1 && !ownsNft) return { ok: false, error: 'Not authorized to delete this member' };
+    members.splice(idx, 1);
+    writeTeamData(members);
+    broadcastTeamDocsToPeers();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+// ── Governance Documentation IPC handlers ────────────────────────────────────
+
+ipcMain.handle('wattcoin-docs-list', (_event, address) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, docs: [], error: 'Node not ready' };
+    if (!userHasAnyNft(wtcNode, address)) return { ok: false, docs: [], error: 'Not authorized' };
+    return { ok: true, docs: readDocsData() };
+  } catch (e) {
+    return { ok: false, docs: [], error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-docs-upload', (_event, address, doc) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, error: 'Node not ready' };
+    if (!userHasVhpn1(wtcNode, address)) return { ok: false, error: 'Only vhpn-1 holder can upload documentation' };
+    if (!doc || !doc.title || !doc.title.trim()) return { ok: false, error: 'Title is required' };
+    if (!doc || !doc.content || !doc.content.trim()) return { ok: false, error: 'Content is required' };
+    const docs = readDocsData();
+    const entry = {
+      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      title: doc.title.trim(),
+      content: doc.content.trim(),
+      category: (doc.category || '').trim(),
+      addedBy: address,
+      addedAt: Date.now(),
+      lastEdited: Date.now(),
+    };
+    docs.push(entry);
+    writeDocsData(docs);
+    broadcastTeamDocsToPeers();
+    return { ok: true, doc: entry };
+  } catch (e) {
+    return { ok: false, error: String(e && e.message) };
+  }
+});
+
+ipcMain.handle('wattcoin-docs-delete', (_event, address, docId) => {
+  try {
+    if (!wtcNode || !address) return { ok: false, error: 'Node not ready' };
+    if (!userHasVhpn1(wtcNode, address)) return { ok: false, error: 'Only vhpn-1 holder can delete documentation' };
+    let docs = readDocsData();
+    docs = docs.filter((d) => d.id !== docId);
+    writeDocsData(docs);
+    broadcastTeamDocsToPeers();
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e && e.message) };
   }
@@ -8440,14 +8677,85 @@ async function syncGovernanceFromPeers() {
 let _govSyncInterval = null;
 function startGovernanceSync() {
   stopGovernanceSync();
-  // Initial sync after a short delay to let the node settle
-  setTimeout(() => syncGovernanceFromPeers().catch(() => {}), 5000);
-  _govSyncInterval = setInterval(() => syncGovernanceFromPeers().catch(() => {}), 30_000);
+  const doSync = () => {
+    syncGovernanceFromPeers().catch(() => {});
+    syncTeamDocsFromPeers().catch(() => {});
+  };
+  setTimeout(() => doSync(), 5000);
+  _govSyncInterval = setInterval(() => doSync(), 30_000);
 }
 function stopGovernanceSync() {
   if (_govSyncInterval) {
     clearInterval(_govSyncInterval);
     _govSyncInterval = null;
+  }
+}
+
+/** Fetch team/docs snapshots from all peers and merge locally.
+ *  Only runs on NFT-holding nodes — non-NFT nodes never receive the data. */
+async function syncTeamDocsFromPeers() {
+  if (!wtcNode) return;
+  if (!_nodeHasGovernanceNfts()) return;
+  const settings = getLedgerNetworkSettings();
+  if (!settings.enabled) return;
+  const peers = getActivePeers(settings);
+  if (!peers || peers.length === 0) return;
+
+  const results = await Promise.allSettled(
+    peers.map((peerUrl) =>
+      requestPeerJson(peerUrl, 'GET', '/api/v1/governance/team-docs', undefined, undefined, {
+        trackReachability: false,
+        suppressPeerDiscovery: true,
+        source: 'team-docs-pull',
+        timeoutMs: 10000,
+      }).catch(() => null),
+    ),
+  );
+
+  const mergedMembers = {};
+  const mergedDocs = {};
+  // Start with local data
+  for (const m of readTeamData()) mergedMembers[m.id] = m;
+  for (const d of readDocsData()) mergedDocs[d.id] = d;
+
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status !== 'fulfilled') continue;
+    const snap = results[i].value;
+    if (!snap || !snap.ok) continue;
+    if (Array.isArray(snap.members)) {
+      for (const m of snap.members) {
+        if (!mergedMembers[m.id] || m.addedAt > mergedMembers[m.id].addedAt) {
+          mergedMembers[m.id] = m;
+        }
+      }
+    }
+    if (Array.isArray(snap.docs)) {
+      for (const d of snap.docs) {
+        if (!mergedDocs[d.id] || d.addedAt > mergedDocs[d.id].addedAt) {
+          mergedDocs[d.id] = d;
+        }
+      }
+    }
+  }
+
+  writeTeamData(Object.values(mergedMembers));
+  writeDocsData(Object.values(mergedDocs));
+}
+
+/** Broadcast local team/docs data to all peers (fire-and-forget). */
+function broadcastTeamDocsToPeers() {
+  const settings = getLedgerNetworkSettings();
+  if (!settings.enabled) return;
+  const peers = getActivePeers(settings);
+  if (!peers || peers.length === 0) return;
+  const payload = { ok: true, members: readTeamData(), docs: readDocsData() };
+  for (const peerUrl of peers) {
+    requestPeerJson(peerUrl, 'POST', '/api/v1/governance/team-docs', payload, undefined, {
+      trackReachability: false,
+      suppressPeerDiscovery: true,
+      source: 'team-docs-push',
+      timeoutMs: 5000,
+    }).catch(() => {});
   }
 }
 
@@ -8656,6 +8964,68 @@ function startLedgerNetworkServer() {
         try {
           const proposals = wtcNode.getGovernanceProposals();
           sendJson(res, 200, { ok: true, proposals });
+        } catch (e) {
+          sendJson(res, 500, { ok: false, error: String(e && e.message) });
+        }
+        return;
+      }
+
+      // ── Governance team/docs snapshot (pull-based sync) ──────────────────
+      if (req.method === 'GET' && reqUrl.pathname === '/api/v1/governance/team-docs') {
+        if (!_nodeHasGovernanceNfts()) {
+          sendJson(res, 403, { ok: false, error: 'No governance NFTs on this node' });
+          return;
+        }
+        const rl = await enforceEndpointRateLimit('governance-team-docs', requesterIdentity);
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
+        try {
+          sendJson(res, 200, { ok: true, members: readTeamData(), docs: readDocsData() });
+        } catch (e) {
+          sendJson(res, 500, { ok: false, error: String(e && e.message) });
+        }
+        return;
+      }
+      if (req.method === 'POST' && reqUrl.pathname === '/api/v1/governance/team-docs') {
+        if (!_nodeHasGovernanceNfts()) {
+          sendJson(res, 403, { ok: false, error: 'No governance NFTs on this node' });
+          return;
+        }
+        const rl = await enforceEndpointRateLimit('governance-team-docs-push', requesterIdentity);
+        if (!rl.ok) {
+          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
+          return;
+        }
+        try {
+          let body = '';
+          for await (const chunk of req) body += chunk;
+          const data = JSON.parse(body);
+          if (data && data.ok) {
+            const localMembers = readTeamData();
+            const localDocs = readDocsData();
+            const merged = { members: {}, docs: {} };
+            for (const m of localMembers) merged.members[m.id] = m;
+            for (const d of localDocs) merged.docs[d.id] = d;
+            if (Array.isArray(data.members)) {
+              for (const m of data.members) {
+                if (!merged.members[m.id] || m.addedAt > merged.members[m.id].addedAt) {
+                  merged.members[m.id] = m;
+                }
+              }
+            }
+            if (Array.isArray(data.docs)) {
+              for (const d of data.docs) {
+                if (!merged.docs[d.id] || d.addedAt > merged.docs[d.id].addedAt) {
+                  merged.docs[d.id] = d;
+                }
+              }
+            }
+            writeTeamData(Object.values(merged.members));
+            writeDocsData(Object.values(merged.docs));
+          }
+          sendJson(res, 200, { ok: true });
         } catch (e) {
           sendJson(res, 500, { ok: false, error: String(e && e.message) });
         }
@@ -9028,6 +9398,18 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
     };
   }
 
+  // Block contributions while hardware hold is active (trustScore dropped to 0
+  // after repeated violations).  The hold is set in the benchmark handler and
+  // expires after 24 hours.
+  if (hwAuthority.hwHoldUntilMs > Date.now()) {
+    const remainingH = ((hwAuthority.hwHoldUntilMs - Date.now()) / 3600000).toFixed(1);
+    return {
+      ok: false,
+      code: 'HW_HOLD',
+      message: `Mining suspended for ${remainingH}h due to hardware trust violations. Complete a benchmark when the hold expires.`,
+    };
+  }
+
   // Block contributions if no CPU benchmark has ever been completed.
   // Without at least one benchmark there is no verified hardware capability,
   // so any claimed energy is unverifiable.  A patched renderer cannot bypass
@@ -9059,7 +9441,7 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   // values.  At the normal 0.25s tick rate the legitimate value is 4× smaller.
   let clampedDeltaWh = Math.max(0, Number(deltaWh) || 0);
   if (hwAuthority.calibratedUnitPowerW > 0) {
-    const tf = Math.min(1.0, 0.6 + Math.max(0, (hwAuthority.trustScore - 50) / 50) * 0.4);
+    const tf = Math.min(1.0, 0.2 + (hwAuthority.trustScore / 100) * 0.8);
     // 0.5 s of max power: twice the normal 0.25 s tick interval as jitter headroom.
     // At the 240-calls/min rate limit this caps injection at ≤2× the legitimate rate.
     const maxDeltaWh = (hwAuthority.calibratedUnitPowerW * tf * 0.5) / 3600;
