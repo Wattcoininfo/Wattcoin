@@ -43,6 +43,7 @@ const SUPPLY_PER_TIER = 1_000_000;
 const MAX_TIERS = 21;
 const BASE_REWARD = 1000;
 const GENESIS_PREMINE = 1_000_000; // tier 0 — premined at height 0
+const HARD_CAP = GENESIS_PREMINE + (MAX_TIERS - 1) * SUPPLY_PER_TIER; // 21,000,000 WTC
 
 /**
  * Block reward for a given height.
@@ -80,6 +81,25 @@ function energyForHeight(height) {
   const tier = Math.round(Math.log2(BASE_REWARD / reward));
   const energyPerCoin = 20_000 * Math.pow(2, tier - 1);
   return energyPerCoin * reward;
+}
+
+/**
+ * Total WTC minted up to and including the given height (inclusive).
+ * O(tiers) — at most 21 iterations regardless of chain height.
+ */
+function cumulativeSupplyAtHeight(height) {
+  if (height <= 0) return GENESIS_PREMINE;
+  let total = GENESIS_PREMINE;
+  let remaining = height;
+  for (let tier = 1; tier < MAX_TIERS; tier++) {
+    const reward = BASE_REWARD / Math.pow(2, tier);
+    const blocksThisTier = Math.round(SUPPLY_PER_TIER / reward);
+    const consume = Math.min(remaining, blocksThisTier);
+    total += consume * reward;
+    remaining -= consume;
+    if (remaining <= 0) break;
+  }
+  return total;
 }
 
 /**
@@ -628,10 +648,12 @@ module.exports = {
   Chain,
   rewardForHeight,
   energyForHeight,
+  cumulativeSupplyAtHeight,
   computeBlockHash,
   computeTxsHash,
   GENESIS_PREMINE,
   SUPPLY_PER_TIER,
   MAX_TIERS,
   BASE_REWARD,
+  HARD_CAP,
 };

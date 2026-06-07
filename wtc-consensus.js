@@ -33,7 +33,7 @@
  *    These use the existing port-39310 HTTP peer network.
  */
 
-const { computeBlockHash, energyForHeight } = require('./wtc-chain');
+const { computeBlockHash, energyForHeight, cumulativeSupplyAtHeight, HARD_CAP } = require('./wtc-chain');
 const { validateBlockProbeAttestation } = require('./probe-attestation');
 const {
   verifyCpuSpeedProof,
@@ -396,6 +396,14 @@ class Consensus {
     const minEnergyWh = energyForHeight(block.height);
     if (minEnergyWh > 0 && (typeof block.energyWh !== 'number' || block.energyWh < minEnergyWh)) {
       return `insufficient energyWh: required ${minEnergyWh}, got ${block.energyWh || 0}`;
+    }
+
+    // Hard cap enforcement: cumulative supply after this block must not
+    // exceed 21,000,000 WTC.  This is a protocol-level invariant that
+    // protects against supply overflow even if rewardForHeight is modified.
+    const supplyBefore = cumulativeSupplyAtHeight(block.height - 1);
+    if (supplyBefore + block.rewardTotal > HARD_CAP) {
+      return `block reward would push cumulative supply above hard cap of ${HARD_CAP} WTC`;
     }
 
     const contribs = this._getEnergyContributions();

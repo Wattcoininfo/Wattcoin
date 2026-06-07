@@ -1955,6 +1955,7 @@ export default function Miner({
   const [sharedRoundTotalWh, setSharedRoundTotalWh] = React.useState(0);
 
   const [_baselinePowerW, setBaselinePowerW] = React.useState(0);
+  const [showRebenchPrompt, setShowRebenchPrompt] = React.useState(false);
   const [benchmarkState, setBenchmarkState] = React.useState({
     running: false,
     startupDone: (() => {
@@ -3184,6 +3185,13 @@ export default function Miner({
           memPenaltyPct,
           gpuPenaltyPct,
         });
+
+        // If startup benchmark shows significant performance degradation,
+        // prompt the user to re-benchmark before continuing to mine.
+        if (isBaselineBenchmark) {
+          const anyDegraded = [cpuPenaltyPct, memPenaltyPct, gpuPenaltyPct].some((p) => p > 30);
+          if (anyDegraded) setShowRebenchPrompt(true);
+        }
 
         // Persist proof data so the next mineBlock call can include it in the OP_RETURN
         // commitment.  Other nodes can then re-run cpuSpeedStep(initialSeed, N=20M) and
@@ -6127,6 +6135,7 @@ export default function Miner({
           </span>
         </div>
       )}
+
       <div style={{ display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'stretch', width: '100%' }}>
         {/* Left column: Hardware recognition */}
         <div
@@ -6252,32 +6261,23 @@ export default function Miner({
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
                   {(() => {
                     const p = benchmarkState.cpuPenaltyPct;
-                    const clr = p <= 10 ? '#a7ffb0' : p <= 20 ? '#facc15' : '#f97316';
-                    return (
-                      <span key="cpu" style={{ marginLeft: 4, color: clr }}>
-                        {p < 0 ? 'CPU baseline' : `CPU ${p}%`}
-                      </span>
-                    );
+                    const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : 'Degraded';
+                    const clr = label === 'Good' ? '#a7ffb0' : label === 'Normal' ? '#facc15' : label === 'Degraded' ? '#f97316' : '#6b7280';
+                    return <span style={{ color: clr, marginLeft: 4 }}>CPU: {label}</span>;
                   })()}
                   {benchmarkState.lastAvgMemPct !== null &&
                     (() => {
                       const p = benchmarkState.memPenaltyPct;
-                      const clr = p <= 10 ? '#a7ffb0' : p <= 20 ? '#facc15' : '#f97316';
-                      return (
-                        <span key="mem" style={{ marginLeft: 4, color: clr }}>
-                          {p < 0 ? 'Mem baseline' : `Mem ${p}%`}
-                        </span>
-                      );
+                      const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : 'Degraded';
+                      const clr = label === 'Good' ? '#a7ffb0' : label === 'Normal' ? '#facc15' : label === 'Degraded' ? '#f97316' : '#6b7280';
+                      return <span style={{ color: clr, marginLeft: 4 }}>Mem: {label}</span>;
                     })()}
                   {benchmarkState.lastAvgGpuPct !== null &&
                     (() => {
                       const p = benchmarkState.gpuPenaltyPct;
-                      const clr = p <= 10 ? '#a7ffb0' : p <= 20 ? '#facc15' : '#f97316';
-                      return (
-                        <span key="gpu" style={{ marginLeft: 4, color: clr }}>
-                          {p < 0 ? 'GPU baseline' : `GPU ${p}%`}
-                        </span>
-                      );
+                      const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : 'Degraded';
+                      const clr = label === 'Good' ? '#a7ffb0' : label === 'Normal' ? '#facc15' : label === 'Degraded' ? '#f97316' : '#6b7280';
+                      return <span style={{ color: clr, marginLeft: 4 }}>GPU: {label}</span>;
                     })()}
                 </div>
               ) : (
@@ -6354,7 +6354,11 @@ export default function Miner({
                             : '#f97316',
                     }}
                   >
-                    <b>Jitter:</b> {benchmarkState.lastJitterPct.toFixed(1)}%
+                    {(() => {
+                      const j = benchmarkState.lastJitterPct;
+                      const label = j <= 10 ? 'Low' : j <= 20 ? 'Moderate' : 'High';
+                      return <span><b>Jitter:</b> {label}</span>;
+                    })()}
                   </div>
                 )}
               </div>
@@ -6987,12 +6991,46 @@ export default function Miner({
         />
         <div style={{ flex: 1.6, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 16, width: '100%', alignItems: 'stretch' }}>
-            <div style={{ flex: 1 }} />
+            {showRebenchPrompt ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: '#78350f',
+                  borderRadius: 8,
+                  padding: '8px 12px',
+                  fontSize: 12,
+                  color: '#fed7aa',
+                  fontWeight: 600,
+                }}
+              >
+                <span style={{ flex: 1, lineHeight: 1.3 }}>
+                  Startup benchmark shows degraded performance
+                  {[
+                    benchmarkState.cpuPenaltyPct > 30 && `CPU ${benchmarkState.cpuPenaltyPct}%`,
+                    benchmarkState.memPenaltyPct > 30 && `Mem ${benchmarkState.memPenaltyPct}%`,
+                    benchmarkState.gpuPenaltyPct > 30 && `GPU ${benchmarkState.gpuPenaltyPct}%`,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  . Re-benchmark?
+                </span>
+              </div>
+            ) : (
+              <div style={{ flex: 1 }} />
+            )}
             <div style={{ flex: 1 }}>
               <button
                 onClick={() => {
-                  console.log('[MinerSimulator] Start Mining button clicked, setting mining to true');
-                  setMining(true);
+                  if (showRebenchPrompt) {
+                    setShowRebenchPrompt(false);
+                    runBenchmark('startup');
+                  } else {
+                    console.log('[MinerSimulator] Start Mining button clicked, setting mining to true');
+                    setMining(true);
+                  }
                 }}
                 disabled={
                   mining ||
@@ -7014,8 +7052,10 @@ export default function Miner({
                     peerCount === null ||
                     peerCount === 0
                       ? '#7aa88a'
-                      : '#4ade80',
-                  color: '#0d1a0d',
+                      : showRebenchPrompt
+                        ? '#ea580c'
+                        : '#4ade80',
+                  color: showRebenchPrompt ? '#fff' : '#0d1a0d',
                   border: 'none',
                   borderRadius: 8,
                   padding: '12px 32px',
@@ -7041,9 +7081,11 @@ export default function Miner({
                       ? 'Benchmarking...'
                       : peerCount === null || peerCount === 0
                         ? 'No peers'
-                        : hardwareRecognitionFinished
-                          ? 'Start mining'
-                          : 'Detecting hardware...'}
+                        : showRebenchPrompt
+                          ? 'Re-Benchmark'
+                          : hardwareRecognitionFinished
+                            ? 'Start mining'
+                            : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>
