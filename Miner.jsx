@@ -6262,21 +6262,42 @@ export default function Miner({
                   {(() => {
                     const p = benchmarkState.cpuPenaltyPct;
                     const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : 'Degraded';
-                    const clr = label === 'Good' ? '#a7ffb0' : label === 'Normal' ? '#facc15' : label === 'Degraded' ? '#f97316' : '#6b7280';
+                    const clr =
+                      label === 'Good'
+                        ? '#a7ffb0'
+                        : label === 'Normal'
+                          ? '#facc15'
+                          : label === 'Degraded'
+                            ? '#f97316'
+                            : '#6b7280';
                     return <span style={{ color: clr, marginLeft: 4 }}>CPU: {label}</span>;
                   })()}
                   {benchmarkState.lastAvgMemPct !== null &&
                     (() => {
                       const p = benchmarkState.memPenaltyPct;
                       const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : 'Degraded';
-                      const clr = label === 'Good' ? '#a7ffb0' : label === 'Normal' ? '#facc15' : label === 'Degraded' ? '#f97316' : '#6b7280';
+                      const clr =
+                        label === 'Good'
+                          ? '#a7ffb0'
+                          : label === 'Normal'
+                            ? '#facc15'
+                            : label === 'Degraded'
+                              ? '#f97316'
+                              : '#6b7280';
                       return <span style={{ color: clr, marginLeft: 4 }}>Mem: {label}</span>;
                     })()}
                   {benchmarkState.lastAvgGpuPct !== null &&
                     (() => {
                       const p = benchmarkState.gpuPenaltyPct;
                       const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : 'Degraded';
-                      const clr = label === 'Good' ? '#a7ffb0' : label === 'Normal' ? '#facc15' : label === 'Degraded' ? '#f97316' : '#6b7280';
+                      const clr =
+                        label === 'Good'
+                          ? '#a7ffb0'
+                          : label === 'Normal'
+                            ? '#facc15'
+                            : label === 'Degraded'
+                              ? '#f97316'
+                              : '#6b7280';
                       return <span style={{ color: clr, marginLeft: 4 }}>GPU: {label}</span>;
                     })()}
                 </div>
@@ -6357,7 +6378,11 @@ export default function Miner({
                     {(() => {
                       const j = benchmarkState.lastJitterPct;
                       const label = j <= 10 ? 'Low' : j <= 20 ? 'Moderate' : 'High';
-                      return <span><b>Jitter:</b> {label}</span>;
+                      return (
+                        <span>
+                          <b>Jitter:</b> {label}
+                        </span>
+                      );
                     })()}
                   </div>
                 )}
