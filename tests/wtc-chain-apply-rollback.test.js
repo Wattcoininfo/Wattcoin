@@ -51,8 +51,8 @@ function standaloneNode(id, dir) {
     dataDir: dir,
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: true,
-    verifyCpuSpeedProof: async () => true,
-    verifyMemProof: async () => true,
+    verifyCpuSpeedProof: () => Promise.resolve(true),
+    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => [],
     requestPeerJson: () => {
       throw new Error('no peers in test');

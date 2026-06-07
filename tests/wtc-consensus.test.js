@@ -108,8 +108,8 @@ function makeConsensus(opts = {}) {
     allowPartialQuorumCommit: opts.allowPartialQuorumCommit !== false,
     nfts: opts.nfts || null,
     getEnergyContributions: opts.getEnergyContributions || (() => ({})),
-    verifyCpuSpeedProof: opts.verifyCpuSpeedProof || (async () => true),
-    verifyMemProof: opts.verifyMemProof || (async () => true),
+    verifyCpuSpeedProof: opts.verifyCpuSpeedProof || (() => Promise.resolve(true)),
+    verifyMemProof: opts.verifyMemProof || (() => Promise.resolve(true)),
   });
 }
 

@@ -59,8 +59,8 @@ function makeNode(id, dir) {
     requestPeerJson: () => {
       throw new Error('no peers in counterfeit test');
     },
-    verifyCpuSpeedProof: async () => true,
-    verifyMemProof: async () => true,
+    verifyCpuSpeedProof: () => Promise.resolve(true),
+    verifyMemProof: () => Promise.resolve(true),
   });
 }
 
