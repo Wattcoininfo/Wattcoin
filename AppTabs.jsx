@@ -602,7 +602,20 @@ export default function AppTabs() {
           .catch(() => {});
       }
     }, tickSeconds * 1000);
-    return () => clearInterval(miningRef.current);
+    return () => {
+      clearInterval(miningRef.current);
+      // Sync the Energy Used card to the ledger's confirmed value on stop.
+      if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+        window.wattcoinHardware
+          .invoke('wattcoin-ledger-get-balances', selectedWalletAddress || '')
+          .then((bal) => {
+            if (bal && typeof bal.currentRoundContributionWh === 'number') {
+              setEnergy(bal.currentRoundContributionWh);
+            }
+          })
+          .catch(() => {});
+      }
+    };
   }, [mining, powerW, setEnergy, selectedWalletAddress]);
 
   const handleBlockMined = useCallback(

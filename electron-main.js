@@ -253,6 +253,10 @@ let hwAuthority = {
   // Set when the main process reads getGpuInfo().adapter and looks it up
   // in getGpuTdpW(). Overrides the renderer-supplied GPU power component.
   nativeGpuTdpW: 0,
+  // Consecutive clean probes during mining — increments trust score on each milestone.
+  consecutiveCleanProbes: 0,
+  // Consecutive peer probe hardware failures — decrements trust at threshold.
+  consecutivePeerProbeFails: 0,
   // Rolling mean jitter derived from persistent jitterSamples history.
   // Used to widen the attestation threshold for machines that legitimately
   // run with higher OS-scheduler variance (e.g. background load, slow CPUs).
@@ -1176,8 +1180,8 @@ let peerCountInspectionPromise = null; // concurrency guard for wattcoin-get-pee
 let peerCountCachedResult = null; // { expiresAtMs, value }
 const PEER_COUNT_CACHE_TTL_MS = 8_000; // re-use recent inspection result for 8 s
 const PEER_COUNT_PROBE_CONCURRENCY = 5; // probe up to 5 peers in parallel
-const PEER_COUNT_PROBE_TIMEOUT_MS = 6_000; // shorter timeout for peer-count probes
-const PEER_ATTESTATION_SELECTION_TIMEOUT_MS = 6_000; // attestation peer must be online now
+const PEER_COUNT_PROBE_TIMEOUT_MS = 15_000; // shorter timeout for peer-count probes (increased for external network stability)
+const PEER_ATTESTATION_SELECTION_TIMEOUT_MS = 15_000; // attestation peer must be online now (increased for external network stability)
 const PEER_ATTESTATION_SELECTION_CONCURRENCY = 5;
 let reverseTunnelWss = null;
 const reverseTunnelSessions = new Map(); // tunnelId -> session
@@ -1606,9 +1610,14 @@ function extractReachablePeerCandidates(req, settings = getLedgerNetworkSettings
     1,
     Number(req.headers['x-wtc-peer-port']) || Number(settings && settings.listenPort) || 0,
   );
-  const inferredSocketUrl = buildPeerUrlFromSocket(req.socket && req.socket.remoteAddress, declaredPort);
+  // When the peer announces its own URLs (x-wtc-peer-urls), use those as authoritative.
+  // The socket-inferred URL (remote IP + port) is redundant — it may be a NAT'd LAN
+  // address that causes the same physical peer to be counted twice.
+  const inferredSocketUrl = announcedUrls.length > 0 ? null : buildPeerUrlFromSocket(req.socket && req.socket.remoteAddress, declaredPort);
   return sortPeerUrlsByPreference(
-    [...announcedUrls, inferredSocketUrl].filter((candidate) => candidate && !isSelfPeerUrl(candidate)),
+    [...announcedUrls, ...(inferredSocketUrl ? [inferredSocketUrl] : [])].filter(
+      (candidate) => candidate && !isSelfPeerUrl(candidate),
+    ),
   );
 }
 
@@ -1689,18 +1698,21 @@ function rememberDiscoveredPeer(
   return isNew;
 }
 
-function forgetDiscoveredPeer(peerUrl) {
+function forgetDiscoveredPeer(peerUrl, reason = 'unknown') {
   const normalized = normalizePeerUrl(peerUrl);
   if (!normalized) return false;
   const removed = discoveredPeers.delete(normalized);
-  if (removed) scheduleDiscoveredSeedPeerCacheSave();
+  if (removed) {
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Peer] forgetDiscoveredPeer: removed', normalized, 'reason:', reason);
+    scheduleDiscoveredSeedPeerCacheSave();
+  }
   return removed;
 }
 
-function forgetPeerUrlState(peerUrl) {
+function forgetPeerUrlState(peerUrl, reason = 'unknown') {
   const normalized = normalizePeerUrl(peerUrl);
   if (!normalized) return false;
-  const removed = forgetDiscoveredPeer(normalized);
+  const removed = forgetDiscoveredPeer(normalized, reason);
   peerReachabilityCache.delete(normalized);
   peerChainTipCache.delete(normalized);
   peerChainTipInflight.delete(normalized);
@@ -1768,7 +1780,7 @@ function getLocalTunnelPeerLiveness(peerUrl) {
   return null;
 }
 
-async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), localWorkerId = '') {
+async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), localWorkerId = '', extraOpts = {}) {
   const localWorkerKey = String(localWorkerId || '').trim();
   const peers = getActivePeers(settings);
   const distinctPeerKeys = new Set();
@@ -1791,39 +1803,62 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
     httpPeers.push(peerUrl);
   }
 
+  // Stop probing once enough verifiers are found so unreachable accumulated peers
+  // (from rememberObservedRequester) don't force a full batch cycle delay.
+  const enoughFound = { current: false };
   const probePeer = async (peerUrl) => {
+    if (enoughFound.current) return;
     try {
       const tip = await requestPeerJson(peerUrl, 'GET', '/api/v1/chain/tip', undefined, undefined, {
-        timeoutMs: PEER_ATTESTATION_SELECTION_TIMEOUT_MS,
+        timeoutMs: (extraOpts && extraOpts.fastTimeoutMs) || PEER_ATTESTATION_SELECTION_TIMEOUT_MS,
         trackReachability: false,
         suppressPeerDiscovery: true,
         source: 'peer-probe-select',
       });
       if (!tip || !tip.ok) return;
+      if (enoughFound.current) return;
       const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) return;
       if (localWorkerKey && peerIdentity && hasRecentPeerAttestationRelation(localWorkerKey, peerIdentity)) return;
       const peerKey = getPeerIdentityKey(peerUrl, tip);
       if (distinctPeerKeys.has(peerKey)) return;
       distinctPeerKeys.add(peerKey);
+      rememberDiscoveredPeer(peerUrl, { source: 'peer-probe-select', quiet: true });
       onlinePeers.push(peerUrl);
+      if (onlinePeers.length >= MIN_PROBE_VERIFIERS) {
+        enoughFound.current = true;
+      }
     } catch (_) {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
   };
 
-  for (let index = 0; index < httpPeers.length; index += PEER_ATTESTATION_SELECTION_CONCURRENCY) {
+  for (let index = 0; index < httpPeers.length && onlinePeers.length < MIN_PROBE_VERIFIERS; index += PEER_ATTESTATION_SELECTION_CONCURRENCY) {
     const batch = httpPeers.slice(index, index + PEER_ATTESTATION_SELECTION_CONCURRENCY);
     await Promise.all(batch.map(probePeer));
   }
 
+  if (process.env.WATTCOIN_DEBUG && onlinePeers.length < MIN_PROBE_VERIFIERS) {
+    console.warn('[Peer] getOnlineAttestationPeers: only', onlinePeers.length, 'online, httpPeers tried:', httpPeers.length, 'tunnelPeers:', peers.length - httpPeers.length);
+  }
   return onlinePeers;
 }
 
 function pruneDiscoveredPeers(nowMs = Date.now()) {
   let changed = false;
   for (const [url, info] of discoveredPeers.entries()) {
-    if (!info || nowMs - Number(info.lastSeenMs || 0) > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(url)) {
+    if (!info) {
+      discoveredPeers.delete(url);
+      changed = true;
+    } else if (nowMs - Number(info.lastSeenMs || 0) > PEER_STALE_THRESHOLD_MS) {
+      if (process.env.WATTCOIN_DEBUG) {
+        const ageSec = ((nowMs - Number(info.lastSeenMs || 0)) / 1000).toFixed(0);
+        console.warn('[Peer] pruneDiscoveredPeers: stale', url, 'lastSeen', ageSec + 's ago');
+      }
+      discoveredPeers.delete(url);
+      changed = true;
+    } else if (isPeerUrlBanned(url)) {
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Peer] pruneDiscoveredPeers: banned', url);
       discoveredPeers.delete(url);
       changed = true;
     }
@@ -2017,6 +2052,7 @@ async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') 
   try {
     const tip = await requestPeerJson(normalized, 'GET', '/api/v1/chain/tip', undefined, undefined, {
       timeoutMs: PEER_REACHABILITY_TIMEOUT_MS,
+      trackReachability: false,
       suppressPeerDiscovery: true,
       source,
     });
@@ -2027,6 +2063,7 @@ async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') 
       lastSuccessAtMs: Date.now(),
       ok: true,
     });
+    recordPeerUrlSuccess(normalized);
     rememberDiscoveredPeer(normalized, { source, quiet: true });
     if (Number.isFinite(remoteHeight) && Number.isFinite(localHeight) && remoteHeight > localHeight) {
       scheduleWtcPeerSync(`${source}-higher-tip`, 150);
@@ -4083,6 +4120,7 @@ function banPeerUrl(peerUrl, reason, durationMs = PEER_URL_BAN_MS) {
   if (isPinnedPeerUrl(key)) return;
   const untilMs = Date.now() + durationMs;
   bannedPeerUrls.set(key, { untilMs, reason: String(reason || 'policy') });
+  if (process.env.WATTCOIN_DEBUG) console.warn('[Peer] BANNED', key, 'until', new Date(untilMs).toISOString(), 'reason:', reason);
   recordOpsAlert('peer.url.ban', 'warn', `Banned peer ${key}`, { reason, untilMs });
 }
 
@@ -4105,6 +4143,9 @@ function recordPeerUrlFailure(peerUrl, reason) {
   const hits = peerUrlFailures.get(key) || [];
   const updated = pushTimestampWindow(hits, PEER_FAILURE_WINDOW_MS, 200);
   peerUrlFailures.set(key, updated);
+  if (process.env.WATTCOIN_DEBUG && updated.length >= 3) {
+    console.warn('[Peer] failures', key, updated.length + '/' + PEER_FAILURE_BAN_THRESHOLD, 'reason:', reason);
+  }
   if (updated.length >= PEER_FAILURE_BAN_THRESHOLD) {
     banPeerUrl(key, reason || 'excessive failures');
     peerUrlFailures.set(key, []);
@@ -4241,6 +4282,7 @@ async function inspectPeerConnectivityForTargets(
         distinctPeerKeys.add(fallbackKey);
         return;
       }
+      recordPeerUrlSuccess(normalizePeerUrl(peerUrl));
       const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) {
         return;
@@ -4248,6 +4290,7 @@ async function inspectPeerConnectivityForTargets(
       const peerKey = getPeerIdentityKey(peerUrl, tip);
       distinctPeerKeys.add(peerKey);
       healthyPeerKeys.add(peerKey);
+      rememberDiscoveredPeer(peerUrl, { source, quiet: true });
       if (isReverseTunnelPeerUrl(peerUrl)) {
         healthyTunnelPeerKeys.add(peerKey);
       }
@@ -5873,41 +5916,57 @@ ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
   }
 
   const workerId = String((opts && opts.workerId) || walletAddressCache.address || 'unknown');
-  const peers = await getOnlineAttestationPeers(settings, workerId);
-  if (!peers || peers.length === 0) {
-    return { ok: false, error: 'No online attestation peers available.' };
-  }
-
-  const candidatePeers = [...peers];
   const allowGpu = !!(opts && opts.allowGpuWorkloads);
-  while (candidatePeers.length > 0) {
-    const index = Math.floor(Math.random() * candidatePeers.length);
-    const [peerUrl] = candidatePeers.splice(index, 1);
-    try {
-      const result = await requestPeerJson(
-        peerUrl,
-        'GET',
-        '/api/v1/probe/issue',
-        undefined,
-        {
-          workerId,
-          allowGpu: String(allowGpu),
-        },
-        {
-          trackReachability: false,
-          suppressPeerDiscovery: true,
-          source: 'peer-probe-issue',
-        },
-      );
-      const probe = result && result.probe ? result.probe : null;
-      if (probe) probe._peerUrl = peerUrl;
-      return { ok: true, source: 'peer', probe };
-    } catch (e) {
-      console.warn('[PeerProbe] Attestation peer unavailable, trying another peer:', e.message);
+
+  // Aggressive polling: when the seed is reachable, chain/tip responds in <10 ms,
+  // so we use a short probe timeout (2 s) and poll every 1 s.  This lets us detect
+  // recovery from a transient drop within ~3 s instead of waiting 33+ s for the
+  // old two-retry cycle (15 s + 3 s + 15 s).
+  const POLL_FAST_TIMEOUT_MS = 2_000;
+  const POLL_INTERVAL_MS = 1_000;
+  const MAX_WAIT_MS = 30_000;
+  const deadline = Date.now() + MAX_WAIT_MS;
+  let pollAttempt = 0;
+  while (Date.now() < deadline) {
+    const pollOpts = pollAttempt < 5 ? { fastTimeoutMs: POLL_FAST_TIMEOUT_MS } : {};
+    const peers = await getOnlineAttestationPeers(settings, workerId, pollOpts);
+    if (peers && peers.length > 0) {
+      const candidatePeers = [...peers];
+      while (candidatePeers.length > 0) {
+        const index = Math.floor(Math.random() * candidatePeers.length);
+        const [peerUrl] = candidatePeers.splice(index, 1);
+        try {
+          const result = await requestPeerJson(
+            peerUrl,
+            'GET',
+            '/api/v1/probe/issue',
+            undefined,
+            {
+              workerId,
+              allowGpu: String(allowGpu),
+            },
+            {
+              trackReachability: false,
+              suppressPeerDiscovery: true,
+              source: 'peer-probe-issue',
+              timeoutMs: 15000,
+            },
+          );
+          const probe = result && result.probe ? result.probe : null;
+          if (probe) probe._peerUrl = peerUrl;
+          return { ok: true, source: 'peer', probe };
+        } catch (e) {
+          console.warn('[PeerProbe] Attestation peer unavailable, trying another peer:', e.message);
+        }
+      }
+    }
+    pollAttempt++;
+    if (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
   }
 
-  return { ok: false, error: 'Online attestation peers became unavailable.' };
+  return { ok: false, error: 'No online attestation peers available.' };
 });
 
 // Renderer calls this after completing a peer probe.
@@ -5922,19 +5981,49 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
     const peerUrl = result._peerUrl ? String(result._peerUrl) : null;
     if (peerUrl) {
       try {
+        console.warn(`[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} (typeof=${typeof result.probeWallClockMs}) id=${result.id}`);
         const body = {
           probeId: result.id || '',
           proof: result.proof || '',
           pixelHash: result.pixelHash || '',
+          probeWallClockMs: typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : null,
           hardwareSpec: hardwareSpec,
         };
-        const verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
+        let verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
           trackReachability: false,
           suppressPeerDiscovery: true,
           source: 'peer-probe-submit',
         });
         if (verdict && verdict.ok) {
           hwAuthority.peerProbeVerifiedForRound = true;
+          const receipt = verdict.receipt;
+          if (receipt && receipt.verifierAddress && receipt.workerId) {
+            recordPeerAttestation(receipt.verifierAddress, receipt.workerId);
+          }
+          const trustScoreBefore = hwAuthority.trustScore;
+          hwAuthority.consecutiveCleanProbes += 1;
+          hwAuthority.consecutivePeerProbeFails = 0;
+          if (hwAuthority.consecutiveCleanProbes >= 25) {
+            hwAuthority.consecutiveCleanProbes = 0;
+            hwAuthority.trustScore = Math.min(100, hwAuthority.trustScore + 1);
+            saveHwAuthState();
+          }
+          verdict = Object.assign({}, verdict, {
+            trustScoreBefore,
+            trustScoreAfter: hwAuthority.trustScore,
+          });
+        } else {
+          hwAuthority.consecutiveCleanProbes = 0;
+          hwAuthority.consecutivePeerProbeFails += 1;
+          if (hwAuthority.consecutivePeerProbeFails >= 2) {
+            hwAuthority.consecutivePeerProbeFails = 0;
+            hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
+            saveHwAuthState();
+          }
+          verdict = Object.assign({}, verdict, {
+            trustScoreBefore: hwAuthority.trustScore,
+            trustScoreAfter: hwAuthority.trustScore,
+          });
         }
         return verdict;
       } catch (e) {
@@ -7606,7 +7695,7 @@ function getLedgerNetworkSettings() {
     authToken: String(runtime.ledgerNetworkAuthToken || '').trim(),
     listenHost: String(runtime.ledgerNetworkListenHost || '0.0.0.0').trim() || '0.0.0.0',
     listenPort: Math.max(1, Number(runtime.ledgerNetworkListenPort) || 39310),
-    requestTimeoutMs: Math.max(1000, Number(runtime.ledgerNetworkRequestTimeoutMs) || 7000),
+    requestTimeoutMs: Math.max(1000, Number(runtime.ledgerNetworkRequestTimeoutMs) || 15000),
     publicUrl: normalizePeerUrl(runtime.ledgerNetworkPublicUrl),
     tunnelPublicUrl: normalizePeerUrl(runtime.ledgerNetworkTunnelPublicUrl),
     advertiseUrls: normalizedAdvertiseUrls,
@@ -8148,7 +8237,7 @@ function broadcastProbeReceiptToPeers(receipt) {
       trackReachability: false,
       suppressPeerDiscovery: true,
       source: 'probe-receipt',
-      timeout: 5000,
+      timeoutMs: 5000,
     }).catch(() => {});
   }
 }
@@ -8383,7 +8472,10 @@ async function settleLocalLedgerRound(payload = {}) {
   return { ok: true, round, maturedRounds, blockHeight };
 }
 
-// Returns the union of statically configured peers and dynamically discovered ones.
+// Returns the union of statically configured peers, seed peers, and dynamically
+// discovered ones.  Seed peers are always included so that a reachable bootstrap
+// fallback stays available even when stale-but-not-yet-evicted dynamic peers
+// would otherwise gate them out.
 function getActivePeers(settings) {
   const staticPeers = settings && settings.peers ? settings.peers : [];
   const seedPeers = settings && settings.seedPeers ? settings.seedPeers : [];
@@ -8393,16 +8485,10 @@ function getActivePeers(settings) {
     if (now - info.lastSeenMs > PEER_STALE_THRESHOLD_MS || isPeerUrlBanned(url)) continue;
     dynamic.push(url);
   }
-  const preferredPeers = sortPeerUrlsByPreference(
-    Array.from(new Set([...staticPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)),
+  const allPeers = sortPeerUrlsByPreference(
+    Array.from(new Set([...staticPeers, ...seedPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)),
   );
-  const bootstrapPeers =
-    preferredPeers.length > 0
-      ? preferredPeers
-      : sortPeerUrlsByPreference(
-          Array.from(new Set([...staticPeers, ...seedPeers, ...dynamic])).filter((url) => !isPeerUrlBanned(url)),
-        );
-  return filterExternalPeerUrls(bootstrapPeers, {
+  return filterExternalPeerUrls(allPeers, {
     selfAdvertisedUrls: getConfiguredAdvertisedPeerUrls(settings),
     listenPort: settings && settings.listenPort,
     localHosts: Array.from(getLocalPeerHosts()),
@@ -8971,10 +9057,12 @@ function startLedgerNetworkServer() {
           return;
         }
         const body = await readJsonBody(req);
+        console.warn(`[PeerProbe/Crd] submit body probeWallClockMs=${body && body.probeWallClockMs} (typeof=${typeof (body && body.probeWallClockMs)})`);
         const probeResult = {
           id: body && body.probeId ? String(body.probeId) : '',
           proof: body && body.proof ? String(body.proof) : '',
           pixelHash: body && body.pixelHash ? String(body.pixelHash) : '',
+          probeWallClockMs: body && typeof body.probeWallClockMs === 'number' ? body.probeWallClockMs : undefined,
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
         const probeRoundId = getCurrentNetworkRoundId();

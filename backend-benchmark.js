@@ -967,14 +967,15 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       // Floor: a worker cannot claim to be slower than history shows they actually are.
       const effectiveCpuOpsPerSec = Math.max(hardwareSpec.measuredCpuOpsPerSec, historicalCpuMean);
       const expectedMs = (probe.params.iterations / effectiveCpuOpsPerSec) * 1000;
-      const ratio = wallClockMs / Math.max(1, expectedMs);
+      const probeTimeMs = (result && result.probeWallClockMs) || wallClockMs;
+      const ratio = probeTimeMs / Math.max(1, expectedMs);
       if (ratio < 1 / PROBE_PEER_SLACK)
         issues.push(
-          `cpu peer-probe suspiciously fast: ${Math.round(wallClockMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
+          `cpu peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
         );
       if (ratio > PROBE_PEER_SLACK)
         issues.push(
-          `cpu peer-probe too slow: ${Math.round(wallClockMs)}ms vs expected ~${Math.round(expectedMs)}ms (ratio=${ratio.toFixed(2)})`,
+          `cpu peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms (ratio=${ratio.toFixed(2)})`,
         );
     }
   } else if (probe.type === 'memory') {
@@ -993,14 +994,15 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         historicalMemMean > 0 ? historicalMemMean : hardwareSpec.measuredMemLatencyNs,
       );
       const expectedMs = (probe.params.iterations * effectiveMemLatencyNs) / 1e6;
-      const ratio = wallClockMs / Math.max(1, expectedMs);
+      const probeTimeMs = (result && result.probeWallClockMs) || wallClockMs;
+      const ratio = probeTimeMs / Math.max(1, expectedMs);
       if (ratio < 1 / PROBE_PEER_SLACK)
         issues.push(
-          `memory peer-probe suspiciously fast: ${Math.round(wallClockMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
+          `memory peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
         );
       if (ratio > PROBE_PEER_SLACK)
         issues.push(
-          `memory peer-probe too slow: ${Math.round(wallClockMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
+          `memory peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
         );
     }
   } else if (probe.type === 'gpu') {
@@ -1032,10 +1034,12 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   if (proofValid) {
     const wh = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [] };
     if (probe.type === 'cpu' && wallClockMs > 0) {
-      const actualCpuOpsPerSec = (probe.params.iterations / wallClockMs) * 1000;
+      const effectiveProbeMs = (result && result.probeWallClockMs) || wallClockMs;
+      const actualCpuOpsPerSec = (probe.params.iterations / effectiveProbeMs) * 1000;
       wh.cpuSamples = appendWorkerHwSample(wh.cpuSamples, actualCpuOpsPerSec);
     } else if (probe.type === 'memory' && wallClockMs > 0) {
-      const actualMemLatencyNs = (wallClockMs * 1e6) / probe.params.iterations;
+      const effectiveProbeMs = (result && result.probeWallClockMs) || wallClockMs;
+      const actualMemLatencyNs = (effectiveProbeMs * 1e6) / probe.params.iterations;
       wh.memSamples = appendWorkerHwSample(wh.memSamples, actualMemLatencyNs);
     }
     workerHwHistory.set(entry.workerId, wh);
@@ -1096,7 +1100,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   });
   if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
 
-  return { ok, proofValid, issues, wallClockMs, workerId: entry.workerId, receipt };
+  return { ok, proofValid, issues, wallClockMs, workerId: entry.workerId, receipt, probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined };
 }
 
 function getAttestHistory() {

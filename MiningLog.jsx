@@ -225,6 +225,17 @@ function MiningLog({
           {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (
             <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
           )}
+          {entry.trustDelta != null && entry.trustDelta !== 0 && (
+            <span
+              style={{
+                color: entry.trustDelta > 0 ? '#4ade80' : '#f87171',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              Trust {entry.trustDelta > 0 ? `+${entry.trustDelta}` : entry.trustDelta}
+            </span>
+          )}
           {probeId && <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>}
           {entry.type === 'gpu' && typeof entry.pixelHash === 'string' && entry.pixelHash && (
             <span style={{ color: '#64748b', fontSize: 11 }}>hash {entry.pixelHash}</span>
@@ -245,7 +256,7 @@ function MiningLog({
   const renderProbeList = (entries) => {
     if (!entries || entries.length === 0) {
       return (
-        <div style={{ color: '#6b7280', fontSize: 13 }}>No probes yet. Probes run every 2-8 min while mining.</div>
+        <div style={{ color: '#6b7280', fontSize: 13 }}>No probes yet. Probes trigger every ~30s while mining.</div>
       );
     }
     return (
