@@ -1613,7 +1613,8 @@ function extractReachablePeerCandidates(req, settings = getLedgerNetworkSettings
   // When the peer announces its own URLs (x-wtc-peer-urls), use those as authoritative.
   // The socket-inferred URL (remote IP + port) is redundant — it may be a NAT'd LAN
   // address that causes the same physical peer to be counted twice.
-  const inferredSocketUrl = announcedUrls.length > 0 ? null : buildPeerUrlFromSocket(req.socket && req.socket.remoteAddress, declaredPort);
+  const inferredSocketUrl =
+    announcedUrls.length > 0 ? null : buildPeerUrlFromSocket(req.socket && req.socket.remoteAddress, declaredPort);
   return sortPeerUrlsByPreference(
     [...announcedUrls, ...(inferredSocketUrl ? [inferredSocketUrl] : [])].filter(
       (candidate) => candidate && !isSelfPeerUrl(candidate),
@@ -1833,13 +1834,24 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
     }
   };
 
-  for (let index = 0; index < httpPeers.length && onlinePeers.length < MIN_PROBE_VERIFIERS; index += PEER_ATTESTATION_SELECTION_CONCURRENCY) {
+  for (
+    let index = 0;
+    index < httpPeers.length && onlinePeers.length < MIN_PROBE_VERIFIERS;
+    index += PEER_ATTESTATION_SELECTION_CONCURRENCY
+  ) {
     const batch = httpPeers.slice(index, index + PEER_ATTESTATION_SELECTION_CONCURRENCY);
     await Promise.all(batch.map(probePeer));
   }
 
   if (process.env.WATTCOIN_DEBUG && onlinePeers.length < MIN_PROBE_VERIFIERS) {
-    console.warn('[Peer] getOnlineAttestationPeers: only', onlinePeers.length, 'online, httpPeers tried:', httpPeers.length, 'tunnelPeers:', peers.length - httpPeers.length);
+    console.warn(
+      '[Peer] getOnlineAttestationPeers: only',
+      onlinePeers.length,
+      'online, httpPeers tried:',
+      httpPeers.length,
+      'tunnelPeers:',
+      peers.length - httpPeers.length,
+    );
   }
   return onlinePeers;
 }
@@ -4120,7 +4132,8 @@ function banPeerUrl(peerUrl, reason, durationMs = PEER_URL_BAN_MS) {
   if (isPinnedPeerUrl(key)) return;
   const untilMs = Date.now() + durationMs;
   bannedPeerUrls.set(key, { untilMs, reason: String(reason || 'policy') });
-  if (process.env.WATTCOIN_DEBUG) console.warn('[Peer] BANNED', key, 'until', new Date(untilMs).toISOString(), 'reason:', reason);
+  if (process.env.WATTCOIN_DEBUG)
+    console.warn('[Peer] BANNED', key, 'until', new Date(untilMs).toISOString(), 'reason:', reason);
   recordOpsAlert('peer.url.ban', 'warn', `Banned peer ${key}`, { reason, untilMs });
 }
 
@@ -5981,7 +5994,9 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
     const peerUrl = result._peerUrl ? String(result._peerUrl) : null;
     if (peerUrl) {
       try {
-        console.warn(`[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} (typeof=${typeof result.probeWallClockMs}) id=${result.id}`);
+        console.warn(
+          `[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} (typeof=${typeof result.probeWallClockMs}) id=${result.id}`,
+        );
         const body = {
           probeId: result.id || '',
           proof: result.proof || '',
@@ -9057,7 +9072,9 @@ function startLedgerNetworkServer() {
           return;
         }
         const body = await readJsonBody(req);
-        console.warn(`[PeerProbe/Crd] submit body probeWallClockMs=${body && body.probeWallClockMs} (typeof=${typeof (body && body.probeWallClockMs)})`);
+        console.warn(
+          `[PeerProbe/Crd] submit body probeWallClockMs=${body && body.probeWallClockMs} (typeof=${typeof (body && body.probeWallClockMs)})`,
+        );
         const probeResult = {
           id: body && body.probeId ? String(body.probeId) : '',
           proof: body && body.proof ? String(body.proof) : '',

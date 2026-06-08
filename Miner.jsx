@@ -3676,7 +3676,12 @@ export default function Miner({
     let nextTimer = null;
     const scheduleNext = () => {
       if (disposed) return;
-      nextTimer = setTimeout(() => { runProbeTick(); }, retryFast ? RETRY_MS : POLL_MS);
+      nextTimer = setTimeout(
+        () => {
+          runProbeTick();
+        },
+        retryFast ? RETRY_MS : POLL_MS,
+      );
       retryFast = false;
     };
     const runProbeTick = async () => {
@@ -3684,7 +3689,9 @@ export default function Miner({
       inFlight = true;
       if (!walletAddressRef.current) {
         inFlight = false;
-        nextTimer = setTimeout(() => { runProbeTick(); }, POLL_MS);
+        nextTimer = setTimeout(() => {
+          runProbeTick();
+        }, POLL_MS);
         return;
       }
       try {
@@ -3799,7 +3806,10 @@ export default function Miner({
           };
         }
 
-        if (!probeResult) { retryFast = true; return; }
+        if (!probeResult) {
+          retryFast = true;
+          return;
+        }
 
         const submitPayload = {
           source,
@@ -3867,13 +3877,16 @@ export default function Miner({
             const prev = trustScoreRef.current;
             setTrustScore(verdict.trustScoreAfter);
             trustScoreRef.current = verdict.trustScoreAfter;
-            const delta = verdict.trustScoreAfter - (typeof verdict.trustScoreBefore === 'number' ? verdict.trustScoreBefore : prev);
+            const delta =
+              verdict.trustScoreAfter -
+              (typeof verdict.trustScoreBefore === 'number' ? verdict.trustScoreBefore : prev);
             const pad2 = (n) => String(n).padStart(2, '0');
             const d = new Date();
             setBenchmarkState((prevState) => ({
               ...prevState,
               lastTrustDelta: delta,
-              lastTrustChangeTime: delta !== 0 ? `${pad2(d.getHours())}.${pad2(d.getMinutes())}.${pad2(d.getSeconds())}` : null,
+              lastTrustChangeTime:
+                delta !== 0 ? `${pad2(d.getHours())}.${pad2(d.getMinutes())}.${pad2(d.getSeconds())}` : null,
             }));
           }
           // Record to probe log (real-time capture; covers both local and peer probe paths).
@@ -3890,7 +3903,12 @@ export default function Miner({
                   type: probe.type,
                   ok: !!verdict.ok,
                   timedOut: false,
-                  wallClockMs: typeof verdict.probeWallClockMs === 'number' ? verdict.probeWallClockMs : typeof verdict.wallClockMs === 'number' ? verdict.wallClockMs : null,
+                  wallClockMs:
+                    typeof verdict.probeWallClockMs === 'number'
+                      ? verdict.probeWallClockMs
+                      : typeof verdict.wallClockMs === 'number'
+                        ? verdict.wallClockMs
+                        : null,
                   pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
                   proof: typeof probeResult.proof === 'string' ? probeResult.proof : '',
                   verifierAddress:
@@ -6311,126 +6329,163 @@ export default function Miner({
               (benchmarkState.lastJitterPct !== null ||
                 benchmarkState.lastAvgCpuPct !== null ||
                 benchmarkState.lastAvgMemPct !== null ||
-                benchmarkState.lastAvgGpuPct !== null) &&
-              <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                {benchmarkState.lastJitterPct !== null && (
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color:
-                        benchmarkState.lastJitterPct <= 10
-                          ? '#4ade80'
-                          : benchmarkState.lastJitterPct <= 20
-                            ? '#facc15'
-                            : '#f97316',
-                    }}
-                  >
-                    {(() => {
-                      const j = benchmarkState.lastJitterPct;
-                      const label = j <= 10 ? 'Low' : j <= 20 ? 'Moderate' : 'High';
-                      return (
-                        <span>
-                          <b>Jitter:</b> {label}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                )}
-                {(benchmarkState.lastAvgCpuPct !== null ||
-                  benchmarkState.lastAvgMemPct !== null ||
-                  benchmarkState.lastAvgGpuPct !== null) &&
-                  (benchmarkState.lastWasBaseline ? (
-                    <div style={{ fontSize: 11, color: '#6b7280' }}>
-                      {(() => {
-                        const p = benchmarkState.cpuPenaltyPct;
-                        const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : p <= 30 ? 'Poor' : 'Degraded';
-                        const clr =
-                          label === 'Good'
-                            ? '#a7ffb0'
-                            : label === 'Normal'
+                benchmarkState.lastAvgGpuPct !== null) && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                  {benchmarkState.lastJitterPct !== null && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color:
+                          benchmarkState.lastJitterPct <= 10
+                            ? '#4ade80'
+                            : benchmarkState.lastJitterPct <= 20
                               ? '#facc15'
-                              : label === 'High'
-                                ? '#f97316'
-                                : label === 'Degraded'
-                                  ? '#ef4444'
-                                  : '#6b7280';
-                        return <span style={{ color: clr, marginLeft: 0 }}>CPU: {label}</span>;
-                        })()}
-                      {benchmarkState.lastAvgMemPct !== null &&
-                        (() => {
-                          const p = benchmarkState.memPenaltyPct;
-                          const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : p <= 30 ? 'Poor' : 'Degraded';
-                          const clr =
-                            label === 'Good'
-                              ? '#a7ffb0'
-                              : label === 'Normal'
-                                ? '#facc15'
-                              : label === 'High'
-                                ? '#f97316'
-                                : label === 'Degraded'
-                                  ? '#ef4444'
-                                  : '#6b7280';
-                          return <span style={{ color: clr, marginLeft: 8 }}>Mem: {label}</span>;
-                        })()}
-                      {benchmarkState.lastAvgGpuPct !== null &&
-                        (() => {
-                          const p = benchmarkState.gpuPenaltyPct;
-                          const label = p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : p <= 30 ? 'Poor' : 'Degraded';
-                          const clr =
-                            label === 'Good'
-                              ? '#a7ffb0'
-                              : label === 'Normal'
-                                ? '#facc15'
-                              : label === 'High'
-                                ? '#f97316'
-                                : label === 'Degraded'
-                                  ? '#ef4444'
-                                  : '#6b7280';
-                          return <span style={{ color: clr, marginLeft: 8 }}>GPU: {label}</span>;
-                        })()}
+                              : '#f97316',
+                      }}
+                    >
+                      {(() => {
+                        const j = benchmarkState.lastJitterPct;
+                        const label = j <= 10 ? 'Low' : j <= 20 ? 'Moderate' : 'High';
+                        return (
+                          <span>
+                            <b>Jitter:</b> {label}
+                          </span>
+                        );
+                      })()}
                     </div>
-                  ) : (
-                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                  avg
-                  {[
-                    benchmarkState.lastAvgCpuPct !== null &&
-                      (() => {
-                        const v = benchmarkState.lastAvgCpuPct;
-                        const c =
-                          Math.abs(v) <= 10 ? '#a7ffb0' : Math.abs(v) <= 25 ? '#facc15' : v > 0 ? '#4ade80' : '#f87171';
-                        return (
-                          <span key="cpu" style={{ color: c, marginLeft: 8 }}>
-                            CPU {v > 0 ? `+${v}` : v}%
-                          </span>
-                        );
-                      })(),
-                    benchmarkState.lastAvgMemPct !== null &&
-                      (() => {
-                        const v = benchmarkState.lastAvgMemPct;
-                        const c =
-                          Math.abs(v) <= 10 ? '#a7ffb0' : Math.abs(v) <= 25 ? '#facc15' : v > 0 ? '#4ade80' : '#f87171';
-                        return (
-                          <span key="mem" style={{ color: c, marginLeft: 8 }}>
-                            Mem {v > 0 ? `+${v}` : v}%
-                          </span>
-                        );
-                      })(),
-                    benchmarkState.lastAvgGpuPct !== null &&
-                      (() => {
-                        const v = benchmarkState.lastAvgGpuPct;
-                        const c =
-                          Math.abs(v) <= 10 ? '#a7ffb0' : Math.abs(v) <= 25 ? '#facc15' : v > 0 ? '#4ade80' : '#f87171';
-                        return (
-                          <span key="gpu" style={{ color: c, marginLeft: 8 }}>
-                            GPU {v > 0 ? `+${v}` : v}%
-                          </span>
-                        );
-                      })(),
-                  ].filter(Boolean)}
+                  )}
+                  {(benchmarkState.lastAvgCpuPct !== null ||
+                    benchmarkState.lastAvgMemPct !== null ||
+                    benchmarkState.lastAvgGpuPct !== null) &&
+                    (benchmarkState.lastWasBaseline ? (
+                      <div style={{ fontSize: 11, color: '#6b7280' }}>
+                        {(() => {
+                          const p = benchmarkState.cpuPenaltyPct;
+                          const label =
+                            p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : p <= 30 ? 'Poor' : 'Degraded';
+                          const clr =
+                            label === 'Good'
+                              ? '#a7ffb0'
+                              : label === 'Normal'
+                                ? '#facc15'
+                                : label === 'High'
+                                  ? '#f97316'
+                                  : label === 'Degraded'
+                                    ? '#ef4444'
+                                    : '#6b7280';
+                          return <span style={{ color: clr, marginLeft: 0 }}>CPU: {label}</span>;
+                        })()}
+                        {benchmarkState.lastAvgMemPct !== null &&
+                          (() => {
+                            const p = benchmarkState.memPenaltyPct;
+                            const label =
+                              p < 0
+                                ? 'Baseline'
+                                : p <= 10
+                                  ? 'Good'
+                                  : p <= 20
+                                    ? 'Normal'
+                                    : p <= 30
+                                      ? 'Poor'
+                                      : 'Degraded';
+                            const clr =
+                              label === 'Good'
+                                ? '#a7ffb0'
+                                : label === 'Normal'
+                                  ? '#facc15'
+                                  : label === 'High'
+                                    ? '#f97316'
+                                    : label === 'Degraded'
+                                      ? '#ef4444'
+                                      : '#6b7280';
+                            return <span style={{ color: clr, marginLeft: 8 }}>Mem: {label}</span>;
+                          })()}
+                        {benchmarkState.lastAvgGpuPct !== null &&
+                          (() => {
+                            const p = benchmarkState.gpuPenaltyPct;
+                            const label =
+                              p < 0
+                                ? 'Baseline'
+                                : p <= 10
+                                  ? 'Good'
+                                  : p <= 20
+                                    ? 'Normal'
+                                    : p <= 30
+                                      ? 'Poor'
+                                      : 'Degraded';
+                            const clr =
+                              label === 'Good'
+                                ? '#a7ffb0'
+                                : label === 'Normal'
+                                  ? '#facc15'
+                                  : label === 'High'
+                                    ? '#f97316'
+                                    : label === 'Degraded'
+                                      ? '#ef4444'
+                                      : '#6b7280';
+                            return <span style={{ color: clr, marginLeft: 8 }}>GPU: {label}</span>;
+                          })()}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                        avg
+                        {[
+                          benchmarkState.lastAvgCpuPct !== null &&
+                            (() => {
+                              const v = benchmarkState.lastAvgCpuPct;
+                              const c =
+                                Math.abs(v) <= 10
+                                  ? '#a7ffb0'
+                                  : Math.abs(v) <= 25
+                                    ? '#facc15'
+                                    : v > 0
+                                      ? '#4ade80'
+                                      : '#f87171';
+                              return (
+                                <span key="cpu" style={{ color: c, marginLeft: 8 }}>
+                                  CPU {v > 0 ? `+${v}` : v}%
+                                </span>
+                              );
+                            })(),
+                          benchmarkState.lastAvgMemPct !== null &&
+                            (() => {
+                              const v = benchmarkState.lastAvgMemPct;
+                              const c =
+                                Math.abs(v) <= 10
+                                  ? '#a7ffb0'
+                                  : Math.abs(v) <= 25
+                                    ? '#facc15'
+                                    : v > 0
+                                      ? '#4ade80'
+                                      : '#f87171';
+                              return (
+                                <span key="mem" style={{ color: c, marginLeft: 8 }}>
+                                  Mem {v > 0 ? `+${v}` : v}%
+                                </span>
+                              );
+                            })(),
+                          benchmarkState.lastAvgGpuPct !== null &&
+                            (() => {
+                              const v = benchmarkState.lastAvgGpuPct;
+                              const c =
+                                Math.abs(v) <= 10
+                                  ? '#a7ffb0'
+                                  : Math.abs(v) <= 25
+                                    ? '#facc15'
+                                    : v > 0
+                                      ? '#4ade80'
+                                      : '#f87171';
+                              return (
+                                <span key="gpu" style={{ color: c, marginLeft: 8 }}>
+                                  GPU {v > 0 ? `+${v}` : v}%
+                                </span>
+                              );
+                            })(),
+                        ].filter(Boolean)}
+                      </div>
+                    ))}
                 </div>
-              ))}
-              </div>
-            }
+              )}
             {!benchmarkState.running && !startupBenchmarkPending && benchmarkState.lastScore !== null && (
               <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                 {benchmarkState.lastTrustDelta !== null && (
@@ -6452,9 +6507,7 @@ export default function Miner({
                         ? `${benchmarkState.lastTrustDelta}`
                         : 'no change'}
                     {benchmarkState.lastTrustChangeTime && (
-                      <span style={{ color: '#64748b', marginLeft: 6 }}>
-                        {benchmarkState.lastTrustChangeTime}
-                      </span>
+                      <span style={{ color: '#64748b', marginLeft: 6 }}>{benchmarkState.lastTrustChangeTime}</span>
                     )}
                   </div>
                 )}

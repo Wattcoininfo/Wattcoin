@@ -1100,7 +1100,15 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   });
   if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
 
-  return { ok, proofValid, issues, wallClockMs, workerId: entry.workerId, receipt, probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined };
+  return {
+    ok,
+    proofValid,
+    issues,
+    wallClockMs,
+    workerId: entry.workerId,
+    receipt,
+    probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined,
+  };
 }
 
 function getAttestHistory() {
