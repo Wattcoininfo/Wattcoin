@@ -897,6 +897,20 @@
           <div class="latest-item">
             <div class="latest-date">JUN 2026</div>
             <div class="latest-text">
+              <strong>v1.0.327 released</strong> — Persistent keep-alive HTTP agent pool for stable WAN peer connections
+              (no more cascading TCP timeouts). WebSocket push replaces HTTP polling for probe delivery — the miner
+              cannot predict when the next probe will land. Probe timing now uses the worker's actual computation time
+              (capped at round-trip) so network latency no longer inflates the speed ratio. GPU capability is detected
+              at runtime and only GPU-equipped machines receive GPU probes. Peer failure backoff via
+              <code>peerReachabilityCache</code> (3-min retry, no bans). CPU probe retry on slow first run (fixes V8
+              TurboFan compilation delay). Poll timer moved to main process — renderer cannot patch
+              <code>setTimeout</code>/<code>Math.random</code> to control probe timing.
+              <a href="/wattcoin-whitepaper.html#download">Download</a>
+            </div>
+          </div>
+          <div class="latest-item">
+            <div class="latest-date">JUN 2026</div>
+            <div class="latest-text">
               <strong>v1.0.314 released</strong> — In-app block explorer overhauled with network stats panel (height,
               supply, peers, block time, rate), search by height/hash/address, jump-to-height input, proof type badges
               (CPU/MEM/GPU) on block rows, clickable addresses showing balance and mined blocks, clickable transaction
