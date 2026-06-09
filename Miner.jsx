@@ -2059,6 +2059,10 @@ export default function Miner({
 
   // True while waiting for the re-benchmark confirmation after a first drift was detected.
   const benchmarkRetryPendingRef = React.useRef(false);
+  // Set when all peers go offline to pause mining. Cleared when a peer reconnects.
+  const peerDownRef = React.useRef(false);
+  // Toggled when a peer reconnects after being down, forcing the mining effect to re-run.
+  const [peerDownToggle, setPeerDownToggle] = React.useState(0);
   // Tracks consecutive peer probe connection failures (no peers, peer unreachable).
   // Resets on success or coordinator rejection (non-transient). Mining stops at 5.
   // WebGL GPU load canvas and GL state (for continuous GPU load during mining).
@@ -3385,13 +3389,18 @@ export default function Miner({
         let result = await window.wattcoinHardware.mineBlock(miningAddress || undefined, proofData);
         console.log('[MinerSimulator] Mining result:', result);
 
-        // If selected address path fails, retry once without forcing address.
-        if (result && result.error && miningAddress) {
+        // If selected address path fails (but not NO_PEERS), retry once without forcing address.
+        if (result && result.code !== 'NO_PEERS' && result.error && miningAddress) {
           console.log('[MinerSimulator] Retrying without forcing address due to error:', result.error);
           result = await window.wattcoinHardware.mineBlock(undefined, proofData);
           console.log('[MinerSimulator] Retry result:', result);
         }
 
+        if (result && result.code === 'NO_PEERS') {
+          setRealMineStatus('Waiting for peers...');
+          peerDownRef.current = true;
+          return 'NO_PEERS';
+        }
         if (result && result.address) {
           const blockHash = result && result.blockHash ? String(result.blockHash).trim() : '';
           const walletName = result && result.walletName ? String(result.walletName).trim() : 'wattminer';
@@ -5664,6 +5673,10 @@ export default function Miner({
 
     const tick = async () => {
       if (cancelled) return;
+      if (peerDownRef.current) {
+        setRealMineStatus('Waiting for peers...');
+        return;
+      }
 
       const nowMs = Date.now();
       const elapsedSeconds = Math.max(0, (nowMs - lastMs) / 1000);
@@ -5703,8 +5716,8 @@ export default function Miner({
             }
 
             lastRoundAttemptRef.current = { id: roundId, atMs: nowAttemptMs };
-            await mineOneRealBlock(sharedTotalWh);
-            if (!cancelled) {
+            const result = await mineOneRealBlock(sharedTotalWh);
+            if (!cancelled && result !== 'NO_PEERS') {
               timer = setTimeout(tick, tickMs);
             }
             return;
@@ -5712,6 +5725,11 @@ export default function Miner({
         }
       } catch (_) {
         if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
+      }
+
+      if (peerDownRef.current) {
+        setRealMineStatus('Waiting for peers...');
+        return;
       }
 
       // Accumulate available mining energy from power over elapsed time.
@@ -5725,12 +5743,16 @@ export default function Miner({
       }
 
       blocksToMine = Math.min(blocksToMine, maxBlocksPerTick);
+      let minedCount = 0;
       for (let i = 0; i < blocksToMine && !cancelled; i++) {
-        await mineOneRealBlock(energyPerBlockWh);
+        const result = await mineOneRealBlock(energyPerBlockWh);
+        if (result === 'NO_PEERS') break;
+        if (result === true) minedCount++;
       }
-      energyBudgetWhRef.current = Math.max(0, energyBudgetWhRef.current - blocksToMine * energyPerBlockWh);
+      // Only deduct budget for blocks that were actually mined.
+      energyBudgetWhRef.current = Math.max(0, energyBudgetWhRef.current - minedCount * energyPerBlockWh);
 
-      if (!cancelled) {
+      if (!cancelled && !peerDownRef.current) {
         timer = setTimeout(tick, tickMs);
       }
     };
@@ -5742,7 +5764,16 @@ export default function Miner({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [mining, miningAddress, powerW, tierEnergyPerCoinWh, tierRewardCoins, onBlockMined, mineOneRealBlock]);
+  }, [
+    mining,
+    miningAddress,
+    powerW,
+    tierEnergyPerCoinWh,
+    tierRewardCoins,
+    onBlockMined,
+    mineOneRealBlock,
+    peerDownToggle,
+  ]);
 
   // NEW: lift powerW to parent
   React.useEffect(() => {
@@ -6136,6 +6167,16 @@ export default function Miner({
       clearInterval(id);
     };
   }, [isActive]);
+
+  // Restart mining when a peer reconnects after all peers were offline.
+  React.useEffect(() => {
+    if (!isActive) return;
+    if (peerDownRef.current && peerCount > 0) {
+      peerDownRef.current = false;
+      setRealMineStatus('Mining started...');
+      setPeerDownToggle((t) => t + 1);
+    }
+  }, [isActive, peerCount]);
 
   // Poll wallet/chain readiness every 10 seconds while the dashboard is active.
   React.useEffect(() => {
