@@ -8742,17 +8742,28 @@ function getActivePeers(settings) {
  * Combines the stale-threshold peer check with the actively-probed peer count
  * cache.  The dashboard shows onlineCount from active HTTP probing, so this
  * prevents mining from continuing when the UI already shows 0 peers.
+ *
+ * Once the cache records onlineCount === 0 the result is sticky — it is not
+ * invalidated by the 30-second TTL because only a fresh inspection result can
+ * prove peers have returned.  Without this stickiness mining would repeatedly
+ * resume in the gap between cache expiry and the next inspection completing
+ * (a ~25 second window when all peers are unreachable).
  */
 function hasOnlinePeers(settings) {
   const activePeers = getActivePeers(settings);
   if (activePeers.length === 0) return false;
-  // Peer-count inspection actively probes each peer URL (up to 25 s timeout).
-  // If the cache is fresh and shows 0, trust it over the 15 min stale threshold.
+  // Trust the actively-probed peer count cache over the 15-minute stale threshold.
   const pc = peerCountCachedResult;
-  if (pc && pc.expiresAtMs > Date.now() && pc.value && pc.value.source === 'peer' && pc.value.onlineCount === 0) {
-    return false;
+  if (pc && pc.value && pc.value.source === 'peer') {
+    // 0 is sticky — never falls back to the stale-discovered list.
+    if (pc.value.onlineCount === 0) return false;
+    // A fresh >0 result means peers are online.
+    if (pc.expiresAtMs > Date.now()) return true;
   }
-  return true;
+  // Cache expired and an inspection is in flight — peers may have just dropped.
+  if (peerCountInspectionPromise) return false;
+  // Last resort: the 15-minute stale-threshold list.
+  return activePeers.length > 0;
 }
 
 function getPeerDirectoryTargets(settings) {
