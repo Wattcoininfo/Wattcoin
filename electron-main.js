@@ -2456,7 +2456,9 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           if (existing) {
             try {
               existing.ws.close();
-            } catch (_) {}
+            } catch (_) {
+              /* ws already closed */
+            }
           }
           _probePushConns.set(workerId, { ws, allowGpu });
           ws.on('close', () => {
@@ -6000,7 +6002,9 @@ function _closeBgProbeWs() {
   if (_bgProbeWs) {
     try {
       _bgProbeWs.close();
-    } catch (_) {}
+    } catch (_) {
+      /* ws already closed */
+    }
     _bgProbeWs = null;
     _bgProbeWsPeerUrl = null;
   }
@@ -6035,7 +6039,9 @@ function _startBgProbeWs(peerUrl) {
           msg.data.probe._peerUrl = peerUrl;
           _pendingProbe = { probe: msg.data.probe, source: 'peer', peerUrl };
         }
-      } catch (_) {}
+      } catch (_) {
+        /* ignore parse errors */
+      }
     });
     ws.on('close', () => {
       if (_bgProbeWs === ws) {
@@ -6075,7 +6081,7 @@ async function _connectBgProbeWs() {
 
 // Renderer calls this to obtain a probe. Returns immediately from cache;
 // no network I/O. Probes arrive via WebSocket push at unpredictable times.
-ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts) => {
+ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
   const settings = getLedgerNetworkSettings();
   if (!settings.enabled || settings.mode !== 'peer') {
     return { ok: false, error: 'Peer attestation is required but peer mode is not enabled.' };

@@ -3734,7 +3734,6 @@ export default function Miner({
           let retried = false;
           // Retry once if suspiciously slow — transient dips resolve on the second attempt
           if (mainMs > 3000) {
-            const firstChunks = cpuResult.chunks ? cpuResult.chunks.join(',') : '';
             cpuResult = runCpuProbe(seed, iterations, true);
             mainMs = cpuResult.chunks ? cpuResult.chunks.reduce((a, b) => a + b, 0) : 0;
             retried = true;
