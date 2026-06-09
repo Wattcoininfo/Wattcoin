@@ -415,7 +415,7 @@ async function runBackendBenchmark(_request = {}) {
 const PROBE_INTERVAL_MIN_MS = 2 * 60 * 1000; // earliest a new probe can fire (2 min)
 const PROBE_INTERVAL_MAX_MS = 8 * 60 * 1000; // latest a new probe can fire (8 min)
 const PROBE_INTERVAL_MS = 5 * 60 * 1000; // retained for coverage-ratio math (used as mean)
-const PROBE_TIMEOUT_MS = 90 * 1000; // 90 s - generous for slow hardware, tight vs 5-min window
+const PROBE_TIMEOUT_MS = 180 * 1000; // 180 s - generous for slow hardware, tight vs 5-min window
 const PROBE_CPU_ITERS = 200_000_000; // ~1000-4000 ms - pushes timing above scheduler/network noise
 const PROBE_MEM_ENTRIES = 1 << 24; // 64 MB - large enough to stay in DRAM on mainstream systems
 const PROBE_MEM_ITERS = 10_000_000; // ~500-4000 ms depending on latency
@@ -949,6 +949,14 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   peerProbeIssuances.delete(result.id);
   const wallClockMs = Date.now() - entry.issuedAt;
+  // Use the worker-reported probeWallClockMs capped at the coordinator's RTT.
+  // The worker reports actual computation time; the RTT is an upper bound
+  // (computation can't exceed the total round-trip). This prevents network
+  // latency and poll-cycle delays from inflating the timing ratio.
+  const probeWallClockMs =
+    typeof result.probeWallClockMs === 'number' && result.probeWallClockMs > 0
+      ? Math.min(wallClockMs, result.probeWallClockMs)
+      : wallClockMs;
   const probe = entry.probe;
   const issues = [];
   let proofValid = false;
@@ -967,7 +975,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       // Floor: a worker cannot claim to be slower than history shows they actually are.
       const effectiveCpuOpsPerSec = Math.max(hardwareSpec.measuredCpuOpsPerSec, historicalCpuMean);
       const expectedMs = (probe.params.iterations / effectiveCpuOpsPerSec) * 1000;
-      const probeTimeMs = (result && result.probeWallClockMs) || wallClockMs;
+      const probeTimeMs = probeWallClockMs;
       const ratio = probeTimeMs / Math.max(1, expectedMs);
       if (ratio < 1 / PROBE_PEER_SLACK)
         issues.push(
@@ -994,7 +1002,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         historicalMemMean > 0 ? historicalMemMean : hardwareSpec.measuredMemLatencyNs,
       );
       const expectedMs = (probe.params.iterations * effectiveMemLatencyNs) / 1e6;
-      const probeTimeMs = (result && result.probeWallClockMs) || wallClockMs;
+      const probeTimeMs = probeWallClockMs;
       const ratio = probeTimeMs / Math.max(1, expectedMs);
       if (ratio < 1 / PROBE_PEER_SLACK)
         issues.push(
@@ -1029,17 +1037,17 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   const ok = issues.length === 0;
 
-  // Update per-worker hardware-speed history using wall-clock actual speeds.
-  // Only update on a passing proof so cheating attempts don't corrupt the history.
+  // Update per-worker hardware-speed history using actual computation time
+  // (worker-reported probeWallClockMs) so network latency does not distort
+  // the measured hardware speed. Only update on a passing proof so cheating
+  // attempts don't corrupt the history.
   if (proofValid) {
     const wh = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [] };
-    if (probe.type === 'cpu' && wallClockMs > 0) {
-      const effectiveProbeMs = (result && result.probeWallClockMs) || wallClockMs;
-      const actualCpuOpsPerSec = (probe.params.iterations / effectiveProbeMs) * 1000;
+    if (probe.type === 'cpu' && probeWallClockMs > 0) {
+      const actualCpuOpsPerSec = (probe.params.iterations / probeWallClockMs) * 1000;
       wh.cpuSamples = appendWorkerHwSample(wh.cpuSamples, actualCpuOpsPerSec);
-    } else if (probe.type === 'memory' && wallClockMs > 0) {
-      const effectiveProbeMs = (result && result.probeWallClockMs) || wallClockMs;
-      const actualMemLatencyNs = (effectiveProbeMs * 1e6) / probe.params.iterations;
+    } else if (probe.type === 'memory' && probeWallClockMs > 0) {
+      const actualMemLatencyNs = (probeWallClockMs * 1e6) / probe.params.iterations;
       wh.memSamples = appendWorkerHwSample(wh.memSamples, actualMemLatencyNs);
     }
     workerHwHistory.set(entry.workerId, wh);

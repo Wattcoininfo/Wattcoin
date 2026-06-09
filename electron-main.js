@@ -2442,6 +2442,37 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
   ledgerNetworkServer.on('upgrade', (req, socket, head) => {
     try {
       const reqUrl = new URL(req.url || '/', 'http://127.0.0.1');
+
+      // Probe push WebSocket — workers connect here to receive probes at
+      // unpredictable times instead of polling an HTTP endpoint.
+      if (reqUrl.pathname === '/api/v1/probe/push') {
+        const workerId = String(reqUrl.searchParams.get('workerId') || 'unknown');
+        const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
+        if (!_probePushWss) {
+          _probePushWss = new WebSocketServer({ noServer: true });
+        }
+        _probePushWss.handleUpgrade(req, socket, head, (ws) => {
+          const existing = _probePushConns.get(workerId);
+          if (existing) {
+            try {
+              existing.ws.close();
+            } catch (_) {}
+          }
+          _probePushConns.set(workerId, { ws, allowGpu });
+          ws.on('close', () => {
+            if (_probePushConns.get(workerId) && _probePushConns.get(workerId).ws === ws) {
+              _probePushConns.delete(workerId);
+            }
+          });
+          ws.on('error', () => {
+            if (_probePushConns.get(workerId) && _probePushConns.get(workerId).ws === ws) {
+              _probePushConns.delete(workerId);
+            }
+          });
+        });
+        return;
+      }
+
       if (reqUrl.pathname !== '/api/v1/tunnel/connect') {
         socket.destroy();
         return;
@@ -5947,81 +5978,184 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
 });
 
 // -- Peer probe IPC (worker mode) ----------------------------------------------
-// Renderer calls this to fetch a probe from the coordinator. Peer attestation is
-// required and local fallback is disabled.
-ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
+// WebSocket push-probe client. The worker connects to the coordinator via
+// WebSocket; probes arrive at unpredictable times so the renderer cannot
+// predict or control probe timing. If the WebSocket disconnects, the worker
+// tries to reconnect to a different peer after a random delay.
+let _pendingProbe = null; // { probe, source, peerUrl } | null
+let _bgProbeWs = null; // WebSocket connection (push mode)
+let _bgProbeWsPeerUrl = null;
+let _bgProbeWsReconnectTimer = null; // WS reconnect timer
+let _allowGpuWorkloads = false; // updated by renderer via IPC
+const _BG_WS_RECONNECT_MAX_MS = 60_000;
+
+function _cancelBgProbeWsReconnect() {
+  if (_bgProbeWsReconnectTimer) {
+    clearTimeout(_bgProbeWsReconnectTimer);
+    _bgProbeWsReconnectTimer = null;
+  }
+}
+
+function _closeBgProbeWs() {
+  if (_bgProbeWs) {
+    try {
+      _bgProbeWs.close();
+    } catch (_) {}
+    _bgProbeWs = null;
+    _bgProbeWsPeerUrl = null;
+  }
+}
+
+function _scheduleBgProbeWsReconnect() {
+  _cancelBgProbeWsReconnect();
+  const delay = Math.round(Math.random() * _BG_WS_RECONNECT_MAX_MS); // 0-60s, unpredictable
+  _bgProbeWsReconnectTimer = setTimeout(() => {
+    _connectBgProbeWs();
+  }, delay);
+}
+
+function _startBgProbeWs(peerUrl) {
+  _closeBgProbeWs();
+  const wsUrl = peerUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/probe/push';
+  const workerId = walletAddressCache.address || 'unknown';
+  try {
+    const ws = new WebSocket(
+      wsUrl + '?workerId=' + encodeURIComponent(workerId) + '&allowGpu=' + (_allowGpuWorkloads ? 'true' : 'false'),
+    );
+    ws.on('open', () => {
+      _cancelBgProbeWsReconnect();
+      _bgProbeWs = ws;
+      _bgProbeWs._connectedWorkerId = walletAddressCache.address || 'unknown';
+      _bgProbeWsPeerUrl = peerUrl;
+    });
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(String(data));
+        if (msg.type === 'probe' && msg.data && msg.data.probe) {
+          msg.data.probe._peerUrl = peerUrl;
+          _pendingProbe = { probe: msg.data.probe, source: 'peer', peerUrl };
+        }
+      } catch (_) {}
+    });
+    ws.on('close', () => {
+      if (_bgProbeWs === ws) {
+        _bgProbeWs = null;
+        _bgProbeWsPeerUrl = null;
+        _scheduleBgProbeWsReconnect();
+      }
+    });
+    ws.on('error', () => {
+      if (_bgProbeWs === ws) {
+        _bgProbeWs = null;
+        _bgProbeWsPeerUrl = null;
+        _scheduleBgProbeWsReconnect();
+      }
+    });
+  } catch (_) {
+    _scheduleBgProbeWsReconnect();
+  }
+}
+
+async function _connectBgProbeWs() {
+  try {
+    const settings = getLedgerNetworkSettings();
+    if (!settings.enabled || settings.mode !== 'peer') return;
+    const workerId = walletAddressCache.address || 'unknown';
+    const peers = await getOnlineAttestationPeers(settings, workerId, {});
+    if (!peers || peers.length === 0) {
+      _scheduleBgProbeWsReconnect();
+      return;
+    }
+    const peerUrl = peers[Math.floor(Math.random() * peers.length)];
+    _startBgProbeWs(peerUrl);
+  } catch (_) {
+    _scheduleBgProbeWsReconnect();
+  }
+}
+
+// Renderer calls this to obtain a probe. Returns immediately from cache;
+// no network I/O. Probes arrive via WebSocket push at unpredictable times.
+ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts) => {
   const settings = getLedgerNetworkSettings();
   if (!settings.enabled || settings.mode !== 'peer') {
     return { ok: false, error: 'Peer attestation is required but peer mode is not enabled.' };
   }
 
-  const workerId = String((opts && opts.workerId) || walletAddressCache.address || 'unknown');
-  const allowGpu = !!(opts && opts.allowGpuWorkloads);
-
-  // WAN-aware polling: on a local subnet chain/tip responds in <10 ms, but
-  // across the open internet RTT can be 200-1500 ms and transient packet loss
-  // is common.  We use moderate timeouts (5 s initial, 15 s after) so that a
-  // single lost packet doesn't disqualify an otherwise reachable peer.
-  const POLL_FAST_TIMEOUT_MS = 5_000;
-  const POLL_INTERVAL_MS = 1_500;
-  const MAX_WAIT_MS = 45_000;
-  const deadline = Date.now() + MAX_WAIT_MS;
-  let pollAttempt = 0;
-  while (Date.now() < deadline) {
-    const pollOpts = pollAttempt < 8 ? { fastTimeoutMs: POLL_FAST_TIMEOUT_MS } : {};
-    const peers = await getOnlineAttestationPeers(settings, workerId, pollOpts);
-    if (peers && peers.length > 0) {
-      const candidatePeers = [...peers];
-      while (candidatePeers.length > 0) {
-        const index = Math.floor(Math.random() * candidatePeers.length);
-        const [peerUrl] = candidatePeers.splice(index, 1);
-        let lastError = null;
-        for (let retry = 0; retry < 3; retry++) {
-          if (retry > 0) {
-            await new Promise((r) => setTimeout(r, 2000 * retry));
-          }
-          try {
-            const result = await requestPeerJson(
-              peerUrl,
-              'GET',
-              '/api/v1/probe/issue',
-              undefined,
-              {
-                workerId,
-                allowGpu: String(allowGpu),
-              },
-              {
-                trackReachability: false,
-                suppressPeerDiscovery: true,
-                source: 'peer-probe-issue',
-                timeoutMs: 30000,
-              },
-            );
-            const probe = result && result.probe ? result.probe : null;
-            if (probe) probe._peerUrl = peerUrl;
-            return { ok: true, source: 'peer', probe };
-          } catch (e) {
-            lastError = e;
-            console.warn('[PeerProbe] Attestation peer unavailable (attempt ' + (retry + 1) + '/3):', e.message);
-          }
-        }
-        if (lastError) {
-          console.warn('[PeerProbe] All 3 attempts to peer exhausted:', peerUrl, lastError.message);
-          const np = normalizePeerUrl(peerUrl);
-          if (np) {
-            peerReachabilityCache.set(np, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
-          }
-        }
-      }
-    }
-    pollAttempt++;
-    if (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-    }
+  // Track GPU capability and wallet address from renderer; reconnect WS if stale
+  let needsReconnect = false;
+  const rendererAllowGpu = !!(opts && opts.allowGpuWorkloads);
+  if (rendererAllowGpu !== _allowGpuWorkloads) {
+    _allowGpuWorkloads = rendererAllowGpu;
+    needsReconnect = true;
+  }
+  const currentWorkerId = walletAddressCache.address || 'unknown';
+  if (
+    _bgProbeWs &&
+    _bgProbeWs.readyState === WebSocket.OPEN &&
+    currentWorkerId !== 'unknown' &&
+    _bgProbeWs._connectedWorkerId !== currentWorkerId
+  ) {
+    _bgProbeWs._connectedWorkerId = currentWorkerId;
+    needsReconnect = true;
+  }
+  if (needsReconnect && _bgProbeWs) {
+    _closeBgProbeWs();
+    _connectBgProbeWs();
   }
 
-  return { ok: false, error: 'No online attestation peers available.' };
+  const cached = _pendingProbe;
+  if (cached) {
+    _pendingProbe = null;
+    return { ok: true, source: cached.source, probe: cached.probe };
+  }
+
+  return { ok: false, error: 'No probe available.' };
 });
+
+// -- WebSocket push-probe coordinator -------------------------------------------
+// Pushes probes to connected workers at unpredictable intervals so the
+// renderer cannot predict or control probe timing.
+const _probePushConns = new Map(); // workerId -> { ws, allowGpu }
+let _probePushWss = null;
+let _probePushTimer = null;
+const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
+
+function _clearProbePushTimer() {
+  if (_probePushTimer) {
+    clearTimeout(_probePushTimer);
+    _probePushTimer = null;
+  }
+}
+
+function _scheduleProbePush() {
+  _clearProbePushTimer();
+  const delay = Math.round(Math.random() * _PROBE_PUSH_INTERVAL_MAX_MS); // 0-60s
+  _probePushTimer = setTimeout(() => {
+    _runProbePush();
+  }, delay);
+}
+
+function _runProbePush() {
+  try {
+    if (_probePushConns.size === 0) return;
+    const keys = Array.from(_probePushConns.keys());
+    const workerId = keys[Math.floor(Math.random() * keys.length)];
+    const conn = _probePushConns.get(workerId);
+    if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
+      _probePushConns.delete(workerId);
+      return;
+    }
+    if (workerId === 'unknown') return;
+    const probe = issuePeerProbe(workerId, conn.allowGpu);
+    if (probe) {
+      conn.ws.send(JSON.stringify({ type: 'probe', data: { ok: true, probe, source: 'peer' } }));
+    }
+  } catch (_) {
+    // transient — retries on next interval
+  } finally {
+    _scheduleProbePush();
+  }
+}
 
 // Renderer calls this after completing a peer probe.
 // Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
@@ -6036,7 +6170,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
     if (peerUrl) {
       try {
         console.warn(
-          `[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} (typeof=${typeof result.probeWallClockMs}) id=${result.id}`,
+          `[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} id=${result.id} N=${result._probeIterations || '?'} intDateMs=${result._intDateMs || '?'} warmupTotal=${result._warmupTotalMs || '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
         );
         const body = {
           probeId: result.id || '',
@@ -9124,31 +9258,7 @@ function startLedgerNetworkServer() {
         if (handled) return;
       }
 
-      // GET /api/v1/probe/issue � unauthenticated: every peer must be able to request a
-      // probe challenge without knowing the coordinator's machine-specific token.
-      // Rate-limited by remote IP to prevent DoS.
-      if (req.method === 'GET' && reqUrl.pathname === '/api/v1/probe/issue') {
-        refreshCoordinatorIdentityKey();
-        const identity = getRequesterIdentity(req);
-        const rl = await enforceEndpointRateLimit('peer-probe-issue', identity);
-        if (!rl.ok) {
-          sendJson(res, 429, { ok: false, code: rl.code, message: rl.message });
-          return;
-        }
-        const workerId = String(reqUrl.searchParams.get('workerId') || identity || 'unknown');
-        if (workerId === 'unknown') {
-          // No usable workerId and no IP fallback � issuing a probe here would create
-          // an entry that can never be resolved, polluting the attest history.
-          sendJson(res, 400, { ok: false, code: 'MISSING_WORKER_ID', message: 'workerId is required.' });
-          return;
-        }
-        const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
-        const probe = issuePeerProbe(workerId, allowGpu);
-        sendJson(res, 200, { ok: true, probe });
-        return;
-      }
-
-      // POST /api/v1/probe/submit � unauthenticated: results are cryptographically verified;
+      // POST /api/v1/probe/submit — unauthenticated: results are cryptographically verified;
       // a wrong proof is simply rejected.  Rate-limited by remote IP.
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/probe/submit') {
         refreshCoordinatorIdentityKey();
@@ -9686,6 +9796,7 @@ function startLedgerNetworkServer() {
   });
 
   startReverseTunnelCoordinator(settings);
+  _scheduleProbePush();
 
   ledgerNetworkServer.listen(settings.listenPort, settings.listenHost, async () => {
     await refreshAutoPublicPeerUrl(settings);
@@ -10844,6 +10955,8 @@ app.whenReady().then(() => {
   }
   startLedgerReconcileLoop();
   startLedgerNetworkServer();
+  // Start the WebSocket push-probe client after wallet address is available.
+  _connectBgProbeWs();
   startWtcPeerSyncLoop();
   startWalletSyncStateLoop();
   startOpsMetricsLoop();
