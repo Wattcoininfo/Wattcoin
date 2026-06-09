@@ -4322,10 +4322,16 @@ async function inspectPeerConnectivityForTargets(
       const _normalized = normalizePeerUrl(peerUrl);
       const _cached = _normalized ? peerReachabilityCache.get(_normalized) : null;
       if (_cached && _cached.ok) {
-        // Recently successful — count as healthy without re-probing.
-        const _peerKey = getFallbackPeerKey(peerUrl);
-        distinctPeerKeys.add(_peerKey);
-        healthyPeerKeys.add(_peerKey);
+        // Only trust a success-cache entry if it is fresher than the peer-count
+        // TTL (30 s).  Older entries may be stale — the peer could have gone
+        // offline since the last successful probe — so they are re-probed.
+        if (nowMs - Number(_cached.lastSuccessAtMs || 0) < PEER_COUNT_CACHE_TTL_MS) {
+          const _peerKey = getFallbackPeerKey(peerUrl);
+          distinctPeerKeys.add(_peerKey);
+          healthyPeerKeys.add(_peerKey);
+        } else {
+          httpPeers.push(peerUrl);
+        }
       } else {
         // In failure backoff — count as distinct but not healthy.
         distinctPeerKeys.add(getFallbackPeerKey(peerUrl));
@@ -4346,6 +4352,10 @@ async function inspectPeerConnectivityForTargets(
         return;
       }
       recordPeerUrlSuccess(normalizePeerUrl(peerUrl));
+      const _tipNp = normalizePeerUrl(peerUrl);
+      if (_tipNp) {
+        peerReachabilityCache.set(_tipNp, { ok: true, lastAttemptAtMs: Date.now(), lastSuccessAtMs: Date.now() });
+      }
       const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) {
         return;
@@ -4369,6 +4379,12 @@ async function inspectPeerConnectivityForTargets(
         healthyPeerKeys.add(_peerKey);
       } else {
         distinctPeerKeys.add(fallbackKey);
+      }
+      // Record the failure in the reachability cache so subsequent inspections
+      // do not re-probe this peer (respecting the 3-min backoff).  Without this
+      // the peer-count inspection would keep timing out every 30 s.
+      if (_normalized) {
+        peerReachabilityCache.set(_normalized, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
       }
     }
   };
