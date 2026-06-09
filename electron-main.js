@@ -8768,18 +8768,24 @@ function getActivePeers(settings) {
 function hasOnlinePeers(settings) {
   const activePeers = getActivePeers(settings);
   if (activePeers.length === 0) return false;
-  // Trust the actively-probed peer count cache over the 15-minute stale threshold.
+  // Only trust the actively-probed peer count cache — never the 15-minute
+  // stale threshold (getActivePeers).  A peer that went offline 14 minutes
+  // ago would otherwise keep mining running indefinitely.
   const pc = peerCountCachedResult;
   if (pc && pc.value && pc.value.source === 'peer') {
-    // 0 is sticky — never falls back to the stale-discovered list.
+    // 0 is sticky — never falls back to a stale-discovered list.
     if (pc.value.onlineCount === 0) return false;
     // A fresh >0 result means peers are online.
     if (pc.expiresAtMs > Date.now()) return true;
+    // TTL expired and >0 was cached — if an inspection is in flight wait for
+    // it to confirm (the tick loop will retry on the next cycle).  Otherwise
+    // continue optimistically; the renderer poll will start a new inspection
+    // within 5 s and confirm or correct the stale value then.
+    if (peerCountInspectionPromise) return false;
+    return true;
   }
-  // Cache expired and an inspection is in flight — peers may have just dropped.
-  if (peerCountInspectionPromise) return false;
-  // Last resort: the 15-minute stale-threshold list.
-  return activePeers.length > 0;
+  // No valid cache entry yet — mining waits for the first inspection.
+  return false;
 }
 
 function getPeerDirectoryTargets(settings) {
