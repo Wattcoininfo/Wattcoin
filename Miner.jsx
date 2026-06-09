@@ -5858,7 +5858,8 @@ export default function Miner({
       return;
     }
     // Intentionally NOT gated on isActive -- GPU mining continues when other app tabs are open.
-    const gpuLoadActive = mining || benchmarkState.running;
+    // Peer-down stops GPU load too so the hardware is not wasted while waiting.
+    const gpuLoadActive = (mining && !peerDownRef.current) || benchmarkState.running;
     if (!gpuLoadActive || isHardwareOnHold || loadPercent <= 0) {
       if (gpuLoadRafRef.current) {
         clearTimeout(gpuLoadRafRef.current);
@@ -6070,7 +6071,7 @@ export default function Miner({
       }
       gpuMeasuredDutyRef.current = 0;
     };
-  }, [allowGpuWorkloads, mining, benchmarkState.running, loadPercent, effectiveLoadPercent, isHardwareOnHold]);
+  }, [allowGpuWorkloads, mining, benchmarkState.running, loadPercent, effectiveLoadPercent, isHardwareOnHold, peerDownToggle]);
 
   // Hold countdown: tick holdSecondsLeft down every second; auto-clear when expired.
   React.useEffect(() => {
@@ -6167,6 +6168,18 @@ export default function Miner({
       clearInterval(id);
     };
   }, [isActive]);
+
+  // Pause mining when the 5‑second peer poll reports 0 online peers.
+  // Without this the tick loop's round‑summary path can spin indefinitely
+  // (setting timeout → tick → setting timeout …) without ever calling
+  // mineOneRealBlock, which is the only other code path that sets
+  // peerDownRef.current = true.
+  React.useEffect(() => {
+    if (peerCount === 0) {
+      peerDownRef.current = true;
+      setPeerDownToggle((t) => t + 1);
+    }
+  }, [peerCount]);
 
   // Restart mining when a peer reconnects after all peers were offline.
   React.useEffect(() => {
