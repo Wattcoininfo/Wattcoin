@@ -7775,8 +7775,9 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
     // a probe receipt secp256k1-signed by a live verifier peer (typically the
     // bootstrap node). A patched client cannot forge that signature, so solo
     // mining with fabricated energy values is not possible on the real network.
-    const activePeersForProbeCheck = getActivePeers(getLedgerNetworkSettings());
-    if (activePeersForProbeCheck.length === 0) {
+    // Uses the actively-probed peer count cache (same source the dashboard shows)
+    // not just the 15-minute stale threshold from discoveredPeers.
+    if (!hasOnlinePeers(getLedgerNetworkSettings())) {
       return {
         address: '',
         mined: '',
@@ -8735,6 +8736,23 @@ function getActivePeers(settings) {
     listenPort: settings && settings.listenPort,
     localHosts: Array.from(getLocalPeerHosts()),
   });
+}
+
+/**
+ * Combines the stale-threshold peer check with the actively-probed peer count
+ * cache.  The dashboard shows onlineCount from active HTTP probing, so this
+ * prevents mining from continuing when the UI already shows 0 peers.
+ */
+function hasOnlinePeers(settings) {
+  const activePeers = getActivePeers(settings);
+  if (activePeers.length === 0) return false;
+  // Peer-count inspection actively probes each peer URL (up to 25 s timeout).
+  // If the cache is fresh and shows 0, trust it over the 15 min stale threshold.
+  const pc = peerCountCachedResult;
+  if (pc && pc.expiresAtMs > Date.now() && pc.value && pc.value.source === 'peer' && pc.value.onlineCount === 0) {
+    return false;
+  }
+  return true;
 }
 
 function getPeerDirectoryTargets(settings) {
@@ -9892,15 +9910,14 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   }
 
   // Block contributions when no peers are online � solo mining is not allowed.
-  if (wtcNode) {
-    const activePeersForContributionCheck = getActivePeers(getLedgerNetworkSettings());
-    if (activePeersForContributionCheck.length === 0) {
-      return {
-        ok: false,
-        code: 'NO_PEERS',
-        message: 'At least one peer must be connected before mining. Waiting for peer connection...',
-      };
-    }
+  // Uses the actively-probed peer count cache (same source the dashboard shows)
+  // not just the 15-minute stale threshold from discoveredPeers.
+  if (wtcNode && !hasOnlinePeers(getLedgerNetworkSettings())) {
+    return {
+      ok: false,
+      code: 'NO_PEERS',
+      message: 'At least one peer must be connected before mining. Waiting for peer connection...',
+    };
   }
 
   // -- deltaWh ceiling: clamp to one second of trust-capped calibrated power ---
