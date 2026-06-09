@@ -3815,7 +3815,11 @@ export default function Miner({
 
         const submitPayload = {
           source,
-          result: { ...probeResult, _peerUrl: probe._peerUrl, probeWallClockMs: Math.round(performance.now() - probeStartedAt) },
+          result: {
+            ...probeResult,
+            _peerUrl: probe._peerUrl,
+            probeWallClockMs: Math.round(performance.now() - probeStartedAt),
+          },
           hardwareSpec: {
             measuredCpuOpsPerSec: Number(benchmarkProofRef.current && benchmarkProofRef.current.cpuSpeedOpsPerSec) || 0,
             measuredMemLatencyNs: Number(benchmarkProofRef.current && benchmarkProofRef.current.memLatencyNs) || 0,

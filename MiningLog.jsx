@@ -219,7 +219,7 @@ function MiningLog({
           </span>
           {/* Timing */}
           {typeof entry.wallClockMs === 'number' && (
-            <span style={{ color: '#64748b', fontSize: 11 }}>{entry.wallClockMs} ms</span>
+            <span style={{ color: '#64748b', fontSize: 11 }}>{Math.round(entry.wallClockMs)} ms</span>
           )}
           {/* Chain index */}
           {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (

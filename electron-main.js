@@ -4330,7 +4330,7 @@ async function inspectPeerConnectivityForTargets(
     } catch (_) {
       const _normalized = normalizePeerUrl(peerUrl);
       const _disc = _normalized ? discoveredPeers.get(_normalized) : null;
-      if (_disc && _disc.lastSeenMs && (Date.now() - _disc.lastSeenMs) < PEER_HEALTHY_GRACE_PERIOD_MS) {
+      if (_disc && _disc.lastSeenMs && Date.now() - _disc.lastSeenMs < PEER_HEALTHY_GRACE_PERIOD_MS) {
         // Grace period: peer was recently seen, don't drop on a single timeout.
         const _peerKey = getFallbackPeerKey(peerUrl);
         distinctPeerKeys.add(_peerKey);
@@ -7807,9 +7807,9 @@ function loadBundledSeedPeers() {
             try {
               const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
               if (decoded) return normalizePeerUrl(`http://${decoded}`);
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-    }
+            } catch (_) {
+              if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
+            }
           }
           return normalizePeerUrl(rawUrl);
         })
