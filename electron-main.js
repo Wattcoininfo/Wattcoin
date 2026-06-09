@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
 // Keep the GPU compositor active even when the window is minimized or occluded.
 // backgroundThrottling:false (set on the BrowserWindow) stops JS timer throttling but
 // Chromium's GPU process still pauses WebGL rasterisation for invisible windows.
@@ -165,7 +165,7 @@ const ENDPOINT_RATE_LIMITS = {
 
 const endpointRateState = new Map();
 
-// ── Rate-lock persistence ─────────────────────────────────────────────────────
+// -- Rate-lock persistence -----------------------------------------------------
 // Active locks are written to disk so a restart cannot circumvent a punishment
 // window.  Only the lock expiry timestamps are persisted (not hit counts) since
 // those would be stale after a restart anyway.
@@ -213,7 +213,7 @@ function saveRateLock(key, lockedUntil) {
   }
 }
 
-// ── Hardware-authority state ─────────────────────────────────────────────────────
+// -- Hardware-authority state -----------------------------------------------------
 // Owned by the main process only.  Calibrations, trust score, and hw-hold are
 // persisted to a userData file so they cannot be reset by patching the renderer
 // or clearing localStorage.  The renderer reads these values back via IPC and
@@ -234,7 +234,7 @@ let hwAuthority = {
   // Commitment stored at mine time; verified at settle time to prevent swapping
   // a fake contribution in between mine and settle.
   pendingProofCommitment: '',
-  // Power ceiling — set at benchmark time, used to clamp addContribution calls.
+  // Power ceiling � set at benchmark time, used to clamp addContribution calls.
   // Stores the calibration-adjusted declared TDP; trust factor applied at contribution time.
   calibratedUnitPowerW: 0,
   // Last load percentage actually applied via wattcoin-set-hardware-load.
@@ -253,9 +253,9 @@ let hwAuthority = {
   // Set when the main process reads getGpuInfo().adapter and looks it up
   // in getGpuTdpW(). Overrides the renderer-supplied GPU power component.
   nativeGpuTdpW: 0,
-  // Consecutive clean probes during mining — increments trust score on each milestone.
+  // Consecutive clean probes during mining � increments trust score on each milestone.
   consecutiveCleanProbes: 0,
-  // Consecutive peer probe hardware failures — decrements trust at threshold.
+  // Consecutive peer probe hardware failures � decrements trust at threshold.
   consecutivePeerProbeFails: 0,
   // Rolling mean jitter derived from persistent jitterSamples history.
   // Used to widen the attestation threshold for machines that legitimately
@@ -263,9 +263,9 @@ let hwAuthority = {
   rollingJitterMean: 0,
 };
 
-// ── Network anomaly detection: per-address mining stats ──────────────────────
+// -- Network anomaly detection: per-address mining stats ----------------------
 // Tracks declared power vs measured CPU for every miner seen by this node.
-// Used to detect outliers — a miner claiming 5000W with CPU benchmark far
+// Used to detect outliers � a miner claiming 5000W with CPU benchmark far
 // outside the network norm is likely cheating.
 // Entries are evicted after 24h of inactivity; capped at 10,000 entries.
 const networkMiningStats = new Map();
@@ -286,7 +286,7 @@ function recordMinerStats(address, powerW, cpuOps) {
   }
 }
 
-// Returns true if this miner's power/cpu ratio is an outlier (>3σ from network mean).
+// Returns true if this miner's power/cpu ratio is an outlier (>3s from network mean).
 function isPowerCpuOutlier(address, powerW, cpuOps) {
   if (networkMiningStats.size < 3) return false;
   let sumRatio = 0,
@@ -339,13 +339,13 @@ function loadHwAuthState() {
     if (sig) {
       const expected = computeHwAuthSig(data);
       if (!crypto.timingSafeEqual(Buffer.from(sig, 'utf8'), Buffer.from(expected, 'utf8'))) {
-        // Signature mismatch — file was tampered with.  Reset to defaults and flag.
+        // Signature mismatch � file was tampered with.  Reset to defaults and flag.
         hwAuthStateIsNew = true;
         console.warn('[hwAuth] hw-auth-state.json signature invalid - resetting to defaults.');
         return;
       }
     }
-    // Trust-reset epoch check — if the saved epoch doesn't match TRUST_RESET_EPOCH,
+    // Trust-reset epoch check � if the saved epoch doesn't match TRUST_RESET_EPOCH,
     // discard the stored trust score and reset to 50 (neutral) for this user.
     if (data.trustResetEpoch !== TRUST_RESET_EPOCH) {
       console.log('[hwAuth] Trust reset epoch changed - resetting trust score to 50.');
@@ -439,7 +439,7 @@ function saveHwAuthState() {
   }
 }
 
-// ── OS-level hardware identity (authoritative — renderer cannot influence) ────
+// -- OS-level hardware identity (authoritative � renderer cannot influence) ----
 // These values are read once at startup from Node / Electron / systeminformation
 // APIs in the main process.  They are used to cross-check the renderer's hardware
 // declarations; any mismatch triggers a trust penalty and a Brave-sourced TDP cap.
@@ -520,9 +520,9 @@ async function resolveOsHardwareIdentity() {
     }
   }
 
-  // ── VM detection (multi-signal) ──────────────────────────────────────────
+  // -- VM detection (multi-signal) ------------------------------------------
   // A VM allows spoofing CPUID + SMBIOS tables, bypassing all OS-level checks.
-  // We use multiple independent signals — any single one is sufficient to flag.
+  // We use multiple independent signals � any single one is sufficient to flag.
   let isVM = false;
   let vmType = '';
   try {
@@ -553,7 +553,7 @@ async function resolveOsHardwareIdentity() {
     }
   }
 
-  // Quaternary: GPU model hints — virtual display adapters.
+  // Quaternary: GPU model hints � virtual display adapters.
   if (!isVM && gpuModels.length > 0) {
     const vmGpuHints = /virtualbox|vmware|microsoft basic|hyper-v|qxl|virtio|red hat|bochs/i;
     if (gpuModels.some((g) => vmGpuHints.test(g))) {
@@ -569,7 +569,7 @@ async function resolveOsHardwareIdentity() {
   return osHardwareIdentity;
 }
 
-// ── Wattage parsing (shared with Miner.jsx — authoritative copy) ────────────
+// -- Wattage parsing (shared with Miner.jsx � authoritative copy) ------------
 function normalizeWattageText(text) {
   return String(text || '')
     .replace(/\$\$/g, ' ')
@@ -603,12 +603,12 @@ function parseBestWattage(text) {
   return best;
 }
 
-// ── Main-process TDP lookup (via server-side proxy) ─────────────────────────
+// -- Main-process TDP lookup (via server-side proxy) -------------------------
 // The Brave AI subscription key lives server-side only.  The app calls
 // wattcoin.ee/api/tdp-lookup which forwards to Brave and returns the raw
 // answer text.  parseBestWattage() still runs locally for extraction.
 const BRAVE_TDP_PROXY_URL = 'https://wattcoin.ee/api/tdp-lookup';
-const _mainTdpCache = new Map(); // model → { tdpW, ts }
+const _mainTdpCache = new Map(); // model ? { tdpW, ts }
 const _MAIN_TDP_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
 function fetchTdpFromBrave(modelString) {
@@ -666,7 +666,7 @@ function fetchTdpFromBrave(modelString) {
   });
 }
 
-// ── ASIC liveness check: hash challenge via cgminer API ──────────────────────
+// -- ASIC liveness check: hash challenge via cgminer API ----------------------
 // Connects to the ASIC's local API (standard ports 4028-4030) and sends a
 // hashing challenge.  Real ASIC chips complete near-instantly via their hash
 // boards; software fakes (or absent hardware) take orders of magnitude longer.
@@ -715,13 +715,13 @@ async function verifyAsicLiveness(_modelName) {
       const elapsedMs = Date.now() - startMs;
       return { ok: true, elapsedMs, rounds: ROUNDS, bytesTotal: ROUNDS * CHUNK_BYTES, port, asicType };
     } catch (_) {
-      // Port unreachable or check failed — try next port.
+      // Port unreachable or check failed � try next port.
     }
   }
   return { ok: false, elapsedMs: 0, asicType: '' };
 }
 
-// Compare two hardware model strings — returns true if they refer to the same
+// Compare two hardware model strings � returns true if they refer to the same
 // component.  Strips OEM decoration ((R), (TM), '@ X.XXGHz', gen-prefix) and
 // uses case-insensitive includes in both directions (OS strings may be shorter
 // or longer than renderer strings).
@@ -730,7 +730,7 @@ function hardwareModelsMatch(osModel, declaredModel) {
     String(s || '')
       .normalize('NFKC')
       // Handle common mojibake variants of trademark symbols from mixed encodings.
-      .replace(/Γäó|â„¢|™/g, ' ')
+      .replace(/G��|™|�/g, ' ')
       // Handle collapsed trademark text forms (e.g. CoreTM).
       .replace(/([a-z])tm\b/gi, '$1')
       .replace(/\b(tm|trademark|registered)\b/gi, ' ')
@@ -754,7 +754,7 @@ function hardwareModelsMatch(osModel, declaredModel) {
   return bTokens.some((t) => aTokens.has(t));
 }
 
-// ── ASIC firmware attestation: verify the device's firmware across multiple ──
+// -- ASIC firmware attestation: verify the device's firmware across multiple --
 // independent API commands to detect modified firmware.
 // A patched firmware must consistently lie across all of: check, version, stats.
 // If any endpoint reports a different model identity, the firmware is modified.
@@ -819,7 +819,7 @@ async function verifyAsicFirmware(port, checkModel, _modelName) {
     const json = await r.json();
     const statsRecords = json && json.STATS;
     if (Array.isArray(statsRecords) && statsRecords.length > 0) {
-      // Skip the "STATS" summary record (id=0) — look at individual miner records.
+      // Skip the "STATS" summary record (id=0) � look at individual miner records.
       for (const rec of statsRecords) {
         if (rec && rec.id !== 0) {
           const type = String(rec.Type || '').trim();
@@ -842,23 +842,23 @@ async function verifyAsicFirmware(port, checkModel, _modelName) {
   if (identityValues.length >= 2 && uniqueIdentities.size > 1) {
     result.issues.push(
       `firmware model mismatch: conflicting identities [${[...new Set(identityValues)].join(', ')}]` +
-        ` across check/version/stats API commands — firmware may be modified`,
+        ` across check/version/stats API commands � firmware may be modified`,
     );
   }
 
   // 4. Check compile time is present.
   if (result.compileTimes.length === 0) {
-    result.issues.push('no compile time reported — firmware info may be suppressed');
+    result.issues.push('no compile time reported � firmware info may be suppressed');
   }
 
   result.ok = result.issues.length === 0;
   return result;
 }
 
-// ── Hardware fingerprint & per-wallet benchmark history ──────────────────────
+// -- Hardware fingerprint & per-wallet benchmark history ----------------------
 // The fingerprint records the CPU+memory descriptor from the first calibrated
 // benchmark.  If the descriptor changes but the wallet stays the same,
-// contributions are blocked until the user creates a new wallet — ensuring each
+// contributions are blocked until the user creates a new wallet � ensuring each
 // wallet's benchmark history always belongs to exactly one physical machine.
 //
 // Benchmark history stores a rolling window of measured CPU/mem/GPU values per
@@ -1015,12 +1015,12 @@ function clearBenchmarkHistory() {
 
 // Append a new sample to a rolling window, rejecting clear outliers.
 // With fewer than 4 existing samples any value is accepted (insufficient history).
-// Outlier rule: reject if > 2.5× or < 0.40× the current mean.
+// Outlier rule: reject if > 2.5� or < 0.40� the current mean.
 function appendBenchmarkSample(samples, newValue) {
   if (samples.length >= 4) {
     const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
     if (newValue > mean * 2.5 || newValue < mean * 0.4) {
-      return samples; // outlier — reject without adding
+      return samples; // outlier � reject without adding
     }
   }
   const updated = [...samples, newValue];
@@ -1118,7 +1118,7 @@ let mineBlockBusy = false; // prevents concurrent mineBlock calls (IPC + flush l
 let bundledSeedPeersCache = null;
 let remoteSeedPeerRefreshTimer = null;
 
-// ── Peer-mode UDP discovery ───────────────────────────────────────────────────
+// -- Peer-mode UDP discovery ---------------------------------------------------
 // Peers send a UDP beacon on PEER_DISCOVERY_PORT every 2 min so that nodes
 // on the same subnet find each other without a hand-written peer list.
 // Uses link-local multicast (TTL=1) instead of 255.255.255.255 broadcast
@@ -1127,13 +1127,13 @@ let remoteSeedPeerRefreshTimer = null;
 // a separate static active-peer bucket.
 const PEER_DISCOVERY_PORT = 39311;
 const PEER_DISCOVERY_MCAST = '239.0.52.67'; // administratively-scoped multicast, LAN-only
-const PEER_BEACON_INTERVAL_MS = 120_000; // 2 min — low-rate discovery
-const PEER_STALE_THRESHOLD_MS = 5 * 60_000; // 5 min without beacon â†’ evict
+const PEER_BEACON_INTERVAL_MS = 120_000; // 2 min � low-rate discovery
+const PEER_STALE_THRESHOLD_MS = 15 * 60_000; // 15 min without beacon -> evict
 const PEER_EXCHANGE_TARGET_LIMIT = 4;
-const PEER_REACHABILITY_RETRY_MS = 2 * 60_000;
+const PEER_REACHABILITY_RETRY_MS = 3 * 60_000; // 3 min — WAN peers need longer backoff before re-probe
 const PEER_REACHABILITY_SUCCESS_TTL_MS = 10 * 60_000;
-const PEER_REACHABILITY_TIMEOUT_MS = 12_000;
-const PEER_CHAIN_TIP_TIMEOUT_MS = 12_000;
+const PEER_REACHABILITY_TIMEOUT_MS = 20_000; // WAN: allow for TCP handshake + high latency
+const PEER_CHAIN_TIP_TIMEOUT_MS = 25_000; // WAN: allow for TCP handshake + high latency
 const PEER_CHAIN_TIP_CACHE_MS = 3_000;
 const PEER_LOCAL_SUBNET_DISCOVERY_TIMEOUT_MS = 1_200;
 const PEER_LOCAL_SUBNET_DISCOVERY_CONCURRENCY = 24;
@@ -1178,10 +1178,11 @@ const peerAttestationHistory = new Map(); // peerIdentity -> Map<otherPeerIdenti
 const PEER_ATTESTATION_RECIPROCITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 let peerCountInspectionPromise = null; // concurrency guard for wattcoin-get-peer-count
 let peerCountCachedResult = null; // { expiresAtMs, value }
-const PEER_COUNT_CACHE_TTL_MS = 8_000; // re-use recent inspection result for 8 s
+const PEER_COUNT_CACHE_TTL_MS = 30_000; // re-use recent inspection result for 30 s (less aggressive probing)
 const PEER_COUNT_PROBE_CONCURRENCY = 5; // probe up to 5 peers in parallel
-const PEER_COUNT_PROBE_TIMEOUT_MS = 15_000; // shorter timeout for peer-count probes (increased for external network stability)
-const PEER_ATTESTATION_SELECTION_TIMEOUT_MS = 15_000; // attestation peer must be online now (increased for external network stability)
+const PEER_COUNT_PROBE_TIMEOUT_MS = 25_000; // WAN-aware timeout for peer-count probes
+const PEER_HEALTHY_GRACE_PERIOD_MS = 120_000; // 2 min — don't drop a peer on a single timeout; require sustained failure
+const PEER_ATTESTATION_SELECTION_TIMEOUT_MS = 25_000; // attestation peer must be online now (increased for WAN stability)
 const PEER_ATTESTATION_SELECTION_CONCURRENCY = 5;
 let reverseTunnelWss = null;
 const reverseTunnelSessions = new Map(); // tunnelId -> session
@@ -1203,7 +1204,7 @@ const reverseTunnelClientState = {
 let autoDetectedPublicPeerUrl = '';
 let autoDetectedPublicPeerLookupPromise = null;
 let autoPublicPeerRefreshTimer = null;
-// blockHash â†’ { minedAddress, totalWh, rewardCoins, settledAtMs, sig, fromPeer }
+// blockHash → { minedAddress, totalWh, rewardCoins, settledAtMs, sig, fromPeer }
 const witnessedSettlements = new Map();
 
 function getDiscoveredSeedPeerCachePath() {
@@ -1611,7 +1612,7 @@ function extractReachablePeerCandidates(req, settings = getLedgerNetworkSettings
     Number(req.headers['x-wtc-peer-port']) || Number(settings && settings.listenPort) || 0,
   );
   // When the peer announces its own URLs (x-wtc-peer-urls), use those as authoritative.
-  // The socket-inferred URL (remote IP + port) is redundant — it may be a NAT'd LAN
+  // The socket-inferred URL (remote IP + port) is redundant � it may be a NAT'd LAN
   // address that causes the same physical peer to be counted twice.
   const inferredSocketUrl =
     announcedUrls.length > 0 ? null : buildPeerUrlFromSocket(req.socket && req.socket.remoteAddress, declaredPort);
@@ -1801,6 +1802,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
       continue;
     }
 
+    if (!shouldAttemptPeerReachability(peerUrl)) continue;
     httpPeers.push(peerUrl);
   }
 
@@ -1831,6 +1833,10 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
       }
     } catch (_) {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
+      const np = normalizePeerUrl(peerUrl);
+      if (np) {
+        peerReachabilityCache.set(np, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
+      }
     }
   };
 
@@ -2379,7 +2385,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
     const coordinatorBaseUrl = getReverseTunnelCoordinatorBaseUrl(req, settings);
     const publicUrl = buildReverseTunnelPublicUrl(coordinatorBaseUrl, tunnelId);
     const peerIdentity = getReverseTunnelPeerIdentity(req);
-    // Reject self-connecting tunnels — the seed peer should not tunnel to itself.
+    // Reject self-connecting tunnels � the seed peer should not tunnel to itself.
     const localPeerIdentity = getLocalPeerIdentity();
     if (peerIdentity && localPeerIdentity && peerIdentity === localPeerIdentity) {
       console.log(`[ReverseTunnel] Rejecting self-connecting tunnel from ${peerIdentity}`);
@@ -2747,7 +2753,7 @@ function ensureManagedReverseTunnelClient(settings = getLedgerNetworkSettings())
     scheduleManagedReverseTunnelReconnect();
     return;
   }
-  // Do not tunnel to ourselves — seed peer is its own coordinator.
+  // Do not tunnel to ourselves � seed peer is its own coordinator.
   if (isSelfPeerUrl(coordinatorUrl) || isLocallyServedReverseTunnelPeerUrl(coordinatorUrl, settings)) {
     writeStartupTrace('reverse-tunnel.connect-skipped', {
       reason: 'coordinator-is-self',
@@ -2891,7 +2897,7 @@ const ATTESTATION_SPOTCHECK_DURATION_MS = 20 * 60_000;
 const POLICY_FEED_REFRESH_MS = 15 * 60_000;
 const ENABLE_NODE_ATTESTATION = true;
 const ENABLE_POWER_PROOF_COMMITMENT = true;
-// OP_RETURN prefix for on-chain policy anchors — 'WTCP1:' + 64-char SHA-256 hex = 70 bytes.
+// OP_RETURN prefix for on-chain policy anchors � 'WTCP1:' + 64-char SHA-256 hex = 70 bytes.
 const _POLICY_OPRETURN_PREFIX = 'WTCP1:';
 
 const LOCAL_HARDWARE_PROFILE_DB = [
@@ -2956,7 +2962,7 @@ function loadConsumedProofs() {
     const raw = fs.readFileSync(getConsumedProofsFilePath(), 'utf8');
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return;
-    // Verify HMAC integrity — same pattern as hw-auth-state.json and benchmark-history.json.
+    // Verify HMAC integrity � same pattern as hw-auth-state.json and benchmark-history.json.
     const { _sig, ...data } = parsed;
     if (_sig) {
       const expected = computeHwAuthSig(data);
@@ -3002,7 +3008,7 @@ let remoteProfileFeed = {
 };
 let remoteProfileFeedRefreshTimer = null;
 
-// ── On-chain policy anchor state ─────────────────────────────────────────────
+// -- On-chain policy anchor state ---------------------------------------------
 // Persisted across restarts so the app doesn't rescan the full chain every launch.
 const POLICY_ANCHOR_CACHE_FILE = 'policy-anchor-cache.json';
 let policyAnchorState = { latestAnchor: null, lastScannedHeight: -1, scannedAtMs: 0 };
@@ -3118,7 +3124,7 @@ function fetchTextWithTimeout(url, timeoutMs = 5000) {
       const req = client.get(url, { timeout: timeoutMs, headers: { Accept: 'application/json' } }, (res) => {
         const chunks = [];
         let totalBytes = 0;
-        const FETCH_MAX_BYTES = 1 * 1024 * 1024; // 1 MB cap — policy feeds should never exceed this
+        const FETCH_MAX_BYTES = 1 * 1024 * 1024; // 1 MB cap � policy feeds should never exceed this
         res.on('data', (chunk) => {
           totalBytes += chunk.length;
           if (totalBytes > FETCH_MAX_BYTES) {
@@ -3151,7 +3157,7 @@ function fetchTextWithTimeout(url, timeoutMs = 5000) {
   });
 }
 
-// IPC proxy — routes renderer fetch() calls through Node's https module.
+// IPC proxy � routes renderer fetch() calls through Node's https module.
 // Renderer-process fetch() uses Chromium's networking stack which enforces CORS.
 // TechPowerUp spec pages, NotebookCheck HTML, and Reddit JSON don't send
 // Access-Control-Allow-Origin headers, so every response body is blocked by CORS
@@ -3305,7 +3311,7 @@ async function refreshRemoteProfilesFromPolicyFeed() {
       return { ok: false, code: 'POLICY_FEED_INVALID_JSON' };
     }
 
-    // ── Tier 1: On-chain anchor verification (primary) ───────────────────────
+    // -- Tier 1: On-chain anchor verification (primary) -----------------------
     // Hash = SHA-256 of the canonical policy object (JSON.stringify without spaces).
     // For envelopes, hash the inner policy; for raw policy files, hash the whole thing.
     const hashTarget = isEnvelope ? JSON.stringify(policy) : policyText;
@@ -3320,14 +3326,14 @@ async function refreshRemoteProfilesFromPolicyFeed() {
       }
       console.log(`[PolicyFeed] Policy verified against on-chain anchor (block ${anchor.blockHeight}).`);
     } else {
-      // ── Tier 2: RSA signature fallback (when no chain anchor published yet) ──
+      // -- Tier 2: RSA signature fallback (when no chain anchor published yet) --
       if (publicKeyPem) {
         if (!isEnvelope || !verifyPolicyFeedEnvelope(policyObj, publicKeyPem)) {
           return { ok: false, code: 'POLICY_FEED_SIGNATURE_INVALID' };
         }
         console.log('[PolicyFeed] Policy verified via RSA signature (no chain anchor found).');
       } else {
-        // Neither chain anchor nor RSA key — can't verify. Refuse and use local DB.
+        // Neither chain anchor nor RSA key � can't verify. Refuse and use local DB.
         console.warn('[PolicyFeed] No on-chain anchor and no RSA public key configured - using local profile DB.');
         return { ok: false, code: 'POLICY_FEED_UNVERIFIABLE' };
       }
@@ -3364,7 +3370,7 @@ function ensurePolicyFeedRefreshLoop() {
   }, POLICY_FEED_REFRESH_MS);
 }
 
-// ── Publish a policy anchor on-chain via OP_RETURN ────────────────────────────
+// -- Publish a policy anchor on-chain via OP_RETURN ----------------------------
 // Operator usage: window.wattcoinHardware.invoke('wattcoin-publish-policy-anchor', jsonText)
 // jsonText = the policy JSON string (same content that will be hosted at the feed URL).
 ipcMain.handle('wattcoin-publish-policy-anchor', (_event, _policyText) => {
@@ -3427,7 +3433,7 @@ function loadAttestationState() {
         }
       }
     } else if (parsed && typeof parsed.secret === 'string' && parsed.secret.length >= 32) {
-      // Legacy plaintext secret — accepted once; re-saved encrypted on next saveAttestationState().
+      // Legacy plaintext secret � accepted once; re-saved encrypted on next saveAttestationState().
       secret = parsed.secret;
     } else {
       secret = crypto.randomBytes(32).toString('hex');
@@ -3451,7 +3457,7 @@ function saveAttestationState() {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     const payload = { version: attestationState.version, miners: attestationState.miners };
     if (safeStorage.isEncryptionAvailable()) {
-      // Encrypt with OS secure store — plaintext secret never written to disk.
+      // Encrypt with OS secure store � plaintext secret never written to disk.
       payload.encryptedSecret = safeStorage.encryptString(attestationState.secret).toString('base64');
     }
     // Always write a machine-derived AES-256-GCM fallback (keyed by device-identity secret)
@@ -3471,7 +3477,7 @@ function saveAttestationState() {
         payload.fallbackEncryptedSecret = Buffer.concat([fbIv, fbTag, fbEnc]).toString('base64');
       }
     } catch (_fb) {
-      /* non-fatal — primary DPAPI path is sufficient */
+      /* non-fatal � primary DPAPI path is sufficient */
     }
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
   } catch (_) {
@@ -3694,11 +3700,11 @@ function _verifyContributionSignature(address, signature, message, expectedPrefi
   if (windowNum !== currentWindow && windowNum !== currentWindow - 1) {
     return { ok: false, reason: 'contribution signature expired or from the future' };
   }
-  // Pure JS verification — works offline, no node dependency.
+  // Pure JS verification � works offline, no node dependency.
   try {
     const valid = verifyWalletMessagePureJS(address, signature, message, getActiveNetwork());
     if (valid) return { ok: true };
-    // Pure JS says invalid — try RPC as a secondary check in case of network/address edge case.
+    // Pure JS says invalid � try RPC as a secondary check in case of network/address edge case.
   } catch (pureJsErr) {
     console.warn('[SigVerify] Pure JS verification threw, falling back to RPC:', pureJsErr && pureJsErr.message);
   }
@@ -3916,7 +3922,7 @@ async function submitBenchmarkProof(payload = {}) {
   if (jitterRatio > Number((expected.minimums && expected.minimums.jitterRatioMax) || 0.45)) {
     // Adapt the threshold to this machine's rolling jitter history: if the device
     // consistently runs at moderate jitter (e.g. 0.25 rolling mean), allow up to
-    // 2× that rolling mean before rejecting — so a single noisy run doesn't cause
+    // 2� that rolling mean before rejecting � so a single noisy run doesn't cause
     // a false failure.  The hard cap of 0.70 prevents a pathologically jittery
     // machine from bypassing the check entirely.
     const adaptiveMax =
@@ -4258,7 +4264,7 @@ async function inspectPeerConnectivityForTargets(
   const httpPeers = [];
   for (const peerUrl of peers) {
     if (isLocallyServedReverseTunnelPeerUrl(peerUrl, settings)) {
-      // Tunnel peer whose session lives on this coordinator — derive health
+      // Tunnel peer whose session lives on this coordinator � derive health
       // from the WebSocket session rather than probing through the tunnel.
       const tunnelId = extractTunnelIdFromUrl(peerUrl);
       const session = tunnelId ? reverseTunnelSessions.get(tunnelId) : null;
@@ -4275,11 +4281,23 @@ async function inspectPeerConnectivityForTargets(
         healthyPeerKeys.add(peerKey);
         healthyTunnelPeerKeys.add(peerKey);
       } else {
-        // Session dead or gone — still count as distinct but unhealthy.
+        // Session dead or gone � still count as distinct but unhealthy.
         distinctPeerKeys.add(getFallbackPeerKey(peerUrl));
       }
-    } else {
+    } else if (shouldAttemptPeerReachability(peerUrl, nowMs)) {
       httpPeers.push(peerUrl);
+    } else {
+      const _normalized = normalizePeerUrl(peerUrl);
+      const _cached = _normalized ? peerReachabilityCache.get(_normalized) : null;
+      if (_cached && _cached.ok) {
+        // Recently successful — count as healthy without re-probing.
+        const _peerKey = getFallbackPeerKey(peerUrl);
+        distinctPeerKeys.add(_peerKey);
+        healthyPeerKeys.add(_peerKey);
+      } else {
+        // In failure backoff — count as distinct but not healthy.
+        distinctPeerKeys.add(getFallbackPeerKey(peerUrl));
+      }
     }
   }
 
@@ -4310,7 +4328,16 @@ async function inspectPeerConnectivityForTargets(
       const height = Number(tip.height);
       if (Number.isFinite(height) && height > bestPeerHeight) bestPeerHeight = height;
     } catch (_) {
-      distinctPeerKeys.add(fallbackKey);
+      const _normalized = normalizePeerUrl(peerUrl);
+      const _disc = _normalized ? discoveredPeers.get(_normalized) : null;
+      if (_disc && _disc.lastSeenMs && (Date.now() - _disc.lastSeenMs) < PEER_HEALTHY_GRACE_PERIOD_MS) {
+        // Grace period: peer was recently seen, don't drop on a single timeout.
+        const _peerKey = getFallbackPeerKey(peerUrl);
+        distinctPeerKeys.add(_peerKey);
+        healthyPeerKeys.add(_peerKey);
+      } else {
+        distinctPeerKeys.add(fallbackKey);
+      }
     }
   };
 
@@ -4899,7 +4926,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     const _duty = typeof _hwState.avgCpuWorkerDuty === 'number' ? (_hwState.avgCpuWorkerDuty * 100).toFixed(1) : '?';
     const _bgOps = typeof _hwState.cpuLoadOpsPerSec === 'number' ? Math.round(_hwState.cpuLoadOpsPerSec / 1e6) : '?';
   } catch (_) {
-    // diagnostic logging — ignore failures
+    // diagnostic logging � ignore failures
   }
 
   // Pause the hardware load during the benchmark so the main thread is not
@@ -4921,7 +4948,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       allowGpuWorkloads: !!(request && request.allowGpuWorkloads),
     });
 
-    // ── Pin throughput to pending attestation challenges ──────────────────────
+    // -- Pin throughput to pending attestation challenges ----------------------
     // Store main-process-measured values on active challenges for this miner so
     // submitBenchmarkProof uses authoritative numbers, not renderer-reported ones.
     const _minerAddr = walletAddressCache.address || '';
@@ -4934,7 +4961,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       }
     }
 
-    // ── Calibration (authoritative — uses main-process copy of hardware tables) ─
+    // -- Calibration (authoritative � uses main-process copy of hardware tables) -
     // The renderer sends the hardware description strings; main performs its own
     // expected-value lookup so the renderer cannot manipulate expected ops/s.
     // SECURITY: CPU model is overridden with os.cpus()[0].model (kernel-level)
@@ -4996,7 +5023,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     const expectedDeclaredCpu = getExpectedCpuSpeedOps(declaredCpuModel);
     const expectedMem = getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks);
 
-    // ── Hardware fingerprint: detect machine swap with same wallet ────────────
+    // -- Hardware fingerprint: detect machine swap with same wallet ------------
     const currentWallet = walletAddressCache.address || '';
     const hwDescriptor = {
       cpuModel,
@@ -5022,13 +5049,13 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         };
       }
       if (fpChanged) {
-        // Hardware changed and wallet also changed — accept as a new installation.
+        // Hardware changed and wallet also changed � accept as a new installation.
         // Clear benchmark history so the new hardware starts accumulating fresh samples.
         console.log('[hwFingerprint] Hardware change with new wallet - fingerprint updated, history cleared.');
         saveHwFingerprint({ ...hwDescriptor, walletAddress: currentWallet });
         clearBenchmarkHistory();
       } else if (storedFp.walletAddress && storedFp.walletAddress !== currentWallet) {
-        // Wallet changed on same hardware — update fingerprint. No penalty: users
+        // Wallet changed on same hardware � update fingerprint. No penalty: users
         // are permitted to use multiple wallet addresses on the same machine.
         saveHwFingerprint({ ...hwDescriptor, walletAddress: currentWallet });
         console.log(
@@ -5041,7 +5068,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       saveHwFingerprint({ ...hwDescriptor, walletAddress: currentWallet });
     }
 
-    // ── Per-device benchmark history (personal mean calibration) ────────────
+    // -- Per-device benchmark history (personal mean calibration) ------------
     // Stored in userData (device-scoped), not keyed by wallet address.
     // History is cleared when hardware changes (fingerprint detects new device).
     const benchmarkHistory = loadBenchmarkHistory();
@@ -5066,8 +5093,8 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
 
     // Use personal mean (blended with table value) as reference once enrolled.
     // Before HISTORY_ENROLL_COUNT samples the table value is used unchanged.
-    // Anti-spoofing floor: once ≥ 4 personal samples exist the reference is always
-    // at least the personal mean — a renderer declaring a weaker CPU/mem model to
+    // Anti-spoofing floor: once = 4 personal samples exist the reference is always
+    // at least the personal mean � a renderer declaring a weaker CPU/mem model to
     // inflate the ratio cannot gain more than the machine actually measured.
     const personalCpuMean =
       benchmarkHistory.cpuSamples.length >= 4
@@ -5115,30 +5142,30 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       const ratio = measuredCpu / referenceCpu;
       hwAuthority.benchmarkOpsCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
     } else if (referenceCpu === 0) {
-      // Unknown CPU and no personal history — conservative fallback.
+      // Unknown CPU and no personal history � conservative fallback.
       hwAuthority.benchmarkOpsCalibration = Math.min(hwAuthority.benchmarkOpsCalibration, 0.8);
     }
     if (referenceMem > 0 && measuredMem > 0) {
       const ratio = measuredMem / referenceMem;
       hwAuthority.benchmarkMemCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
     } else if (referenceMem === 0) {
-      // Unknown memory and no personal history — conservative fallback.
+      // Unknown memory and no personal history � conservative fallback.
       hwAuthority.benchmarkMemCalibration = Math.min(hwAuthority.benchmarkMemCalibration, 0.8);
     }
 
     saveBenchmarkHistory(benchmarkHistory);
 
-    // ── Contribution power ceiling (authoritative) ────────────────────────────
+    // -- Contribution power ceiling (authoritative) ----------------------------
     // Renderer declares its hardware unit TDP; main applies the calibration factor
     // it independently verified.  Trust factor is applied at addContribution time
     // so trust changes take effect immediately without re-running the benchmark.
     // Using min(opsCalib, memCalib) penalises hardware that underperforms on either
-    // dimension — a high GPU machine with slow CPU still gets a conservative cap.
+    // dimension � a high GPU machine with slow CPU still gets a conservative cap.
     //
-    // Hard cap: 600 W covers even the most power-hungry consumer GPU (RTX 4090 ≈ 450 W)
+    // Hard cap: 600 W covers even the most power-hungry consumer GPU (RTX 4090 � 450 W)
     // with headroom for future hardware.  This prevents a patched renderer from
     // sending arbitrary large values (e.g. 1 000 000 W) to inflate the ceiling.
-    // ASICs can draw 3000–4000 W, so allow up to 5000 W when the device is an ASIC.
+    // ASICs can draw 3000�4000 W, so allow up to 5000 W when the device is an ASIC.
     const _declaredDeviceTypeForCap = String((request && request.declaredDeviceType) || '').toLowerCase();
     const _isAsicDevice = /asic/i.test(_declaredDeviceTypeForCap);
     const MAX_DECLARED_UNIT_POWER_W = _isAsicDevice ? 5000 : 600;
@@ -5147,7 +5174,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       Math.max(0, Number((request && request.declaredUnitPowerW) || 0)),
     );
 
-    // ── Hardware mismatch: trust penalty + authoritative TDP re-lookup ───────
+    // -- Hardware mismatch: trust penalty + authoritative TDP re-lookup -------
     // If the OS-level hardware identity doesn't match what the renderer declared,
     // apply a -20 trust penalty (once per mismatch detection) and fetch the real
     // TDP from Brave Answers to clamp the declared power.
@@ -5160,7 +5187,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       );
 
       // Fetch real TDP for the OS-identified components via Brave and clamp.
-      // No tolerance margin: mismatch already proves dishonesty — no OC headroom.
+      // No tolerance margin: mismatch already proves dishonesty � no OC headroom.
       try {
         // CPU TDP clamp.
         if (cpuModelMismatch && osCpuModel) {
@@ -5230,7 +5257,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
                 declaredUnitPowerW = realAsicPower;
               }
             } else {
-              // Brave lookup failed — fall back to local ASIC power table.
+              // Brave lookup failed � fall back to local ASIC power table.
               const tablePower = getAsicPowerW(declaredGpuModel);
               if (tablePower > 0 && declaredUnitPowerW !== tablePower) {
                 console.warn(
@@ -5247,14 +5274,14 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       saveHwAuthState();
     }
 
-    // ── Unknown ASIC detection: reject mining if model has no known power ──
+    // -- Unknown ASIC detection: reject mining if model has no known power --
     // If the device claims ASIC but the model has no power data in any
     // lookup source (Brave AI or local hardware table), the energy model
-    // cannot bound the miner's contribution — reject outright.
+    // cannot bound the miner's contribution � reject outright.
     if (_isAsicDevice) {
       const _declaredAsicModel = String((request && request.declaredGpuModel) || '');
       if (!_declaredAsicModel) {
-        console.warn(`[HW-Verify] ASIC declared but no model specified — rejecting`);
+        console.warn(`[HW-Verify] ASIC declared but no model specified � rejecting`);
         return {
           ok: false,
           unknownAsic: true,
@@ -5265,7 +5292,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       const bravePower = await fetchTdpFromBrave(_declaredAsicModel);
       const tablePower = getAsicPowerW(_declaredAsicModel);
       if (bravePower === null && tablePower === 0) {
-        console.warn(`[HW-Verify] Unknown ASIC model "${_declaredAsicModel}" — no power data available, rejecting`);
+        console.warn(`[HW-Verify] Unknown ASIC model "${_declaredAsicModel}" � no power data available, rejecting`);
         return {
           ok: false,
           unknownAsic: true,
@@ -5275,8 +5302,8 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       }
     }
 
-    // ── VM detection: block mining entirely ─────────────────────────────────
-    // VMs can spoof CPUID, SMBIOS, and GPU identity — all OS-level checks
+    // -- VM detection: block mining entirely ---------------------------------
+    // VMs can spoof CPUID, SMBIOS, and GPU identity � all OS-level checks
     // become unreliable.  A VM has no physical power draw (the host bears the
     // energy cost), so allowing VM mining undermines the entire energy model.
     if (hwIdentity.isVM) {
@@ -5289,7 +5316,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       };
     }
 
-    // ── Power vs CPU cross-check: catch fake ASIC declarations ──────────────
+    // -- Power vs CPU cross-check: catch fake ASIC declarations --------------
     // A genuine ASIC miner has a weak embedded ARM controller (<150M ops/sec CPU
     // benchmark).  If a device claims to be an ASIC (5000W ceiling) but its CPU
     // benchmarks like a desktop processor (>150M ops/sec), it is almost certainly
@@ -5312,7 +5339,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           if (gpuTdp !== null) realDesktopPowerW += gpuTdp;
         }
       }
-      // If both lookups failed, estimate from CPU benchmark (≈ 1 W per 1M ops/sec sustained).
+      // If both lookups failed, estimate from CPU benchmark (� 1 W per 1M ops/sec sustained).
       if (realDesktopPowerW === 0) {
         realDesktopPowerW = Math.round(measuredCpu / 2_000_000);
       }
@@ -5321,11 +5348,11 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       powerVsCpuOverride = true;
       console.warn(
         `[HW-Verify] Power/CPU override: declared ASIC with CPU=${(measuredCpu / 1e6).toFixed(0)}M ops/sec ` +
-          `> 150M — reclassified as non-ASIC, actual desktop power calculated as ${declaredUnitPowerW}W (Brave)${realDesktopPowerW === 0 ? ', fallback estimate' : ''} from ${previousCap}W declared`,
+          `> 150M � reclassified as non-ASIC, actual desktop power calculated as ${declaredUnitPowerW}W (Brave)${realDesktopPowerW === 0 ? ', fallback estimate' : ''} from ${previousCap}W declared`,
       );
     }
 
-    // ── ASIC API liveness check: verify the hash boards exist and respond ────
+    // -- ASIC API liveness check: verify the hash boards exist and respond ----
     // Only run when the device claims ASIC.  We connect to the cgminer-compatible
     // API (localhost:4028-4030) and send a multi-round hash challenge.  Real hash
     // boards return correct results in < 500 ms; absent or faked hardware fails
@@ -5339,14 +5366,14 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       const livenessResult = await verifyAsicLiveness(_declaredAsicModel);
       if (!livenessResult.ok) {
         asicLivenessFailed = true;
-        // Liveness failure alone doesn't override the ceiling — the CPU bench
+        // Liveness failure alone doesn't override the ceiling � the CPU bench
         // already provides calibration.  But it IS a trust issue.
         console.warn(
           `[HW-Verify] ASIC liveness check failed for ${_declaredAsicModel || 'unknown'}` +
-            ` — no cgminer API response on ports 4028-4030`,
+            ` � no cgminer API response on ports 4028-4030`,
         );
       } else if (livenessResult.elapsedMs > 500) {
-        // Responded but too slow for real hash boards — likely software hashing.
+        // Responded but too slow for real hash boards � likely software hashing.
         asicLivenessFailed = true;
         console.warn(
           `[HW-Verify] ASIC liveness check too slow: ${livenessResult.elapsedMs}ms for ` +
@@ -5354,10 +5381,10 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         );
       } else {
         console.log(`[HW-Verify] ASIC liveness OK: ${livenessResult.elapsedMs}ms on port ${livenessResult.port}`);
-        // ── ASIC model verification: compare API-reported model against declared ─
+        // -- ASIC model verification: compare API-reported model against declared -
         // A miner declaring a high-end ASIC (e.g. S21 XP, 3800W) while running
         // a low-end unit (e.g. S9, 1350W) would inflate their power ceiling.
-        // The cgminer API returns the actual device type — verify it matches.
+        // The cgminer API returns the actual device type � verify it matches.
         const reportedModel = (livenessResult.asicType || '').trim();
         if (reportedModel && _declaredAsicModel && !hardwareModelsMatch(reportedModel, _declaredAsicModel)) {
           asicModelMismatch = true;
@@ -5366,7 +5393,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           if (realTdp !== null && declaredUnitPowerW > realTdp) {
             console.warn(
               `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
-                `API reports="${reportedModel}" — clamping TDP from ${declaredUnitPowerW}W to ${realTdp}W`,
+                `API reports="${reportedModel}" � clamping TDP from ${declaredUnitPowerW}W to ${realTdp}W`,
             );
             declaredUnitPowerW = realTdp;
           } else {
@@ -5374,21 +5401,21 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
             if (tableTdp > 0 && declaredUnitPowerW > tableTdp) {
               console.warn(
                 `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
-                  `API reports="${reportedModel}" — clamping TDP from ${declaredUnitPowerW}W to ${tableTdp}W (table)`,
+                  `API reports="${reportedModel}" � clamping TDP from ${declaredUnitPowerW}W to ${tableTdp}W (table)`,
               );
               declaredUnitPowerW = tableTdp;
             } else {
-              // No TDP data for the real model — apply a conservative 20% penalty.
+              // No TDP data for the real model � apply a conservative 20% penalty.
               const penalty = Math.round(declaredUnitPowerW * 0.8);
               console.warn(
                 `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
-                  `API reports="${reportedModel}" — no TDP data, applying 20% penalty: ${declaredUnitPowerW}W → ${penalty}W`,
+                  `API reports="${reportedModel}" � no TDP data, applying 20% penalty: ${declaredUnitPowerW}W ? ${penalty}W`,
               );
               declaredUnitPowerW = penalty;
             }
           }
         }
-        // ── ASIC hashrate benchmark: query summary command and compare ───────────
+        // -- ASIC hashrate benchmark: query summary command and compare -----------
         // Query the cgminer summary command for the actual hashrate and verify it
         // is consistent with the declared model.  A large deficit indicates either
         // a model mismatch or severe undervolting.
@@ -5420,7 +5447,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
               measuredHashrateTHs = Math.max(ghsAv, ghs5s) / 1000 || Math.max(mhsAv, mhs5s) / 1_000_000;
             }
           } catch (_e) {
-            // Summary command failed — non-fatal, probes will re-check.
+            // Summary command failed � non-fatal, probes will re-check.
           }
           const ASIC_MIN_HASHRATE_RATIO = 0.85;
           if (measuredHashrateTHs > 0 && measuredHashrateTHs < _expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO) {
@@ -5428,7 +5455,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
             console.warn(
               `[HW-Verify] ASIC hashrate too low: ${measuredHashrateTHs.toFixed(1)} TH/s measured, ` +
                 `expected >= ${(_expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
-                `for "${_declaredAsicModel}" — hash boards may be underperforming or misidentified`,
+                `for "${_declaredAsicModel}" � hash boards may be underperforming or misidentified`,
             );
           } else if (measuredHashrateTHs > 0) {
             console.log(
@@ -5443,7 +5470,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           asicHashrateTHs: _expectedHashrateTHs || measuredHashrateTHs || 0,
           asicModel: _declaredAsicModel || livenessResult.asicType || 'unknown',
         });
-        // ── ASIC firmware attestation: cross-reference multiple API commands ──────
+        // -- ASIC firmware attestation: cross-reference multiple API commands ------
         // Query version and stats commands and verify they all report the same model
         // identity.  A patched firmware must consistently lie across every endpoint.
         const firmwareAttest = await verifyAsicFirmware(livenessPort, livenessResult.asicType, _declaredAsicModel);
@@ -5451,7 +5478,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           asicFirmwareIssue = true;
           console.warn(`[HW-Verify] ASIC firmware attestation failed: ${firmwareAttest.issues.join(', ')}`);
         }
-        // ── ASIC temperature consistency check ─────────────────────────────────────
+        // -- ASIC temperature consistency check -------------------------------------
         // Query the stats command for temperature data and verify the values are
         // realistic for real hash board hardware.  A fake cgminer responder would
         // need to return plausible per-chip temperatures that vary realistically.
@@ -5488,11 +5515,11 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
               const avgTemp = allTemps.reduce((a, b) => a + b, 0) / allTemps.length;
               const minTemp = Math.min(...allTemps);
               const maxTemp = Math.max(...allTemps);
-              // Real ASIC hash board temps typically range 40-85°C.
+              // Real ASIC hash board temps typically range 40-85�C.
               if (avgTemp < 30 || avgTemp > 95) {
                 asicFirmwareIssue = true;
                 console.warn(
-                  `[HW-Verify] ASIC temperature range suspicious: avg=${avgTemp.toFixed(0)}°C (range ${minTemp.toFixed(0)}-${maxTemp.toFixed(0)}°C) — expected 30-95°C`,
+                  `[HW-Verify] ASIC temperature range suspicious: avg=${avgTemp.toFixed(0)}�C (range ${minTemp.toFixed(0)}-${maxTemp.toFixed(0)}�C) � expected 30-95�C`,
                 );
               }
               if (allTemps.length >= 3) {
@@ -5502,13 +5529,13 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
                 if (uniqueTemps.size <= 1) {
                   asicFirmwareIssue = true;
                   console.warn(
-                    `[HW-Verify] ASIC temperature consistency suspicious: all ${allTemps.length} sensors report ~${Math.round(allTemps[0])}°C — expected variation across chips`,
+                    `[HW-Verify] ASIC temperature consistency suspicious: all ${allTemps.length} sensors report ~${Math.round(allTemps[0])}�C � expected variation across chips`,
                   );
                 }
               }
             } else {
-              // No temperature data at all — could be a pre-prod unit but also a fake.
-              console.warn(`[HW-Verify] ASIC temperature data not available — may indicate fake cgminer responder`);
+              // No temperature data at all � could be a pre-prod unit but also a fake.
+              console.warn(`[HW-Verify] ASIC temperature data not available � may indicate fake cgminer responder`);
             }
           } catch (_e) {
             console.warn(`[HW-Verify] ASIC temperature check failed: ${String(_e.message || _e).slice(0, 80)}`);
@@ -5520,7 +5547,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     if (declaredUnitPowerW > 0) {
       const _allowGpuCalib = !!(request && request.allowGpuWorkloads);
 
-      // ── GPU TDP from native binary (authoritative — renderer cannot forge) ─
+      // -- GPU TDP from native binary (authoritative � renderer cannot forge) -
       // The native gpu-miner.exe reports the GPU adapter name from DXGI.
       // We look up its TDP from hardware-tables.cjs and use it to cap the
       // GPU component of declaredUnitPowerW, ignoring whatever the renderer
@@ -5543,14 +5570,14 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
               if (declaredUnitPowerW > plausibleMax) {
                 console.warn(
                   `[HW-Verify] Declared power ${declaredUnitPowerW}W exceeds plausible ` +
-                    `max ${plausibleMax}W (GPU ${nativeTdp}W + 300W CPU/mem) — capping`,
+                    `max ${plausibleMax}W (GPU ${nativeTdp}W + 300W CPU/mem) � capping`,
                 );
                 declaredUnitPowerW = plausibleMax;
               }
             }
           }
         } catch (_) {
-          // Native binary not available — ignore
+          // Native binary not available � ignore
         }
       }
 
@@ -5564,7 +5591,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         const plausibleMax = Math.min(Math.max(cpuBasedPower, 65), 300);
         if (declaredUnitPowerW > plausibleMax) {
           console.warn(
-            `[HW-Verify] Native GPU info unavailable — capping declared ` +
+            `[HW-Verify] Native GPU info unavailable � capping declared ` +
               `${declaredUnitPowerW}W to CPU-based estimate ${plausibleMax}W (measuredCpu=${(measuredCpu / 1e6).toFixed(0)}M ops/s)`,
           );
           declaredUnitPowerW = plausibleMax;
@@ -5573,7 +5600,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
 
       // All devices including ASICs use the same benchmark-based calibration factor.
       // ASIC controllers have limited compute, so the calibration naturally reflects
-      // the hardware's proven capability. Unknown ASICs get a conservative 0.8× cap
+      // the hardware's proven capability. Unknown ASICs get a conservative 0.8� cap
       // until personal history builds.
       const calibFactor = Math.min(
         hwAuthority.benchmarkOpsCalibration,
@@ -5583,7 +5610,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       hwAuthority.calibratedUnitPowerW = Math.round(declaredUnitPowerW * calibFactor);
     }
 
-    // ── Network anomaly detection ──────────────────────────────────────────
+    // -- Network anomaly detection ------------------------------------------
     // Record this miner's stats and check if they are a statistical outlier
     // compared to all other miners seen by this node.
     const _minerAddrForStats = walletAddressCache.address || '';
@@ -5597,7 +5624,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       declaredUnitPowerW > 0 &&
       isPowerCpuOutlier(_minerAddrForStats, declaredUnitPowerW, measuredCpu);
 
-    // ── Trust cap: no benchmark history → max trust 50 ───────────────────────
+    // -- Trust cap: no benchmark history ? max trust 50 -----------------------
     // A device that has never completed a full CPU benchmark cannot earn trust
     // beyond the neutral default.  This prevents someone from accumulating trust
     // through contributions alone without proving their hardware capability.
@@ -5605,7 +5632,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       hwAuthority.trustScore = Math.min(hwAuthority.trustScore, 50);
     }
 
-    // ── Trust score (authoritative — main process owns, not localStorage) ──────
+    // -- Trust score (authoritative � main process owns, not localStorage) ------
     // Backend proof flags are checked here in addition to any renderer-reported issues.
     const trustScoreBefore = hwAuthority.trustScore;
     if (!isBaseline) {
@@ -5617,23 +5644,23 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         ...rendererIssues,
         ...(backendFail ? ['backend proof integrity failed'] : []),
         ...(gpuProofFail ? ['gpu proof failed verification'] : []),
-        ...(anyHwMismatch ? ['hardware identity mismatch (OS ≠ renderer)'] : []),
-        ...(powerVsCpuOverride ? ['power/cpu mismatch — fake ASIC declaration'] : []),
-        ...(asicLivenessFailed ? ['asic liveness check failed — hash boards unresponsive'] : []),
-        ...(asicModelMismatch ? ['asic model mismatch — declared model does not match hash board'] : []),
-        ...(asicHashrateLow ? ['asic hashrate too low — hash boards underperforming or misidentified'] : []),
+        ...(anyHwMismatch ? ['hardware identity mismatch (OS ? renderer)'] : []),
+        ...(powerVsCpuOverride ? ['power/cpu mismatch � fake ASIC declaration'] : []),
+        ...(asicLivenessFailed ? ['asic liveness check failed � hash boards unresponsive'] : []),
+        ...(asicModelMismatch ? ['asic model mismatch � declared model does not match hash board'] : []),
+        ...(asicHashrateLow ? ['asic hashrate too low � hash boards underperforming or misidentified'] : []),
         ...(asicFirmwareIssue
           ? [
-              'asic firmware attestation or temperature consistency check failed — hash board identity or thermal behavior does not match expected values',
+              'asic firmware attestation or temperature consistency check failed � hash board identity or thermal behavior does not match expected values',
             ]
           : []),
-        ...(minerIsOutlier ? ['network outlier — power/cpu ratio >3σ from mean'] : []),
+        ...(minerIsOutlier ? ['network outlier � power/cpu ratio >3s from mean'] : []),
       ];
       if (allIssues.length > 0) {
         hwAuthority.consecutiveCleanBenchmarks = 0;
         // Note: the -20 mismatch penalty was already applied above; normal
         // per-issue penalty only covers the remaining issues to avoid double-counting.
-        const alreadyPenalised = new Set(['hardware identity mismatch (OS ≠ renderer)']);
+        const alreadyPenalised = new Set(['hardware identity mismatch (OS ? renderer)']);
         const nonMismatchIssues = allIssues.filter((i) => !alreadyPenalised.has(i));
         if (nonMismatchIssues.length > 0) {
           hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - nonMismatchIssues.length);
@@ -5681,7 +5708,7 @@ ipcMain.handle('wattcoin-get-attest-history', () => {
   return getAttestHistory();
 });
 
-// ── Probe log persistence ──────────────────────────────────────────────────────
+// -- Probe log persistence ------------------------------------------------------
 // The renderer probe log is persisted to userData so entries survive restarts.
 // Capped at 500 entries on save; renderer may further cap at 150 for display.
 const PROBE_LOG_FILE_NAME = 'probe-log.json';
@@ -5713,7 +5740,7 @@ ipcMain.handle('wattcoin-save-probe-log', (_event, entries) => {
         for (const [k, v] of Object.entries(entry)) {
           if (typeof v === 'string') clean[k] = v.slice(0, MAX_STR_LEN);
           else if (typeof v === 'number' || typeof v === 'boolean') clean[k] = v;
-          // drop nested objects, arrays, null — keep the log flat and safe
+          // drop nested objects, arrays, null � keep the log flat and safe
         }
         return clean;
       })
@@ -5725,7 +5752,7 @@ ipcMain.handle('wattcoin-save-probe-log', (_event, entries) => {
   }
 });
 
-// ── Wallet-bound fingerprint (item 6) ─────────────────────────────────────────
+// -- Wallet-bound fingerprint (item 6) -----------------------------------------
 // Fingerprint is stored in userData (not localStorage) so clearing browser storage
 // cannot reset cross-session drift detection.  The file is HMAC-signed using the
 // wallet address as key so tampering is detectable.
@@ -5753,7 +5780,7 @@ ipcMain.handle('wattcoin-write-fingerprint', (_event, payload = {}) => {
     const data = payload && typeof payload === 'object' ? payload : {};
     // HMAC-sign using the per-install DPAPI-encrypted secret (same key as computeHwAuthSig).
     // Previously used the public wallet address as the key, which allowed an attacker who
-    // knows the on-chain address to forge a valid sig — fixed to use the private secret.
+    // knows the on-chain address to forge a valid sig � fixed to use the private secret.
     const dataStr = JSON.stringify({ ...data, sig: undefined }); // exclude sig before signing
     const sig = computeHwAuthSig({ _fpData: dataStr });
     fs.writeFileSync(filePath, JSON.stringify({ ...data, sig }, null, 2), 'utf8');
@@ -5763,10 +5790,10 @@ ipcMain.handle('wattcoin-write-fingerprint', (_event, payload = {}) => {
   }
 });
 
-// ── Hardware-bound device identity ────────────────────────────────────────────
+// -- Hardware-bound device identity --------------------------------------------
 // On first launch a 32-byte random secret is generated and stored in userData.
 // The secret never leaves the device.  The publicaly shareable deviceId is
-// SHA-256(secret) — 64 hex chars.  It is linked to the Wattcoin wallet address
+// SHA-256(secret) � 64 hex chars.  It is linked to the Wattcoin wallet address
 // (which is the on-chain identity) at runtime so the binding is cryptographically
 // provable without requiring any extra transaction.
 const DEVICE_IDENTITY_FILE = 'device-identity.json';
@@ -5850,7 +5877,7 @@ function getOrCreateWalletEncryptionKey() {
     if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
 
-  // Last resort — random key, lost on restart (wallet will be re-created). Still better than plaintext.
+  // Last resort � random key, lost on restart (wallet will be re-created). Still better than plaintext.
   _walletEncryptionKey = newKey;
   return _walletEncryptionKey;
 }
@@ -5919,7 +5946,7 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
   }
 });
 
-// ── Peer probe IPC (worker mode) ──────────────────────────────────────────────
+// -- Peer probe IPC (worker mode) ----------------------------------------------
 // Renderer calls this to fetch a probe from the coordinator. Peer attestation is
 // required and local fallback is disabled.
 ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
@@ -5931,45 +5958,59 @@ ipcMain.handle('wattcoin-request-peer-probe', async (_event, opts = {}) => {
   const workerId = String((opts && opts.workerId) || walletAddressCache.address || 'unknown');
   const allowGpu = !!(opts && opts.allowGpuWorkloads);
 
-  // Aggressive polling: when the seed is reachable, chain/tip responds in <10 ms,
-  // so we use a short probe timeout (2 s) and poll every 1 s.  This lets us detect
-  // recovery from a transient drop within ~3 s instead of waiting 33+ s for the
-  // old two-retry cycle (15 s + 3 s + 15 s).
-  const POLL_FAST_TIMEOUT_MS = 2_000;
-  const POLL_INTERVAL_MS = 1_000;
-  const MAX_WAIT_MS = 30_000;
+  // WAN-aware polling: on a local subnet chain/tip responds in <10 ms, but
+  // across the open internet RTT can be 200-1500 ms and transient packet loss
+  // is common.  We use moderate timeouts (5 s initial, 15 s after) so that a
+  // single lost packet doesn't disqualify an otherwise reachable peer.
+  const POLL_FAST_TIMEOUT_MS = 5_000;
+  const POLL_INTERVAL_MS = 1_500;
+  const MAX_WAIT_MS = 45_000;
   const deadline = Date.now() + MAX_WAIT_MS;
   let pollAttempt = 0;
   while (Date.now() < deadline) {
-    const pollOpts = pollAttempt < 5 ? { fastTimeoutMs: POLL_FAST_TIMEOUT_MS } : {};
+    const pollOpts = pollAttempt < 8 ? { fastTimeoutMs: POLL_FAST_TIMEOUT_MS } : {};
     const peers = await getOnlineAttestationPeers(settings, workerId, pollOpts);
     if (peers && peers.length > 0) {
       const candidatePeers = [...peers];
       while (candidatePeers.length > 0) {
         const index = Math.floor(Math.random() * candidatePeers.length);
         const [peerUrl] = candidatePeers.splice(index, 1);
-        try {
-          const result = await requestPeerJson(
-            peerUrl,
-            'GET',
-            '/api/v1/probe/issue',
-            undefined,
-            {
-              workerId,
-              allowGpu: String(allowGpu),
-            },
-            {
-              trackReachability: false,
-              suppressPeerDiscovery: true,
-              source: 'peer-probe-issue',
-              timeoutMs: 15000,
-            },
-          );
-          const probe = result && result.probe ? result.probe : null;
-          if (probe) probe._peerUrl = peerUrl;
-          return { ok: true, source: 'peer', probe };
-        } catch (e) {
-          console.warn('[PeerProbe] Attestation peer unavailable, trying another peer:', e.message);
+        let lastError = null;
+        for (let retry = 0; retry < 3; retry++) {
+          if (retry > 0) {
+            await new Promise((r) => setTimeout(r, 2000 * retry));
+          }
+          try {
+            const result = await requestPeerJson(
+              peerUrl,
+              'GET',
+              '/api/v1/probe/issue',
+              undefined,
+              {
+                workerId,
+                allowGpu: String(allowGpu),
+              },
+              {
+                trackReachability: false,
+                suppressPeerDiscovery: true,
+                source: 'peer-probe-issue',
+                timeoutMs: 30000,
+              },
+            );
+            const probe = result && result.probe ? result.probe : null;
+            if (probe) probe._peerUrl = peerUrl;
+            return { ok: true, source: 'peer', probe };
+          } catch (e) {
+            lastError = e;
+            console.warn('[PeerProbe] Attestation peer unavailable (attempt ' + (retry + 1) + '/3):', e.message);
+          }
+        }
+        if (lastError) {
+          console.warn('[PeerProbe] All 3 attempts to peer exhausted:', peerUrl, lastError.message);
+          const np = normalizePeerUrl(peerUrl);
+          if (np) {
+            peerReachabilityCache.set(np, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
+          }
         }
       }
     }
@@ -6004,11 +6045,25 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           probeWallClockMs: typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : null,
           hardwareSpec: hardwareSpec,
         };
-        let verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
-          trackReachability: false,
-          suppressPeerDiscovery: true,
-          source: 'peer-probe-submit',
-        });
+        let verdict;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (attempt > 0) {
+            await new Promise((r) => setTimeout(r, 3000 * attempt));
+          }
+          try {
+            verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
+              trackReachability: false,
+              suppressPeerDiscovery: true,
+              source: 'peer-probe-submit',
+              timeoutMs: 30000,
+            });
+            if (verdict && (verdict.ok || !verdict.transient)) break;
+          } catch (e) {
+            console.warn('[PeerProbe] Submit attempt ' + (attempt + 1) + '/3 failed:', e.message);
+            if (attempt === 2) throw e;
+            continue;
+          }
+        }
         if (verdict && verdict.ok) {
           hwAuthority.peerProbeVerifiedForRound = true;
           const receipt = verdict.receipt;
@@ -6043,6 +6098,10 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
         return verdict;
       } catch (e) {
         console.warn('[PeerProbe] Could not submit peer probe result:', e.message);
+        const np = normalizePeerUrl(peerUrl);
+        if (np) {
+          peerReachabilityCache.set(np, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
+        }
         return { ok: false, transient: true, issues: ['peer unreachable: ' + e.message] };
       }
     }
@@ -6054,7 +6113,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
   };
 });
 
-// ── Hardware-authority read-back (renderer uses for display only) ─────────────
+// -- Hardware-authority read-back (renderer uses for display only) -------------
 const HW_RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const SEARCH_CACHE_COOLDOWN_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
@@ -6092,7 +6151,7 @@ ipcMain.handle('wattcoin-clear-search-cache', () => {
   const cooldownRemainingMs = Math.max(0, hwAuthority.lastSearchCacheClearAtMs + SEARCH_CACHE_COOLDOWN_MS - now);
   if (cooldownRemainingMs > 0) {
     const remainingDays = Math.ceil(cooldownRemainingMs / (24 * 60 * 60 * 1000));
-    console.warn(`[searchCache] Clear blocked — cooldown active, ${remainingDays}d remaining.`);
+    console.warn(`[searchCache] Clear blocked � cooldown active, ${remainingDays}d remaining.`);
     return { ok: false, reason: 'cooldown', cooldownRemainingMs, remainingDays };
   }
   hwAuthority.lastSearchCacheClearAtMs = now;
@@ -6106,7 +6165,7 @@ ipcMain.handle('wattcoin-reset-hardware-identity', () => {
   const cooldownRemainingMs = Math.max(0, hwAuthority.lastHwResetAtMs + HW_RESET_COOLDOWN_MS - now);
   if (cooldownRemainingMs > 0) {
     const remainingDays = Math.ceil(cooldownRemainingMs / (24 * 60 * 60 * 1000));
-    console.warn(`[hwReset] Reset blocked — cooldown active, ${remainingDays}d remaining.`);
+    console.warn(`[hwReset] Reset blocked � cooldown active, ${remainingDays}d remaining.`);
     return {
       ok: false,
       reason: 'cooldown',
@@ -6134,12 +6193,12 @@ ipcMain.handle('wattcoin-reset-hardware-identity', () => {
 // the app runs so legacy values survive the transition to the backend authority.
 ipcMain.handle('wattcoin-seed-authority-state', (_event, payload = {}) => {
   if (!hwAuthStateIsNew) {
-    // File already exists — ignore to prevent the renderer overwriting real data.
+    // File already exists � ignore to prevent the renderer overwriting real data.
     return { ok: false, reason: 'not first run' };
   }
   const legacyTrust = Number(payload && payload.trustScore);
   const legacyHold = Number((payload && payload.hwHoldUntilMs) || 0);
-  // Cap seeded value at 50 (the neutral default) — prevents an attacker from deleting
+  // Cap seeded value at 50 (the neutral default) � prevents an attacker from deleting
   // hw-auth-state.json and seeding an inflated trust score via a modified localStorage.
   if (Number.isFinite(legacyTrust) && legacyTrust >= 0 && legacyTrust <= 50) {
     hwAuthority.trustScore = legacyTrust;
@@ -6164,9 +6223,9 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
   }
   const gpuScore = Number((payload && payload.gpuScore) || 0);
   // Hard bounds on renderer-supplied maxExpectedScore.
-  // Lower bound (300 K ops/ms): below any real GPU in the table — prevents a patched
-  // renderer sending maxExpectedScore=1 to inflate the ratio to 10× (discard threshold).
-  // Upper bound (5 B ops/ms): well above RTX 4090 table value (1.15 B) — prevents sending
+  // Lower bound (300 K ops/ms): below any real GPU in the table � prevents a patched
+  // renderer sending maxExpectedScore=1 to inflate the ratio to 10� (discard threshold).
+  // Upper bound (5 B ops/ms): well above RTX 4090 table value (1.15 B) � prevents sending
   // an impossibly large value to deflate the ratio and claim calibration credit for nothing.
   const GPU_MAX_EXPECTED_SCORE_MIN = 300_000;
   const GPU_MAX_EXPECTED_SCORE_MAX = 5_000_000_000;
@@ -6193,10 +6252,10 @@ ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) =
 });
 
 // Verify a GPU benchmark proof submitted by the renderer.
-// computeGpuProbeExpectedHash runs the same XOR-shift algorithm in pure JS — bit-identical
-// to the WebGL integer shader — so no GPU is needed on the main-process side.
+// computeGpuProbeExpectedHash runs the same XOR-shift algorithm in pure JS � bit-identical
+// to the WebGL integer shader � so no GPU is needed on the main-process side.
 ipcMain.handle('wattcoin-verify-gpu-proof', (_event, payload = {}) => {
-  // Match the shader's seed guard: gl.uniform1i uses (seed | 0) || 1, so seed=0 → 1.
+  // Match the shader's seed guard: gl.uniform1i uses (seed | 0) || 1, so seed=0 ? 1.
   const seed = Number(payload && payload.seed) | 0 || 1;
   const size = Math.max(1, Math.min(512, Number(payload && payload.size) || 128));
   const shaderIters = Math.max(1, Math.min(256, Number(payload && payload.shaderIterations) || 32));
@@ -6482,7 +6541,7 @@ ipcMain.handle('wattcoin-validate-address', (_event, addr) => {
   }
 });
 
-// ── WTC Sale IPC handlers ─────────────────────────────────────────────────────
+// -- WTC Sale IPC handlers -----------------------------------------------------
 
 // Get sale status: sold WTC, tier info, seller USDC address
 ipcMain.handle('wattcoin-sale-status', async (_event) => {
@@ -6581,7 +6640,7 @@ ipcMain.handle('wattcoin-sale-confirm-payment', (_event, payload) => {
   return saleQueue.setOrderTxHash(orderId, txHash);
 });
 
-// ── Staking queue IPC handlers ────────────────────────────────────────────────
+// -- Staking queue IPC handlers ------------------------------------------------
 
 // Status: pool balance, total pending staked, current APY
 ipcMain.handle('wattcoin-staking-status', (_event) => {
@@ -6649,7 +6708,7 @@ ipcMain.handle('wattcoin-staking-cancel', (_event, entryId) => {
   return stakingQueue.cancelEntry(String(entryId || ''));
 });
 
-// ── Vortex NFT IPC handlers ─────────────────────────────────────────────────────────
+// -- Vortex NFT IPC handlers ---------------------------------------------------------
 
 // List NFTs owned by an address
 ipcMain.handle('wattcoin-nft-list', (_event, address) => {
@@ -6708,7 +6767,7 @@ ipcMain.handle('wattcoin-nft-transfer', async (_event, { nftId, fromAddress, toA
   }
 });
 
-// ── Governance IPC handlers ──────────────────────────────────────────────────────────
+// -- Governance IPC handlers ----------------------------------------------------------
 
 ipcMain.handle('wattcoin-governance-status', (_event) => {
   try {
@@ -6765,7 +6824,7 @@ ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
   try {
     if (!wtcNode) return { ok: false, error: 'Node not ready' };
 
-    // Auto-determine creator address and NFT — never trust the renderer.
+    // Auto-determine creator address and NFT � never trust the renderer.
     const addrs = wtcNode.getAddresses();
     let creator = addrs[0] || '';
     let creatorNftId = '';
@@ -6804,13 +6863,13 @@ ipcMain.handle('wattcoin-governance-propose', (_event, proposal) => {
       commentPeriodWeeks,
     };
 
-    // Governance transfer fields — only accepted if the governance wallet key is in this node
+    // Governance transfer fields � only accepted if the governance wallet key is in this node
     if (proposal.transferTo && proposal.transferAmount) {
       const govKey = wtcNode.hasAddress('wtc1qcfrnhn0mh0wmrq0q5dyku0z55q8kwdx2dt6etw');
       if (!govKey) {
         return {
           ok: false,
-          error: 'Governance wallet key not available on this node — cannot submit treasury transfer proposals.',
+          error: 'Governance wallet key not available on this node � cannot submit treasury transfer proposals.',
         };
       }
       // Validate minimum reserve at node level (needs balance info)
@@ -6875,7 +6934,7 @@ ipcMain.handle('wattcoin-governance-vote', async (_event, pipId, voteData) => {
   }
 });
 
-// ── Governance Team IPC handlers ─────────────────────────────────────────────
+// -- Governance Team IPC handlers ---------------------------------------------
 
 const TEAM_FILE = 'wtc-team.json';
 const DOCS_FILE = 'wtc-docs.json';
@@ -7039,7 +7098,7 @@ ipcMain.handle('wattcoin-team-delete', (_event, address, memberId) => {
   }
 });
 
-// ── Governance Documentation IPC handlers ────────────────────────────────────
+// -- Governance Documentation IPC handlers ------------------------------------
 
 ipcMain.handle('wattcoin-docs-list', (_event, address) => {
   try {
@@ -7292,7 +7351,7 @@ ipcMain.handle('wattcoin-get-peer-count', async () => {
       const discovery = getPeerDiscoverySnapshot(settings);
       const lastSync = opsState.lastSyncResult || null;
       if (settings.enabled && settings.mode === 'peer') {
-        // Single merged peer list — avoids double sequential probing.
+        // Single merged peer list � avoids double sequential probing.
         const mergedTargets = Array.from(new Set([...getActivePeers(settings), ...getPeerDirectoryTargets(settings)]));
         const activeConnectivity = await inspectPeerConnectivityForTargets(mergedTargets, {
           source: 'peer-count-active',
@@ -7414,7 +7473,7 @@ ipcMain.handle('wattcoin-stop-hardware-load', () => {
   }
 });
 
-// ── Native GPU load control (gpu-miner.exe) ────────────────────────────────
+// -- Native GPU load control (gpu-miner.exe) --------------------------------
 ipcMain.handle('wattcoin-gpu-info', async () => {
   try {
     const available = await ensureGpu();
@@ -7496,7 +7555,7 @@ ipcMain.handle('wattcoin-get-hardware-load-state', () => {
 // encodes a SHA-256 commitment of the energy+benchmark proof supplied by the
 // renderer.  The miner's `generatetoaddress` call then picks up that mempool
 // transaction and includes it in the block, making the proof auditable on-chain.
-// The commitment is: SHA-256(JSON.stringify(sortedProofFields))  â†’ 32 bytes â†’ 64 hex chars.
+// The commitment is: SHA-256(JSON.stringify(sortedProofFields))  → 32 bytes → 64 hex chars.
 // Format on-chain (80-byte OP_RETURN payload limit):
 //   WTC1:<32-byte-hex-commitment>  (37 bytes)
 // ---------------------------------------------------------------------------
@@ -7504,8 +7563,8 @@ function buildPowerProofCommitment(proofData) {
   if (!proofData || typeof proofData !== 'object') return null;
   // Canonicalise: only include fields we care about, sorted.
   // cpuSpeedInitialSeed + cpuSpeedProof allow any peer to independently verify the
-  // computation: re-run cpuSpeedStep(initialSeed) × CPU_SPEED_N and confirm the hash.
-  // memProof is unique per (wallet address × challengeSeed); a peer verifies it by
+  // computation: re-run cpuSpeedStep(initialSeed) � CPU_SPEED_N and confirm the hash.
+  // memProof is unique per (wallet address � challengeSeed); a peer verifies it by
   // re-running the deterministic traversal seeded with the miner's address and
   // the challengeSeed embedded in this commitment.
   const canonical = {
@@ -7567,10 +7626,10 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
     };
   }
 
-  // ── WTC native chain path ─────────────────────────────────────────────────
+  // -- WTC native chain path -------------------------------------------------
   if (wtcNode) {
     if (mineBlockBusy) {
-      return { address: '', mined: '', error: 'A block is already being mined — please wait.', code: 'MINE_BUSY' };
+      return { address: '', mined: '', error: 'A block is already being mined � please wait.', code: 'MINE_BUSY' };
     }
     // At least one peer must be online to mine. This ensures every block carries
     // a probe receipt secp256k1-signed by a live verifier peer (typically the
@@ -7585,7 +7644,7 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
         code: 'NO_PEERS',
       };
     }
-    // Probe receipt required — the verifier peer measures timing independently
+    // Probe receipt required � the verifier peer measures timing independently
     // and signs the receipt. Cannot be forged without the verifier's private key.
     if (!(proofData && proofData.peerProbeVerified)) {
       return {
@@ -7647,7 +7706,7 @@ ipcMain.handle('wattcoin-mine-block', async (_, selectedAddress, proofData) => {
       );
       announceTipToPeers({ height: result.height, hash: result.hash });
       pushChainToPeers({ windowSize: 200 });
-      // Block mined — promote any delivery_pending orders that got confirmed,
+      // Block mined � promote any delivery_pending orders that got confirmed,
       // then flush queued orders into the mempool for natural confirmation.
       saleQueue.onBlockConfirmed();
       saleQueue.flushSaleQueue().catch((e) => console.warn('[SaleQueue] post-mine flush error:', e && e.message));
@@ -7748,9 +7807,9 @@ function loadBundledSeedPeers() {
             try {
               const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
               if (decoded) return normalizePeerUrl(`http://${decoded}`);
-            } catch (_) {
-              if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-            }
+    } catch (_) {
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
+    }
           }
           return normalizePeerUrl(rawUrl);
         })
@@ -7880,6 +7939,30 @@ function verifyChainPeerCompatibility(req) {
   return { ok: true };
 }
 
+// ─── Peer HTTP agent pool (persistent keep-alive connections) ────────────────
+// Each peer host:port gets one agent with a single keep-alive socket.  This
+// avoids the TCP handshake overhead on every request, eliminates TIME_WAIT
+// socket churn, and keeps a stable "tunnel" through stateful firewalls/NAT.
+const peerAgents = new Map();
+
+function getPeerAgent(hostname, port, httpsTransport) {
+  const key = `${hostname}:${port}`;
+  let agent = peerAgents.get(key);
+  if (!agent) {
+    const AgentClass = httpsTransport ? https.Agent : http.Agent;
+    agent = new AgentClass({
+      keepAlive: true,
+      keepAliveMsecs: 30_000,
+      maxSockets: 8,
+      maxFreeSockets: 4,
+      scheduling: 'fifo',
+    });
+    peerAgents.set(key, agent);
+  }
+  return agent;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // requestPeerJson targets an explicit peer URL rather than the
 function requestPeerJson(peerUrl, method, routePath, payload, query = {}, options = {}) {
   return new Promise((resolve, reject) => {
@@ -7945,10 +8028,10 @@ function requestPeerJson(peerUrl, method, routePath, payload, query = {}, option
           port: fullUrl.port || (isHttps ? 443 : 80),
           path: `${fullUrl.pathname}${fullUrl.search}`,
           timeout: Math.max(1000, Number(options && options.timeoutMs) || settings.requestTimeoutMs),
-          // Disable keep-alive pooling: Node.js v19+ uses keep-alive by default,
-          // which causes "socket hang up" (ECONNRESET) when the server closes a
-          // pooled socket just as a new request starts on it.
-          agent: false,
+          // Persistent keep-alive agent: avoids TCP handshake overhead for every
+          // request, eliminates TIME_WAIT churn, and keeps a stable tunnel through
+          // stateful NAT/firewalls.  Stale sockets are cleaned up on ECONNRESET.
+          agent: getPeerAgent(fullUrl.hostname, fullUrl.port || (isHttps ? 443 : 80), isHttps),
           headers: {
             'Content-Type': 'application/json; charset=utf-8',
             'Content-Length': Buffer.byteLength(body),
@@ -8003,6 +8086,10 @@ function requestPeerJson(peerUrl, method, routePath, payload, query = {}, option
           });
         },
       );
+      request.on('socket', (socket) => {
+        socket.setKeepAlive(true, 10000);
+        socket.setNoDelay(true);
+      });
       request.on('timeout', () => {
         request.destroy(new Error('Peer request timed out.'));
       });
@@ -8051,7 +8138,7 @@ function alignRoundLedgerToChain(roundId = getCurrentNetworkRoundId()) {
     const prevRoundId = roundLedger.getCurrentRoundSnapshot().id;
     const result = roundLedger.beginRound(roundId, 0);
     if (prevRoundId && prevRoundId !== roundId) {
-      // Round boundary crossed — purge witnessed probe receipts from prior round.
+      // Round boundary crossed � purge witnessed probe receipts from prior round.
       witnessedProbeReceipts.clear();
     }
     return result;
@@ -8087,7 +8174,7 @@ async function pullContributionsFromPeers() {
         snapshots.push(res.snapshot);
       }
     } catch (_) {
-      // Peer unreachable or returned error — skip
+      // Peer unreachable or returned error � skip
     }
   }
   if (snapshots.length === 0) return;
@@ -8107,7 +8194,7 @@ async function pullContributionsFromPeers() {
     let bestVerifiedTime = 0;
 
     // Pass 1: accept values with a valid cryptographic signature
-    // (prevents third-party inflation — a peer cannot forge another wallet's signature)
+    // (prevents third-party inflation � a peer cannot forge another wallet's signature)
     for (const snap of snapshots) {
       const totalWh = Number((snap.contributionsWh || {})[address] || 0);
       if (totalWh <= 0) continue;
@@ -8122,9 +8209,9 @@ async function pullContributionsFromPeers() {
               bestVerifiedTime = updatedAtMs;
             }
           }
-          // Invalid signature → skip (peer tampered with stored value)
+          // Invalid signature ? skip (peer tampered with stored value)
         } catch (_) {
-          // Verification error → skip
+          // Verification error ? skip
         }
       }
     }
@@ -8134,7 +8221,7 @@ async function pullContributionsFromPeers() {
       continue;
     }
 
-    // Pass 2: no valid signatures — use majority voting across peers
+    // Pass 2: no valid signatures � use majority voting across peers
     // (protects against self-inflation when the wallet owner controls a peer)
     const tally = {};
     for (const snap of snapshots) {
@@ -8365,7 +8452,7 @@ async function settleLocalLedgerRound(payload = {}) {
 
   // Tier 4c (item 1): main process independently re-verifies the CPU and memory proof hashes.
   // The renderer already verified these in the same process (weak), but here we do it in the
-  // main process (strong cross-process check — a patched renderer cannot fake this).
+  // main process (strong cross-process check � a patched renderer cannot fake this).
   const cpuSpeedInitialSeed = Number(payload && payload.cpuSpeedInitialSeed) || 0;
   const cpuSpeedProof = String((payload && payload.cpuSpeedProof) || '');
   const memProof = String((payload && payload.memProof) || '');
@@ -8389,22 +8476,22 @@ async function settleLocalLedgerRound(payload = {}) {
     }
   }
 
-  // Tier 4d (item 4): solo mining is not allowed — a peer probe is required.
+  // Tier 4d (item 4): solo mining is not allowed � a peer probe is required.
   // Peer probes are the only external timing verification; without one, we can't
   // confirm the CPU/memory claims with independent wall-clock measurement.
-  // The main process tracks peerProbeVerifiedForRound via IPC — the renderer
+  // The main process tracks peerProbeVerifiedForRound via IPC � the renderer
   // cannot self-certify this flag.
   const peerProbeVerified = hwAuthority.peerProbeVerifiedForRound;
   hwAuthority.peerProbeVerifiedForRound = false; // reset for next round
   if (!peerProbeVerified && minedAddress) {
     roundLedger.partialForfeit(minedAddress, 1);
-    console.log(`[Ledger] Tier 4d: no peer probe for ${minedAddress} — all contribution forfeited.`);
+    console.log(`[Ledger] Tier 4d: no peer probe for ${minedAddress} � all contribution forfeited.`);
   }
 
   // Tier 4e: coverage-ratio penalty based on chained-probe continuity.
   // A node that was offline during part of the round answered fewer probes than
   // expected.  We scale their contribution proportionally so going offline is
-  // self-penalising — the energy credit reflects only the verified-online fraction.
+  // self-penalising � the energy credit reflects only the verified-online fraction.
   //
   //   expectedProbeCount = floor(roundDurationMs / PROBE_INTERVAL_MS)   (min 1)
   //   coverageRatio      = min(1, chainIndex / expectedProbeCount)
@@ -8430,7 +8517,7 @@ async function settleLocalLedgerRound(payload = {}) {
         console.log(
           `[Ledger] Tier 4e: coverage=${(coverageRatio * 100).toFixed(0)}% ` +
             `(${chainIndex}/${expectedProbeCount} probes, roundDuration=${Math.round(roundDurationMs / 1000)}s)` +
-            `${chainBroken ? ', chain broken (+20%)' : ''} — ` +
+            `${chainBroken ? ', chain broken (+20%)' : ''} � ` +
             `forfeited ${(forfeitFraction * 100).toFixed(0)}% for ${minedAddress}, remaining=${partial.remaining} Wh.`,
         );
       }
@@ -8439,8 +8526,8 @@ async function settleLocalLedgerRound(payload = {}) {
 
   // Tier 4f: probe-rate energy capping.
   // Each answered probe represents at most PROBE_INTERVAL_MS of online mining.
-  // The maximum credible energy for that interval is hardware TDP × interval.
-  // If claimed Wh exceeds this, the excess is forfeited — prevents injecting
+  // The maximum credible energy for that interval is hardware TDP � interval.
+  // If claimed Wh exceeds this, the excess is forfeited � prevents injecting
   // fake energy even after passing the one-time peer probe.
   // The GPU TDP comes from the native binary (gpu-miner.exe via DXGI) so the
   // renderer cannot lie about which GPU is installed or its power ceiling.
@@ -8451,7 +8538,7 @@ async function settleLocalLedgerRound(payload = {}) {
       const gpuPowerW = Math.max(0, Number(hwAuthority.nativeGpuTdpW) || 0);
       const cpuPowerW = Math.max(0, Number(hwAuthority.calibratedUnitPowerW) || 100);
       const hwPowerW = gpuPowerW > 0 ? gpuPowerW : cpuPowerW;
-      // Max Wh per probe: hwPowerW × (PROBE_INTERVAL_MS / 3600000)
+      // Max Wh per probe: hwPowerW � (PROBE_INTERVAL_MS / 3600000)
       const maxWhThisRound = chainIndex * hwPowerW * (PROBE_INTERVAL_MS / 3600000);
       const currentWh = roundLedger.getRoundContribution(minedAddress);
       if (currentWh > maxWhThisRound && maxWhThisRound > 0) {
@@ -8460,9 +8547,9 @@ async function settleLocalLedgerRound(payload = {}) {
         if (cappedFraction > 0.01) {
           const partial = roundLedger.partialForfeit(minedAddress, cappedFraction);
           console.warn(
-            `[Ledger] Tier 4f: energy cap — ${currentWh.toFixed(4)} Wh exceeds ` +
-              `${maxWhThisRound.toFixed(4)} Wh (${chainIndex} probes × ${hwPowerW}W) ` +
-              `for ${minedAddress} — forfeited ${(cappedFraction * 100).toFixed(0)}%, ` +
+            `[Ledger] Tier 4f: energy cap � ${currentWh.toFixed(4)} Wh exceeds ` +
+              `${maxWhThisRound.toFixed(4)} Wh (${chainIndex} probes � ${hwPowerW}W) ` +
+              `for ${minedAddress} � forfeited ${(cappedFraction * 100).toFixed(0)}%, ` +
               `remaining=${partial.remaining} Wh.`,
           );
         }
@@ -8657,7 +8744,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
         const directLanPeerUrl = buildPeerUrlFromSocket(rinfo && rinfo.address, data.httpPort);
         // Skip our own beacon.
         // When the advertised public URL looks like ours, two LAN peers behind the same NAT
-        // router share the same public IP, so we must NOT return early — the direct LAN URL
+        // router share the same public IP, so we must NOT return early � the direct LAN URL
         // from the socket may still be a valid non-self peer.  Only bail out when both the
         // advertised URL and the direct LAN URL point at this machine.
         if (
@@ -8669,7 +8756,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
         if (!advertisedPeerUrl && !directLanPeerUrl) return;
         if (!advertisedPeerUrl && selfIps.has(rinfo.address) && data.httpPort === httpPort) return;
         if (directLanPeerUrl && isSelfPeerUrl(directLanPeerUrl)) return;
-        // Reject well-known system ports (≤ 1023) to prevent SSRF against local
+        // Reject well-known system ports (= 1023) to prevent SSRF against local
         // services (HTTP :80, etc.) via a crafted multicast beacon.
         if (data.httpPort <= 1023) {
           console.warn(`[PeerDiscovery] Ignoring beacon from ${rinfo.address} with reserved port ${data.httpPort}`);
@@ -8697,7 +8784,7 @@ function startPeerDiscovery(httpPort, publicUrl = '') {
     let joinedGroups = 0;
     try {
       // Join the multicast group so we receive beacons from other nodes.
-      // TTL=1 keeps all traffic on the local subnet — does not route to internet.
+      // TTL=1 keeps all traffic on the local subnet � does not route to internet.
       const interfaceAddresses = getLocalPeerIpv4Interfaces();
       if (interfaceAddresses.length > 0) {
         for (const address of interfaceAddresses) {
@@ -8827,7 +8914,7 @@ function broadcastSettlementToPeers(round) {
   }
 }
 
-// ── Governance P2P gossip ─────────────────────────────────────────────────────
+// -- Governance P2P gossip -----------------------------------------------------
 
 /** Cache of peer governance capability: Map<peerUrl, { hasNfts, cachedAtMs }> */
 function _nodeHasGovernanceNfts() {
@@ -8841,7 +8928,7 @@ function _nodeHasGovernanceNfts() {
 }
 
 /** Fetch governance snapshots from all peers and merge locally.
- *  Only runs on NFT-holding nodes — non-NFT nodes never receive governance data. */
+ *  Only runs on NFT-holding nodes � non-NFT nodes never receive governance data. */
 async function syncGovernanceFromPeers() {
   if (!wtcNode) return;
   if (!_nodeHasGovernanceNfts()) return;
@@ -8869,7 +8956,7 @@ async function syncGovernanceFromPeers() {
     if (!snapshot || !snapshot.ok || !Array.isArray(snapshot.proposals)) continue;
 
     for (const proposal of snapshot.proposals) {
-      // Security: verify the creator's NFT holdings — never trust peer-supplied
+      // Security: verify the creator's NFT holdings � never trust peer-supplied
       // creatorNftId / creatorTier.  Strip them if they don't match local truth.
       let creatorNftId = '';
       let creatorTier = '';
@@ -8910,13 +8997,13 @@ async function syncGovernanceFromPeers() {
           const v = proposal.votes[voterAddr];
           if (!v || !v.signature) continue;
 
-          // Verify the vote signature — the message includes power AND nftTier
+          // Verify the vote signature � the message includes power AND nftTier
           // so neither can be tampered with in transit.
           const msg = `${proposal.pipId}|${v.voter}|${v.vote}|${v.power}|${v.nftTier}|${v.timestamp}`;
           if (!wtcNode.verifyMessage(v.voter, v.signature, msg)) continue;
 
           // Security: always verify the voter's current NFT holdings.
-          // The local NftStore determines real power — never trust peer-supplied
+          // The local NftStore determines real power � never trust peer-supplied
           // power or nftTier.  This prevents vote replay after NFT transfer.
           wtcNode.addGovernanceVote(proposal.pipId, {
             voter: v.voter,
@@ -8951,7 +9038,7 @@ function stopGovernanceSync() {
 }
 
 /** Fetch team/docs snapshots from all peers and merge locally.
- *  Only runs on NFT-holding nodes — non-NFT nodes never receive the data. */
+ *  Only runs on NFT-holding nodes � non-NFT nodes never receive the data. */
 async function syncTeamDocsFromPeers() {
   if (!wtcNode) return;
   if (!_nodeHasGovernanceNfts()) return;
@@ -9037,7 +9124,7 @@ function startLedgerNetworkServer() {
         if (handled) return;
       }
 
-      // GET /api/v1/probe/issue — unauthenticated: every peer must be able to request a
+      // GET /api/v1/probe/issue � unauthenticated: every peer must be able to request a
       // probe challenge without knowing the coordinator's machine-specific token.
       // Rate-limited by remote IP to prevent DoS.
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/probe/issue') {
@@ -9050,7 +9137,7 @@ function startLedgerNetworkServer() {
         }
         const workerId = String(reqUrl.searchParams.get('workerId') || identity || 'unknown');
         if (workerId === 'unknown') {
-          // No usable workerId and no IP fallback — issuing a probe here would create
+          // No usable workerId and no IP fallback � issuing a probe here would create
           // an entry that can never be resolved, polluting the attest history.
           sendJson(res, 400, { ok: false, code: 'MISSING_WORKER_ID', message: 'workerId is required.' });
           return;
@@ -9061,7 +9148,7 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // POST /api/v1/probe/submit — unauthenticated: results are cryptographically verified;
+      // POST /api/v1/probe/submit � unauthenticated: results are cryptographically verified;
       // a wrong proof is simply rejected.  Rate-limited by remote IP.
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/probe/submit') {
         refreshCoordinatorIdentityKey();
@@ -9124,7 +9211,7 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // POST /api/v1/probe/receipt — receives a probe receipt broadcast from a
+      // POST /api/v1/probe/receipt � receives a probe receipt broadcast from a
       // verifier peer.  The receipt is signed by the verifier and attests to a
       // worker having answered a specific probe.  Stores it so the worker's
       // contribution chainIndex can be cross-checked.
@@ -9135,7 +9222,7 @@ function startLedgerNetworkServer() {
           sendJson(res, 400, { ok: false, code: 'INVALID_RECEIPT', message: 'Invalid probe receipt.' });
           return;
         }
-        // Verify the receipt signature — must be signed by the claimed verifier.
+        // Verify the receipt signature � must be signed by the claimed verifier.
         const normalizedReceipt = normalizeProbeReceipt(receipt);
         if (!normalizedReceipt) {
           sendJson(res, 400, { ok: false, code: 'INVALID_RECEIPT', message: 'Could not normalize receipt.' });
@@ -9202,7 +9289,7 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // ── Governance capability probe ──────────────────────────────────────────
+      // -- Governance capability probe ------------------------------------------
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/governance/capability') {
         const rl = await enforceEndpointRateLimit('governance-capability', requesterIdentity);
         if (!rl.ok) {
@@ -9213,7 +9300,7 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // ── Governance snapshot (pull-based sync) ────────────────────────────
+      // -- Governance snapshot (pull-based sync) ----------------------------
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/governance/snapshot') {
         const rl = await enforceEndpointRateLimit('governance-snapshot', requesterIdentity);
         if (!rl.ok) {
@@ -9233,7 +9320,7 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // ── Governance team/docs snapshot (pull-based sync) ──────────────────
+      // -- Governance team/docs snapshot (pull-based sync) ------------------
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/governance/team-docs') {
         if (!_nodeHasGovernanceNfts()) {
           sendJson(res, 403, { ok: false, error: 'No governance NFTs on this node' });
@@ -9310,7 +9397,7 @@ function startLedgerNetworkServer() {
         rememberObservedRequester(req, settings, 'peer-directory-presence');
         // Fire-and-forget: do NOT await the reachability probe.  Blocking the
         // response while probing back to the requester causes callers behind
-        // NAT to time out (12 s probe vs 7 s caller timeout) → 0 peers.
+        // NAT to time out (12 s probe vs 7 s caller timeout) ? 0 peers.
         maybeRegisterReachableRequester(req, settings, 'peer-directory').catch(() => {});
         sendJson(res, 200, {
           ok: true,
@@ -9340,7 +9427,7 @@ function startLedgerNetworkServer() {
       // POST /api/v1/settlement/seen  body: { blockHash, minedAddress, totalWh, rewardCoins, settledAtMs, sig }
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/settlement/seen') {
         const body = await readJsonBody(req);
-        // Verify the HMAC sig before recording — prevents a malicious LAN peer from
+        // Verify the HMAC sig before recording � prevents a malicious LAN peer from
         // injecting fake settlement records (e.g. inflated totalWh or rewardCoins).
         const { sig: receivedSig, ...bodyWithoutSig } = body || {};
         const expectedSig = computeHwAuthSig(bodyWithoutSig);
@@ -9451,7 +9538,7 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // GET /api/v1/round/contribution — pull current round snapshot from this peer
+      // GET /api/v1/round/contribution � pull current round snapshot from this peer
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/round/contribution') {
         if (!wtcNode) {
           sendJson(res, 503, { ok: false, code: 'NODE_NOT_READY', message: 'Node not ready.' });
@@ -9462,12 +9549,12 @@ function startLedgerNetworkServer() {
         return;
       }
 
-      // ── WTC native chain endpoints (unauthenticated — proofs are self-verifying) ──
+      // -- WTC native chain endpoints (unauthenticated � proofs are self-verifying) --
       // GET /api/v1/chain/tip
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/chain/tip') {
         // Fire-and-forget: do NOT await the reachability probe.  The probe can
         // take up to PEER_REACHABILITY_TIMEOUT_MS (12 s) when the requester is
-        // behind NAT, which exceeds the caller's own request timeout (6–7 s)
+        // behind NAT, which exceeds the caller's own request timeout (6�7 s)
         // and causes them to see 0 peers.
         maybeRegisterReachableRequester(req, settings, 'tip-probe').catch(() => {});
         const tip = wtcNode ? wtcNode.handleGetTip() : { ok: false, reason: 'node not ready' };
@@ -9646,7 +9733,7 @@ function stopLedgerNetworkServer() {
 }
 
 ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) => {
-  // ── Address: use verified wallet cache; renderer-supplied is only a fallback ─
+  // -- Address: use verified wallet cache; renderer-supplied is only a fallback -
   // Once the wallet is known to main, we ignore the renderer-supplied address so
   // a patched renderer cannot credit energy to an arbitrary wallet.
   const verifiedAddress =
@@ -9676,7 +9763,7 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   // Block contributions if no CPU benchmark has ever been completed.
   // Without at least one benchmark there is no verified hardware capability,
   // so any claimed energy is unverifiable.  A patched renderer cannot bypass
-  // this because the benchmark history is HMAC-signed in userData — the main
+  // this because the benchmark history is HMAC-signed in userData � the main
   // process owns it, not the renderer.
   const _contributionBenchHistory = loadBenchmarkHistory();
   if (_contributionBenchHistory.cpuSamples.length === 0) {
@@ -9687,7 +9774,7 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
     };
   }
 
-  // Block contributions when no peers are online — solo mining is not allowed.
+  // Block contributions when no peers are online � solo mining is not allowed.
   if (wtcNode) {
     const activePeersForContributionCheck = getActivePeers(getLedgerNetworkSettings());
     if (activePeersForContributionCheck.length === 0) {
@@ -9699,18 +9786,18 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
     }
   }
 
-  // ── deltaWh ceiling: clamp to one second of trust-capped calibrated power ───
+  // -- deltaWh ceiling: clamp to one second of trust-capped calibrated power ---
   // This prevents a patched renderer from injecting arbitrarily large energy
-  // values.  At the normal 0.25s tick rate the legitimate value is 4× smaller.
+  // values.  At the normal 0.25s tick rate the legitimate value is 4� smaller.
   let clampedDeltaWh = Math.max(0, Number(deltaWh) || 0);
   if (hwAuthority.calibratedUnitPowerW > 0) {
     const tf = Math.min(1.0, 0.2 + (hwAuthority.trustScore / 100) * 0.8);
     // 0.5 s of max power: twice the normal 0.25 s tick interval as jitter headroom.
-    // At the 240-calls/min rate limit this caps injection at ≤2× the legitimate rate.
+    // At the 240-calls/min rate limit this caps injection at =2� the legitimate rate.
     const maxDeltaWh = (hwAuthority.calibratedUnitPowerW * tf * 0.5) / 3600;
     if (clampedDeltaWh > maxDeltaWh) {
       console.warn(
-        `[Ledger] deltaWh clamped ${clampedDeltaWh.toFixed(6)} â†’ ${maxDeltaWh.toFixed(6)} Wh` +
+        `[Ledger] deltaWh clamped ${clampedDeltaWh.toFixed(6)} → ${maxDeltaWh.toFixed(6)} Wh` +
           ` for ${verifiedAddress} (calibratedUnitPowerW=${hwAuthority.calibratedUnitPowerW} W, trust=${hwAuthority.trustScore})`,
       );
       clampedDeltaWh = maxDeltaWh;
@@ -9788,7 +9875,7 @@ ipcMain.handle('wattcoin-ledger-get-balances', async (_, selectedAddress) => {
   if (!rateLimit.ok) {
     return { ok: false, code: rateLimit.code, message: rateLimit.message, lockedUntil: rateLimit.lockedUntil || 0 };
   }
-  // ── WTC native chain balance ───────────────────────────────────────────────
+  // -- WTC native chain balance -----------------------------------------------
   if (wtcNode) {
     try {
       const addr =
@@ -9830,7 +9917,7 @@ ipcMain.handle('wattcoin-ledger-get-balances', async (_, selectedAddress) => {
 
 // Get WTC balances reconstructed from mined block history for a specific mining address.
 ipcMain.handle('wattcoin-get-node-mined-coins', (_, selectedAddress) => {
-  // ── WTC native chain fast-path ───────────────────────────────────────
+  // -- WTC native chain fast-path ---------------------------------------
   if (wtcNode) {
     try {
       const addr =
@@ -9873,7 +9960,7 @@ ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
     return { ok: false, code: 'BETA_WITHDRAWALS_DISABLED', message: betaPolicy.policyMessage };
   }
 
-  // ── Sender whitelist (hardcoded — cannot be overridden by config) ─────────
+  // -- Sender whitelist (hardcoded � cannot be overridden by config) ---------
   const fromAddr = payload && typeof payload.selectedAddress === 'string' ? payload.selectedAddress.trim() : '';
   if (!fromAddr || !ALLOWED_SENDER_ADDRESSES.has(fromAddr)) {
     return { ok: false, code: 'SENDER_NOT_ALLOWED', message: 'Withdrawals are not available for this address.' };
@@ -9900,7 +9987,7 @@ ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
     return { ok: false, code: 'INVALID_AMOUNT', message: 'Amount must be greater than 0.' };
   }
 
-  // ── WTC native chain path ─────────────────────────────────────────────────
+  // -- WTC native chain path -------------------------------------------------
   if (wtcNode) {
     try {
       const fromAddress =
@@ -9908,7 +9995,7 @@ ipcMain.handle('wattcoin-send', async (_, payload = {}) => {
           ? payload.selectedAddress.trim()
           : wtcNode.getPrimaryAddress();
       const result = wtcNode.send({ fromAddress, toAddress, amount, subtractFeeFromAmount });
-      // Transaction is now in the mempool — it will be included in the next
+      // Transaction is now in the mempool � it will be included in the next
       // naturally mined block. No flush block is triggered here.
       return { ok: true, txid: result.txid, toAddress, amount: result.amount, subtractFeeFromAmount };
     } catch (e) {
@@ -9941,7 +10028,7 @@ ipcMain.handle('wattcoin-list-transactions', async (_, payload = {}) => {
   const count = Math.min(200, Math.max(1, Number.isFinite(countRaw) ? Math.floor(countRaw) : 50));
   const selectedAddress = typeof payload.selectedAddress === 'string' ? payload.selectedAddress.trim() : '';
 
-  // ── WTC native chain path ─────────────────────────────────────────────────
+  // -- WTC native chain path -------------------------------------------------
   if (wtcNode) {
     const txs = wtcNode.listTransactions(selectedAddress || wtcNode.getPrimaryAddress(), count);
     return { ok: true, selectedAddress, count: txs.length, transactions: txs };
@@ -10176,7 +10263,7 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
   }
 });
 
-// ── Binary integrity verification ──────────────────────────────────────────────
+// -- Binary integrity verification ----------------------------------------------
 // Reads binary-manifest.json (written by scripts/after-sign-windows.js afterSign
 // hook) and verifies the SHA-256 of every bundled binary before the node daemon
 // is launched.  Only runs in packaged builds; dev mode always passes.
@@ -10215,7 +10302,7 @@ function verifyBinaryManifest() {
   }
 }
 
-// ── App JS integrity verification ─────────────────────────────────────────────
+// -- App JS integrity verification ---------------------------------------------
 // Manifest is generated during release build (scripts/release-build.js) and
 // packaged into the app. Verifies critical JS modules inside app.asar.
 function verifyAppIntegrityManifest() {
@@ -10253,7 +10340,7 @@ function verifyAppIntegrityManifest() {
   }
 }
 
-// ── Anti-debug friction (release only) ───────────────────────────────────────
+// -- Anti-debug friction (release only) ---------------------------------------
 // Lightweight checks that block obvious debugger-enabled launches in packaged builds.
 function verifyReleaseDebuggerFriction() {
   if (!app.isPackaged) return { ok: true, skipped: 'dev-mode' };
@@ -10441,7 +10528,7 @@ function stopWtcPeerSyncLoop() {
 }
 
 function createWindow() {
-  // ── Content Security Policy ───────────────────────────────────────────────
+  // -- Content Security Policy -----------------------------------------------
   // Set before the window is created so it applies from the very first navigation.
   // Restricts script, style, and connection sources to 'self' (the local app bundle).
   // In dev mode we also allow localhost:5173 for the Vite dev server.
@@ -10508,16 +10595,16 @@ function createWindow() {
 
 app.setAppPath(__dirname);
 
-// ── Single-instance lock ───────────────────────────────────────────────────────
+// -- Single-instance lock -------------------------------------------------------
 // Prevent a second instance from running alongside, which would let an attacker
 // double contribution throughput under a different wallet address on the same machine.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
-  // Another instance is already running — bring its window to front and quit this one.
+  // Another instance is already running � bring its window to front and quit this one.
   app.quit();
 } else {
   app.on('second-instance', () => {
-    // Someone tried to launch a second instance — focus the existing window.
+    // Someone tried to launch a second instance � focus the existing window.
     const wins = require('electron').BrowserWindow.getAllWindows();
     const main = wins.find((w) => !w.isDestroyed());
     if (main) {
@@ -10531,7 +10618,7 @@ app.whenReady().then(() => {
   // Query physical CPU core count so hardware-load workers are limited to physical
   // cores only.  On HT CPUs (2 logical per physical) spawning workers on all logical
   // cores doubles the duty-cycle pressure on each physical core, causing actual power
-  // draw that is ~2× the intended %.  One worker per physical core makes N% duty = N% TDP.
+  // draw that is ~2� the intended %.  One worker per physical core makes N% duty = N% TDP.
   si.cpu()
     .then((cpu) => {
       try {
@@ -10575,7 +10662,7 @@ app.whenReady().then(() => {
   // The bundled config ships with defaults (user/pass); if we still see those,
   // create a local override file in the user-data dir with random credentials.
   // This file takes priority in getConfigCandidates() so it wins from this
-  // launch onward — without touching the ASAR or the shipped config.
+  // launch onward � without touching the ASAR or the shipped config.
   (() => {
     try {
       const { getLocalOverrideConfigPath } = require('./runtime-config');
@@ -10675,7 +10762,7 @@ app.whenReady().then(() => {
     console.warn('[WtcNode] Could not install wtc-genesis.json:', genesisErr && genesisErr.message);
   }
 
-  // ── WTC native chain node ─────────────────────────────────────────────────
+  // -- WTC native chain node -------------------------------------------------
   try {
     const wtcSecret = (() => {
       try {
@@ -10722,7 +10809,7 @@ app.whenReady().then(() => {
   const debugFrictionResult = verifyReleaseDebuggerFriction();
   if (!debugFrictionResult.ok) {
     dialog.showErrorBox(
-      'Wattcoin Miner — Debugger Blocked',
+      'Wattcoin Miner � Debugger Blocked',
       `Debugger launch flags were detected in this release build.\n\n${(debugFrictionResult.reasons || []).join('\n')}\n\nTo run with debugger for support, set WATTCOIN_ALLOW_DEBUGGER=1.`,
     );
     app.quit();
@@ -10731,9 +10818,9 @@ app.whenReady().then(() => {
 
   const appIntegrityResult = verifyAppIntegrityManifest();
   if (!appIntegrityResult.ok) {
-    const failedList = (appIntegrityResult.failures || []).map((f) => `  • ${f.rel} (${f.reason})`).join('\n');
+    const failedList = (appIntegrityResult.failures || []).map((f) => `  � ${f.rel} (${f.reason})`).join('\n');
     dialog.showErrorBox(
-      'Wattcoin Miner — Integrity Check Failed',
+      'Wattcoin Miner � Integrity Check Failed',
       `One or more application modules have been modified or are missing.\n\n${failedList}\n\nThe application cannot start safely. Please reinstall Wattcoin Miner.`,
     );
     app.quit();
@@ -10767,7 +10854,7 @@ app.whenReady().then(() => {
     pullContributionsFromPeers().catch(() => {});
   }, 10000);
 
-  // ── WTC Sale queue ───────────────────────────────────────────────────────
+  // -- WTC Sale queue -------------------------------------------------------
   // Init only after wtcNode is ready so balance reads work immediately.
   if (wtcNode) {
     saleQueue.init(getDataDir(), wtcNode);
@@ -10797,7 +10884,7 @@ app.whenReady().then(() => {
       console.warn('[SaleQueue] Failed to load sale-api-key.txt:', e && e.message);
     }
 
-    // ── WTC Staking queue ─────────────────────────────────────────────────
+    // -- WTC Staking queue -------------------------------------------------
     stakingQueue.init(getDataDir(), wtcNode);
     // Share the same API key so staking processes website entries in the same flush
     // and pushes combined stats (APY, totalStaked) back to the website.
@@ -10848,13 +10935,13 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-// ── Auto-updater ──────────────────────────────────────────────────────────────
+// -- Auto-updater --------------------------------------------------------------
 // Only runs in a packaged app (app.isPackaged). In dev mode autoUpdater is a
 // no-op so it never interferes with the development workflow.
-// Flow: check automatically on startup â†’ download silently in background â†’
-// notify renderer via 'wattcoin-update-downloaded' â†’ user clicks Restart â†’
-// renderer calls 'wattcoin-install-update' â†’ quitAndInstall.
-// ─────────────────────────────────────────────────────────────────────────────
+// Flow: check automatically on startup → download silently in background →
+// notify renderer via 'wattcoin-update-downloaded' → user clicks Restart →
+// renderer calls 'wattcoin-install-update' → quitAndInstall.
+// -----------------------------------------------------------------------------
 function normalizeUpdateFeedUrl(value) {
   const s = String(value || '').trim();
   if (!s) return '';
@@ -11026,10 +11113,10 @@ if (app.isPackaged) {
   });
 }
 
-// ─── Global average electricity price (USD/kWh) ──────────────────────────────
+// --- Global average electricity price (USD/kWh) ------------------------------
 // Fetches from GlobalPetrolPrices.com. Cached for 24 h. Falls back to the
 // widely-cited 2024 global average of $0.165/kWh if the fetch or parse fails.
-const ELECTRICITY_PRICE_FALLBACK = 0.174; // USD/kWh — Q1 2026 world average
+const ELECTRICITY_PRICE_FALLBACK = 0.174; // USD/kWh � Q1 2026 world average
 const ELECTRICITY_PRICE_CACHE_MS = 24 * 60 * 60 * 1000; // 24 h
 let _electricityCache = { price: null, fetchedAt: 0 };
 
@@ -11073,7 +11160,7 @@ ipcMain.handle('wattcoin-get-electricity-price', () => {
             try {
               const html = Buffer.concat(chunks).toString('utf8');
               // GlobalPetrolPrices embeds a JS data array.  The world-average row
-              // typically looks like: ["World","…","0.165",…]
+              // typically looks like: ["World","�","0.165",�]
               // Try several patterns in order of reliability.
               const patterns = [
                 // prose text in article body

@@ -3741,6 +3741,7 @@ export default function Miner({
         if (probe.type === 'cpu') {
           let x = probe.params.seed | 0 || 1;
           const N = probe.params.iterations | 0;
+          if (process.env.WATTCOIN_DEBUG) console.time('probe-cpu-loop');
           for (let i = 0; i < N; i++) {
             x = (Math.imul(x, 48271) + 9973) | 0;
             x ^= x << 13;
@@ -3748,6 +3749,7 @@ export default function Miner({
             x ^= x << 5;
             x &= 0x7fffffff;
           }
+          if (process.env.WATTCOIN_DEBUG) console.timeEnd('probe-cpu-loop');
           probeResult = { id: probe.id, type: 'cpu', proof: (x >>> 0).toString(16).padStart(8, '0') };
         } else if (probe.type === 'memory') {
           const ENTRIES = Math.max(1, Number(probe.params.entries) || 1 << 24);
@@ -3813,7 +3815,7 @@ export default function Miner({
 
         const submitPayload = {
           source,
-          result: { ...probeResult, _peerUrl: probe._peerUrl, probeWallClockMs: performance.now() - probeStartedAt },
+          result: { ...probeResult, _peerUrl: probe._peerUrl, probeWallClockMs: Math.round(performance.now() - probeStartedAt) },
           hardwareSpec: {
             measuredCpuOpsPerSec: Number(benchmarkProofRef.current && benchmarkProofRef.current.cpuSpeedOpsPerSec) || 0,
             measuredMemLatencyNs: Number(benchmarkProofRef.current && benchmarkProofRef.current.memLatencyNs) || 0,
@@ -3905,9 +3907,9 @@ export default function Miner({
                   timedOut: false,
                   wallClockMs:
                     typeof verdict.probeWallClockMs === 'number'
-                      ? verdict.probeWallClockMs
+                      ? Math.round(verdict.probeWallClockMs)
                       : typeof verdict.wallClockMs === 'number'
-                        ? verdict.wallClockMs
+                        ? Math.round(verdict.wallClockMs)
                         : null,
                   pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
                   proof: typeof probeResult.proof === 'string' ? probeResult.proof : '',
@@ -3990,7 +3992,7 @@ export default function Miner({
           type: h.type || '?',
           ok: !!h.ok,
           timedOut: Array.isArray(h.issues) && h.issues.some((i) => String(i).includes('timed out')),
-          wallClockMs: typeof h.wallClockMs === 'number' ? h.wallClockMs : null,
+          wallClockMs: typeof h.wallClockMs === 'number' ? Math.round(h.wallClockMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
           issues: Array.isArray(h.issues) ? h.issues : [],
         }));
@@ -4003,7 +4005,7 @@ export default function Miner({
           type: h.type || '?',
           ok: !!h.ok,
           timedOut: false,
-          wallClockMs: typeof h.wallClockMs === 'number' ? h.wallClockMs : null,
+          wallClockMs: typeof h.wallClockMs === 'number' ? Math.round(h.wallClockMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
           workerId: typeof h.workerId === 'string' ? h.workerId : '',
           pixelHash: typeof h.pixelHash === 'string' ? h.pixelHash : '',

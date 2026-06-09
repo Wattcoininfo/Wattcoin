@@ -50,17 +50,17 @@ const PENDING_TXS_FILE = 'wtc-pending-txs.json';
 const GENESIS_CFG_FILE = 'wtc-genesis.json';
 const GENESIS_PREMINE = 1_000_000;
 const CHAIN_PROTOCOL_VERSION = 1;
-const PEER_CHAIN_TIP_TIMEOUT_MS = 12_000;
+const PEER_CHAIN_TIP_TIMEOUT_MS = 25_000; // increased for WAN: high-latency links and TCP handshake overhead
 const PEER_CHAIN_FETCH_TIMEOUT_MS = 20_000;
-const PEER_READINESS_PROBE_CONCURRENCY = 5;
+const PEER_READINESS_PROBE_CONCURRENCY = 10; // increased to complete probes faster across many WAN peers
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 class WtcNode {
   static PEER_BACKOFF_DIAGNOSTIC_MS = 5 * 60_000; // log stuck-peers reminder every 5 min
   // Track consecutive failures for each peer
-  static PEER_FAILURE_BACKOFF_MS = 30_000; // 30 s backoff — peers typically recover within seconds
-  static PEER_FAILURE_THRESHOLD = 5; // backoff only after 5 consecutive failures
+  static PEER_FAILURE_BACKOFF_MS = 60_000; // 60 s backoff — WAN peers may take longer to recover
+  static PEER_FAILURE_THRESHOLD = 8; // backoff only after 8 consecutive failures (more tolerant of transient WAN drops)
   _peerFailureCounts = new Map(); // peerUrl -> { count, lastFail }
   _lastBackoffLog = new Map(); // peerUrl -> last log timestamp
 
