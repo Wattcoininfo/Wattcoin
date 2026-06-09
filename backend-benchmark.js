@@ -1195,6 +1195,22 @@ function restoreCoordinatorState(snapshot) {
   }
 }
 
+/**
+ * Silently removes all in-flight peer-probe issuances for a given worker
+ * without recording timeout entries.  Called when the worker's WebSocket
+ * connection drops so that its orphaned probes do not appear as "timed out"
+ * failures in the attestation log after the 180 s timeout expires.
+ */
+function cancelPendingPeerProbesForWorker(workerId) {
+  const key = String(workerId || '').trim();
+  if (!key) return;
+  for (const [id, entry] of peerProbeIssuances) {
+    if (entry.workerId === key) {
+      peerProbeIssuances.delete(id);
+    }
+  }
+}
+
 // Periodic sweep: expire peerProbeIssuances for ALL workers, not just ones that
 // come back to poll again.  Without this, probes from workers that go offline
 // accumulate silently in the map and are only recorded as timeouts when (if) the
@@ -1253,4 +1269,5 @@ module.exports = {
   getCoordinatorStateSnapshot,
   restoreCoordinatorState,
   getAttestHistory,
+  cancelPendingPeerProbesForWorker,
 };

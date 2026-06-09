@@ -39,6 +39,7 @@ const {
   PROBE_INTERVAL_MS,
   getLocalProbeChain,
   setAsicHardwareSpec,
+  cancelPendingPeerProbesForWorker,
 } = require('./backend-benchmark');
 const {
   getExpectedCpuSpeedOps,
@@ -2461,16 +2462,14 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
             }
           }
           _probePushConns.set(workerId, { ws, allowGpu });
-          ws.on('close', () => {
-            if (_probePushConns.get(workerId) && _probePushConns.get(workerId).ws === ws) {
-              _probePushConns.delete(workerId);
+          const dropWorker = (id) => {
+            if (_probePushConns.get(id) && _probePushConns.get(id).ws === ws) {
+              _probePushConns.delete(id);
             }
-          });
-          ws.on('error', () => {
-            if (_probePushConns.get(workerId) && _probePushConns.get(workerId).ws === ws) {
-              _probePushConns.delete(workerId);
-            }
-          });
+            cancelPendingPeerProbesForWorker(id);
+          };
+          ws.on('close', () => dropWorker(workerId));
+          ws.on('error', () => dropWorker(workerId));
         });
         return;
       }
@@ -6149,6 +6148,7 @@ function _runProbePush() {
     const conn = _probePushConns.get(workerId);
     if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
       _probePushConns.delete(workerId);
+      cancelPendingPeerProbesForWorker(workerId);
       return;
     }
     if (workerId === 'unknown') return;
