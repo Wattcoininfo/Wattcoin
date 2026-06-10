@@ -2455,6 +2455,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         _probePushWss.handleUpgrade(req, socket, head, (ws) => {
           const existing = _probePushConns.get(workerId);
           if (existing) {
+            cancelPendingPeerProbesForWorker(workerId);
             try {
               existing.ws.close();
             } catch (_) {
@@ -2463,6 +2464,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           }
           _probePushConns.set(workerId, { ws, allowGpu });
           const dropWorker = (id) => {
+            clearInterval(ws._probePushPingInterval);
             if (_probePushConns.get(id) && _probePushConns.get(id).ws === ws) {
               _probePushConns.delete(id);
             }
@@ -2470,6 +2472,45 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           };
           ws.on('close', () => dropWorker(workerId));
           ws.on('error', () => dropWorker(workerId));
+          // Heartbeat: detect half-open TCP connections so dead workers
+          // don't accumulate orphaned probes in peerProbeIssuances.
+          // Grace period: allow up to 2 consecutive missed pongs (~90s) before
+          // terminating, so transient network jitter does not disconnect workers.
+          const PROBE_PUSH_MAX_MISSED_PONGS = 2;
+          try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) {}
+          ws.isAlive = true;
+          ws._probePushMissedPongs = 0;
+          ws.on('pong', () => { ws.isAlive = true; });
+          // Listen for worker busy signals to extend probe deadlines.
+          ws.on('message', (data) => {
+            try {
+              const msg = JSON.parse(String(data));
+              if (msg.type === 'busy' && msg.probeId) {
+                handleWorkerBusy(workerId, msg.probeId);
+              }
+            } catch (_) {}
+          });
+          ws._probePushPingInterval = setInterval(() => {
+            if (ws.readyState !== WebSocket.OPEN) {
+              clearInterval(ws._probePushPingInterval);
+              return;
+            }
+            if (!ws.isAlive) {
+              ws._probePushMissedPongs++;
+              if (ws._probePushMissedPongs > PROBE_PUSH_MAX_MISSED_PONGS) {
+                dropWorker(workerId);
+                ws.terminate();
+                return;
+              }
+              // Grace cycle: send another ping instead of terminating.
+              ws.isAlive = false;
+              try { ws.ping(); } catch (_) {}
+              return;
+            }
+            ws._probePushMissedPongs = 0;
+            ws.isAlive = false;
+            try { ws.ping(); } catch (_) {}
+          }, 30_000);
         });
         return;
       }
@@ -5999,10 +6040,14 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
 // WebSocket; probes arrive at unpredictable times so the renderer cannot
 // predict or control probe timing. If the WebSocket disconnects, the worker
 // tries to reconnect to a different peer after a random delay.
-let _pendingProbe = null; // { probe, source, peerUrl } | null
+let _pendingProbes = []; // bounded queue of { probe, source, peerUrl }
+const _PENDING_PROBES_MAX = 4;
+let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
+let _bgProbeWsConnecting = null; // WebSocket that hasn't fired 'open' yet
 let _bgProbeWs = null; // WebSocket connection (push mode)
 let _bgProbeWsPeerUrl = null;
 let _bgProbeWsReconnectTimer = null; // WS reconnect timer
+let _bgProbeWsConnId = 0; // monotonic connection ID to guard orphaned connections
 let _allowGpuWorkloads = false; // updated by renderer via IPC
 const _BG_WS_RECONNECT_MAX_MS = 60_000;
 
@@ -6014,6 +6059,14 @@ function _cancelBgProbeWsReconnect() {
 }
 
 function _closeBgProbeWs() {
+  _cancelBgProbeWsReconnect();
+  _pendingProbes = [];
+  _probeInProgress = false;
+  // Abort any connecting WS before it opens.
+  if (_bgProbeWsConnecting) {
+    try { _bgProbeWsConnecting.close(); } catch (_) {}
+    _bgProbeWsConnecting = null;
+  }
   if (_bgProbeWs) {
     try {
       _bgProbeWs.close();
@@ -6035,45 +6088,97 @@ function _scheduleBgProbeWsReconnect() {
 
 function _startBgProbeWs(peerUrl) {
   _closeBgProbeWs();
+  _bgProbeWsConnId++; // increment connection ID so orphaned WS events are ignored
+  const connId = _bgProbeWsConnId;
   const wsUrl = peerUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/probe/push';
   const workerId = walletAddressCache.address || 'unknown';
   try {
     const ws = new WebSocket(
       wsUrl + '?workerId=' + encodeURIComponent(workerId) + '&allowGpu=' + (_allowGpuWorkloads ? 'true' : 'false'),
     );
+    _bgProbeWsConnecting = ws;
     ws.on('open', () => {
+      if (_bgProbeWsConnId !== connId) { try { ws.close(); } catch (_) {} return; }
+      if (_bgProbeWsConnecting === ws) _bgProbeWsConnecting = null;
       _cancelBgProbeWsReconnect();
       _bgProbeWs = ws;
       _bgProbeWs._connectedWorkerId = walletAddressCache.address || 'unknown';
       _bgProbeWsPeerUrl = peerUrl;
+      try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) {}
+      // Worker-side heartbeat: detect dead coordinator independently.
+      ws._bgProbeIsAlive = true;
+      ws.on('pong', () => { ws._bgProbeIsAlive = true; });
+      ws._bgProbePingInterval = setInterval(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          clearInterval(ws._bgProbePingInterval);
+          return;
+        }
+        if (!ws._bgProbeIsAlive) {
+          clearInterval(ws._bgProbePingInterval);
+          ws.terminate();
+          return;
+        }
+        ws._bgProbeIsAlive = false;
+        try { ws.ping(); } catch (_) {}
+      }, 30_000);
     });
     ws.on('message', (data) => {
+      if (_bgProbeWsConnId !== connId) return;
       try {
         const msg = JSON.parse(String(data));
         if (msg.type === 'probe' && msg.data && msg.data.probe) {
+          const probeId = msg.data.probe.id;
+          if (_probeInProgress) {
+            // Renderer is busy, tell the coordinator to extend the probe deadline
+            // instead of letting it time out silently.
+            try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
+            // Still queue the probe if it's not already queued, so the worker has
+            // something to work on when the current probe finishes.
+            if (!_pendingProbes.some((p) => p.probe.id === probeId)) {
+              if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
+              msg.data.probe._peerUrl = peerUrl;
+              _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
+            }
+            return;
+          }
+          // Skip duplicates that may arrive because issuePeerProbe returns the same
+          // in-flight probe on subsequent push cycles until the result is submitted.
+          if (_pendingProbes.some((p) => p.probe.id === probeId)) return;
           msg.data.probe._peerUrl = peerUrl;
-          _pendingProbe = { probe: msg.data.probe, source: 'peer', peerUrl };
+          if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
+          _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
         }
       } catch (_) {
         /* ignore parse errors */
       }
     });
     ws.on('close', () => {
-      if (_bgProbeWs === ws) {
-        _bgProbeWs = null;
-        _bgProbeWsPeerUrl = null;
-        _scheduleBgProbeWsReconnect();
-      }
+      if (_bgProbeWsConnId !== connId) return;
+      if (_bgProbeWs !== ws && _bgProbeWsConnecting !== ws) return;
+      if (_bgProbeWsConnecting === ws) _bgProbeWsConnecting = null;
+      clearInterval(ws._bgProbePingInterval);
+      _bgProbeWs = null;
+      _bgProbeWsPeerUrl = null;
+      _pendingProbes = [];
+      _probeInProgress = false;
+      _scheduleBgProbeWsReconnect();
     });
     ws.on('error', () => {
-      if (_bgProbeWs === ws) {
-        _bgProbeWs = null;
-        _bgProbeWsPeerUrl = null;
-        _scheduleBgProbeWsReconnect();
-      }
+      if (_bgProbeWsConnId !== connId) return;
+      if (_bgProbeWs !== ws && _bgProbeWsConnecting !== ws) return;
+      if (_bgProbeWsConnecting === ws) _bgProbeWsConnecting = null;
+      clearInterval(ws._bgProbePingInterval);
+      _bgProbeWs = null;
+      _bgProbeWsPeerUrl = null;
+      _pendingProbes = [];
+      _probeInProgress = false;
+      _scheduleBgProbeWsReconnect();
     });
   } catch (_) {
-    _scheduleBgProbeWsReconnect();
+    if (_bgProbeWsConnId === connId) {
+      if (_bgProbeWsConnecting) { try { _bgProbeWsConnecting.close(); } catch (_) {} _bgProbeWsConnecting = null; }
+      _scheduleBgProbeWsReconnect();
+    }
   }
 }
 
@@ -6124,9 +6229,18 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
     _connectBgProbeWs();
   }
 
-  const cached = _pendingProbe;
+  // Dequeue atomically to prevent a TOCTOU race with the WS message handler
+  // (it pushes to _pendingProbes between our shift and use).
+  const cached = _pendingProbes.shift() || null;
   if (cached) {
-    _pendingProbe = null;
+    // Discard stale probes: if the WS reconnected to a different coordinator
+    // since this probe was cached, its _peerUrl points to a coordinator that
+    // no longer has this probe in peerProbeIssuances.  Submitting there would
+    // waste time and the probe would time out on the original issuer.
+    if (cached.probe && cached.probe._peerUrl && cached.probe._peerUrl !== _bgProbeWsPeerUrl) {
+      return { ok: false, error: 'Stale probe from previous coordinator.' };
+    }
+    _probeInProgress = true;
     return { ok: true, source: cached.source, probe: cached.probe };
   }
 
@@ -6157,10 +6271,12 @@ function _scheduleProbePush() {
 }
 
 function _runProbePush() {
+  let probeIssued = false;
+  let workerId = '';
   try {
     if (_probePushConns.size === 0) return;
     const keys = Array.from(_probePushConns.keys());
-    const workerId = keys[Math.floor(Math.random() * keys.length)];
+    workerId = keys[Math.floor(Math.random() * keys.length)];
     const conn = _probePushConns.get(workerId);
     if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
       _probePushConns.delete(workerId);
@@ -6169,11 +6285,20 @@ function _runProbePush() {
     }
     if (workerId === 'unknown') return;
     const probe = issuePeerProbe(workerId, conn.allowGpu);
+    if (probe === null) {
+      // Worker quarantined (too many consecutive timeouts) — remove from push list.
+      _probePushConns.delete(workerId);
+      cancelPendingPeerProbesForWorker(workerId);
+      return;
+    }
     if (probe) {
+      probeIssued = true;
       conn.ws.send(JSON.stringify({ type: 'probe', data: { ok: true, probe, source: 'peer' } }));
     }
   } catch (_) {
-    // transient — retries on next interval
+    if (probeIssued) {
+      cancelPendingPeerProbesForWorker(workerId);
+    }
   } finally {
     _scheduleProbePush();
   }
@@ -6182,6 +6307,7 @@ function _runProbePush() {
 // Renderer calls this after completing a peer probe.
 // Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
+  _probeInProgress = false;
   const settings = getLedgerNetworkSettings();
   const source = String((payload && payload.source) || 'peer');
   const result = payload && payload.result ? payload.result : {};
@@ -6202,21 +6328,21 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           hardwareSpec: hardwareSpec,
         };
         let verdict;
-        for (let attempt = 0; attempt < 3; attempt++) {
+        for (let attempt = 0; attempt < 2; attempt++) {
           if (attempt > 0) {
-            await new Promise((r) => setTimeout(r, 3000 * attempt));
+            await new Promise((r) => setTimeout(r, 3000));
           }
           try {
             verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
               trackReachability: false,
               suppressPeerDiscovery: true,
               source: 'peer-probe-submit',
-              timeoutMs: 30000,
+              timeoutMs: 15000,
             });
             if (verdict && (verdict.ok || !verdict.transient)) break;
           } catch (e) {
-            console.warn('[PeerProbe] Submit attempt ' + (attempt + 1) + '/3 failed:', e.message);
-            if (attempt === 2) throw e;
+            console.warn('[PeerProbe] Submit attempt ' + (attempt + 1) + '/2 failed:', e.message);
+            if (attempt === 1) throw e;
             continue;
           }
         }

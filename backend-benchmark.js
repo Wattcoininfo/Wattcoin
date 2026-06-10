@@ -847,6 +847,12 @@ const WORKER_ACTIVE_WINDOW_MS = 10 * 60 * 1000; // consider a worker active if s
 // so the coordinator can derive the next expected seed and verify unbroken continuity.
 const workerChainState = new Map(); // workerId ? { chainHead, chainIndex }
 
+// Tracks consecutive probe timeouts per worker.  When a worker exceeds
+// WORKER_MAX_CONSECUTIVE_TIMEOUTS, issuePeerProbe stops issuing new probes
+// (returning null) so the coordinator does not keep spinning on a dead/stuck worker.
+const workerConsecutiveTimeouts = new Map(); // workerId ? count
+const WORKER_MAX_CONSECUTIVE_TIMEOUTS = 3;
+
 function getActiveWorkerCount() {
   const now = Date.now();
   let count = 0;
@@ -903,6 +909,15 @@ function issuePeerProbe(workerId, allowGpuWorkloads) {
         issues: ['probe timed out: worker received challenge but never submitted result'],
       });
       if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
+      // Break the worker's chain on timeout so the next probe uses a fresh random seed
+      // instead of re-deriving from the same stale chain head.
+      const wc = workerChainState.get(entry.workerId);
+      if (wc) {
+        workerChainState.set(entry.workerId, { chainHead: null, chainIndex: wc.chainIndex || 0 });
+      }
+      // Track consecutive timeouts so the coordinator can quarantine the worker.
+      const to = (workerConsecutiveTimeouts.get(entry.workerId) || 0) + 1;
+      workerConsecutiveTimeouts.set(entry.workerId, to);
     }
   }
   // If this worker already has an active in-flight probe (not yet timed out),
@@ -918,6 +933,16 @@ function issuePeerProbe(workerId, allowGpuWorkloads) {
       return { ...existingEntry.probe };
     }
   }
+  // If this worker has exceeded the consecutive timeout threshold, quarantine it
+  // by refusing to issue new probes.  The worker must reconnect or submit a
+  // successful result to reset the counter.
+  if ((workerConsecutiveTimeouts.get(workerId) || 0) >= WORKER_MAX_CONSECUTIVE_TIMEOUTS) {
+    console.warn(
+      `[PeerProbe] Worker ${workerId} has ${workerConsecutiveTimeouts.get(workerId)} consecutive timeouts - quarantined`,
+    );
+    return null;
+  }
+
   // For GPU probes: pre-compute the expected pixel hash using pure-JS integer algebra.
   // This allows algebraic verification in submitPeerProbeResult without needing a GPU.
   const expectedPixelHash =
@@ -1060,6 +1085,8 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     workerChainEntry.chainHead = proofKey;
     workerChainEntry.chainIndex = (workerChainEntry.chainIndex || 0) + 1;
     workerChainState.set(entry.workerId, workerChainEntry);
+    // Successful submission resets the consecutive timeout counter.
+    workerConsecutiveTimeouts.set(entry.workerId, 0);
   } else {
     // Break: reset chainHead so next probe uses a fresh random seed
     workerChainState.set(entry.workerId, { chainHead: null, chainIndex: workerChainEntry.chainIndex || 0 });
@@ -1209,6 +1236,26 @@ function cancelPendingPeerProbesForWorker(workerId) {
       peerProbeIssuances.delete(id);
     }
   }
+  // Reset consecutive timeout counter so a reconnecting worker starts fresh.
+  workerConsecutiveTimeouts.delete(key);
+}
+
+/**
+ * Extends a probe's deadline when the worker signals that it is busy running
+ * another probe.  Prevents false timeouts when probes arrive faster than the
+ * worker can process them.  Limited to 3 extensions per probe to prevent abuse.
+ */
+function handleWorkerBusy(workerId, probeId) {
+  const entry = peerProbeIssuances.get(probeId);
+  if (entry && entry.workerId === workerId) {
+    const busyCount = (entry._busyCount || 0) + 1;
+    if (busyCount > 3) return;
+    entry._busyCount = busyCount;
+    entry.issuedAt = Date.now();
+    console.log(
+      `[PeerProbe] Worker ${workerId} busy, extended deadline for ${entry.probe.type} probe ${probeId} (${busyCount}/3)`,
+    );
+  }
 }
 
 // Periodic sweep: expire peerProbeIssuances for ALL workers, not just ones that
@@ -1233,6 +1280,14 @@ setInterval(() => {
         issues: ['probe timed out: worker received challenge but never submitted result'],
       });
       if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
+      // Break the worker's chain on timeout so the next probe uses a fresh random seed.
+      const wc = workerChainState.get(entry.workerId);
+      if (wc) {
+        workerChainState.set(entry.workerId, { chainHead: null, chainIndex: wc.chainIndex || 0 });
+      }
+      // Track consecutive timeouts so the coordinator can quarantine the worker.
+      const to = (workerConsecutiveTimeouts.get(entry.workerId) || 0) + 1;
+      workerConsecutiveTimeouts.set(entry.workerId, to);
     }
   }
 }, 60_000);
@@ -1270,4 +1325,5 @@ module.exports = {
   restoreCoordinatorState,
   getAttestHistory,
   cancelPendingPeerProbesForWorker,
+  handleWorkerBusy,
 };
