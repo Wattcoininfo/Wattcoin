@@ -40,6 +40,7 @@ const {
   getLocalProbeChain,
   setAsicHardwareSpec,
   cancelPendingPeerProbesForWorker,
+  handleWorkerBusy,
 } = require('./backend-benchmark');
 const {
   getExpectedCpuSpeedOps,
@@ -1786,7 +1787,7 @@ function getLocalTunnelPeerLiveness(peerUrl) {
 }
 
 async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), localWorkerId = '', extraOpts = {}) {
-  const localWorkerKey = String(localWorkerId || '').trim();
+  const _localWorkerKey = String(localWorkerId || '').trim();
   const peers = getActivePeers(settings);
   const distinctPeerKeys = new Set();
   const onlinePeers = [];
@@ -1797,7 +1798,6 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
     if (liveTunnel && liveTunnel.live) {
       const peerIdentity = String(liveTunnel.peerIdentity || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) continue;
-      if (localWorkerKey && peerIdentity && hasRecentPeerAttestationRelation(localWorkerKey, peerIdentity)) continue;
       const peerKey = peerIdentity || normalizePeerUrl(peerUrl);
       if (distinctPeerKeys.has(peerKey)) continue;
       distinctPeerKeys.add(peerKey);
@@ -1805,7 +1805,25 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
       continue;
     }
 
-    if (!shouldAttemptPeerReachability(peerUrl)) continue;
+    const shouldProbe = shouldAttemptPeerReachability(peerUrl);
+    if (!shouldProbe) {
+      // If we're skipping because the peer was recently confirmed online
+      // (cached.ok === true), include it directly without re-probing.
+      const np = normalizePeerUrl(peerUrl);
+      const cached = np ? peerReachabilityCache.get(np) : null;
+      if (cached && cached.ok) {
+        const tunnel = getLocalTunnelPeerLiveness(peerUrl);
+        const peerIdentity = tunnel && tunnel.peerIdentity ? String(tunnel.peerIdentity).trim() : cached.peerIdentity || '';
+        if (!isPeerIdentitySelfReference(peerIdentity, peerUrl)) {
+          const peerKey = peerIdentity || np;
+          if (!distinctPeerKeys.has(peerKey)) {
+            distinctPeerKeys.add(peerKey);
+            onlinePeers.push(peerUrl);
+          }
+        }
+      }
+      continue;
+    }
     httpPeers.push(peerUrl);
   }
 
@@ -1825,7 +1843,6 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
       if (enoughFound.current) return;
       const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) return;
-      if (localWorkerKey && peerIdentity && hasRecentPeerAttestationRelation(localWorkerKey, peerIdentity)) return;
       const peerKey = getPeerIdentityKey(peerUrl, tip);
       if (distinctPeerKeys.has(peerKey)) return;
       distinctPeerKeys.add(peerKey);
@@ -2479,7 +2496,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           // Grace period: allow up to 2 consecutive missed pongs (~90s) before
           // terminating, so transient network jitter does not disconnect workers.
           const PROBE_PUSH_MAX_MISSED_PONGS = 2;
-          try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) {}
+          try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) { /* ignore */ }
           ws.isAlive = true;
           ws._probePushMissedPongs = 0;
           ws.on('pong', () => { ws.isAlive = true; });
@@ -2490,7 +2507,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
               if (msg.type === 'busy' && msg.probeId) {
                 handleWorkerBusy(workerId, msg.probeId);
               }
-            } catch (_) {}
+            } catch (_) { /* ignore */ }
           });
           ws._probePushPingInterval = setInterval(() => {
             if (ws.readyState !== WebSocket.OPEN) {
@@ -2506,12 +2523,12 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
               }
               // Grace cycle: send another ping instead of terminating.
               ws.isAlive = false;
-              try { ws.ping(); } catch (_) {}
+              try { ws.ping(); } catch (_) { /* ignore */ }
               return;
             }
             ws._probePushMissedPongs = 0;
             ws.isAlive = false;
-            try { ws.ping(); } catch (_) {}
+            try { ws.ping(); } catch (_) { /* ignore */ }
           }, 30_000);
         });
         return;
@@ -4366,7 +4383,7 @@ async function inspectPeerConnectivityForTargets(
       const _cached = _normalized ? peerReachabilityCache.get(_normalized) : null;
       if (_cached && _cached.ok) {
         // Only trust a success-cache entry if it is fresher than the peer-count
-        // TTL (30 s).  Older entries may be stale — the peer could have gone
+        // TTL (30 s).  Older entries may be stale — the peer could have gone
         // offline since the last successful probe — so they are re-probed.
         if (nowMs - Number(_cached.lastSuccessAtMs || 0) < PEER_COUNT_CACHE_TTL_MS) {
           const _peerKey = getFallbackPeerKey(peerUrl);
@@ -4425,7 +4442,7 @@ async function inspectPeerConnectivityForTargets(
       }
       // Record the failure in the reachability cache so subsequent inspections
       // do not re-probe this peer (respecting the 3-min backoff).  Without this
-      // the peer-count inspection would keep timing out every 30 s.
+      // the peer-count inspection would keep timing out every 30 s.
       if (_normalized) {
         peerReachabilityCache.set(_normalized, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
       }
@@ -6051,7 +6068,9 @@ let _probeInProgress = false; // renderer has a probe and hasn't submitted resul
 let _probeInProgressId = ''; // probe ID of the currently running probe
 let _probeTimeoutTimer = null; // setTimeout handle for the in-progress probe timeout
 let _probeConns = []; // array of { ws, connId, peerUrl, pingInterval } — one entry per connected coordinator
+let _pendingConns = new Map(); // peerUrl → { ws, connId } — WS connections not yet opened
 let _probeConnIdSeq = 0; // monotonic connection ID sequence
+let _connectingProbeWs = false; // concurrency guard for _connectBgProbeWs
 const _PROBE_CONN_TARGET = 3; // maintain 3 simultaneous WS connections to distinct coordinators
 let _allowGpuWorkloads = false; // updated by renderer via IPC
 const _BG_WS_RECONNECT_MAX_MS = 60_000;
@@ -6064,10 +6083,15 @@ function _clearProbeTimeoutTimer() {
 }
 
 function _closeBgProbeWs() {
-  // Close ALL connections and clear shared probe state.
+  // Close pending connections (not yet opened) so they do not fire stale events.
+  for (const [, pending] of _pendingConns) {
+    try { pending.ws.close(); } catch (_) { /* ignore */ }
+  }
+  _pendingConns.clear();
+  // Close all established connections and clear shared probe state.
   for (const c of _probeConns) {
     if (c.pingInterval) clearInterval(c.pingInterval);
-    try { c.ws.close(); } catch (_) {}
+    try { c.ws.close(); } catch (_) { /* ignore */ }
   }
   _probeConns = [];
   _pendingProbes = [];
@@ -6092,69 +6116,93 @@ function _removeProbeConn(peerUrl) {
   if (idx === -1) return;
   const c = _probeConns[idx];
   if (c.pingInterval) clearInterval(c.pingInterval);
-  try { c.ws.close(); } catch (_) {}
+  try { c.ws.close(); } catch (_) { /* ignore */ }
   _probeConns.splice(idx, 1);
 }
 
 function _scheduleProbeConnReplacement() {
   if (_probeConns.length >= _PROBE_CONN_TARGET) return;
+  if (_pendingConns.size >= _PROBE_CONN_TARGET) return;
   const delay = Math.round(Math.random() * _BG_WS_RECONNECT_MAX_MS);
   setTimeout(async () => {
-    if (_probeConns.length >= _PROBE_CONN_TARGET) return;
-    const settings = getLedgerNetworkSettings();
-    if (!settings.enabled || settings.mode !== 'peer') return;
-    const workerId = walletAddressCache.address || 'unknown';
-    const peers = await getOnlineAttestationPeers(settings, workerId, {});
-    if (!peers || peers.length === 0) { _scheduleProbeConnReplacement(); return; }
-    const currentUrls = _getProbeConnPeerUrls();
-    const available = peers.filter((p) => !currentUrls.has(p));
-    if (available.length === 0) {
-      if (_probeConns.length < Math.min(_PROBE_CONN_TARGET, peers.length)) {
-        _scheduleProbeConnReplacement();
+    try {
+      if (_probeConns.length >= _PROBE_CONN_TARGET) return;
+      if (_pendingConns.size >= _PROBE_CONN_TARGET) return;
+      const settings = getLedgerNetworkSettings();
+      if (!settings.enabled || settings.mode !== 'peer') return;
+      const workerId = walletAddressCache.address || 'unknown';
+      if (workerId === 'unknown') { _scheduleProbeConnReplacement(); return; }
+      let peers = await getOnlineAttestationPeers(settings, workerId, {});
+      if (!peers || peers.length < _PROBE_CONN_TARGET) {
+        // Fall back to all active peers — includes peers that are in backoff
+        // (recently failed HTTP probe) but known from peer directory exchange.
+        const allPeers = getActivePeers(settings);
+        if (allPeers.length > 0) {
+          const merged = new Set(peers || []);
+          for (const p of allPeers) { merged.add(p); }
+          peers = Array.from(merged);
+        }
       }
-      return;
+      if (!peers || peers.length === 0) { _scheduleProbeConnReplacement(); return; }
+      const currentUrls = _getProbeConnPeerUrls();
+      for (const [peerUrl] of _pendingConns) { currentUrls.add(peerUrl); }
+      const available = peers.filter((p) => !currentUrls.has(p));
+      if (available.length === 0) {
+        // All known peers are already connected or pending.  Reschedule with a
+        // longer delay so newly discovered peers (from peer directory exchange)
+        // can be picked up when they appear.
+        if (_probeConns.length < _PROBE_CONN_TARGET) {
+          setTimeout(() => { _scheduleProbeConnReplacement(); }, _BG_WS_RECONNECT_MAX_MS);
+        }
+        return;
+      }
+      _startBgProbeWs(available[Math.floor(Math.random() * available.length)]);
+    } catch (_) {
+      _scheduleProbeConnReplacement();
     }
-    _startBgProbeWs(available[Math.floor(Math.random() * available.length)]);
   }, delay);
 }
 
 function _startBgProbeWs(peerUrl) {
-  // Avoid duplicates across multiple connections.
+  // Avoid duplicates: reject if already connected or pending (not yet opened).
   if (_probeConns.some((c) => c.peerUrl === peerUrl)) return;
+  if (_pendingConns.has(peerUrl)) return;
   const connId = ++_probeConnIdSeq;
-  const conn = { ws: null, connId, peerUrl, pingInterval: null };
-  _probeConns.push(conn);
   const wsUrl = peerUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/probe/push';
   const workerId = walletAddressCache.address || 'unknown';
   try {
     const ws = new WebSocket(
       wsUrl + '?workerId=' + encodeURIComponent(workerId) + '&allowGpu=' + (_allowGpuWorkloads ? 'true' : 'false'),
     );
-    // No _cancelBgProbeWsReconnect — slot-based reconnection is handled by _scheduleProbeConnReplacement.
+    // Track as pending BEFORE the WS opens so the slot is reserved immediately.
+    _pendingConns.set(peerUrl, { ws, connId });
     ws.on('open', () => {
-      // Guard: this connection must still be in our array with matching connId.
-      const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
-      if (!cur || cur.connId !== connId) { try { ws.close(); } catch (_) {} return; }
-      cur.ws = ws;
-      cur.ws._connectedWorkerId = walletAddressCache.address || 'unknown';
-      try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) {}
+      // Guard: must still be pending with matching connId.
+      const pending = _pendingConns.get(peerUrl);
+      if (!pending || pending.connId !== connId) { try { ws.close(); } catch (_) { /* ignore */ } return; }
+      _pendingConns.delete(peerUrl);
+      // Move to the established-connections array.
+      const conn = { ws, connId, peerUrl, pingInterval: null };
+      _probeConns.push(conn);
+      conn.ws._connectedWorkerId = walletAddressCache.address || 'unknown';
+      try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) { /* ignore */ }
       // Worker-side heartbeat: detect dead coordinator independently.
       ws._bgProbeIsAlive = true;
       ws.on('pong', () => { ws._bgProbeIsAlive = true; });
-      cur.pingInterval = setInterval(() => {
+      conn.pingInterval = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) {
-          clearInterval(cur.pingInterval);
-          cur.pingInterval = null;
+          clearInterval(conn.pingInterval);
+          conn.pingInterval = null;
           return;
         }
         if (!ws._bgProbeIsAlive) {
-          clearInterval(cur.pingInterval);
-          cur.pingInterval = null;
+          clearInterval(conn.pingInterval);
+          conn.pingInterval = null;
           ws.terminate();
           return;
         }
         ws._bgProbeIsAlive = false;
-        try { ws.ping(); } catch (_) {}
+        try { ws.ping(); } catch (_) { /* ignore */ }
       }, 30_000);
     });
     ws.on('message', (data) => {
@@ -6168,12 +6216,12 @@ function _startBgProbeWs(peerUrl) {
           // subsequent push cycles until the result is submitted.
           if (probeId === _probeInProgressId || _pendingProbes.some((p) => p.probe.id === probeId)) {
             if (_probeInProgress) {
-              try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
+              try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) { /* ignore */ }
             }
             return;
           }
           if (_probeInProgress) {
-            try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
+            try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) { /* ignore */ }
             if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
             msg.data.probe._peerUrl = peerUrl;
             _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
@@ -6188,35 +6236,59 @@ function _startBgProbeWs(peerUrl) {
       }
     });
     ws.on('close', () => {
+      const wasPending = _pendingConns.delete(peerUrl);
       const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
-      if (!cur || cur.connId !== connId) return;
+      if (!cur || cur.connId !== connId) {
+        // Closed before opening — still need to schedule a replacement for this slot.
+        if (wasPending) _scheduleProbeConnReplacement();
+        return;
+      }
       if (cur.pingInterval) { clearInterval(cur.pingInterval); cur.pingInterval = null; }
       _removeProbeConn(peerUrl);
-      // Schedule a replacement for this slot — other connections remain active.
       _scheduleProbeConnReplacement();
     });
     ws.on('error', () => {
+      const wasPending = _pendingConns.delete(peerUrl);
       const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
-      if (!cur || cur.connId !== connId) return;
+      if (!cur || cur.connId !== connId) {
+        if (wasPending) _scheduleProbeConnReplacement();
+        return;
+      }
       if (cur.pingInterval) { clearInterval(cur.pingInterval); cur.pingInterval = null; }
       _removeProbeConn(peerUrl);
       _scheduleProbeConnReplacement();
     });
   } catch (_) {
-    const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
-    if (cur && cur.connId === connId) {
-      _removeProbeConn(peerUrl);
-      _scheduleProbeConnReplacement();
-    }
+    // WebSocket constructor failed — clean up pending marker immediately.
+    _pendingConns.delete(peerUrl);
+    _scheduleProbeConnReplacement();
   }
 }
 
 async function _connectBgProbeWs() {
+  if (_connectingProbeWs) return;
+  _connectingProbeWs = true;
   try {
     const settings = getLedgerNetworkSettings();
     if (!settings.enabled || settings.mode !== 'peer') return;
     const workerId = walletAddressCache.address || 'unknown';
-    const peers = await getOnlineAttestationPeers(settings, workerId, {});
+    // If the wallet address is not yet available, retry with a short delay
+    // instead of connecting with 'unknown' (which the coordinator rejects immediately).
+    if (workerId === 'unknown') {
+      setTimeout(() => { _connectBgProbeWs(); }, 5000);
+      return;
+    }
+    let peers = await getOnlineAttestationPeers(settings, workerId, {});
+    if (!peers || peers.length < _PROBE_CONN_TARGET) {
+      // Fall back to all active peers — includes peers in backoff (recently
+      // failed HTTP probe) that are known from peer directory exchange.
+      const allPeers = getActivePeers(settings);
+      if (allPeers.length > 0) {
+        const merged = new Set(peers || []);
+        for (const p of allPeers) { merged.add(p); }
+        peers = Array.from(merged);
+      }
+    }
     if (!peers || peers.length === 0) {
       _scheduleBgProbeWsReconnect();
       return;
@@ -6227,8 +6299,13 @@ async function _connectBgProbeWs() {
     for (let i = 0; i < target; i++) {
       _startBgProbeWs(shuffled[i]);
     }
+    // Try to fill remaining slots — new peers may appear in getActivePeers once
+    // the peer directory exchange completes (discovers other workers via bootstrap).
+    _scheduleProbeConnReplacement();
   } catch (_) {
     _scheduleBgProbeWsReconnect();
+  } finally {
+    _connectingProbeWs = false;
   }
 }
 
@@ -6258,6 +6335,13 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
   }
   if (needsReconnect && _probeConns.length > 0) {
     _closeBgProbeWs();
+    _connectBgProbeWs();
+  }
+
+  // Fallback: if there are no established OR pending WS connections, try starting
+  // fresh.  This catches cases where the initial startup stalled (e.g. wallet not
+  // yet loaded, or the replacement chain broke from an unhandled error).
+  if (_probeConns.length === 0 && _pendingConns.size === 0) {
     _connectBgProbeWs();
   }
 
@@ -6320,34 +6404,45 @@ function _scheduleProbePush() {
 }
 
 function _runProbePush() {
-  let probeIssued = false;
-  let workerId = '';
   try {
     if (_probePushConns.size === 0) return;
-    const keys = Array.from(_probePushConns.keys());
-    workerId = keys[Math.floor(Math.random() * keys.length)];
-    const conn = _probePushConns.get(workerId);
-    if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
-      _probePushConns.delete(workerId);
-      cancelPendingPeerProbesForWorker(workerId);
-      return;
+    const deadWorkers = [];
+    const liveWorkers = [];
+    // First pass: separate dead connections from eligible workers.
+    for (const [wid, conn] of _probePushConns) {
+      if (!conn || conn.ws.readyState !== WebSocket.OPEN) {
+        deadWorkers.push(wid);
+      } else if (wid !== 'unknown') {
+        liveWorkers.push(wid);
+      }
     }
-    if (workerId === 'unknown') return;
-    const probe = issuePeerProbe(workerId, conn.allowGpu);
-    if (probe === null) {
-      // Worker quarantined (too many consecutive timeouts) — remove from push list.
-      _probePushConns.delete(workerId);
-      cancelPendingPeerProbesForWorker(workerId);
-      return;
+    // Clean up dead connections.
+    for (const wid of deadWorkers) {
+      _probePushConns.delete(wid);
+      cancelPendingPeerProbesForWorker(wid);
     }
-    if (probe) {
-      probeIssued = true;
-      conn.ws.send(JSON.stringify({ type: 'probe', data: { ok: true, probe, source: 'peer' } }));
+    // Issue a probe to every eligible worker in this push cycle.
+    for (const wid of liveWorkers) {
+      const conn = _probePushConns.get(wid);
+      if (!conn) continue;
+      try {
+        const probe = issuePeerProbe(wid, conn.allowGpu);
+        if (probe === null) {
+          // Worker quarantined — close the WS and remove from push list.
+          _probePushConns.delete(wid);
+          cancelPendingPeerProbesForWorker(wid);
+          try { conn.ws.close(); } catch (_) { /* ignore */ }
+          continue;
+        }
+        if (probe) {
+          conn.ws.send(JSON.stringify({ type: 'probe', data: { ok: true, probe, source: 'peer' } }));
+        }
+      } catch (_) {
+        cancelPendingPeerProbesForWorker(wid);
+      }
     }
   } catch (_) {
-    if (probeIssued) {
-      cancelPendingPeerProbesForWorker(workerId);
-    }
+    // Outer safety net — all individual ops are caught inside the loop.
   } finally {
     _scheduleProbePush();
   }
@@ -8984,7 +9079,7 @@ function hasOnlinePeers(settings) {
     // TTL expired and >0 was cached — if an inspection is in flight wait for
     // it to confirm (the tick loop will retry on the next cycle).  Otherwise
     // continue optimistically; the renderer poll will start a new inspection
-    // within 5 s and confirm or correct the stale value then.
+    // within 5 s and confirm or correct the stale value then.
     if (peerCountInspectionPromise) return false;
     return true;
   }
