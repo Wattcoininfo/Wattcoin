@@ -6071,7 +6071,15 @@ export default function Miner({
       }
       gpuMeasuredDutyRef.current = 0;
     };
-  }, [allowGpuWorkloads, mining, benchmarkState.running, loadPercent, effectiveLoadPercent, isHardwareOnHold, peerDownToggle]);
+  }, [
+    allowGpuWorkloads,
+    mining,
+    benchmarkState.running,
+    loadPercent,
+    effectiveLoadPercent,
+    isHardwareOnHold,
+    peerDownToggle,
+  ]);
 
   // Hold countdown: tick holdSecondsLeft down every second; auto-clear when expired.
   React.useEffect(() => {
