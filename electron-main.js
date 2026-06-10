@@ -6050,20 +6050,11 @@ const _PROBE_FAIL_RATIO_THRESHOLD = 0.30; // 30% fail rate triggers -1 trust
 let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
 let _probeInProgressId = ''; // probe ID of the currently running probe
 let _probeTimeoutTimer = null; // setTimeout handle for the in-progress probe timeout
-let _bgProbeWsConnecting = null; // WebSocket that hasn't fired 'open' yet
-let _bgProbeWs = null; // WebSocket connection (push mode)
-let _bgProbeWsPeerUrl = null;
-let _bgProbeWsReconnectTimer = null; // WS reconnect timer
-let _bgProbeWsConnId = 0; // monotonic connection ID to guard orphaned connections
+let _probeConns = []; // array of { ws, connId, peerUrl, pingInterval } — one entry per connected coordinator
+let _probeConnIdSeq = 0; // monotonic connection ID sequence
+const _PROBE_CONN_TARGET = 3; // maintain 3 simultaneous WS connections to distinct coordinators
 let _allowGpuWorkloads = false; // updated by renderer via IPC
 const _BG_WS_RECONNECT_MAX_MS = 60_000;
-
-function _cancelBgProbeWsReconnect() {
-  if (_bgProbeWsReconnectTimer) {
-    clearTimeout(_bgProbeWsReconnectTimer);
-    _bgProbeWsReconnectTimer = null;
-  }
-}
 
 function _clearProbeTimeoutTimer() {
   if (_probeTimeoutTimer !== null) {
@@ -6073,64 +6064,92 @@ function _clearProbeTimeoutTimer() {
 }
 
 function _closeBgProbeWs() {
-  _cancelBgProbeWsReconnect();
+  // Close ALL connections and clear shared probe state.
+  for (const c of _probeConns) {
+    if (c.pingInterval) clearInterval(c.pingInterval);
+    try { c.ws.close(); } catch (_) {}
+  }
+  _probeConns = [];
   _pendingProbes = [];
   _probeInProgress = false;
   _probeInProgressId = '';
   _clearProbeTimeoutTimer();
-  // Abort any connecting WS before it opens.
-  if (_bgProbeWsConnecting) {
-    try { _bgProbeWsConnecting.close(); } catch (_) {}
-    _bgProbeWsConnecting = null;
-  }
-  if (_bgProbeWs) {
-    try {
-      _bgProbeWs.close();
-    } catch (_) {
-      /* ws already closed */
-    }
-    _bgProbeWs = null;
-    _bgProbeWsPeerUrl = null;
-  }
 }
 
 function _scheduleBgProbeWsReconnect() {
-  _cancelBgProbeWsReconnect();
-  const delay = Math.round(Math.random() * _BG_WS_RECONNECT_MAX_MS); // 0-60s, unpredictable
-  _bgProbeWsReconnectTimer = setTimeout(() => {
-    _connectBgProbeWs();
+  // Full reconnect: close all connections and start fresh after a random delay.
+  _closeBgProbeWs();
+  const delay = Math.round(Math.random() * _BG_WS_RECONNECT_MAX_MS);
+  setTimeout(() => { _connectBgProbeWs(); }, delay);
+}
+
+function _getProbeConnPeerUrls() {
+  return new Set(_probeConns.map((c) => c.peerUrl));
+}
+
+function _removeProbeConn(peerUrl) {
+  const idx = _probeConns.findIndex((c) => c.peerUrl === peerUrl);
+  if (idx === -1) return;
+  const c = _probeConns[idx];
+  if (c.pingInterval) clearInterval(c.pingInterval);
+  try { c.ws.close(); } catch (_) {}
+  _probeConns.splice(idx, 1);
+}
+
+function _scheduleProbeConnReplacement() {
+  if (_probeConns.length >= _PROBE_CONN_TARGET) return;
+  const delay = Math.round(Math.random() * _BG_WS_RECONNECT_MAX_MS);
+  setTimeout(async () => {
+    if (_probeConns.length >= _PROBE_CONN_TARGET) return;
+    const settings = getLedgerNetworkSettings();
+    if (!settings.enabled || settings.mode !== 'peer') return;
+    const workerId = walletAddressCache.address || 'unknown';
+    const peers = await getOnlineAttestationPeers(settings, workerId, {});
+    if (!peers || peers.length === 0) { _scheduleProbeConnReplacement(); return; }
+    const currentUrls = _getProbeConnPeerUrls();
+    const available = peers.filter((p) => !currentUrls.has(p));
+    if (available.length === 0) {
+      if (_probeConns.length < Math.min(_PROBE_CONN_TARGET, peers.length)) {
+        _scheduleProbeConnReplacement();
+      }
+      return;
+    }
+    _startBgProbeWs(available[Math.floor(Math.random() * available.length)]);
   }, delay);
 }
 
 function _startBgProbeWs(peerUrl) {
-  _closeBgProbeWs();
-  _bgProbeWsConnId++; // increment connection ID so orphaned WS events are ignored
-  const connId = _bgProbeWsConnId;
+  // Avoid duplicates across multiple connections.
+  if (_probeConns.some((c) => c.peerUrl === peerUrl)) return;
+  const connId = ++_probeConnIdSeq;
+  const conn = { ws: null, connId, peerUrl, pingInterval: null };
+  _probeConns.push(conn);
   const wsUrl = peerUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/probe/push';
   const workerId = walletAddressCache.address || 'unknown';
   try {
     const ws = new WebSocket(
       wsUrl + '?workerId=' + encodeURIComponent(workerId) + '&allowGpu=' + (_allowGpuWorkloads ? 'true' : 'false'),
     );
-    _bgProbeWsConnecting = ws;
+    // No _cancelBgProbeWsReconnect — slot-based reconnection is handled by _scheduleProbeConnReplacement.
     ws.on('open', () => {
-      if (_bgProbeWsConnId !== connId) { try { ws.close(); } catch (_) {} return; }
-      if (_bgProbeWsConnecting === ws) _bgProbeWsConnecting = null;
-      _cancelBgProbeWsReconnect();
-      _bgProbeWs = ws;
-      _bgProbeWs._connectedWorkerId = walletAddressCache.address || 'unknown';
-      _bgProbeWsPeerUrl = peerUrl;
+      // Guard: this connection must still be in our array with matching connId.
+      const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
+      if (!cur || cur.connId !== connId) { try { ws.close(); } catch (_) {} return; }
+      cur.ws = ws;
+      cur.ws._connectedWorkerId = walletAddressCache.address || 'unknown';
       try { if (ws._socket) ws._socket.setKeepAlive(true, 15000); } catch (_) {}
       // Worker-side heartbeat: detect dead coordinator independently.
       ws._bgProbeIsAlive = true;
       ws.on('pong', () => { ws._bgProbeIsAlive = true; });
-      ws._bgProbePingInterval = setInterval(() => {
+      cur.pingInterval = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) {
-          clearInterval(ws._bgProbePingInterval);
+          clearInterval(cur.pingInterval);
+          cur.pingInterval = null;
           return;
         }
         if (!ws._bgProbeIsAlive) {
-          clearInterval(ws._bgProbePingInterval);
+          clearInterval(cur.pingInterval);
+          cur.pingInterval = null;
           ws.terminate();
           return;
         }
@@ -6139,15 +6158,14 @@ function _startBgProbeWs(peerUrl) {
       }, 30_000);
     });
     ws.on('message', (data) => {
-      if (_bgProbeWsConnId !== connId) return;
+      const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
+      if (!cur || cur.connId !== connId) return;
       try {
         const msg = JSON.parse(String(data));
         if (msg.type === 'probe' && msg.data && msg.data.probe) {
           const probeId = msg.data.probe.id;
           // Skip duplicates: issuePeerProbe returns the same in-flight probe on
-          // subsequent push cycles until the result is submitted.  The probe
-          // might still be in the queue, already in progress (dequeued), or
-          // even just submitted (still in peerProbeIssuances but being processed).
+          // subsequent push cycles until the result is submitted.
           if (probeId === _probeInProgressId || _pendingProbes.some((p) => p.probe.id === probeId)) {
             if (_probeInProgress) {
               try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
@@ -6155,10 +6173,7 @@ function _startBgProbeWs(peerUrl) {
             return;
           }
           if (_probeInProgress) {
-            // Renderer is busy, tell the coordinator to extend the probe deadline
-            // instead of letting it time out silently.
             try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
-            // Queue for when the current probe finishes (redundancy already handled above).
             if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
             msg.data.probe._peerUrl = peerUrl;
             _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
@@ -6173,35 +6188,25 @@ function _startBgProbeWs(peerUrl) {
       }
     });
     ws.on('close', () => {
-      if (_bgProbeWsConnId !== connId) return;
-      if (_bgProbeWs !== ws && _bgProbeWsConnecting !== ws) return;
-      if (_bgProbeWsConnecting === ws) _bgProbeWsConnecting = null;
-      clearInterval(ws._bgProbePingInterval);
-      _bgProbeWs = null;
-      _bgProbeWsPeerUrl = null;
-      _pendingProbes = [];
-      _probeInProgress = false;
-      _probeInProgressId = '';
-      _clearProbeTimeoutTimer();
-      _scheduleBgProbeWsReconnect();
+      const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
+      if (!cur || cur.connId !== connId) return;
+      if (cur.pingInterval) { clearInterval(cur.pingInterval); cur.pingInterval = null; }
+      _removeProbeConn(peerUrl);
+      // Schedule a replacement for this slot — other connections remain active.
+      _scheduleProbeConnReplacement();
     });
     ws.on('error', () => {
-      if (_bgProbeWsConnId !== connId) return;
-      if (_bgProbeWs !== ws && _bgProbeWsConnecting !== ws) return;
-      if (_bgProbeWsConnecting === ws) _bgProbeWsConnecting = null;
-      clearInterval(ws._bgProbePingInterval);
-      _bgProbeWs = null;
-      _bgProbeWsPeerUrl = null;
-      _pendingProbes = [];
-      _probeInProgress = false;
-      _probeInProgressId = '';
-      _clearProbeTimeoutTimer();
-      _scheduleBgProbeWsReconnect();
+      const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
+      if (!cur || cur.connId !== connId) return;
+      if (cur.pingInterval) { clearInterval(cur.pingInterval); cur.pingInterval = null; }
+      _removeProbeConn(peerUrl);
+      _scheduleProbeConnReplacement();
     });
   } catch (_) {
-    if (_bgProbeWsConnId === connId) {
-      if (_bgProbeWsConnecting) { try { _bgProbeWsConnecting.close(); } catch (_) {} _bgProbeWsConnecting = null; }
-      _scheduleBgProbeWsReconnect();
+    const cur = _probeConns.find((c) => c.peerUrl === peerUrl);
+    if (cur && cur.connId === connId) {
+      _removeProbeConn(peerUrl);
+      _scheduleProbeConnReplacement();
     }
   }
 }
@@ -6216,8 +6221,12 @@ async function _connectBgProbeWs() {
       _scheduleBgProbeWsReconnect();
       return;
     }
-    const peerUrl = peers[Math.floor(Math.random() * peers.length)];
-    _startBgProbeWs(peerUrl);
+    // Shuffle and pick up to N distinct peers.
+    const shuffled = [...peers].sort(() => Math.random() - 0.5);
+    const target = Math.min(_PROBE_CONN_TARGET, shuffled.length);
+    for (let i = 0; i < target; i++) {
+      _startBgProbeWs(shuffled[i]);
+    }
   } catch (_) {
     _scheduleBgProbeWsReconnect();
   }
@@ -6239,16 +6248,15 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
     needsReconnect = true;
   }
   const currentWorkerId = walletAddressCache.address || 'unknown';
-  if (
-    _bgProbeWs &&
-    _bgProbeWs.readyState === WebSocket.OPEN &&
-    currentWorkerId !== 'unknown' &&
-    _bgProbeWs._connectedWorkerId !== currentWorkerId
-  ) {
-    _bgProbeWs._connectedWorkerId = currentWorkerId;
-    needsReconnect = true;
+  if (currentWorkerId !== 'unknown') {
+    for (const c of _probeConns) {
+      if (c.ws && c.ws.readyState === WebSocket.OPEN && c.ws._connectedWorkerId !== currentWorkerId) {
+        c.ws._connectedWorkerId = currentWorkerId;
+        needsReconnect = true;
+      }
+    }
   }
-  if (needsReconnect && _bgProbeWs) {
+  if (needsReconnect && _probeConns.length > 0) {
     _closeBgProbeWs();
     _connectBgProbeWs();
   }
@@ -6264,7 +6272,7 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
     // since this probe was cached, its _peerUrl points to a coordinator that
     // no longer has this probe in peerProbeIssuances.  Submitting there would
     // waste time and the probe would time out on the original issuer.
-    if (cached.probe && cached.probe._peerUrl && cached.probe._peerUrl !== _bgProbeWsPeerUrl) {
+    if (cached.probe && cached.probe._peerUrl && !_getProbeConnPeerUrls().has(cached.probe._peerUrl)) {
       return { ok: false, error: 'Stale probe from previous coordinator.' };
     }
     _probeInProgress = true;
@@ -6450,10 +6458,10 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
         if (np) {
           peerReachabilityCache.set(np, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
         }
-        // Coordinator is unreachable — close WS immediately so we reconnect to a live peer
-        // instead of waiting up to 30s for the ping timeout to detect the dead connection.
-        _closeBgProbeWs();
-        _scheduleBgProbeWsReconnect();
+        // Coordinator is unreachable — close only this connection and replace it;
+        // other connections remain active so probes continue to arrive.
+        _removeProbeConn(peerUrl);
+        _scheduleProbeConnReplacement();
         return { ok: false, transient: true, issues: ['peer unreachable: ' + e.message] };
       }
     }
