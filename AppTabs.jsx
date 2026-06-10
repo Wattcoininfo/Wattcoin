@@ -858,21 +858,24 @@ export default function AppTabs() {
               hwResetCooldownRemainingMs={hwResetCooldownRemainingMs}
               searchCacheOnCooldown={searchCacheOnCooldown}
               searchCacheCooldownRemainingMs={searchCacheCooldownRemainingMs}
-              onClearLog={() => {
-                setLog([]);
-                setProbeLog([]);
-                try {
-                  localStorage.removeItem(LOG_STORAGE_KEY);
-                } catch (_) {
-                  /* istanbul ignore next */
-                }
-                try {
-                  const hw = window.wattcoinHardware;
-                  if (hw && hw.invoke) hw.invoke('wattcoin-save-probe-log', []);
-                } catch (_) {
-                  /* istanbul ignore next */
-                }
-              }}
+               onClearLog={() => {
+                 setLog([]);
+                 setProbeLog([]);
+                 try {
+                   localStorage.removeItem(LOG_STORAGE_KEY);
+                 } catch (_) {
+                   /* istanbul ignore next */
+                 }
+                 try {
+                   const hw = window.wattcoinHardware;
+                   if (hw && hw.invoke) {
+                     hw.invoke('wattcoin-save-probe-log', []);
+                     hw.invoke('wattcoin-clear-probe-history');
+                   }
+                 } catch (_) {
+                   /* istanbul ignore next */
+                 }
+               }}
               onClearSearchCache={async () => {
                 try {
                   const hw = window.wattcoinHardware;

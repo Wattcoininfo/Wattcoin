@@ -29,6 +29,7 @@ const {
   submitProbeResult,
   getProbeHistory,
   getAttestHistory,
+  clearProbeHistory,
   issuePeerProbe,
   submitPeerProbeResult,
   getPeerProbeHistory: _getPeerProbeHistory,
@@ -2507,12 +2508,14 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           ws.on('pong', () => {
             ws.isAlive = true;
           });
-          // Listen for worker busy signals to extend probe deadlines.
+          // Listen for worker messages: busy signals, shutdown notification.
           ws.on('message', (data) => {
             try {
               const msg = JSON.parse(String(data));
               if (msg.type === 'busy' && msg.probeId) {
                 handleWorkerBusy(workerId, msg.probeId);
+              } else if (msg.type === 'worker-done') {
+                dropWorker(workerId);
               }
             } catch (_) {
               /* ignore */
@@ -2525,7 +2528,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
             }
             if (!ws.isAlive) {
               ws._probePushMissedPongs++;
-              if (ws._probePushMissedPongs > PROBE_PUSH_MAX_MISSED_PONGS) {
+              if (ws._probePushMissedPongs >= PROBE_PUSH_MAX_MISSED_PONGS) {
                 dropWorker(workerId);
                 ws.terminate();
                 return;
@@ -5833,6 +5836,10 @@ ipcMain.handle('wattcoin-get-attest-history', () => {
   return getAttestHistory();
 });
 
+ipcMain.handle('wattcoin-clear-probe-history', () => {
+  clearProbeHistory();
+});
+
 // -- Probe log persistence ------------------------------------------------------
 // The renderer probe log is persisted to userData so entries survive restarts.
 // Capped at 500 entries on save; renderer may further cap at 150 for display.
@@ -6083,7 +6090,9 @@ const _PROBE_TRUST_WINDOW = 50; // sliding window size for fail-ratio penalty
 const _PROBE_FAIL_RATIO_THRESHOLD = 0.3; // 30% fail rate triggers -1 trust
 let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
 let _probeInProgressId = ''; // probe ID of the currently running probe
+let _probeInProgressEpoch = -1; // _probeEpoch value when the current probe was dequeued
 let _probeTimeoutTimer = null; // setTimeout handle for the in-progress probe timeout
+let _probeEpoch = 0; // incremented on each _closeBgProbeWs — invalidates in-flight probes
 let _probeConns = []; // array of { ws, connId, peerUrl, pingInterval } — one entry per connected coordinator
 let _pendingConns = new Map(); // peerUrl → { ws, connId } — WS connections not yet opened
 let _probeConnIdSeq = 0; // monotonic connection ID sequence
@@ -6109,8 +6118,16 @@ function _closeBgProbeWs() {
     }
   }
   _pendingConns.clear();
-  // Close all established connections and clear shared probe state.
+  // Notify each coordinator that this worker is done, so they cancel
+  // pending probes immediately instead of waiting for TCP timeout.
   for (const c of _probeConns) {
+    try {
+      if (c.ws.readyState === WebSocket.OPEN) {
+        c.ws.send(JSON.stringify({ type: 'worker-done' }));
+      }
+    } catch (_) {
+      /* ignore */
+    }
     if (c.pingInterval) clearInterval(c.pingInterval);
     try {
       c.ws.close();
@@ -6122,6 +6139,8 @@ function _closeBgProbeWs() {
   _pendingProbes = [];
   _probeInProgress = false;
   _probeInProgressId = '';
+  _probeInProgressEpoch = -1;
+  _probeEpoch++;
   _clearProbeTimeoutTimer();
 }
 
@@ -6439,6 +6458,7 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
     }
     _probeInProgress = true;
     _probeInProgressId = cached.probe.id;
+    _probeInProgressEpoch = _probeEpoch;
     // Start a timeout: if the renderer doesn't submit within _PROBE_TIMEOUT_MS,
     // penalize trust for wasting the coordinator's probe.
     _clearProbeTimeoutTimer();
@@ -6448,6 +6468,7 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
         hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
         _probeInProgress = false;
         _probeInProgressId = '';
+        _probeInProgressEpoch = -1;
         _probeTimeoutTimer = null;
         saveHwAuthState();
       }
@@ -6503,6 +6524,10 @@ function _runProbePush() {
     for (const wid of liveWorkers) {
       const conn = _probePushConns.get(wid);
       if (!conn) continue;
+      // Skip workers that have missed a pong — they may be offline but the OS hasn't
+      // closed the TCP socket yet. Let ping/pong terminate them instead of stacking
+      // more probes that will time out.
+      if (conn.ws._probePushMissedPongs > 0) continue;
       try {
         const probe = issuePeerProbe(wid, conn.allowGpu);
         if (probe === null) {
@@ -6533,9 +6558,6 @@ function _runProbePush() {
 // Renderer calls this after completing a peer probe.
 // Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
-  _probeInProgress = false;
-  _probeInProgressId = '';
-  _clearProbeTimeoutTimer();
   const settings = getLedgerNetworkSettings();
   const source = String((payload && payload.source) || 'peer');
   const result = payload && payload.result ? payload.result : {};
@@ -6544,6 +6566,13 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
   if (source === 'peer' && settings.enabled && settings.mode === 'peer') {
     const peerUrl = result._peerUrl ? String(result._peerUrl) : null;
     if (peerUrl) {
+      // If the WS connection dropped and reconnected since we dequeued this
+      // probe, the coordinator canceled all our pending probes.  Skip submission
+      // even if the same peerUrl is now connected again — the probe ID was
+      // removed from peerProbeIssuances on disconnect.
+      if (!_getProbeConnPeerUrls().has(peerUrl) || _probeEpoch !== _probeInProgressEpoch) {
+        return { ok: false, transient: false, issues: ['stale probe: coordinator disconnected'] };
+      }
       try {
         console.warn(
           `[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} id=${result.id} N=${result._probeIterations || '?'} intDateMs=${result._intDateMs || '?'} warmupTotal=${result._warmupTotalMs || '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
@@ -6645,10 +6674,19 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
         _removeProbeConn(peerUrl);
         _scheduleProbeConnReplacement();
         return { ok: false, transient: true, issues: ['peer unreachable: ' + e.message] };
+      } finally {
+        _probeInProgress = false;
+        _probeInProgressId = '';
+        _probeInProgressEpoch = -1;
+        _clearProbeTimeoutTimer();
       }
     }
   }
 
+  _probeInProgress = false;
+  _probeInProgressId = '';
+  _probeInProgressEpoch = -1;
+  _clearProbeTimeoutTimer();
   return {
     ok: false,
     error: 'Peer probe result submission requires peer mode and a valid attestation peer URL.',
@@ -8008,6 +8046,7 @@ ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
 ipcMain.handle('wattcoin-stop-hardware-load', () => {
   try {
     stopHardwareLoad();
+    _closeBgProbeWs();
     hwAuthority.currentLoadPercent = 0;
     return { ok: true, ...getHardwareLoadState() };
   } catch (e) {

@@ -78,6 +78,7 @@ try {
           'wattcoin-submit-probe-result',
           'wattcoin-get-probe-history',
           'wattcoin-get-attest-history',
+          'wattcoin-clear-probe-history',
           'wattcoin-get-probe-log',
           'wattcoin-save-probe-log',
           'wattcoin-request-peer-probe',

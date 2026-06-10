@@ -1150,6 +1150,11 @@ function getAttestHistory() {
   return { history: peerAttestHistory.map((e) => ({ ...e })) };
 }
 
+function clearProbeHistory() {
+  probeState.history = [];
+  peerAttestHistory.length = 0;
+}
+
 function getPeerProbeHistory() {
   // Expose any still-pending (in-flight) probes for diagnostics.
   const now = Date.now();
@@ -1324,6 +1329,7 @@ module.exports = {
   getCoordinatorStateSnapshot,
   restoreCoordinatorState,
   getAttestHistory,
+  clearProbeHistory,
   cancelPendingPeerProbesForWorker,
   handleWorkerBusy,
 };
