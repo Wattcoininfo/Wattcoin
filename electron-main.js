@@ -6043,6 +6043,7 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
 let _pendingProbes = []; // bounded queue of { probe, source, peerUrl }
 const _PENDING_PROBES_MAX = 4;
 let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
+let _probeInProgressId = ''; // probe ID of the currently running probe
 let _bgProbeWsConnecting = null; // WebSocket that hasn't fired 'open' yet
 let _bgProbeWs = null; // WebSocket connection (push mode)
 let _bgProbeWsPeerUrl = null;
@@ -6062,6 +6063,7 @@ function _closeBgProbeWs() {
   _cancelBgProbeWsReconnect();
   _pendingProbes = [];
   _probeInProgress = false;
+  _probeInProgressId = '';
   // Abort any connecting WS before it opens.
   if (_bgProbeWsConnecting) {
     try { _bgProbeWsConnecting.close(); } catch (_) {}
@@ -6128,22 +6130,26 @@ function _startBgProbeWs(peerUrl) {
         const msg = JSON.parse(String(data));
         if (msg.type === 'probe' && msg.data && msg.data.probe) {
           const probeId = msg.data.probe.id;
+          // Skip duplicates: issuePeerProbe returns the same in-flight probe on
+          // subsequent push cycles until the result is submitted.  The probe
+          // might still be in the queue, already in progress (dequeued), or
+          // even just submitted (still in peerProbeIssuances but being processed).
+          if (probeId === _probeInProgressId || _pendingProbes.some((p) => p.probe.id === probeId)) {
+            if (_probeInProgress) {
+              try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
+            }
+            return;
+          }
           if (_probeInProgress) {
             // Renderer is busy, tell the coordinator to extend the probe deadline
             // instead of letting it time out silently.
             try { ws.send(JSON.stringify({ type: 'busy', probeId })); } catch (_) {}
-            // Still queue the probe if it's not already queued, so the worker has
-            // something to work on when the current probe finishes.
-            if (!_pendingProbes.some((p) => p.probe.id === probeId)) {
-              if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
-              msg.data.probe._peerUrl = peerUrl;
-              _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
-            }
+            // Queue for when the current probe finishes (redundancy already handled above).
+            if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
+            msg.data.probe._peerUrl = peerUrl;
+            _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
             return;
           }
-          // Skip duplicates that may arrive because issuePeerProbe returns the same
-          // in-flight probe on subsequent push cycles until the result is submitted.
-          if (_pendingProbes.some((p) => p.probe.id === probeId)) return;
           msg.data.probe._peerUrl = peerUrl;
           if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
           _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
@@ -6161,6 +6167,7 @@ function _startBgProbeWs(peerUrl) {
       _bgProbeWsPeerUrl = null;
       _pendingProbes = [];
       _probeInProgress = false;
+      _probeInProgressId = '';
       _scheduleBgProbeWsReconnect();
     });
     ws.on('error', () => {
@@ -6172,6 +6179,7 @@ function _startBgProbeWs(peerUrl) {
       _bgProbeWsPeerUrl = null;
       _pendingProbes = [];
       _probeInProgress = false;
+      _probeInProgressId = '';
       _scheduleBgProbeWsReconnect();
     });
   } catch (_) {
@@ -6241,6 +6249,7 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
       return { ok: false, error: 'Stale probe from previous coordinator.' };
     }
     _probeInProgress = true;
+    _probeInProgressId = cached.probe.id;
     return { ok: true, source: cached.source, probe: cached.probe };
   }
 
@@ -6308,6 +6317,7 @@ function _runProbePush() {
 // Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
   _probeInProgress = false;
+  _probeInProgressId = '';
   const settings = getLedgerNetworkSettings();
   const source = String((payload && payload.source) || 'peer');
   const result = payload && payload.result ? payload.result : {};
