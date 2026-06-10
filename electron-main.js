@@ -6450,6 +6450,10 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
         if (np) {
           peerReachabilityCache.set(np, { ok: false, lastAttemptAtMs: Date.now(), lastSuccessAtMs: 0 });
         }
+        // Coordinator is unreachable — close WS immediately so we reconnect to a live peer
+        // instead of waiting up to 30s for the ping timeout to detect the dead connection.
+        _closeBgProbeWs();
+        _scheduleBgProbeWsReconnect();
         return { ok: false, transient: true, issues: ['peer unreachable: ' + e.message] };
       }
     }
