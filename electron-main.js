@@ -258,6 +258,8 @@ let hwAuthority = {
   consecutiveCleanProbes: 0,
   // Consecutive peer probe hardware failures � decrements trust at threshold.
   consecutivePeerProbeFails: 0,
+  // Sliding window of peer probe outcomes (true=pass, false=fail) for ratio-based penalty.
+  probeResultWindow: [],
   // Rolling mean jitter derived from persistent jitterSamples history.
   // Used to widen the attestation threshold for machines that legitimately
   // run with higher OS-scheduler variance (e.g. background load, slow CPUs).
@@ -6042,8 +6044,12 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
 // tries to reconnect to a different peer after a random delay.
 let _pendingProbes = []; // bounded queue of { probe, source, peerUrl }
 const _PENDING_PROBES_MAX = 4;
+const _PROBE_TIMEOUT_MS = 180 * 1000; // 180 s — worker must submit within this window
+const _PROBE_TRUST_WINDOW = 50; // sliding window size for fail-ratio penalty
+const _PROBE_FAIL_RATIO_THRESHOLD = 0.30; // 30% fail rate triggers -1 trust
 let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
 let _probeInProgressId = ''; // probe ID of the currently running probe
+let _probeTimeoutTimer = null; // setTimeout handle for the in-progress probe timeout
 let _bgProbeWsConnecting = null; // WebSocket that hasn't fired 'open' yet
 let _bgProbeWs = null; // WebSocket connection (push mode)
 let _bgProbeWsPeerUrl = null;
@@ -6059,11 +6065,19 @@ function _cancelBgProbeWsReconnect() {
   }
 }
 
+function _clearProbeTimeoutTimer() {
+  if (_probeTimeoutTimer !== null) {
+    clearTimeout(_probeTimeoutTimer);
+    _probeTimeoutTimer = null;
+  }
+}
+
 function _closeBgProbeWs() {
   _cancelBgProbeWsReconnect();
   _pendingProbes = [];
   _probeInProgress = false;
   _probeInProgressId = '';
+  _clearProbeTimeoutTimer();
   // Abort any connecting WS before it opens.
   if (_bgProbeWsConnecting) {
     try { _bgProbeWsConnecting.close(); } catch (_) {}
@@ -6168,6 +6182,7 @@ function _startBgProbeWs(peerUrl) {
       _pendingProbes = [];
       _probeInProgress = false;
       _probeInProgressId = '';
+      _clearProbeTimeoutTimer();
       _scheduleBgProbeWsReconnect();
     });
     ws.on('error', () => {
@@ -6180,6 +6195,7 @@ function _startBgProbeWs(peerUrl) {
       _pendingProbes = [];
       _probeInProgress = false;
       _probeInProgressId = '';
+      _clearProbeTimeoutTimer();
       _scheduleBgProbeWsReconnect();
     });
   } catch (_) {
@@ -6237,6 +6253,9 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
     _connectBgProbeWs();
   }
 
+  // Clear any stale timeout from a prior probe that never submitted.
+  _clearProbeTimeoutTimer();
+
   // Dequeue atomically to prevent a TOCTOU race with the WS message handler
   // (it pushes to _pendingProbes between our shift and use).
   const cached = _pendingProbes.shift() || null;
@@ -6250,6 +6269,19 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
     }
     _probeInProgress = true;
     _probeInProgressId = cached.probe.id;
+    // Start a timeout: if the renderer doesn't submit within _PROBE_TIMEOUT_MS,
+    // penalize trust for wasting the coordinator's probe.
+    _clearProbeTimeoutTimer();
+    _probeTimeoutTimer = setTimeout(() => {
+      if (_probeInProgress && _probeInProgressId === cached.probe.id) {
+        console.warn(`[PeerProbe] Probe ${cached.probe.id} timed out on worker side — penalizing trust`);
+        hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
+        _probeInProgress = false;
+        _probeInProgressId = '';
+        _probeTimeoutTimer = null;
+        saveHwAuthState();
+      }
+    }, _PROBE_TIMEOUT_MS);
     return { ok: true, source: cached.source, probe: cached.probe };
   }
 
@@ -6318,6 +6350,7 @@ function _runProbePush() {
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
   _probeInProgress = false;
   _probeInProgressId = '';
+  _clearProbeTimeoutTimer();
   const settings = getLedgerNetworkSettings();
   const source = String((payload && payload.source) || 'peer');
   const result = payload && payload.result ? payload.result : {};
@@ -6364,7 +6397,10 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           }
           const trustScoreBefore = hwAuthority.trustScore;
           hwAuthority.consecutiveCleanProbes += 1;
-          hwAuthority.consecutivePeerProbeFails = 0;
+          // Record pass in sliding window for fail-ratio tracking.
+          const window = hwAuthority.probeResultWindow;
+          window.push(true);
+          if (window.length > _PROBE_TRUST_WINDOW) window.shift();
           if (hwAuthority.consecutiveCleanProbes >= 25) {
             hwAuthority.consecutiveCleanProbes = 0;
             hwAuthority.trustScore = Math.min(100, hwAuthority.trustScore + 1);
@@ -6376,12 +6412,32 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           });
         } else {
           hwAuthority.consecutiveCleanProbes = 0;
-          hwAuthority.consecutivePeerProbeFails += 1;
-          if (hwAuthority.consecutivePeerProbeFails >= 2) {
-            hwAuthority.consecutivePeerProbeFails = 0;
-            hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
-            saveHwAuthState();
+          // Determine penalty severity based on the coordinator's verdict issues.
+          const issues = Array.isArray(verdict && verdict.issues) ? verdict.issues : [];
+          let penalty = -1; // default: -1 for timing / unknown / generic
+          if (
+            issues.some((i) => i.includes('proof hash mismatch') || i.includes('pixel hash mismatch') || i.includes('no pixel hash returned'))
+          ) {
+            penalty = -3; // proof mismatch — likely cheating, severe penalty
           }
+          hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore + penalty);
+          // Record fail in sliding window.
+          const window = hwAuthority.probeResultWindow;
+          window.push(false);
+          if (window.length > _PROBE_TRUST_WINDOW) window.shift();
+          // If the window is full and fail ratio exceeds threshold, apply additional -1.
+          if (window.length >= _PROBE_TRUST_WINDOW) {
+            const fails = window.filter((r) => !r).length;
+            if (fails / window.length >= _PROBE_FAIL_RATIO_THRESHOLD) {
+              hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
+              console.warn(
+                `[PeerProbe] Fail ratio ${fails}/${window.length} exceeds ${(_PROBE_FAIL_RATIO_THRESHOLD * 100).toFixed(0)}% — additional trust penalty`,
+              );
+              // Reset window to avoid compounding every submission.
+              hwAuthority.probeResultWindow = [];
+            }
+          }
+          saveHwAuthState();
           verdict = Object.assign({}, verdict, {
             trustScoreBefore: hwAuthority.trustScore,
             trustScoreAfter: hwAuthority.trustScore,
