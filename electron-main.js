@@ -6044,7 +6044,7 @@ ipcMain.handle('wattcoin-get-device-identity', () => {
 // tries to reconnect to a different peer after a random delay.
 let _pendingProbes = []; // bounded queue of { probe, source, peerUrl }
 const _PENDING_PROBES_MAX = 4;
-const _PROBE_TIMEOUT_MS = 180 * 1000; // 180 s — worker must submit within this window
+const _PROBE_TIMEOUT_MS = 100 * 1000; // 100 s — ~1.67× max push interval (0-60 s)
 const _PROBE_TRUST_WINDOW = 50; // sliding window size for fail-ratio penalty
 const _PROBE_FAIL_RATIO_THRESHOLD = 0.30; // 30% fail rate triggers -1 trust
 let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
