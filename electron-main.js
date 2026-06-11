@@ -467,7 +467,7 @@ function isUnusableGpuIdentity(value) {
   if (/^unknown/i.test(s)) return true;
   if (/^0x[0-9a-f]+$/i.test(s)) return true;
   if (/^[0-9\s,./-]+$/.test(s)) return true;
-  if (/Microsoft Basic (Render|Display) Driver/i.test(s)) return true;
+  if (/Microsoft (Basic|Remote) (Render|Display)( Driver)?/i.test(s)) return true;
   if (/Microsoft Hyper-V/i.test(s)) return true;
   return !/[a-z]/i.test(s);
 }
@@ -1204,6 +1204,7 @@ let reverseTunnelWss = null;
 const reverseTunnelSessions = new Map(); // tunnelId -> session
 const reverseTunnelSessionsByPeerIdentity = new Map(); // peerIdentity -> session
 const reverseTunnelPendingResponses = new Map(); // requestId -> { res, timer }
+const relayWorkerConns = new Map(); // tunnelId -> Map<workerId, WebSocket>
 const reverseTunnelClientState = {
   socket: null,
   coordinatorUrl: '',
@@ -2312,6 +2313,18 @@ function destroyReverseTunnelSession(session, reason = 'closed') {
     scheduleWtcPeerSync(`managed-reverse-tunnel-${reason}`, 150);
   }
   failReverseTunnelPendingRequestsForSession(session, `Reverse tunnel ${reason}.`);
+  // Close all relayed worker WS connections for this tunnel.
+  const relayed = relayWorkerConns.get(session.tunnelId);
+  if (relayed) {
+    for (const [, ws] of relayed) {
+      try {
+        ws.close();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    relayWorkerConns.delete(session.tunnelId);
+  }
   try {
     clearInterval(session.pingTimer);
   } catch (_) {
@@ -2383,6 +2396,37 @@ function handleReverseTunnelSocketMessage(session, rawMessage) {
   }
   if (message.type === 'http-response') {
     handleReverseTunnelResponseMessage(session, message);
+    return;
+  }
+  // Relay WS messages — forward data/close from the mobile node to the
+  // worker's WS that is connected to us via /api/v1/tunnel/<id>/api/v1/probe/push.
+  if (message.type === 'relay-ws-data') {
+    const workerId = String(message.workerId || '');
+    const dataBase64 = String(message.dataBase64 || '');
+    const relays = relayWorkerConns.get(session.tunnelId);
+    if (relays) {
+      const ws = relays.get(workerId);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(Buffer.from(dataBase64, 'base64'));
+      }
+    }
+    return;
+  }
+  if (message.type === 'relay-ws-close') {
+    const workerId = String(message.workerId || '');
+    const relays = relayWorkerConns.get(session.tunnelId);
+    if (relays) {
+      const ws = relays.get(workerId);
+      if (ws) {
+        relays.delete(workerId);
+        try {
+          ws.close();
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+    return;
   }
 }
 
@@ -2597,6 +2641,74 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         return;
       }
 
+      // Relay push WebSocket — workers connect here to be probed by a
+      // tunneled (CGNAT / mobile data) peer.  The seed peer pipes the
+      // WS frames bidirectionally through the reverse tunnel so the
+      // mobile node acts as the coordinator transparently.
+      const tunnelProbePushMatch = reqUrl.pathname.match(/^\/api\/v1\/tunnel\/([^/]+)\/api\/v1\/probe\/push$/);
+      if (tunnelProbePushMatch) {
+        const tunnelId = decodeURIComponent(tunnelProbePushMatch[1]);
+        const session = reverseTunnelSessions.get(tunnelId);
+        if (!session || session.socket.readyState !== WebSocket.OPEN) {
+          socket.destroy();
+          return;
+        }
+        const workerId = String(reqUrl.searchParams.get('workerId') || 'unknown');
+        const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
+        if (!_probePushWss) {
+          _probePushWss = new WebSocketServer({ noServer: true });
+        }
+        _probePushWss.handleUpgrade(req, socket, head, (ws) => {
+          let tunnelRelays = relayWorkerConns.get(tunnelId);
+          if (!tunnelRelays) {
+            tunnelRelays = new Map();
+            relayWorkerConns.set(tunnelId, tunnelRelays);
+          }
+          tunnelRelays.set(workerId, ws);
+          // Notify the mobile node that a worker connected via relay.
+          try {
+            session.socket.send(
+              JSON.stringify({
+                type: 'relay-ws-open',
+                workerId,
+                allowGpu,
+              }),
+            );
+          } catch (_) {
+            /* tunnel closed */
+          }
+          // Forward WS messages from the worker to the mobile node.
+          ws.on('message', (data) => {
+            try {
+              session.socket.send(
+                JSON.stringify({
+                  type: 'relay-ws-data',
+                  workerId,
+                  dataBase64: Buffer.from(data).toString('base64'),
+                }),
+              );
+            } catch (_) {
+              /* tunnel closed */
+            }
+          });
+          // Clean up relay mapping on worker disconnect.
+          ws.on('close', () => {
+            const relays = relayWorkerConns.get(tunnelId);
+            if (relays) relays.delete(workerId);
+            try {
+              session.socket.send(JSON.stringify({ type: 'relay-ws-close', workerId }));
+            } catch (_) {
+              /* tunnel closed */
+            }
+          });
+          ws.on('error', () => {
+            const relays = relayWorkerConns.get(tunnelId);
+            if (relays) relays.delete(workerId);
+          });
+        });
+        return;
+      }
+
       if (reqUrl.pathname !== '/api/v1/tunnel/connect') {
         socket.destroy();
         return;
@@ -2663,6 +2775,17 @@ function stopManagedReverseTunnelClient() {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
     reverseTunnelClientState.socket = null;
+  }
+  // Remove all relayed (virtual WS) probe push connections.
+  for (const [wid, conn] of _probePushConns) {
+    if (conn && conn.ws && conn.ws._isRelayWs) {
+      cancelPendingPeerProbesForWorker(wid);
+    }
+  }
+  for (const [wid, conn] of _probePushConns) {
+    if (conn && conn.ws && conn.ws._isRelayWs) {
+      _probePushConns.delete(wid);
+    }
   }
 }
 
@@ -2763,6 +2886,69 @@ async function forwardReverseTunnelRequestToLocalNode(socket, message) {
   }
 }
 
+function createRelayVirtualWs(workerId) {
+  const eventHandlers = { message: [], close: [], error: [] };
+  const virtualWs = {
+    _isRelayWs: true,
+    readyState: 1, // WebSocket.OPEN
+    _probePushMissedPongs: 0,
+    send: (data) => {
+      const ws = reverseTunnelClientState.socket;
+      if (ws && ws.readyState === 1) {
+        const payload = typeof data === 'string' ? data : String(data);
+        try {
+          ws.send(
+            JSON.stringify({
+              type: 'relay-ws-data',
+              workerId,
+              dataBase64: Buffer.from(payload).toString('base64'),
+            }),
+          );
+        } catch (_) {
+          /* tunnel closed */
+        }
+      }
+    },
+    close: () => {
+      virtualWs.readyState = 3; // CLOSED
+      const ws = reverseTunnelClientState.socket;
+      if (ws && ws.readyState === 1) {
+        try {
+          ws.send(JSON.stringify({ type: 'relay-ws-close', workerId }));
+        } catch (_) {
+          /* tunnel closed */
+        }
+      }
+    },
+    on: (event, handler) => {
+      if (eventHandlers[event]) {
+        eventHandlers[event].push(handler);
+      }
+    },
+    _emitMessage: (data) => {
+      virtualWs.readyState = 1;
+      for (const handler of eventHandlers.message) {
+        try {
+          handler(data);
+        } catch (_) {
+          /* ignore handler error */
+        }
+      }
+    },
+    _emitClose: () => {
+      virtualWs.readyState = 3;
+      for (const handler of eventHandlers.close) {
+        try {
+          handler();
+        } catch (_) {
+          /* ignore handler error */
+        }
+      }
+    },
+  };
+  return virtualWs;
+}
+
 function handleManagedReverseTunnelMessage(socket, rawMessage) {
   let message = null;
   try {
@@ -2803,6 +2989,45 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
   }
   if (message.type === 'http-request') {
     forwardReverseTunnelRequestToLocalNode(socket, message).catch(() => {});
+    return;
+  }
+  // Relay WS messages — the seed peer is forwarding probe push WS
+  // connections so we can act as coordinator through the tunnel.
+  if (message.type === 'relay-ws-open') {
+    const workerId = String(message.workerId || '');
+    const allowGpu = message.allowGpu === true;
+    const existing = _probePushConns.get(workerId);
+    if (existing) {
+      cancelPendingPeerProbesForWorker(workerId);
+      try {
+        existing.ws.close();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    const virtualWs = createRelayVirtualWs(workerId);
+    _probePushConns.set(workerId, { ws: virtualWs, allowGpu });
+    console.log(`[RelayWS] Worker ${workerId} connected via relay tunnel`);
+    return;
+  }
+  if (message.type === 'relay-ws-data') {
+    const workerId = String(message.workerId || '');
+    const conn = _probePushConns.get(workerId);
+    if (conn && conn.ws && conn.ws._isRelayWs) {
+      const data = Buffer.from(String(message.dataBase64 || ''), 'base64');
+      conn.ws._emitMessage(data);
+    }
+    return;
+  }
+  if (message.type === 'relay-ws-close') {
+    const workerId = String(message.workerId || '');
+    const conn = _probePushConns.get(workerId);
+    if (conn && conn.ws && conn.ws._isRelayWs) {
+      _probePushConns.delete(workerId);
+      cancelPendingPeerProbesForWorker(workerId);
+      conn.ws._emitClose();
+    }
+    return;
   }
 }
 

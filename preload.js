@@ -13,7 +13,13 @@ try {
         console.log('[Wattcoin preload] getSystemInfo called');
         const cpu = await si.cpu();
         const graphics = await si.graphics();
-        const gpuControllers = graphics.controllers || [];
+        const gpuControllers = (graphics.controllers || []).filter((g) => {
+          const name = String(g.model || g.name || '').trim();
+          if (!name) return false;
+          if (/Microsoft (Basic|Remote) (Render|Display)/i.test(name)) return false;
+          if (/Microsoft Hyper-V/i.test(name)) return false;
+          return true;
+        });
         const gpu = gpuControllers[0] || {};
         const gpus = gpuControllers; // all GPU controllers for multi-GPU support
         const mem = await si.mem();

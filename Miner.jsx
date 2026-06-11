@@ -360,7 +360,7 @@ const LAPTOP_COMMERCIAL_MODEL_HINTS =
 const DESKTOP_COMMERCIAL_MODEL_HINTS =
   /ThinkCentre|ThinkStation|ThinkServer|OptiPlex|Precision|ProDesk|EliteDesk|Z2|Z4|Z6|Z8|NUC|Mini PC|Workstation/i;
 const MINI_PC_COMMERCIAL_MODEL_HINTS =
-  /ThinkCentre\s+(?:M\d{3,4}[a-z]?q|Tiny)|OptiPlex\s+(?:Micro|Ultra)|ProDesk\s+Mini|EliteDesk\s+Mini|EliteMini|Mini\s+PC|Mini-PC|NUC|NUCBox|BRIX|Cubi|DeskMini|Veriton\s+N|ExpertCenter\s+PN|Chromebox|TinyMiniMicro|USFF|Micro|Tiny|Nano/i;
+  /ThinkCentre\s+(?:M\d{3,4}[a-z]?q|Tiny)|OptiPlex\s+(?:Micro|Ultra)|ProDesk\s+Mini|EliteDesk\s+Mini|EliteMini|Mini\s+PC|Mini-PC|NUC|NUCBox|BRIX|Cubi|DeskMini|Veriton\s+N|ExpertCenter\s+PN|Chromebox|TinyMiniMicro|USFF|\bMicro\b(?!-)|\bTiny\b|\bNano\b/i;
 const MINI_PC_VENDOR_HINTS =
   /Beelink|Minisforum|Geekom|GMKtec|Zotac|Shuttle|ASUS|MSI|Gigabyte|Acer|Dell|HP|Lenovo|Intel/i;
 const MINI_PC_MODEL_SERIES_HINTS =
