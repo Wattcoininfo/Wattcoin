@@ -230,6 +230,7 @@ export default function AppTabs() {
   const [hwResetOnCooldown, setHwResetOnCooldown] = useState(false);
   const [hwResetCooldownRemainingMs, setHwResetCooldownRemainingMs] = useState(0);
   const [searchCacheOnCooldown, setSearchCacheOnCooldown] = useState(false);
+  const [miningWarning, setMiningWarning] = useState(null);
   const [searchCacheCooldownRemainingMs, setSearchCacheCooldownRemainingMs] = useState(0);
   const [_betaPolicy, _setBetaPolicy] = useState({
     loading: true,
@@ -425,7 +426,7 @@ export default function AppTabs() {
   // Node connection state
   const nodeConnecting = walletSyncState.rpcReachable === false;
   // Helper for timestamp
-  const _now = () => new Date().toLocaleString();
+  const _now = () => new Date().toLocaleString('en-GB');
   const selectedAddressKey =
     (typeof selectedWalletAddress === 'string' ? selectedWalletAddress.trim() : '') || '__legacy__';
   const energy = Math.max(0, Number(energyByAddress[selectedAddressKey]) || 0);
@@ -543,7 +544,7 @@ export default function AppTabs() {
           ? ` (contributed ${roundWh >= 1000 ? (roundWh / 1000).toFixed(3) + ' kWh' : roundWh.toFixed(4) + ' Wh'} this round)`
           : '';
       const stopEntry = {
-        time: new Date().toLocaleString(),
+        time: new Date().toLocaleString('en-GB'),
         msg: `Mining stopped (app closed)${roundWhStr}.`,
         type: 'info',
       };
@@ -590,16 +591,39 @@ export default function AppTabs() {
 
   // Mining effect at parent level
   useEffect(() => {
-    if (!mining) return;
+    if (!mining) {
+      setMiningWarning(null);
+      return;
+    }
+    let ipcInFlight = false;
     const tickSeconds = 0.25;
     miningRef.current = setInterval(() => {
+      if (ipcInFlight) return;
       const energyDeltaWh = (powerW * tickSeconds) / 3600;
 
-      setEnergy((ePrev) => ePrev + energyDeltaWh);
       if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+        ipcInFlight = true;
         window.wattcoinHardware
           .invoke('wattcoin-ledger-add-contribution', selectedWalletAddress || '', energyDeltaWh)
-          .catch(() => {});
+          .then((res) => {
+            if (res && res.ok) {
+              setEnergy((ePrev) => ePrev + energyDeltaWh);
+              setMiningWarning(null);
+            } else if (res && res.code) {
+              const warnings = {
+                HW_CHANGED: 'Mining blocked — hardware changed on this wallet. Use Reset Hardware to accept the new hardware.',
+                HW_HOLD: `Mining suspended — ${res.message || 'hardware trust violations.'}`,
+                NEVER_BENCHMARKED: 'Mining blocked — complete a full hardware benchmark first.',
+                NO_PEERS: 'Mining paused — waiting for peer connection.',
+                LEDGER_ADD_FAILED: 'Mining error — contribution rejected. Restart the miner or check logs.',
+                RATE_LIMIT_LOCKED: 'Mining rate-limited — too many requests. Waiting for cooldown.',
+                RATE_LIMIT_EXCEEDED: 'Mining rate-limited — too many requests. Cooldown applied.',
+              };
+              setMiningWarning({ code: res.code, message: warnings[res.code] || `Mining blocked — ${res.message || 'unknown reason'}.` });
+            }
+          })
+          .catch(() => {})
+          .finally(() => { ipcInFlight = false; });
       }
     }, tickSeconds * 1000);
     return () => {
@@ -808,6 +832,26 @@ export default function AppTabs() {
           Node connecting... Please wait
         </div>
       )}
+      {miningWarning && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: (updateReady ? 60 : 0) + (nodeConnecting ? 60 : 0),
+            zIndex: 1001,
+            background: '#3a1a1a',
+            color: '#fbbf24',
+            fontWeight: 700,
+            fontSize: 14,
+            textAlign: 'center',
+            padding: '10px 16px',
+            borderTop: '2px solid #f59e0b',
+          }}
+        >
+          {miningWarning.message}
+        </div>
+      )}
       <div style={{ paddingTop: `${TAB_BAR_HEIGHT_PX}px` }}>
         <div style={{ display: activeTab === 'dashboard' ? 'block' : 'none' }}>
           {protectedTabLocked ? (
@@ -892,7 +936,7 @@ export default function AppTabs() {
                     setSearchCacheCooldownRemainingMs(remainingMs);
                     setLog((prev) => [
                       {
-                        time: new Date().toLocaleString(),
+                        time: new Date().toLocaleString('en-GB'),
                         msg: `Search cache clear is on a 3-day cooldown. Available again in ${timeStr}.`,
                         type: 'warn',
                       },
@@ -916,7 +960,7 @@ export default function AppTabs() {
                   setSearchCacheCooldownRemainingMs(nextAllowedMs - Date.now());
                   setLog((prev) => [
                     {
-                      time: new Date().toLocaleString(),
+                      time: new Date().toLocaleString('en-GB'),
                       msg: 'TDP search cache cleared. Fresh hardware lookup data will be fetched on next benchmark. Next clear available in 3 days.',
                       type: 'info',
                     },
@@ -925,7 +969,7 @@ export default function AppTabs() {
                 } catch (error) {
                   setLog((prev) => [
                     {
-                      time: new Date().toLocaleString(),
+                      time: new Date().toLocaleString('en-GB'),
                       msg: `Search cache clear failed: ${error && error.message ? error.message : String(error)}`,
                       type: 'error',
                     },
@@ -950,7 +994,7 @@ export default function AppTabs() {
                     setHwResetCooldownRemainingMs(remainingMs);
                     setLog((prev) => [
                       {
-                        time: new Date().toLocaleString(),
+                        time: new Date().toLocaleString('en-GB'),
                         msg: `Hardware reset is on a 7-day cooldown. Available again in ${timeStr}.`,
                         type: 'warn',
                       },
@@ -994,7 +1038,7 @@ export default function AppTabs() {
                   }
                   setLog((prev) => [
                     {
-                      time: new Date().toLocaleString(),
+                      time: new Date().toLocaleString('en-GB'),
                       msg: `Hardware identity reset. ${parts.length ? `Previous baseline: ${parts.join(' • ')}. ` : ''}A fresh benchmark will adopt the current CPU, GPU, and memory configuration without requiring a new wallet. Next reset allowed in 7 days.`,
                       type: 'warn',
                     },
@@ -1003,7 +1047,7 @@ export default function AppTabs() {
                 } catch (error) {
                   setLog((prev) => [
                     {
-                      time: new Date().toLocaleString(),
+                      time: new Date().toLocaleString('en-GB'),
                       msg: `Hardware reset failed: ${error && error.message ? error.message : String(error)}`,
                       type: 'error',
                     },

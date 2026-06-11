@@ -1965,7 +1965,7 @@ export default function Miner({
   hardwareLookupResetNonce = 0,
 }) {
   // Helper for timestamp
-  const now = React.useCallback(() => new Date().toLocaleString(), []);
+  const now = React.useCallback(() => new Date().toLocaleString('en-GB'), []);
   const [realMineBusy, setRealMineBusy] = React.useState(false);
   const [_realMineStatus, setRealMineStatus] = React.useState('');
   const [peerCount, setPeerCount] = React.useState(null);
@@ -4007,7 +4007,7 @@ export default function Miner({
         const selfEntries = selfHistory.map((h) => ({
           ts: typeof h.ts === 'number' ? h.ts : 0,
           id: typeof h.id === 'string' ? h.id : '',
-          time: h.ts ? new Date(h.ts).toLocaleString() : '—',
+          time: h.ts ? new Date(h.ts).toLocaleString('en-GB') : '—',
           role: 'self',
           source: 'local',
           type: h.type || '?',
@@ -4020,7 +4020,7 @@ export default function Miner({
         const attestEntries = attestHistory.map((h) => ({
           ts: typeof h.ts === 'number' ? h.ts : 0,
           id: typeof h.id === 'string' ? h.id : '',
-          time: h.ts ? new Date(h.ts).toLocaleString() : '—',
+          time: h.ts ? new Date(h.ts).toLocaleString('en-GB') : '—',
           role: 'attested',
           source: 'peer',
           type: h.type || '?',

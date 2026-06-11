@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, shell } = require('electron');
 // Keep the GPU compositor active even when the window is minimized or occluded.
 // backgroundThrottling:false (set on the BrowserWindow) stops JS timer throttling but
 // Chromium's GPU process still pauses WebGL rasterisation for invisible windows.
@@ -1189,6 +1189,7 @@ const peerReachabilityCache = new Map(); // url -> { lastAttemptAtMs, lastSucces
 const peerChainTipCache = new Map(); // peerUrl -> { expiresAtMs, value }
 const peerChainTipInflight = new Map(); // peerUrl -> Promise
 const pendingRoundContributionBroadcasts = new Map(); // key -> { peerUrl, payload, timer }
+const forwardedContributionMessages = new Map(); // msgKey `${address}:${message}` -> expiresAtMs (loop prevention)
 const witnessedProbeReceipts = new Map(); // workerAddress -> { maxChainIndex: number, receipts: Map<chainIndex, Map<verifierAddress, receipt>> }
 const peerAttestationHistory = new Map(); // peerIdentity -> Map<otherPeerIdentity, lastAttestedMs>
 const PEER_ATTESTATION_RECIPROCITY_WINDOW_MS = 60 * 60 * 1000; // 1 hour
@@ -9016,9 +9017,14 @@ async function pullContributionsFromPeers() {
   const settings = getLedgerNetworkSettings();
   if (!settings || !settings.enabled || !wtcNode) return;
   const peers = getActivePeers(settings);
-  if (!peers || peers.length === 0) return;
+  if (!peers || peers.length === 0) {
+    if (process.env.WATTCOIN_DEBUG) console.log('[pullContributions] No active peers to pull from.');
+    return;
+  }
   const currentRoundId = getCurrentNetworkRoundId();
   if (currentRoundId <= 0) return;
+
+  if (process.env.WATTCOIN_DEBUG) console.log(`[pullContributions] Pulling from ${peers.length} peers for round ${currentRoundId}...`);
 
   // Collect snapshots from all peers first
   const snapshots = [];
@@ -9034,10 +9040,23 @@ async function pullContributionsFromPeers() {
         snapshots.push(res.snapshot);
       }
     } catch (_) {
-      // Peer unreachable or returned error � skip
+      // Peer unreachable or returned error — skip
     }
   }
-  if (snapshots.length === 0) return;
+  if (snapshots.length === 0) {
+    if (process.env.WATTCOIN_DEBUG) console.log('[pullContributions] No valid snapshots from peers.');
+    return;
+  }
+
+  if (process.env.WATTCOIN_DEBUG) {
+    const allAddrs = new Set();
+    for (const snap of snapshots) {
+      for (const addr of Object.keys(snap.contributionsWh || {})) {
+        if (addr) allAddrs.add(addr);
+      }
+    }
+    console.log(`[pullContributions] Found ${allAddrs.size} unique addresses across ${snapshots.length} peer snapshots:`, Array.from(allAddrs));
+  }
 
   alignRoundLedgerToChain(currentRoundId);
 
@@ -9052,6 +9071,9 @@ async function pullContributionsFromPeers() {
   for (const address of allAddresses) {
     let bestVerifiedWh = 0;
     let bestVerifiedTime = 0;
+    let bestMessage = '';
+    let bestSignature = '';
+    let bestChainIndex = -1;
 
     // Pass 1: accept values with a valid cryptographic signature
     // (prevents third-party inflation � a peer cannot forge another wallet's signature)
@@ -9067,6 +9089,9 @@ async function pullContributionsFromPeers() {
             if (updatedAtMs > bestVerifiedTime) {
               bestVerifiedWh = totalWh;
               bestVerifiedTime = updatedAtMs;
+              bestMessage = String(message);
+              bestSignature = String(signature);
+              bestChainIndex = Math.max(-1, Math.floor(Number((snap.probeChainIndex || {})[address]) || -1));
             }
           }
           // Invalid signature ? skip (peer tampered with stored value)
@@ -9077,17 +9102,23 @@ async function pullContributionsFromPeers() {
     }
 
     if (bestVerifiedTime > 0) {
-      roundLedger.setRoundContribution(address, bestVerifiedWh, bestVerifiedTime);
+      roundLedger.setRoundContribution(address, bestVerifiedWh, bestVerifiedTime, bestChainIndex, bestMessage, bestSignature);
       continue;
     }
 
     // Pass 2: no valid signatures � use majority voting across peers
     // (protects against self-inflation when the wallet owner controls a peer)
+    // Also tracks the latest updatedAtMs from all snapshots for this address
+    // instead of using Date.now() — prevents inflating timestamps with the
+    // pulling machine's clock, which would block future signed broadcasts.
     const tally = {};
+    let latestUpdatedMs = 0;
     for (const snap of snapshots) {
       const totalWh = Number((snap.contributionsWh || {})[address] || 0);
       if (totalWh > 0) {
         tally[totalWh] = (tally[totalWh] || 0) + 1;
+        const snapTime = Number((snap.contributionUpdatedAtMs || {})[address] || 0);
+        if (snapTime > latestUpdatedMs) latestUpdatedMs = snapTime;
       }
     }
     const values = Object.keys(tally);
@@ -9101,7 +9132,9 @@ async function pullContributionsFromPeers() {
           bestValue = Number(value);
         }
       }
-      roundLedger.setRoundContribution(address, bestValue, Date.now());
+      // Use the latest snapshot timestamp if available, fall back to Date.now() only as last resort
+      const bestTime = latestUpdatedMs > 0 ? latestUpdatedMs : Date.now();
+      roundLedger.setRoundContribution(address, bestValue, bestTime);
     }
     // If no snapshots contain this address, skip it (nothing to restore)
   }
@@ -10465,6 +10498,36 @@ function startLedgerNetworkServer() {
           });
           return;
         }
+
+        // Forward accepted contribution to other peers (gossip propagation).
+        // Uses a dedup cache keyed by message to prevent forwarding loops.
+        if (address && message) {
+          const fwdKey = `${address}:${message}`;
+          if (!forwardedContributionMessages.has(fwdKey)) {
+            forwardedContributionMessages.set(fwdKey, Date.now() + 30_000);
+            setTimeout(() => forwardedContributionMessages.delete(fwdKey), 30_000);
+            if (process.env.WATTCOIN_DEBUG)
+              console.log(`[contribution-forward] Accepted contribution from ${address}: ${totalWh} Wh (round ${roundId}), dedupKey=${fwdKey.slice(0, 40)}...`);
+            if (address !== walletAddressCache.address) {
+              const fwdSettings = getLedgerNetworkSettings();
+              const fwdPeers = fwdSettings && fwdSettings.enabled ? getActivePeers(fwdSettings) : [];
+              if (process.env.WATTCOIN_DEBUG)
+                console.log(`[contribution-forward] Forwarding ${address} to ${fwdPeers.length} peers...`);
+              if (fwdPeers.length > 0) {
+                const fwdBody = { address, roundId, totalWh, updatedAtMs, chainIndex, message, signature };
+                for (const peerUrl of fwdPeers) {
+                  requestPeerJson(peerUrl, 'POST', '/api/v1/round/contribution', fwdBody, undefined, {
+                    timeoutMs: 5000,
+                    trackReachability: false,
+                    suppressPeerDiscovery: true,
+                    source: 'contribution-forward',
+                  }).catch(() => {});
+                }
+              }
+            }
+          }
+        }
+
         const snapshot = roundLedger.getCurrentRoundSnapshot();
         sendJson(res, 200, {
           ok: true,
@@ -10792,11 +10855,13 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
     alignRoundLedgerToChain();
     const added = roundLedger.addContribution(verifiedAddress, clampedDeltaWh);
     const snapshot = roundLedger.getCurrentRoundSnapshot();
-    broadcastRoundContributionToPeers({
-      address: verifiedAddress,
-      roundId: snapshot.id,
-      totalWh: added.addressRoundWh,
-    }).catch(() => {});
+    Promise.resolve(
+      broadcastRoundContributionToPeers({
+        address: verifiedAddress,
+        roundId: snapshot.id,
+        totalWh: added.addressRoundWh,
+      })
+    ).catch(() => {});
     return { ...added, roundTotalWh: snapshot.totalWh };
   } catch (e) {
     return {
@@ -11727,6 +11792,9 @@ if (!gotSingleInstanceLock) {
 }
 
 app.whenReady().then(() => {
+  // Remove default File, Edit, View, Window menus.
+  Menu.setApplicationMenu(null);
+
   // Query physical CPU core count so hardware-load workers are limited to physical
   // cores only.  On HT CPUs (2 logical per physical) spawning workers on all logical
   // cores doubles the duty-cycle pressure on each physical core, causing actual power
@@ -11964,9 +12032,14 @@ app.whenReady().then(() => {
 
   // Pull current round contributions from peers so a fresh install
   // recovers mid-round contributions that were broadcast before data loss.
+  // Also re-pull periodically to pick up contributions from newly-connected peers
+  // that were not available at startup or whose broadcasts did not reach us.
   setTimeout(() => {
     pullContributionsFromPeers().catch(() => {});
   }, 10000);
+  setInterval(() => {
+    pullContributionsFromPeers().catch(() => {});
+  }, 60000);
 
   // -- WTC Sale queue -------------------------------------------------------
   // Init only after wtcNode is ready so balance reads work immediately.

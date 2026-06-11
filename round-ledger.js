@@ -209,16 +209,25 @@ function createRoundLedger(options = {}) {
     }
 
     const previousUpdatedAtMs = Math.max(0, Number(state.currentRound.contributionUpdatedAtMs[key]) || 0);
+    const hasExistingSig = !!state.currentRound.contributionSignature[key];
+    const hasIncomingSig = !!(signature && message);
     if (previousUpdatedAtMs > 0 && normalizedUpdatedAtMs > 0 && normalizedUpdatedAtMs < previousUpdatedAtMs) {
-      return {
-        ok: false,
-        stale: true,
-        code: 'STALE_CONTRIBUTION',
-        address: key,
-        roundId: state.currentRound.id,
-        addressRoundWh: Math.max(0, Number(state.currentRound.contributionsWh[key]) || 0),
-        updatedAtMs: previousUpdatedAtMs,
-      };
+      // If the incoming contribution is cryptographically signed but the stored
+      // entry has no signature, the stored timestamp may have been inflated by
+      // an unverified pull (e.g. majority-vote used Date.now()).  Allow the
+      // signed contribution through so the original worker's broadcasts are not
+      // permanently blocked by a synthetic timestamp.
+      if (!hasIncomingSig || hasExistingSig) {
+        return {
+          ok: false,
+          stale: true,
+          code: 'STALE_CONTRIBUTION',
+          address: key,
+          roundId: state.currentRound.id,
+          addressRoundWh: Math.max(0, Number(state.currentRound.contributionsWh[key]) || 0),
+          updatedAtMs: previousUpdatedAtMs,
+        };
+      }
     }
 
     const normalizedChainIndex = Math.max(0, Math.floor(Number(probeChainIndex) || 0));
