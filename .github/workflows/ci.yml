@@ -198,6 +198,37 @@ jobs:
           path: Releases/Wattcoin-Miner-*.deb
           if-no-files-found: warn
 
+  build-windows:
+    name: Build Windows (exe)
+    runs-on: windows-latest
+    needs: [lint, audit, test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-optional
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Package Windows app
+        run: npx electron-builder --win --config electron-builder.config.js --publish never
+
+      - name: Upload .exe installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: wattcoin-windows-exe
+          path: Releases/Wattcoin-Miner-Setup-*.exe
+          if-no-files-found: warn
+
   build-macos:
     name: Build macOS (dmg + zip)
     runs-on: macos-latest
