@@ -1,0 +1,21 @@
+[Unit]
+Description=Wattcoin Seed Registry
+Documentation=https://github.com/your-org/wattcoin
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/seed-registry
+ExecStart=/usr/bin/node /root/seed-registry/seed-registry-server.js
+Restart=always
+RestartSec=10
+Environment=SEED_REGISTRY_PORT=4901
+Environment=SEED_REGISTRY_DATA_DIR=/root/seed-registry
+Environment=SEED_REGISTRY_PEER_TTL_MS=7200000
+Environment=NODE_ENV=production
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

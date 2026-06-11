@@ -1,6 +1,6 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.337",
+  "version": "1.0.338",
   "description": "Wattcoin Miner — energy-backed cryptocurrency miner",
   "author": "Wattcoin",
   "license": "MIT",
@@ -51,6 +51,7 @@
     "electron:build:local": "node scripts/release-build.js --local",
     "deploy:whitepaper": "node scripts/_deploy-whitepaper.js",
     "deploy:seed-manifest": "node scripts/deploy-seed-manifest.js",
+    "deploy:seed-registry": "node scripts/deploy-seed-registry.js",
     "deploy:elec-price-api": "node scripts/deploy-elec-price-api.js",
     "sitemap": "node scripts/generate-sitemap.js",
     "deploy:files": "npm run sitemap && node scripts/deploy-files.js"
@@ -59,6 +60,7 @@
     "electron-updater": "^6.8.3",
     "elliptic": "^6.6.1",
     "mqtt": "^5.15.1",
+    "nat-upnp": "^1.1.1",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "ssh2": "^1.17.0",

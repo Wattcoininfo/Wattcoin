@@ -117,6 +117,7 @@ const { countLiveReverseTunnelPeers, summarizeDisplayedPeerCounts } = require('.
 const { buildPeerDiscoverySnapshot } = require('./peer-discovery-observability');
 const { filterAdvertisedPeerUrls, obfuscatePeerUrl, resolvePeerPrivacySecret } = require('./peer-privacy');
 const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./peer-self-filter');
+const { setupUpnpPortMapping, removeUpnpPortMapping: removeUpnpMapping } = require('./upnp-port-forward');
 const {
   getLocalSubnetProbeCandidates,
   selectDiscoveryPeerUrl,
@@ -124,6 +125,16 @@ const {
   sortPeerUrlsByPreference,
   checkHasKnownPrivateLanPeer,
 } = require('./local-subnet-discovery');
+const { detectNatType, getMappedAddress: _getMappedAddress, NAT_TYPE, DEFAULT_STUN_SERVERS } = require('./stun-client');
+const {
+  allocatePunchPort,
+  buildPunchResponse,
+  handlePunchResponse: _handlePunchResponse,
+  requestPunch,
+  performPunch,
+  MIN_PUNCH_PORT: _MIN_PUNCH_PORT,
+  MAX_PUNCH_PORT: _MAX_PUNCH_PORT,
+} = require('./tcp-hole-punch');
 const {
   normalizeProbeReceipt,
   getProbeReceiptSigningPayload,
@@ -1207,8 +1218,21 @@ const reverseTunnelClientState = {
   rotateCoordinatorOnNextAttempt: false,
 };
 let autoDetectedPublicPeerUrl = '';
+let autoDetectedPublicPeerUrlFromUpnp = false;
 let autoDetectedPublicPeerLookupPromise = null;
 let autoPublicPeerRefreshTimer = null;
+// NAT / STUN detection state
+let stunNatInfo = null; // { natType, mappedIp, mappedPort, stunHost, detectedAtMs }
+let stunDetectionPromise = null;
+let usedPunchPorts = new Set();
+let peerPunchAttemptTimestamps = new Map(); // normalizedUrl -> lastAttemptAtMs
+const PEER_PUNCH_RETRY_INTERVAL_MS = 120_000; // 2 min between punch attempts per peer
+const PEER_PUNCH_PER_CYCLE_MAX = 3;
+// Gossip state
+const PEER_GOSSIP_FANOUT = 4;
+const PEER_GOSSIP_TTL = 2;
+const PEER_GOSSIP_SEEN_TTL_MS = 300_000; // 5 min before re-gossip allowed
+const peerGossipSeen = new Map(); // `peerUrl:gossipId` -> detectedAtMs
 // blockHash → { minedAddress, totalWh, rewardCoins, settledAtMs, sig, fromPeer }
 const witnessedSettlements = new Map();
 
@@ -1401,6 +1425,9 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
     autoDetectedPublicPeerUrl = '';
     return '';
   }
+  if (autoDetectedPublicPeerUrlFromUpnp && autoDetectedPublicPeerUrl) {
+    return autoDetectedPublicPeerUrl;
+  }
   if (!force && autoDetectedPublicPeerUrl) {
     try {
       const cached = new URL(autoDetectedPublicPeerUrl);
@@ -1446,12 +1473,27 @@ async function refreshAutoPublicPeerUrl(settings = getLedgerNetworkSettings()) {
   return nextUrl;
 }
 
+function sendSeedRegistryHeartbeat() {
+  const peerUrl = autoDetectedPublicPeerUrl || '';
+  if (!peerUrl) return;
+  const manifestUrls = _getRemoteSeedManifestUrls();
+  for (const registryUrl of manifestUrls) {
+    requestPeerJson(registryUrl, 'POST', '/', { url: peerUrl }, undefined, {
+      timeoutMs: 8000,
+      suppressPeerDiscovery: true,
+      trackReachability: false,
+    }).catch(() => {});
+  }
+}
+
 function startAutoPublicPeerUrlRefresh(settings = getLedgerNetworkSettings()) {
   stopAutoPublicPeerUrlRefresh();
   if (!settings || !settings.enabled || settings.mode !== 'peer') return;
   if (getExplicitAdvertisedPeerUrls(settings).length > 0) return;
   autoPublicPeerRefreshTimer = setInterval(() => {
-    refreshAutoPublicPeerUrl(getLedgerNetworkSettings()).catch(() => {});
+    refreshAutoPublicPeerUrl(getLedgerNetworkSettings())
+      .then(() => sendSeedRegistryHeartbeat())
+      .catch(() => {});
   }, AUTO_PUBLIC_IP_REFRESH_INTERVAL_MS);
 }
 
@@ -2105,6 +2147,7 @@ async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') 
     });
     recordPeerUrlSuccess(normalized);
     rememberDiscoveredPeer(normalized, { source, quiet: true });
+    gossipAnnounce([normalized]);
     if (Number.isFinite(remoteHeight) && Number.isFinite(localHeight) && remoteHeight > localHeight) {
       scheduleWtcPeerSync(`${source}-higher-tip`, 150);
     }
@@ -2937,6 +2980,7 @@ function pickPeerExchangeTargets(peerUrls, limit = PEER_EXCHANGE_TARGET_LIMIT) {
 async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
   if (!settings || !settings.enabled || settings.mode !== 'peer') return;
   const peers = pickPeerExchangeTargets(getPeerDirectoryTargets(settings));
+  const discoveredCandidates = [];
   for (const peerUrl of peers) {
     try {
       const response = await requestPeerJson(peerUrl, 'GET', '/api/v1/network/peers', undefined, undefined, {
@@ -2950,7 +2994,8 @@ async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
       for (const entry of advertised) {
         const candidate = typeof entry === 'string' ? entry : String(entry && entry.url ? entry.url : '');
         const peerIdentity = typeof entry === 'string' ? '' : String((entry && entry.peerIdentity) || '').trim();
-        rememberDiscoveredPeer(candidate, { source: 'peer-directory', quiet: true, peerIdentity });
+        const isNew = rememberDiscoveredPeer(candidate, { source: 'peer-directory', quiet: true, peerIdentity });
+        if (candidate) discoveredCandidates.push(candidate);
         if (peerIdentity) {
           const preferredPeerUrl = preferredPeerUrlsByIdentity.get(peerIdentity) || '';
           preferredPeerUrlsByIdentity.set(peerIdentity, selectPreferredPeerUrl(preferredPeerUrl, candidate));
@@ -2962,6 +3007,14 @@ async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
     } catch (_) {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
+  }
+  if (
+    discoveredCandidates.length > 0 &&
+    stunNatInfo &&
+    stunNatInfo.natType !== NAT_TYPE.PUBLIC &&
+    stunNatInfo.natType !== NAT_TYPE.TIMEOUT
+  ) {
+    tryHolePunchToPeers(discoveredCandidates, settings);
   }
 }
 
@@ -9999,6 +10052,71 @@ function startLedgerNetworkServer() {
         return;
       }
 
+      if (req.method === 'POST' && reqUrl.pathname === '/api/v1/network/gossip') {
+        const body = await readJsonBody(req);
+        receivePeerGossip(body);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      if (req.method === 'POST' && reqUrl.pathname === '/api/v1/network/punch') {
+        const advertisedUrl = getPrimaryAdvertisedPeerUrl(settings);
+        let ourPublicIp = '';
+        let ourPublicPort = 0;
+        if (advertisedUrl) {
+          try {
+            const parsed = new URL(advertisedUrl);
+            ourPublicIp = parsed.hostname;
+            ourPublicPort = Number(parsed.port) || settings.listenPort;
+          } catch (_) {}
+        }
+        if (!ourPublicIp && stunNatInfo && stunNatInfo.mappedIp) {
+          ourPublicIp = stunNatInfo.mappedIp;
+          ourPublicPort = stunNatInfo.mappedPort;
+        }
+        const requesterCandidates = extractReachablePeerCandidates(req, settings);
+        const referrerPeerUrl = requesterCandidates.length > 0 ? requesterCandidates[0] : '';
+        if (referrerPeerUrl) {
+          rememberDiscoveredPeer(referrerPeerUrl, { source: 'hole-punch', quiet: true });
+        }
+        const body = await readJsonBody(req);
+        const requesterIp = body && body.publicIp;
+        const requesterPort = body && body.publicPort;
+        const requesterPunchPort = body && body.punchPort;
+        if (requesterIp && requesterPort && isPublicPeerHost(requesterIp)) {
+          const requestedPunchPort = Number(requesterPunchPort) || 0;
+          const ourPunchPort = allocatePunchPort(usedPunchPorts);
+          if (ourPunchPort > 0) usedPunchPorts.add(ourPunchPort);
+          const response = buildPunchResponse(ourPublicIp, ourPublicPort, ourPunchPort);
+          response.requesterPort = requestedPunchPort;
+          response.requesterIp = requesterIp;
+          sendJson(res, 200, response);
+          if (ourPunchPort > 0 && ourPublicIp) {
+            const punchDelay = Math.max(0, (response.punchAtMs || Date.now()) - Date.now() + 50);
+            setTimeout(() => {
+              performPunch(requesterIp, requestedPunchPort, ourPunchPort)
+                .then((result) => {
+                  if (result.ok && result.socket) {
+                    console.log(
+                      `[HolePunch] Direct TCP connection established to ${requesterIp}:${requestedPunchPort}`,
+                    );
+                    if (referrerPeerUrl) {
+                      const viaUrl = normalizePeerUrl(`http://${requesterIp}:${requesterPort}`);
+                      if (viaUrl && viaUrl !== referrerPeerUrl) {
+                        rememberDiscoveredPeer(viaUrl, { source: 'hole-punch', quiet: true });
+                      }
+                    }
+                  }
+                })
+                .catch(() => {});
+            }, punchDelay);
+          }
+        } else {
+          sendJson(res, 200, buildPunchResponse('', 0, 0));
+        }
+        return;
+      }
+
       if (req.method === 'GET' && reqUrl.pathname === '/api/v1/ops/health') {
         if (!isLedgerNetworkAuthorized(req, settings)) {
           recordPeerIdentityFailure(requesterIdentity, 'unauthorized-request');
@@ -10282,6 +10400,37 @@ function startLedgerNetworkServer() {
 
   ledgerNetworkServer.listen(settings.listenPort, settings.listenHost, async () => {
     await refreshAutoPublicPeerUrl(settings);
+    const upnpResult = await setupUpnpPortMapping(settings.listenPort, settings.listenHost);
+    if (upnpResult) {
+      const upnpUrl = normalizePeerUrl(`http://${upnpResult.publicIp}:${upnpResult.publicPort}`);
+      if (upnpUrl) {
+        autoDetectedPublicPeerUrl = upnpUrl;
+        autoDetectedPublicPeerUrlFromUpnp = true;
+        console.log(`[Wattcoin] UPnP: public peer URL set to ${upnpUrl}`);
+        sendSeedRegistryHeartbeat();
+      }
+    }
+    if (!stunDetectionPromise) {
+      stunDetectionPromise = detectNatType({
+        stunServers: DEFAULT_STUN_SERVERS,
+        timeoutMs: 3000,
+      })
+        .then((info) => {
+          if (info && info.natType !== NAT_TYPE.TIMEOUT) {
+            stunNatInfo = { ...info, detectedAtMs: Date.now() };
+            console.log(
+              `[NAT] Detected NAT type: ${info.natType}, mapped: ${info.mappedIp || '?'}:${info.mappedPort || '?'}`,
+            );
+          } else {
+            console.log('[NAT] STUN detection timed out; assuming unknown NAT type.');
+          }
+          stunDetectionPromise = null;
+          return stunNatInfo;
+        })
+        .catch(() => {
+          stunDetectionPromise = null;
+        });
+    }
     await refreshRemoteSeedPeers(settings);
     const effectiveSettings = getLedgerNetworkSettings();
     const listenUrls = getLedgerListenUrls(effectiveSettings);
@@ -10306,6 +10455,7 @@ function startLedgerNetworkServer() {
     startAutoPublicPeerUrlRefresh(effectiveSettings);
     startRemoteSeedPeerRefresh(effectiveSettings);
     ensureManagedReverseTunnelClient(effectiveSettings);
+    attemptHolePunchToSeedPeers(effectiveSettings);
   });
 }
 
@@ -10316,6 +10466,13 @@ function stopLedgerNetworkServer() {
   stopPeerDiscovery();
   stopManagedReverseTunnelClient();
   stopReverseTunnelCoordinator();
+  removeUpnpMapping();
+  autoDetectedPublicPeerUrlFromUpnp = false;
+  stunNatInfo = null;
+  stunDetectionPromise = null;
+  usedPunchPorts = new Set();
+  peerPunchAttemptTimestamps = new Map();
+  peerGossipSeen.clear();
   if (!ledgerNetworkServer) return;
   try {
     ledgerNetworkServer.close();
@@ -11021,6 +11178,142 @@ async function runWtcPeerSync(triggerLabel) {
     opsState.lastSyncResult = { ok: false, reason, trigger: label };
     console.warn(`[WtcSync] ${label}: peer sync threw: ${reason}`);
     return opsState.lastSyncResult;
+  }
+}
+
+function attemptHolePunchToSeedPeers(settings = getLedgerNetworkSettings()) {
+  if (!settings || !settings.enabled || settings.mode !== 'peer') return;
+  if (!stunNatInfo || stunNatInfo.natType === NAT_TYPE.PUBLIC || stunNatInfo.natType === NAT_TYPE.TIMEOUT) return;
+  const peerTargets = filterExternalPeerUrls(
+    Array.from(new Set([...(settings.seedPeers || []), ...(settings.configuredPeers || [])])),
+    {
+      selfAdvertisedUrls: getConfiguredAdvertisedPeerUrls(settings),
+      listenPort: settings && settings.listenPort,
+      localHosts: Array.from(getLocalPeerHosts()),
+    },
+  );
+  if (peerTargets.length === 0) return;
+  const stunInfo = stunNatInfo;
+  if (!stunInfo || !stunInfo.mappedIp) return;
+  const localPunchPort = allocatePunchPort(usedPunchPorts);
+  if (!localPunchPort) return;
+  usedPunchPorts.add(localPunchPort);
+  const targetUrl = peerTargets[Math.floor(Math.random() * peerTargets.length)];
+  const punchReq = requestPunch(targetUrl, stunInfo.mappedIp, stunInfo.mappedPort, {
+    requestPeerJson,
+    localPunchPort,
+    timeoutMs: 5000,
+  });
+  punchReq
+    .execute()
+    .then((result) => {
+      if (result && result.ok && result.socket) {
+        console.log(`[HolePunch] Direct connection to seed peer ${targetUrl} via NAT punch`);
+      }
+    })
+    .catch(() => {});
+}
+
+function tryHolePunchToPeers(peerUrls, settings = getLedgerNetworkSettings()) {
+  if (!stunNatInfo || stunNatInfo.natType === NAT_TYPE.PUBLIC || stunNatInfo.natType === NAT_TYPE.TIMEOUT) return;
+  if (!settings || !settings.enabled || settings.mode !== 'peer') return;
+  const stunInfo = stunNatInfo;
+  if (!stunInfo || !stunInfo.mappedIp) return;
+  const nowMs = Date.now();
+  const candidates = [];
+  const seen = new Set();
+  for (const url of peerUrls) {
+    const normalized = normalizePeerUrl(url);
+    if (!normalized || seen.has(normalized) || isSelfPeerUrl(normalized) || isPeerUrlBanned(normalized)) continue;
+    seen.add(normalized);
+    const lastAttempt = peerPunchAttemptTimestamps.get(normalized) || 0;
+    if (nowMs - lastAttempt < PEER_PUNCH_RETRY_INTERVAL_MS) continue;
+    const cached = peerReachabilityCache.get(normalized);
+    if (cached && cached.ok && nowMs - (cached.lastSuccessAtMs || 0) < PEER_REACHABILITY_SUCCESS_TTL_MS) continue;
+    candidates.push(normalized);
+  }
+  const targets = candidates.slice(0, PEER_PUNCH_PER_CYCLE_MAX);
+  for (const targetUrl of targets) {
+    peerPunchAttemptTimestamps.set(targetUrl, nowMs);
+    const localPunchPort = allocatePunchPort(usedPunchPorts);
+    if (!localPunchPort) break;
+    usedPunchPorts.add(localPunchPort);
+    const punchReq = requestPunch(targetUrl, stunInfo.mappedIp, stunInfo.mappedPort, {
+      requestPeerJson,
+      localPunchPort,
+      timeoutMs: 5000,
+    });
+    punchReq
+      .execute()
+      .then((result) => {
+        if (result && result.ok && result.socket) {
+          console.log(`[HolePunch] Direct connection to ${targetUrl} via NAT punch`);
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+function _prunePeerGossipSeen() {
+  const nowMs = Date.now();
+  for (const [key, detectedAtMs] of peerGossipSeen) {
+    if (nowMs - detectedAtMs > PEER_GOSSIP_SEEN_TTL_MS) peerGossipSeen.delete(key);
+  }
+}
+
+function receivePeerGossip(payload) {
+  const entries = Array.isArray(payload && payload.peers) ? payload.peers : [];
+  let ttl = Math.max(0, Number(payload && payload.ttl) || 0);
+  if (ttl > PEER_GOSSIP_TTL) ttl = PEER_GOSSIP_TTL;
+  const gossipId = String((payload && payload.gossipId) || '');
+  if (entries.length === 0) return;
+  const settings = getLedgerNetworkSettings();
+  if (!settings || !settings.enabled || settings.mode !== 'peer') return;
+  const dedupKey = ttl > 0 && gossipId ? `${gossipId}` : '';
+  if (dedupKey && peerGossipSeen.has(dedupKey)) return;
+  if (dedupKey) peerGossipSeen.set(dedupKey, Date.now());
+  const discovered = [];
+  for (const entry of entries) {
+    const url = typeof entry === 'string' ? entry : String(entry && entry.url ? entry.url : '');
+    const peerIdentity = typeof entry === 'string' ? '' : String((entry && entry.peerIdentity) || '').trim();
+    const normalized = normalizePeerUrl(url);
+    if (!normalized) continue;
+    rememberDiscoveredPeer(normalized, { source: 'gossip', quiet: true, peerIdentity });
+    if (ttl > 1 && peerReachabilityCache.get(normalized)?.ok) {
+      discovered.push(normalized);
+    }
+  }
+  if (ttl > 1 && discovered.length > 0) {
+    gossipAnnounce(discovered, { ttl: ttl - 1, gossipId });
+  }
+}
+
+function gossipAnnounce(peerUrls, options = {}) {
+  const { ttl = PEER_GOSSIP_TTL, gossipId: existingGossipId } = options;
+  const settings = getLedgerNetworkSettings();
+  if (!settings || !settings.enabled || settings.mode !== 'peer') return;
+  const entries = Array.isArray(peerUrls) ? peerUrls : [peerUrls];
+  const normalizedEntries = [];
+  for (const entry of entries) {
+    const url = typeof entry === 'string' ? entry : (entry && entry.url) || '';
+    const normalized = normalizePeerUrl(url);
+    if (!normalized || isSelfPeerUrl(normalized)) continue;
+    normalizedEntries.push(normalized);
+  }
+  if (normalizedEntries.length === 0) return;
+  const gossipId = existingGossipId || crypto.randomBytes(8).toString('hex');
+  const dedupKey = `${gossipId}`;
+  if (ttl > 1 && peerGossipSeen.has(dedupKey)) return;
+  if (ttl > 1) peerGossipSeen.set(dedupKey, Date.now());
+  const targets = pickPeerExchangeTargets(getPeerDirectoryTargets(settings), PEER_GOSSIP_FANOUT);
+  const payload = { peers: normalizedEntries.map((url) => ({ url })), ttl, gossipId };
+  for (const targetUrl of targets) {
+    requestPeerJson(targetUrl, 'POST', '/api/v1/network/gossip', payload, undefined, {
+      timeoutMs: 4000,
+      trackReachability: false,
+      suppressPeerDiscovery: true,
+      source: 'gossip-send',
+    }).catch(() => {});
   }
 }
 
