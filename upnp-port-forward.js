@@ -59,10 +59,14 @@ function removeUpnpPortMapping() {
       },
       () => {},
     );
-  } catch (_) {}
+  } catch (_) {
+    /* ignore close error */
+  }
   try {
     upnpClient.close();
-  } catch (_) {}
+  } catch (_) {
+    /* ignore close error */
+  }
   upnpClient = null;
   activeMapping = null;
 }

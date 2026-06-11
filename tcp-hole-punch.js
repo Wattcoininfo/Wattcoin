@@ -22,7 +22,9 @@ function cleanupPunchSession(key) {
     if (session.socket && !session.socket.destroyed) {
       try {
         session.socket.destroy();
-      } catch (_) {}
+      } catch (_) {
+        /* ignore destroy error */
+      }
     }
     activePunchSessions.delete(key);
   }

@@ -2994,7 +2994,7 @@ async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
       for (const entry of advertised) {
         const candidate = typeof entry === 'string' ? entry : String(entry && entry.url ? entry.url : '');
         const peerIdentity = typeof entry === 'string' ? '' : String((entry && entry.peerIdentity) || '').trim();
-        const isNew = rememberDiscoveredPeer(candidate, { source: 'peer-directory', quiet: true, peerIdentity });
+        rememberDiscoveredPeer(candidate, { source: 'peer-directory', quiet: true, peerIdentity });
         if (candidate) discoveredCandidates.push(candidate);
         if (peerIdentity) {
           const preferredPeerUrl = preferredPeerUrlsByIdentity.get(peerIdentity) || '';
@@ -10068,7 +10068,9 @@ function startLedgerNetworkServer() {
             const parsed = new URL(advertisedUrl);
             ourPublicIp = parsed.hostname;
             ourPublicPort = Number(parsed.port) || settings.listenPort;
-          } catch (_) {}
+          } catch (_) {
+            /* ignore URL parse error */
+          }
         }
         if (!ourPublicIp && stunNatInfo && stunNatInfo.mappedIp) {
           ourPublicIp = stunNatInfo.mappedIp;

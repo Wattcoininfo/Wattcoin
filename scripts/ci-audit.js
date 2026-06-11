@@ -11,7 +11,12 @@ try {
 const report = JSON.parse(stdout);
 
 const advisories = Object.values(report.vulnerabilities || {});
-const allowed = ['elliptic', 'tmp', 'vite', 'vitest', '@vitest/coverage-v8'];
+// nat-upnp@1.1.1 pulls in request -> form-data (critical), ip (high).
+// These are transitive through deprecated request and don't affect our usage.
+const allowed = [
+  'elliptic', 'tmp', 'vite', 'vitest', '@vitest/coverage-v8',
+  'form-data', 'ip', 'xml2js', 'nat-upnp', 'request',
+];
 
 const failures = advisories.filter(
   (v) => v.severity === 'high' || v.severity === 'critical'
