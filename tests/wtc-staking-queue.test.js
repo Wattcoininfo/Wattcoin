@@ -13,7 +13,9 @@ const sq = require('../wtc-staking-queue');
 const _tmpDirs = [];
 
 function rmrf(p) {
-  try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {}
+  try {
+    fs.rmSync(p, { recursive: true, force: true });
+  } catch (_) {}
 }
 
 function makeTmpDir() {

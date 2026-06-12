@@ -9035,7 +9035,8 @@ async function pullContributionsFromPeers() {
   const currentRoundId = getCurrentNetworkRoundId();
   if (currentRoundId <= 0) return;
 
-  if (process.env.WATTCOIN_DEBUG) console.log(`[pullContributions] Pulling from ${peers.length} peers for round ${currentRoundId}...`);
+  if (process.env.WATTCOIN_DEBUG)
+    console.log(`[pullContributions] Pulling from ${peers.length} peers for round ${currentRoundId}...`);
 
   // Collect snapshots from all peers first
   const snapshots = [];
@@ -9066,7 +9067,10 @@ async function pullContributionsFromPeers() {
         if (addr) allAddrs.add(addr);
       }
     }
-    console.log(`[pullContributions] Found ${allAddrs.size} unique addresses across ${snapshots.length} peer snapshots:`, Array.from(allAddrs));
+    console.log(
+      `[pullContributions] Found ${allAddrs.size} unique addresses across ${snapshots.length} peer snapshots:`,
+      Array.from(allAddrs),
+    );
   }
 
   alignRoundLedgerToChain(currentRoundId);
@@ -9113,7 +9117,14 @@ async function pullContributionsFromPeers() {
     }
 
     if (bestVerifiedTime > 0) {
-      roundLedger.setRoundContribution(address, bestVerifiedWh, bestVerifiedTime, bestChainIndex, bestMessage, bestSignature);
+      roundLedger.setRoundContribution(
+        address,
+        bestVerifiedWh,
+        bestVerifiedTime,
+        bestChainIndex,
+        bestMessage,
+        bestSignature,
+      );
       continue;
     }
 
@@ -10516,7 +10527,9 @@ function startLedgerNetworkServer() {
             forwardedContributionMessages.set(fwdKey, Date.now() + 30_000);
             setTimeout(() => forwardedContributionMessages.delete(fwdKey), 30_000);
             if (process.env.WATTCOIN_DEBUG)
-              console.log(`[contribution-forward] Accepted contribution from ${address}: ${totalWh} Wh (round ${roundId}), dedupKey=${fwdKey.slice(0, 40)}...`);
+              console.log(
+                `[contribution-forward] Accepted contribution from ${address}: ${totalWh} Wh (round ${roundId}), dedupKey=${fwdKey.slice(0, 40)}...`,
+              );
             if (address !== walletAddressCache.address) {
               const fwdSettings = getLedgerNetworkSettings();
               const fwdPeers = fwdSettings && fwdSettings.enabled ? getActivePeers(fwdSettings) : [];
@@ -10869,7 +10882,7 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
         address: verifiedAddress,
         roundId: snapshot.id,
         totalWh: added.addressRoundWh,
-      })
+      }),
     ).catch(() => {});
     return { ...added, roundTotalWh: snapshot.totalWh };
   } catch (e) {

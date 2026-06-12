@@ -611,7 +611,8 @@ export default function AppTabs() {
               setMiningWarning(null);
             } else if (res && res.code) {
               const warnings = {
-                HW_CHANGED: 'Mining blocked — hardware changed on this wallet. Use Reset Hardware to accept the new hardware.',
+                HW_CHANGED:
+                  'Mining blocked — hardware changed on this wallet. Use Reset Hardware to accept the new hardware.',
                 HW_HOLD: `Mining suspended — ${res.message || 'hardware trust violations.'}`,
                 NEVER_BENCHMARKED: 'Mining blocked — complete a full hardware benchmark first.',
                 NO_PEERS: 'Mining paused — waiting for peer connection.',
@@ -619,11 +620,16 @@ export default function AppTabs() {
                 RATE_LIMIT_LOCKED: 'Mining rate-limited — too many requests. Waiting for cooldown.',
                 RATE_LIMIT_EXCEEDED: 'Mining rate-limited — too many requests. Cooldown applied.',
               };
-              setMiningWarning({ code: res.code, message: warnings[res.code] || `Mining blocked — ${res.message || 'unknown reason'}.` });
+              setMiningWarning({
+                code: res.code,
+                message: warnings[res.code] || `Mining blocked — ${res.message || 'unknown reason'}.`,
+              });
             }
           })
           .catch(() => {})
-          .finally(() => { ipcInFlight = false; });
+          .finally(() => {
+            ipcInFlight = false;
+          });
       }
     }, tickSeconds * 1000);
     return () => {

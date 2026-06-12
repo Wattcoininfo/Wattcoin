@@ -6452,29 +6452,21 @@ export default function Miner({
                           return <span style={{ color: clr, marginLeft: 0 }}>CPU: {label}</span>;
                         })()}
                         {(() => {
-                            const p = benchmarkState.memPenaltyPct;
-                            const label =
-                              p < 0
-                                ? 'Baseline'
-                                : p <= 10
-                                  ? 'Good'
-                                  : p <= 20
-                                    ? 'Normal'
-                                    : p <= 30
-                                      ? 'Poor'
-                                      : 'Degraded';
-                            const clr =
-                              label === 'Good'
-                                ? '#a7ffb0'
-                                : label === 'Normal'
-                                  ? '#facc15'
-                                  : label === 'High'
-                                    ? '#f97316'
-                                    : label === 'Degraded'
-                                      ? '#ef4444'
-                                      : '#6b7280';
-                            return <span style={{ color: clr, marginLeft: 8 }}>Mem: {label}</span>;
-                          })()}
+                          const p = benchmarkState.memPenaltyPct;
+                          const label =
+                            p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : p <= 30 ? 'Poor' : 'Degraded';
+                          const clr =
+                            label === 'Good'
+                              ? '#a7ffb0'
+                              : label === 'Normal'
+                                ? '#facc15'
+                                : label === 'High'
+                                  ? '#f97316'
+                                  : label === 'Degraded'
+                                    ? '#ef4444'
+                                    : '#6b7280';
+                          return <span style={{ color: clr, marginLeft: 8 }}>Mem: {label}</span>;
+                        })()}
                         {benchmarkState.lastAvgGpuPct !== null &&
                           (() => {
                             const p = benchmarkState.gpuPenaltyPct;

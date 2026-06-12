@@ -15,7 +15,9 @@ const BOB = 'wtc1q3t8y4q7g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
 const _tmpDirs = [];
 
 function rmrf(p) {
-  try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {}
+  try {
+    fs.rmSync(p, { recursive: true, force: true });
+  } catch (_) {}
 }
 
 function tmpDir() {
