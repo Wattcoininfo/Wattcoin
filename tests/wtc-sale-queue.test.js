@@ -8,8 +8,16 @@ const os = require('os');
 
 const sq = require('../wtc-sale-queue');
 
+const _tmpDirs = [];
+
+function rmrf(p) {
+  try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {}
+}
+
 function tmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-sale-test-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-sale-test-'));
+  _tmpDirs.push(d);
+  return d;
 }
 
 function describe(name, fn) {
@@ -282,6 +290,7 @@ if (require.main === module) {
     failed = true;
     console.error('Test suite failed:', e.message);
   }
+  _tmpDirs.forEach(rmrf);
   if (failed) process.exit(1);
   console.log('\nAll sale queue tests passed.');
 }

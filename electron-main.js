@@ -160,15 +160,15 @@ const WALLET_SYNC_STATE_REFRESH_INTERVAL_MS = 5000;
 
 const { ALLOWED_SENDER_ADDRESSES } = require('./protocol-constants');
 const ENDPOINT_RATE_LIMITS = {
-  'wattcoin-mine-block': { windowMs: 60_000, max: 12, lockMs: 5 * 60_000 },
-  'wattcoin-ledger-add-contribution': { windowMs: 60_000, max: 240, lockMs: 2 * 60_000 },
-  'wattcoin-ledger-settle-round': { windowMs: 60_000, max: 30, lockMs: 5 * 60_000 },
-  'wattcoin-ledger-get-balances': { windowMs: 60_000, max: 180, lockMs: 60_000 },
-  'wtc-peer-chain-headers': { windowMs: 60_000, max: 120, lockMs: 2 * 60_000 },
-  'wtc-peer-chain-blocks': { windowMs: 60_000, max: 120, lockMs: 2 * 60_000 },
-  'wtc-peer-chain-block-hash': { windowMs: 60_000, max: 120, lockMs: 2 * 60_000 },
+  'wattcoin-mine-block': { windowMs: 60_000, max: 30, lockMs: 60_000 },
+  'wattcoin-ledger-add-contribution': { windowMs: 60_000, max: 1200, lockMs: 60_000 },
+  'wattcoin-ledger-settle-round': { windowMs: 60_000, max: 60, lockMs: 60_000 },
+  'wattcoin-ledger-get-balances': { windowMs: 60_000, max: 360, lockMs: 60_000 },
+  'wtc-peer-chain-headers': { windowMs: 60_000, max: 240, lockMs: 60_000 },
+  'wtc-peer-chain-blocks': { windowMs: 60_000, max: 240, lockMs: 60_000 },
+  'wtc-peer-chain-block-hash': { windowMs: 60_000, max: 240, lockMs: 60_000 },
   'wattcoin-send': { windowMs: 10 * 60_000, max: 3, lockMs: 30 * 60_000 },
-  'wattcoin-list-transactions': { windowMs: 60_000, max: 90, lockMs: 60_000 },
+  'wattcoin-list-transactions': { windowMs: 60_000, max: 180, lockMs: 60_000 },
   // GPU calibration is called once per benchmark run; cap at 10 per 10 min to
   // prevent a compromised renderer from flooding the personal-mean sample buffer.
   'wattcoin-report-gpu-calibration': { windowMs: 10 * 60_000, max: 10, lockMs: 10 * 60_000 },
@@ -5479,6 +5479,17 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     // Stored in userData (device-scoped), not keyed by wallet address.
     // History is cleared when hardware changes (fingerprint detects new device).
     const benchmarkHistory = loadBenchmarkHistory();
+    // Baseline (startup/slider-stop) benchmarks also seed the cpu/mem history so
+    // the NEVER_BENCHMARKED guard in wattcoin-ledger-add-contribution doesn't
+    // permanently block mining on a fresh machine that has never run a non-baseline
+    // benchmark.  The samples are real measured values — they just didn't participate
+    // in drift detection, which is fine for the "has it ever benchmarked" gate.
+    if (isBaseline) {
+      if (measuredCpu > 0)
+        benchmarkHistory.cpuSamples = appendBenchmarkSample(benchmarkHistory.cpuSamples, measuredCpu);
+      if (measuredMem > 0)
+        benchmarkHistory.memSamples = appendBenchmarkSample(benchmarkHistory.memSamples, measuredMem);
+    }
     if (!isBaseline) {
       if (measuredCpu > 0)
         benchmarkHistory.cpuSamples = appendBenchmarkSample(benchmarkHistory.cpuSamples, measuredCpu);
@@ -6092,8 +6103,8 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
       trustScoreBefore,
       trustScoreAfter: hwAuthority.trustScore,
       historySamples: _cpuSamples.length,
-      personalMeanCpu: _cpuSamples.length >= 2 ? _cpuSamples.reduce((a, b) => a + b, 0) / _cpuSamples.length : 0,
-      personalMeanMem: _memSamples.length >= 2 ? _memSamples.reduce((a, b) => a + b, 0) / _memSamples.length : 0,
+      personalMeanCpu: _cpuSamples.length >= 1 ? _cpuSamples.reduce((a, b) => a + b, 0) / _cpuSamples.length : 0,
+      personalMeanMem: _memSamples.length >= 1 ? _memSamples.reduce((a, b) => a + b, 0) / _memSamples.length : 0,
     });
   }
   return result;
@@ -9513,11 +9524,9 @@ function hasOnlinePeers(settings) {
     if (pc.value.onlineCount === 0) return false;
     // A fresh >0 result means peers are online.
     if (pc.expiresAtMs > Date.now()) return true;
-    // TTL expired and >0 was cached — if an inspection is in flight wait for
-    // it to confirm (the tick loop will retry on the next cycle).  Otherwise
-    // continue optimistically; the renderer poll will start a new inspection
-    // within 5 s and confirm or correct the stale value then.
-    if (peerCountInspectionPromise) return false;
+    // TTL expired and >0 was cached — continue optimistically; the renderer
+    // poll will complete within a few seconds and refresh the cache.  The tick
+    // loop retries every 250 ms so the next cycle picks up the fresh result.
     return true;
   }
   // No valid cache entry yet — mining waits for the first inspection.
@@ -11792,6 +11801,24 @@ if (!gotSingleInstanceLock) {
 }
 
 app.whenReady().then(() => {
+  // Clean up stale .tmp.ico files left by Windows icon caching (Electron
+  // BrowserWindow icon → %TEMP%\{GUID}.tmp.ico). Remove older than 1 hour.
+  try {
+    const tmpDir = os.tmpdir();
+    const cutoff = Date.now() - 3_600_000;
+    for (const entry of fs.readdirSync(tmpDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.tmp.ico')) {
+        const p = path.join(tmpDir, entry.name);
+        const st = fs.statSync(p);
+        if (st.mtimeMs < cutoff || st.birthtimeMs < cutoff) {
+          fs.rmSync(p, { force: true });
+        }
+      }
+    }
+  } catch (_) {
+    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] tmp.ico cleanup error:', String(_.message || _).slice(0, 80));
+  }
+
   // Remove default File, Edit, View, Window menus.
   Menu.setApplicationMenu(null);
 

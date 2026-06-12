@@ -6451,8 +6451,7 @@ export default function Miner({
                                     : '#6b7280';
                           return <span style={{ color: clr, marginLeft: 0 }}>CPU: {label}</span>;
                         })()}
-                        {benchmarkState.lastAvgMemPct !== null &&
-                          (() => {
+                        {(() => {
                             const p = benchmarkState.memPenaltyPct;
                             const label =
                               p < 0

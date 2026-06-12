@@ -12,8 +12,16 @@ const { Accounts, MATURITY_DEPTH } = require('../wtc-accounts');
 const ALICE = 'wtc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
 const BOB = 'wtc1q3t8y4q7g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
 
+const _tmpDirs = [];
+
+function rmrf(p) {
+  try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {}
+}
+
 function tmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-accounts-test-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-accounts-test-'));
+  _tmpDirs.push(d);
+  return d;
 }
 
 function makeAccounts(dataDir) {
@@ -347,6 +355,7 @@ if (require.main === module) {
     failed = true;
     console.error('Test suite failed:', e.message);
   }
+  _tmpDirs.forEach(rmrf);
   if (failed) process.exit(1);
   console.log('\nAll account tests passed.');
 }

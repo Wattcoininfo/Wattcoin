@@ -10,8 +10,16 @@ const sq = require('../wtc-staking-queue');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const _tmpDirs = [];
+
+function rmrf(p) {
+  try { fs.rmSync(p, { recursive: true, force: true }); } catch (_) {}
+}
+
 function makeTmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-staking-test-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'wtc-staking-test-'));
+  _tmpDirs.push(d);
+  return d;
 }
 
 function entriesPath(dir) {
@@ -879,7 +887,11 @@ async function run() {
   console.log('staking queue tests passed');
 }
 
-run().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+run()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(() => {
+    _tmpDirs.forEach(rmrf);
+  });
