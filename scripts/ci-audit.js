@@ -16,6 +16,7 @@ const advisories = Object.values(report.vulnerabilities || {});
 const allowed = [
   'elliptic', 'tmp', 'vite', 'vitest', '@vitest/coverage-v8',
   'form-data', 'ip', 'xml2js', 'nat-upnp', 'request',
+  'esbuild', // transitive through vite/vitest, no breaking-change fix path
 ];
 
 const failures = advisories.filter(

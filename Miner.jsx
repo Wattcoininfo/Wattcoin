@@ -3528,10 +3528,12 @@ export default function Miner({
         } else if (mining) {
           await window.wattcoinHardware.setHardwareLoad(trustCappedLoad);
           if (gpuCount > 0 && allowGpuWorkloads && window.wattcoinHardware.invoke) {
-            await window.wattcoinHardware.invoke('wattcoin-set-gpu-load', {
-              percent: trustCappedLoad,
-              gpuCount,
-            }).catch(() => {});
+            await window.wattcoinHardware
+              .invoke('wattcoin-set-gpu-load', {
+                percent: trustCappedLoad,
+                gpuCount,
+              })
+              .catch(() => {});
           }
         } else if (window.wattcoinHardware.stopHardwareLoad) {
           await window.wattcoinHardware.stopHardwareLoad();
@@ -3814,7 +3816,12 @@ export default function Miner({
                 shaderIterations: probe.params.shaderIterations,
               })
               .catch(() => null);
-            if (nativeProofs && nativeProofs.ok && Array.isArray(nativeProofs.devices) && nativeProofs.devices.length > 0) {
+            if (
+              nativeProofs &&
+              nativeProofs.ok &&
+              Array.isArray(nativeProofs.devices) &&
+              nativeProofs.devices.length > 0
+            ) {
               // All GPUs should produce the same hash (deterministic algorithm)
               const primaryHash = nativeProofs.devices[0].hash;
               const allMatch = nativeProofs.devices.every((d) => d.hash === primaryHash);
@@ -3823,7 +3830,11 @@ export default function Miner({
                 type: 'gpu',
                 pixelHash: primaryHash || '',
                 gpuCount: nativeProofs.devices.length,
-                gpuHashes: nativeProofs.devices.map((d) => ({ deviceIndex: d.deviceIndex, hash: d.hash, elapsedMs: d.elapsedMs })),
+                gpuHashes: nativeProofs.devices.map((d) => ({
+                  deviceIndex: d.deviceIndex,
+                  hash: d.hash,
+                  elapsedMs: d.elapsedMs,
+                })),
                 gpuHashesAllMatch: allMatch,
               };
             }
@@ -6351,10 +6362,7 @@ export default function Miner({
           <span style={{ fontSize: 16 }}>⚠</span>
           <span>
             Hardware not recognized — mining is unavailable. Please contact{' '}
-            <a
-              href="mailto:info@wattcoin.ee"
-              style={{ color: '#a5b4fc', textDecoration: 'underline' }}
-            >
+            <a href="mailto:info@wattcoin.ee" style={{ color: '#a5b4fc', textDecoration: 'underline' }}>
               info@wattcoin.ee
             </a>{' '}
             to have your hardware added.

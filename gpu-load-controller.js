@@ -214,7 +214,10 @@ function handleMessage(state, msg) {
   // Find the device index for this state
   let deviceIndex = -1;
   for (const [idx, s] of gpuStates) {
-    if (s === state) { deviceIndex = idx; break; }
+    if (s === state) {
+      deviceIndex = idx;
+      break;
+    }
   }
 
   switch (msg.t) {
@@ -368,9 +371,7 @@ function sendCommand(deviceIndex, cmd) {
 function broadcastCommand(cmd) {
   const promises = [];
   for (const deviceIndex of gpuStates.keys()) {
-    promises.push(
-      sendCommand(deviceIndex, cmd).catch(() => null)
-    );
+    promises.push(sendCommand(deviceIndex, cmd).catch(() => null));
   }
   return Promise.all(promises);
 }
@@ -449,7 +450,7 @@ async function startGpuLoad(percent, gpuCountPer) {
   if (!(await ensureGpu(gpuCountPer))) return false;
   try {
     const results = await broadcastCommand({ start: true, loadPercent: clampPercent(percent) });
-    return results.some(r => r && r.t === 'ok');
+    return results.some((r) => r && r.t === 'ok');
   } catch (_) {
     return false;
   }
@@ -459,7 +460,7 @@ async function setGpuLoad(percent) {
   if (gpuStates.size === 0) return false;
   try {
     const results = await broadcastCommand({ set: true, loadPercent: clampPercent(percent) });
-    return results.some(r => r && r.t === 'ok');
+    return results.some((r) => r && r.t === 'ok');
   } catch (_) {
     return false;
   }

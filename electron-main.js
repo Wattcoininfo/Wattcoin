@@ -2600,9 +2600,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
             if (ws._pingSentAt) {
               const rtt = Date.now() - ws._pingSentAt;
               ws._pingSentAt = 0;
-              ws._smoothedRttMs = ws._smoothedRttMs
-                ? Math.round(ws._smoothedRttMs * 0.7 + rtt * 0.3)
-                : rtt;
+              ws._smoothedRttMs = ws._smoothedRttMs ? Math.round(ws._smoothedRttMs * 0.7 + rtt * 0.3) : rtt;
               updateWorkerRtt(workerId, ws._smoothedRttMs);
             }
           });
@@ -10539,7 +10537,9 @@ function startLedgerNetworkServer() {
                 try {
                   const tableTdp = getGpuTdpW(model);
                   if (tableTdp > 0 && tableTdp < cap) cap = tableTdp;
-                } catch (_) { /* ignore lookup failure */ }
+                } catch (_) {
+                  /* ignore lookup failure */
+                }
               }
             } else if ((receipt.type === 'cpu' || receipt.type === 'memory') && receipt.cpuModel) {
               try {
@@ -10548,7 +10548,9 @@ function startLedgerNetworkServer() {
                   const cpuCap = Math.round(expectedOps / 10);
                   if (cpuCap > 0 && cpuCap < cap) cap = cpuCap;
                 }
-              } catch (_) { /* ignore lookup failure */ }
+              } catch (_) {
+                /* ignore lookup failure */
+              }
             }
 
             // Timing-consistent cap: for a fixed probe workload, throughput scales
@@ -10571,7 +10573,9 @@ function startLedgerNetworkServer() {
                   const timingCap = Math.round(measuredCpuOpsPerSec / 10);
                   if (timingCap > 0 && timingCap < cap) cap = timingCap;
                 }
-              } catch (_) { /* ignore timing cap failure */ }
+              } catch (_) {
+                /* ignore timing cap failure */
+              }
             }
 
             powerValues.push(cap);
@@ -10639,7 +10643,7 @@ function startLedgerNetworkServer() {
                 message:
                   `Energy increment ${increment.toFixed(4)} Wh exceeds max credible ` +
                   `${maxIncrement.toFixed(4)} Wh over ${elapsedMs}ms ` +
-                  `(${(increment / Math.max(1, elapsedMs) * 3600000).toFixed(0)}W equivalent).`,
+                  `(${((increment / Math.max(1, elapsedMs)) * 3600000).toFixed(0)}W equivalent).`,
               });
               return;
             }
@@ -12571,4 +12575,3 @@ ipcMain.handle('wattcoin-get-electricity-price', () => {
     }
   });
 });
-

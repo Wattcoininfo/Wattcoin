@@ -865,7 +865,9 @@ function updateWorkerRtt(workerId, rttMs) {
   if (!workerId || typeof rttMs !== 'number' || rttMs <= 0) return;
   const now = Date.now();
   const prev = workerNetworkRtt.get(workerId);
-  const smoothedMs = prev ? Math.round(prev.smoothedMs * (1 - WORKER_RTT_EWMA_ALPHA) + rttMs * WORKER_RTT_EWMA_ALPHA) : Math.round(rttMs);
+  const smoothedMs = prev
+    ? Math.round(prev.smoothedMs * (1 - WORKER_RTT_EWMA_ALPHA) + rttMs * WORKER_RTT_EWMA_ALPHA)
+    : Math.round(rttMs);
   workerNetworkRtt.set(workerId, { smoothedMs, lastUpdatedMs: now });
   // Prune stale entries once the map exceeds a reasonable size
   if (workerNetworkRtt.size > 500) {
@@ -1136,7 +1138,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       hardwareKnown = hardwareSpec.cpuModel && getExpectedCpuSpeedOps(hardwareSpec.cpuModel) > 0;
     } else if (probe.type === 'gpu') {
       const gpuModels = Array.isArray(hardwareSpec.gpuModels) ? hardwareSpec.gpuModels : [];
-      hardwareKnown = gpuModels.length > 0 && gpuModels.every(m => getGpuTdpW(m) > 0);
+      hardwareKnown = gpuModels.length > 0 && gpuModels.every((m) => getGpuTdpW(m) > 0);
     } else if (probe.type === 'asic') {
       hardwareKnown = hardwareSpec.asicModel && getAsicPowerW(hardwareSpec.asicModel) > 0;
     }
@@ -1180,11 +1182,9 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   // Hardware model fields for independent power verification by other peers.
   const receiptHwModels = {};
   if (probe.type === 'gpu') {
-    const gpuModels = Array.isArray(hardwareSpec && hardwareSpec.gpuModels)
-      ? hardwareSpec.gpuModels
-      : [];
+    const gpuModels = Array.isArray(hardwareSpec && hardwareSpec.gpuModels) ? hardwareSpec.gpuModels : [];
     if (gpuModels.length > 0) {
-      receiptHwModels.gpuModels = gpuModels.map(m => String(m || '').trim()).filter(Boolean);
+      receiptHwModels.gpuModels = gpuModels.map((m) => String(m || '').trim()).filter(Boolean);
     }
   } else if (probe.type === 'cpu' || probe.type === 'memory') {
     if (hardwareSpec && hardwareSpec.cpuModel) {
@@ -1226,8 +1226,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   // Derive network RTT and pure compute time for the probe log UI.
   const attestRttMs = entry.workerId ? getWorkerRtt(entry.workerId) : null;
-  const attestComputeTimeMs =
-    attestRttMs !== null && wallClockMs > attestRttMs ? wallClockMs - attestRttMs : null;
+  const attestComputeTimeMs = attestRttMs !== null && wallClockMs > attestRttMs ? wallClockMs - attestRttMs : null;
 
   // Record in coordinator attest history so the UI can display attested probes.
   peerAttestHistory.unshift({

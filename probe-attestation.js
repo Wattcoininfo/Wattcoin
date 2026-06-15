@@ -43,7 +43,7 @@ function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
   // Hardware model fields (optional — only included in the signed payload when
   // present, so old receipts without them remain verifiable by new code).
   const gpuModels = Array.isArray(receipt.gpuModels)
-    ? receipt.gpuModels.map(m => String(m || '').trim()).filter(Boolean)
+    ? receipt.gpuModels.map((m) => String(m || '').trim()).filter(Boolean)
     : [];
   if (gpuModels.length > 0) normalized.gpuModels = gpuModels;
   if (receipt.cpuModel) normalized.cpuModel = String(receipt.cpuModel).trim();
