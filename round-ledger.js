@@ -439,6 +439,12 @@ function createRoundLedger(options = {}) {
     return Math.max(0, Number(state.currentRound.contributionsWh[key]) || 0);
   }
 
+  function getRoundContributionUpdatedAt(address) {
+    const key = normalizeAddress(address);
+    if (!key) return 0;
+    return Math.max(0, Number(state.currentRound.contributionUpdatedAtMs[key]) || 0);
+  }
+
   // Tier 4: forfeit an address's contribution for the current round.n  // Called when a device-fingerprint-change issue is detected at settle time.
   function forfeitContribution(address) {
     const key = normalizeAddress(address);
@@ -481,6 +487,7 @@ function createRoundLedger(options = {}) {
     syncMaturity,
     getAddressSnapshot,
     getRoundContribution,
+    getRoundContributionUpdatedAt,
     getCurrentRoundSnapshot,
     getMaturityDepth: () => MATURITY_DEPTH,
     forfeitContribution,

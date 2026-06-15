@@ -3,23 +3,20 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 
-let gpuProcess = null;
-let gpuInfo = null;
-let pendingResolve = null;
-let pendingTimeout = null;
+// Per-GPU process states
+const gpuStates = new Map(); // deviceIndex -> { process, info, telemetry, pendingResolve, pendingTimeout, rawBuf, xorKey, xorKeyStr }
+let gpuCount = 0;
 let currentPercent = 0;
 let targetPercent = 0;
 let rampUpStartTime = 0;
 let rampUpTimer = null;
 const RAMP_UP_DURATION_MS = 3000;
 
-let xorKey = null;
-let xorKeyStr = '';
-const EXPECTED_BIN_HASH = 'c37e889a753fb139fc4842869a9aece6b1bf87d0a50d32f0819d57cd89abd378'; // SHA-256 of gpu-miner.exe
+const EXPECTED_BIN_HASH = '640d1748410a8cc998d92abc6158a03f0c19390870ebf412c70fee24892417e1';
 
 const GPU_BINARY_NAME = 'gpu-miner.exe';
 
-// Telemetry
+// Aggregated telemetry (merged from per-GPU processes)
 let gpuTelemetry = {
   backend: '',
   adapter: '',
@@ -35,10 +32,7 @@ let gpuTelemetry = {
   error: null,
 };
 
-// Accumulated encrypted byte buffer (per-line decryption)
-let rawBuf = Buffer.alloc(0);
-
-function xorEncrypt(buf) {
+function xorEncrypt(buf, xorKey) {
   if (!xorKey) return buf;
   const len = buf.length;
   const keyLen = xorKey.length;
@@ -51,8 +45,7 @@ function xorEncrypt(buf) {
 
 function generateSessionKey() {
   const raw = crypto.randomBytes(32);
-  xorKey = raw.toString('hex');
-  xorKeyStr = 'key:' + xorKey;
+  return raw.toString('hex');
 }
 
 function verifyBinaryHash(binaryPath) {
@@ -75,13 +68,9 @@ function verifyBinaryHash(binaryPath) {
 function findGpuBinary() {
   const isPackaged = !!process.resourcesPath;
   const candidates = [
-    // Dev: from project root
     path.join(__dirname, 'native-gpu', 'build', GPU_BINARY_NAME),
-    // Dev: from project root (alternative layout)
     path.join(__dirname, '..', 'native-gpu', 'build', GPU_BINARY_NAME),
-    // Packaged: resourcesPath/native-gpu/
     ...(isPackaged ? [path.join(process.resourcesPath, 'native-gpu', GPU_BINARY_NAME)] : []),
-    // Packaged: resourcesPath/ (flat)
     ...(isPackaged ? [path.join(process.resourcesPath, GPU_BINARY_NAME)] : []),
   ];
   for (const p of candidates) {
@@ -95,102 +84,117 @@ function findGpuBinary() {
   return null;
 }
 
-function spawnGpuProcess() {
-  if (gpuProcess) return true;
-
+function spawnGpuProcess(deviceIndex) {
   const binaryPath = findGpuBinary();
   if (!binaryPath) {
     gpuTelemetry.error = 'GPU native binary not found';
     return false;
   }
 
-  // Anti-cheat: verify binary hash before spawning
   if (!verifyBinaryHash(binaryPath)) {
     return false;
   }
 
-  // Generate session key for pipe encryption
-  generateSessionKey();
+  const xorKey = generateSessionKey();
+  const xorKeyStr = 'key:' + xorKey;
 
-  gpuTelemetry.error = null; // clear any previous error
-
+  let process;
   try {
-    gpuProcess = spawn(binaryPath, [], {
+    process = spawn(binaryPath, ['--adapter', String(deviceIndex)], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
   } catch (err) {
-    gpuTelemetry.error = `spawn failed: ${err.message}`;
-    xorKey = null;
-    xorKeyStr = '';
+    gpuTelemetry.error = `spawn failed for device ${deviceIndex}: ${err.message}`;
     return false;
   }
 
-  rawBuf = Buffer.alloc(0);
+  const state = {
+    process,
+    info: null,
+    telemetry: {
+      backend: '',
+      adapter: '',
+      discrete: 0,
+      vramMb: 0,
+      status: 'starting',
+      duty: 0,
+      targetPercent: 0,
+      currentPercent: 0,
+      ts: 0,
+      frames: 0,
+      benchScore: 0,
+      error: null,
+    },
+    pendingResolve: null,
+    pendingTimeout: null,
+    rawBuf: Buffer.alloc(0),
+    xorKey,
+    xorKeyStr,
+  };
 
-  // Send the XOR session key as the first message (unencrypted preamble)
-  gpuProcess.stdin.write(xorKeyStr + '\n');
+  gpuStates.set(deviceIndex, state);
 
-  gpuProcess.stdout.on('data', (data) => {
-    rawBuf = Buffer.concat([rawBuf, data]);
-    processRawBuffer();
+  // Send the XOR session key as the first message
+  process.stdin.write(xorKeyStr + '\n');
+
+  process.stdout.on('data', (data) => {
+    state.rawBuf = Buffer.concat([state.rawBuf, data]);
+    processRawBuffer(state);
   });
 
-  gpuProcess.stderr.on('data', (data) => {
+  process.stderr.on('data', (data) => {
     if (process.env.WATTCOIN_DEBUG) {
-      console.warn(`[GpuLoad] stderr: ${data.toString('utf8').trim()}`);
+      console.warn(`[GpuLoad:${deviceIndex}] stderr: ${data.toString('utf8').trim()}`);
     }
   });
 
-  gpuProcess.on('exit', (code) => {
+  process.on('exit', (code) => {
     if (process.env.WATTCOIN_DEBUG) {
-      console.warn(`[GpuLoad] process exited code=${code}`);
+      console.warn(`[GpuLoad:${deviceIndex}] process exited code=${code}`);
     }
     const reason = code === 0 ? 'gpu process exited unexpectedly' : `gpu process crashed (code ${code})`;
-    if (!gpuTelemetry.error) gpuTelemetry.error = reason;
-    gpuProcess = null;
-    xorKey = null;
-    xorKeyStr = '';
-    gpuTelemetry.status = 'exited';
-    // Reject any pending request
-    if (pendingResolve) {
-      pendingResolve({ t: 'error', msg: reason });
-      pendingResolve = null;
+    if (!state.telemetry.error) state.telemetry.error = reason;
+    state.telemetry.status = 'exited';
+    if (state.pendingResolve) {
+      state.pendingResolve({ t: 'error', msg: reason });
+      state.pendingResolve = null;
     }
+    gpuStates.delete(deviceIndex);
+    mergeTelemetry();
   });
 
-  gpuProcess.on('error', (err) => {
-    gpuTelemetry.error = `process error: ${err.message}`;
-    gpuProcess = null;
-    xorKey = null;
-    xorKeyStr = '';
+  process.on('error', (err) => {
+    state.telemetry.error = `process error: ${err.message}`;
+    gpuStates.delete(deviceIndex);
+    mergeTelemetry();
   });
 
   return true;
 }
 
-function processRawBuffer() {
-  if (!xorKey || xorKey.length === 0) {
-    rawBuf = Buffer.alloc(0);
+function processRawBuffer(state) {
+  if (!state.xorKey || state.xorKey.length === 0) {
+    state.rawBuf = Buffer.alloc(0);
     return;
   }
-  const keyLen = xorKey.length;
+  const keyLen = state.xorKey.length;
   let lineStart = 0;
   let i = 0;
-  while (i < rawBuf.length) {
+  while (i < state.rawBuf.length) {
     const kIdx = (i - lineStart) % keyLen;
-    const decrypted = rawBuf[i] ^ xorKey.charCodeAt(kIdx);
+    const decrypted = state.rawBuf[i] ^ state.xorKey.charCodeAt(kIdx);
     if (decrypted === 0x0a) {
       const lineLen = i - lineStart + 1;
-      const lineBuf_local = Buffer.alloc(lineLen);
+      const lineBuf = Buffer.alloc(lineLen);
       for (let j = 0; j < lineLen; j++) {
-        lineBuf_local[j] = rawBuf[lineStart + j] ^ xorKey.charCodeAt(j % keyLen);
+        lineBuf[j] = state.rawBuf[lineStart + j] ^ state.xorKey.charCodeAt(j % keyLen);
       }
-      const line = lineBuf_local.toString('utf8').trim();
+      const line = lineBuf.toString('utf8').trim();
       if (line) {
         try {
           const msg = JSON.parse(line);
-          handleMessage(msg);
+          handleMessage(state, msg);
         } catch (_) {
           /* ignore malformed */
         }
@@ -200,108 +204,186 @@ function processRawBuffer() {
     i++;
   }
   if (lineStart > 0) {
-    rawBuf = rawBuf.slice(lineStart);
+    state.rawBuf = state.rawBuf.slice(lineStart);
   }
 }
 
-function handleMessage(msg) {
+function handleMessage(state, msg) {
   if (!msg || !msg.t) return;
+
+  // Find the device index for this state
+  let deviceIndex = -1;
+  for (const [idx, s] of gpuStates) {
+    if (s === state) { deviceIndex = idx; break; }
+  }
 
   switch (msg.t) {
     case 'ready':
-      gpuInfo = msg;
-      gpuTelemetry.backend = msg.backend || '';
-      gpuTelemetry.adapter = msg.adapter || '';
-      gpuTelemetry.discrete = msg.discrete || 0;
-      gpuTelemetry.vramMb = msg.vramMb || 0;
-      gpuTelemetry.vendorId = msg.vendorId || 0;
-      gpuTelemetry.deviceId = msg.deviceId || 0;
-      gpuTelemetry.status = 'ready';
-      // Don't resolve pendingResolve here — the 'info' command response
-      // (sent by ensureGpu) will do that once the binary processes it.
+      state.info = msg;
+      state.telemetry.backend = msg.backend || '';
+      state.telemetry.adapter = msg.adapter || '';
+      state.telemetry.discrete = msg.discrete || 0;
+      state.telemetry.vramMb = msg.vramMb || 0;
+      state.telemetry.vendorId = msg.vendorId || 0;
+      state.telemetry.deviceId = msg.deviceId || 0;
+      state.telemetry.status = 'ready';
+      mergeTelemetry();
       break;
 
     case 'enum':
     case 'trying':
-      // Informational
       break;
 
     case 'ok':
-      gpuTelemetry.duty = msg.duty || 0;
-      gpuTelemetry.status = msg.run ? 'running' : 'idle';
-      gpuTelemetry.ts = Date.now();
-      if (pendingResolve) {
-        pendingResolve(msg);
-        pendingResolve = null;
+      state.telemetry.duty = msg.duty || 0;
+      state.telemetry.status = msg.run ? 'running' : 'idle';
+      state.telemetry.ts = Date.now();
+      if (state.pendingResolve) {
+        state.pendingResolve(msg);
+        state.pendingResolve = null;
       }
+      mergeTelemetry();
       break;
 
     case 'status':
-      gpuTelemetry.duty = msg.duty || 0;
-      gpuTelemetry.status = msg.run ? 'running' : 'idle';
-      gpuTelemetry.ts = Date.now();
-      // Don't consume pendingResolve — status is an unsolicited periodic
-      // message that can arrive while waiting for a bench/proof response.
+      state.telemetry.duty = msg.duty || 0;
+      state.telemetry.status = msg.run ? 'running' : 'idle';
+      state.telemetry.ts = Date.now();
+      mergeTelemetry();
       break;
 
     case 'proof':
-      if (pendingResolve) {
-        pendingResolve(msg);
-        pendingResolve = null;
+      if (state.pendingResolve) {
+        state.pendingResolve(msg);
+        state.pendingResolve = null;
       }
       break;
 
     case 'bench':
-      gpuTelemetry.benchScore = msg.score || 0;
-      gpuTelemetry.frames = msg.frames || 0;
-      if (pendingResolve) {
-        pendingResolve(msg);
-        pendingResolve = null;
+      state.telemetry.benchScore = msg.score || 0;
+      state.telemetry.frames = msg.frames || 0;
+      if (state.pendingResolve) {
+        state.pendingResolve(msg);
+        state.pendingResolve = null;
       }
+      mergeTelemetry();
       break;
 
     case 'info':
-      if (pendingResolve) {
-        pendingResolve(msg);
-        pendingResolve = null;
+      if (state.pendingResolve) {
+        state.pendingResolve(msg);
+        state.pendingResolve = null;
       }
       break;
 
     case 'error':
-      gpuTelemetry.error = msg.msg || 'unknown error';
-      console.warn(`[GpuLoad] binary error: ${gpuTelemetry.error}`);
-      if (pendingResolve) {
-        pendingResolve(msg);
-        pendingResolve = null;
+      state.telemetry.error = msg.msg || 'unknown error';
+      console.warn(`[GpuLoad:${deviceIndex}] binary error: ${state.telemetry.error}`);
+      if (state.pendingResolve) {
+        state.pendingResolve(msg);
+        state.pendingResolve = null;
       }
+      mergeTelemetry();
       break;
   }
 }
 
-function sendCommand(cmd) {
+function mergeTelemetry() {
+  let totalDuty = 0;
+  let totalVramMb = 0;
+  let totalDiscrete = 0;
+  let totalFrames = 0;
+  let totalBenchScore = 0;
+  let anyRunning = false;
+  let anyReady = false;
+  let firstBackend = '';
+  let firstAdapter = '';
+  let firstError = null;
+  let firstStatus = 'idle';
+  let firstTs = 0;
+
+  for (const state of gpuStates.values()) {
+    const t = state.telemetry;
+    totalDuty += t.duty || 0;
+    totalVramMb += t.vramMb || 0;
+    totalDiscrete += t.discrete || 0;
+    totalFrames += t.frames || 0;
+    totalBenchScore += t.benchScore || 0;
+    if (t.status === 'running') anyRunning = true;
+    if (t.status === 'ready' || t.status === 'running') anyReady = true;
+    if (!firstBackend) firstBackend = t.backend || '';
+    if (!firstAdapter) firstAdapter = t.adapter || '';
+    if (!firstError && t.error) firstError = t.error;
+    if (t.ts > firstTs) firstTs = t.ts;
+  }
+
+  if (anyRunning) firstStatus = 'running';
+  else if (anyReady) firstStatus = 'ready';
+  else firstStatus = 'idle';
+
+  gpuTelemetry = {
+    backend: firstBackend,
+    adapter: firstAdapter,
+    discrete: totalDiscrete,
+    vramMb: totalVramMb,
+    status: firstStatus,
+    duty: totalDuty,
+    targetPercent,
+    currentPercent,
+    ts: firstTs || Date.now(),
+    frames: totalFrames,
+    benchScore: totalBenchScore,
+    error: firstError,
+    gpuCount: gpuStates.size,
+  };
+}
+
+function getState(deviceIndex) {
+  return gpuStates.get(deviceIndex) || null;
+}
+
+function sendCommand(deviceIndex, cmd) {
   return new Promise((resolve, reject) => {
-    if (!gpuProcess || !gpuProcess.stdin.writable) {
-      return reject(new Error('GPU process not running'));
+    const state = getState(deviceIndex);
+    if (!state || !state.process || !state.process.stdin.writable) {
+      return reject(new Error(`GPU process ${deviceIndex} not running`));
     }
-    pendingResolve = (msg) => {
-      cleanupPending();
+    state.pendingResolve = (msg) => {
+      if (state.pendingTimeout) {
+        clearTimeout(state.pendingTimeout);
+        state.pendingTimeout = null;
+      }
+      state.pendingResolve = null;
       resolve(msg);
     };
-    pendingTimeout = setTimeout(() => {
-      pendingResolve = null;
-      reject(new Error('GPU command timeout'));
+    state.pendingTimeout = setTimeout(() => {
+      state.pendingResolve = null;
+      reject(new Error(`GPU command timeout on device ${deviceIndex}`));
     }, 30000);
     const payload = JSON.stringify(cmd) + '\n';
-    gpuProcess.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8')));
+    state.process.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8'), state.xorKey));
   });
 }
 
-function cleanupPending() {
-  if (pendingTimeout) {
-    clearTimeout(pendingTimeout);
-    pendingTimeout = null;
+function broadcastCommand(cmd) {
+  const promises = [];
+  for (const deviceIndex of gpuStates.keys()) {
+    promises.push(
+      sendCommand(deviceIndex, cmd).catch(() => null)
+    );
   }
-  pendingResolve = null;
+  return Promise.all(promises);
+}
+
+function cleanupDevice(deviceIndex) {
+  const state = getState(deviceIndex);
+  if (state) {
+    if (state.pendingTimeout) {
+      clearTimeout(state.pendingTimeout);
+    }
+    state.pendingResolve = null;
+    state.pendingTimeout = null;
+  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -312,102 +394,160 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, n));
 }
 
-async function ensureGpu() {
-  if (gpuProcess && gpuInfo) return true;
-  if (!spawnGpuProcess()) return false;
-  // Wait for 'ready' message from the binary (gpuInfo is set in handleMessage)
-  const deadline = Date.now() + 30000;
-  while (!gpuInfo && Date.now() < deadline) {
-    if (!gpuProcess) break; // process crashed/exited before sending ready
-    await new Promise((r) => setTimeout(r, 10));
-  }
-  if (!gpuInfo) {
-    // Surface any backend-specific error collected during the wait
-    if (gpuTelemetry.error) {
-      gpuTelemetry.gpuBenchError = gpuTelemetry.error;
+async function ensureGpu(numGpus) {
+  const count = Math.max(1, Number(numGpus) || 1);
+  if (gpuStates.size >= count && count > 0) {
+    // All requested GPUs already running
+    for (const state of gpuStates.values()) {
+      if (state.info) continue;
+      // Wait for ready
+      const deadline = Date.now() + 30000;
+      while (!state.info && Date.now() < deadline) {
+        if (!state.process) break;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      if (!state.info) return false;
     }
-    return false;
+    return true;
   }
-  if (!gpuInfo) return false;
-  // Verify binary is responsive
-  try {
-    const resp = await sendCommand({ info: true });
-    return resp && resp.t === 'info';
-  } catch (_) {
-    return false;
+
+  // Spawn missing processes
+  for (let i = gpuStates.size; i < count; i++) {
+    if (!spawnGpuProcess(i)) {
+      gpuTelemetry.error = `Failed to spawn GPU process for device ${i}`;
+      return false;
+    }
   }
+
+  // Wait for all to be ready
+  for (const [deviceIndex, state] of gpuStates) {
+    if (state.info) continue;
+    const deadline = Date.now() + 30000;
+    while (!state.info && Date.now() < deadline) {
+      if (!state.process) break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    if (!state.info) return false;
+  }
+
+  // Verify each GPU is responsive
+  for (const deviceIndex of gpuStates.keys()) {
+    try {
+      const resp = await sendCommand(deviceIndex, { info: true });
+      if (!resp || resp.t !== 'info') return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  gpuCount = count;
+  mergeTelemetry();
+  return true;
 }
 
-async function startGpuLoad(percent) {
-  if (!(await ensureGpu())) return false;
+async function startGpuLoad(percent, gpuCountPer) {
+  if (!(await ensureGpu(gpuCountPer))) return false;
   try {
-    const res = await sendCommand({ start: true, loadPercent: clampPercent(percent) });
-    return res && res.t === 'ok';
+    const results = await broadcastCommand({ start: true, loadPercent: clampPercent(percent) });
+    return results.some(r => r && r.t === 'ok');
   } catch (_) {
     return false;
   }
 }
 
 async function setGpuLoad(percent) {
-  if (!gpuProcess) return false;
+  if (gpuStates.size === 0) return false;
   try {
-    const res = await sendCommand({ set: true, loadPercent: clampPercent(percent) });
-    return res && res.t === 'ok';
+    const results = await broadcastCommand({ set: true, loadPercent: clampPercent(percent) });
+    return results.some(r => r && r.t === 'ok');
   } catch (_) {
     return false;
   }
 }
 
 async function stopGpuLoad() {
-  if (!gpuProcess) return;
+  if (gpuStates.size === 0) return;
   try {
-    await sendCommand({ stop: true });
+    await broadcastCommand({ stop: true });
   } catch (_) {
     /* ignore */
   }
 }
 
 async function runGpuProof(seed, size, iters) {
-  if (!(await ensureGpu())) return null;
-  try {
-    const res = await sendCommand({ proof: true, seed, size, iters });
-    if (res && res.t === 'proof') {
-      return {
-        hash: String(res.hash),
-        elapsedMs: res.ms,
-        seed: res.seed,
-      };
+  const count = Math.max(1, gpuStates.size || 1);
+  if (!(await ensureGpu(count))) return null;
+
+  const results = [];
+  for (const deviceIndex of gpuStates.keys()) {
+    try {
+      const res = await sendCommand(deviceIndex, { proof: true, seed, size, iters });
+      if (res && res.t === 'proof') {
+        results.push({
+          deviceIndex,
+          hash: String(res.hash),
+          elapsedMs: res.ms,
+          seed: res.seed,
+        });
+      } else {
+        results.push({ deviceIndex, hash: null, elapsedMs: 0, error: 'proof failed' });
+      }
+    } catch (err) {
+      results.push({ deviceIndex, hash: null, elapsedMs: 0, error: err.message });
     }
-    return null;
-  } catch (_) {
-    return null;
   }
+
+  if (results.length === 0) return null;
+
+  return results;
 }
 
 async function runGpuBenchmark() {
-  if (!(await ensureGpu())) {
+  const count = Math.max(1, gpuStates.size || 1);
+  if (!(await ensureGpu(count))) {
     const errMsg = gpuTelemetry.error || 'GPU unavailable';
     console.warn(`[GpuLoad] benchmark failed: ${errMsg}`);
     return { score: 0, error: errMsg };
   }
-  try {
-    const res = await sendCommand({ bench: true });
-    if (res && res.t === 'bench') {
-      return {
-        score: res.score || 0,
-        frames: res.frames || 0,
-        elapsedMs: res.elapsedMs || 0,
-        opsPerMs: res.opsPerMs || 0,
-      };
+
+  const results = [];
+  for (const deviceIndex of gpuStates.keys()) {
+    try {
+      const res = await sendCommand(deviceIndex, { bench: true });
+      if (res && res.t === 'bench') {
+        results.push({
+          deviceIndex,
+          score: res.score || 0,
+          frames: res.frames || 0,
+          elapsedMs: res.elapsedMs || 0,
+          opsPerMs: res.opsPerMs || 0,
+        });
+      }
+    } catch (err) {
+      results.push({ deviceIndex, score: 0, error: err.message });
     }
-    return { score: 0, error: 'bench failed' };
-  } catch (err) {
-    return { score: 0, error: err.message };
   }
+
+  // Aggregate: total score across all GPUs
+  const totalScore = results.reduce((s, r) => s + r.score, 0);
+  const totalFrames = results.reduce((s, r) => s + (r.frames || 0), 0);
+  const maxElapsed = results.reduce((s, r) => Math.max(s, r.elapsedMs || 0), 0);
+  const avgOpsPerMs = results.length > 0 ? results.reduce((s, r) => s + (r.opsPerMs || 0), 0) / results.length : 0;
+
+  mergeTelemetry();
+  return {
+    score: totalScore,
+    frames: totalFrames,
+    elapsedMs: maxElapsed,
+    opsPerMs: avgOpsPerMs,
+    devices: results,
+  };
 }
 
 function getGpuInfo() {
-  return gpuInfo ? { ...gpuInfo } : null;
+  if (gpuStates.size === 0) return null;
+  const firstState = gpuStates.values().next().value;
+  return firstState.info ? { ...firstState.info, gpuCount: gpuStates.size } : null;
 }
 
 function getGpuLoadState() {
@@ -415,8 +555,9 @@ function getGpuLoadState() {
     ...gpuTelemetry,
     currentPercent,
     targetPercent,
-    available: !!gpuProcess,
-    hasGpu: gpuTelemetry.status !== 'idle' || gpuTelemetry.status !== 'exited',
+    available: gpuStates.size > 0,
+    hasGpu: gpuStates.size > 0,
+    gpuCount: gpuStates.size,
   };
 }
 
@@ -450,8 +591,11 @@ function stopRampUp() {
   rampUpStartTime = 0;
 }
 
-async function setGpuLoadPercent(percent) {
+async function setGpuLoadPercent(percent, ...args) {
   const next = clampPercent(percent);
+
+  // Support both setGpuLoadPercent(percent, gpuCount) and setGpuLoadPercent(percent)
+  const numGpus = args.length > 0 ? Math.max(1, Number(args[0]) || 1) : Math.max(1, gpuStates.size || 1);
 
   if (next <= 0) {
     stopRampUp();
@@ -461,8 +605,7 @@ async function setGpuLoadPercent(percent) {
     return currentPercent;
   }
 
-  // Start GPU process if needed
-  if (!(await ensureGpu())) {
+  if (!(await ensureGpu(numGpus))) {
     gpuTelemetry.error = 'GPU binary unavailable';
     return 0;
   }
@@ -480,20 +623,24 @@ function stopGpuHardwareLoad() {
 
 function shutdownGpu() {
   stopRampUp();
-  if (gpuProcess) {
+  for (const [deviceIndex, state] of gpuStates) {
     try {
       const payload = JSON.stringify({ quit: true }) + '\n';
-      gpuProcess.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8')));
+      state.process.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8'), state.xorKey));
     } catch (_) {
       /* write may fail if pipe closed */
     }
-    setTimeout(() => {
-      if (gpuProcess) {
-        gpuProcess.kill();
-        gpuProcess = null;
-      }
-    }, 500);
   }
+  setTimeout(() => {
+    for (const [deviceIndex, state] of gpuStates) {
+      try {
+        state.process.kill();
+      } catch (_) {
+        /* already dead */
+      }
+    }
+    gpuStates.clear();
+  }, 500);
 }
 
 module.exports = {

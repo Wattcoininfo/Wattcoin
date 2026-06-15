@@ -3,6 +3,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { performance } = require('perf_hooks');
 const { PROBE_RECEIPT_VERSION, normalizeProbeReceipt } = require('./probe-attestation');
+const { getExpectedCpuSpeedOps, getAsicPowerW, getGpuTdpW } = require('./hardware-tables.cjs');
 
 function _hasCommand(command, args = ['--help']) {
   try {
@@ -853,6 +854,38 @@ const workerChainState = new Map(); // workerId ? { chainHead, chainIndex }
 const workerConsecutiveTimeouts = new Map(); // workerId ? count
 const WORKER_MAX_CONSECUTIVE_TIMEOUTS = 3;
 
+// Per-worker network RTT estimate (coordinator side), updated by the probe push
+// WebSocket ping/pong heartbeat.  Used in submitPeerProbeResult to subtract network
+// time from wallClockMs so the product cap tests pure GPU compute time, not RTT.
+const workerNetworkRtt = new Map(); // workerId -> { smoothedMs, lastUpdatedMs }
+const WORKER_RTT_EWMA_ALPHA = 0.3; // weight for new samples vs history
+const WORKER_RTT_STALE_MS = 120_000; // discard RTT estimates older than 2 min
+
+function updateWorkerRtt(workerId, rttMs) {
+  if (!workerId || typeof rttMs !== 'number' || rttMs <= 0) return;
+  const now = Date.now();
+  const prev = workerNetworkRtt.get(workerId);
+  const smoothedMs = prev ? Math.round(prev.smoothedMs * (1 - WORKER_RTT_EWMA_ALPHA) + rttMs * WORKER_RTT_EWMA_ALPHA) : Math.round(rttMs);
+  workerNetworkRtt.set(workerId, { smoothedMs, lastUpdatedMs: now });
+  // Prune stale entries once the map exceeds a reasonable size
+  if (workerNetworkRtt.size > 500) {
+    const cutoff = now - WORKER_RTT_STALE_MS;
+    for (const [id, entry] of workerNetworkRtt) {
+      if (entry.lastUpdatedMs < cutoff) workerNetworkRtt.delete(id);
+    }
+  }
+}
+
+function getWorkerRtt(workerId) {
+  const entry = workerNetworkRtt.get(workerId);
+  if (!entry) return null;
+  if (Date.now() - entry.lastUpdatedMs > WORKER_RTT_STALE_MS) {
+    workerNetworkRtt.delete(workerId);
+    return null;
+  }
+  return entry.smoothedMs;
+}
+
 function getActiveWorkerCount() {
   const now = Date.now();
   let count = 0;
@@ -1092,7 +1125,76 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     workerChainState.set(entry.workerId, { chainHead: null, chainIndex: workerChainEntry.chainIndex || 0 });
   }
 
+  // Cross-check the claimed hardware against known tables and measured throughput.
+  // If the hardware model is not in the coordinator's tables the power is set to 0
+  // (no reward for that probe).  This prevents unknown/unrecognised hardware from
+  // earning rewards — a tampered renderer cannot inflate hwPowerW either.
+  let verifiedHwPowerW = 0;
+  if (hardwareSpec && hardwareSpec.hwPowerW > 0) {
+    let hardwareKnown = false;
+    if (probe.type === 'cpu' || probe.type === 'memory') {
+      hardwareKnown = hardwareSpec.cpuModel && getExpectedCpuSpeedOps(hardwareSpec.cpuModel) > 0;
+    } else if (probe.type === 'gpu') {
+      const gpuModels = Array.isArray(hardwareSpec.gpuModels) ? hardwareSpec.gpuModels : [];
+      hardwareKnown = gpuModels.length > 0 && gpuModels.every(m => getGpuTdpW(m) > 0);
+    } else if (probe.type === 'asic') {
+      hardwareKnown = hardwareSpec.asicModel && getAsicPowerW(hardwareSpec.asicModel) > 0;
+    }
+    if (hardwareKnown) {
+      if (probe.type === 'cpu' && hardwareSpec.measuredCpuOpsPerSec > 0) {
+        // Even the most inefficient CPU achieves ~10 ops/sec/W — anything above
+        // that ceiling is physically impossible for the measured throughput.
+        const maxPlausibleW = Math.round(hardwareSpec.measuredCpuOpsPerSec / 10);
+        if (hardwareSpec.hwPowerW <= maxPlausibleW) {
+          verifiedHwPowerW = Math.round(hardwareSpec.hwPowerW);
+        }
+      } else if (probe.type === 'memory' || probe.type === 'gpu' || probe.type === 'asic') {
+        // For non-CPU probes the coordinator cannot independently verify power
+        // from throughput — the table lookup is the only check.
+        verifiedHwPowerW = Math.round(hardwareSpec.hwPowerW);
+      }
+    }
+  }
+
+  // Timing-consistent power cap: subtract verifier-measured network RTT from the
+  // total wall-clock round trip to isolate pure GPU compute time, then verify
+  // that hwPowerW × computeTimeMs is physically plausible.  The product is
+  // roughly constant across GPU tiers (20k–30k W·ms for the fixed probe workload)
+  // because energy = power × time is conserved.  Threshold at 50k (≈2× margin).
+  if (verifiedHwPowerW > 0 && probe.type === 'gpu' && entry.workerId) {
+    const smoothedRtt = getWorkerRtt(entry.workerId);
+    if (smoothedRtt !== null && wallClockMs > smoothedRtt) {
+      const MAX_GPU_PROBE_PRODUCT = 50_000;
+      const computeTimeMs = wallClockMs - smoothedRtt;
+      if (verifiedHwPowerW * computeTimeMs > MAX_GPU_PROBE_PRODUCT) {
+        const cappedPower = Math.round(MAX_GPU_PROBE_PRODUCT / computeTimeMs);
+        if (cappedPower > 0 && cappedPower < verifiedHwPowerW) {
+          verifiedHwPowerW = cappedPower;
+        }
+      }
+    }
+  }
+
   const tag = ok ? 'PASS' : 'FAIL';
+
+  // Hardware model fields for independent power verification by other peers.
+  const receiptHwModels = {};
+  if (probe.type === 'gpu') {
+    const gpuModels = Array.isArray(hardwareSpec && hardwareSpec.gpuModels)
+      ? hardwareSpec.gpuModels
+      : [];
+    if (gpuModels.length > 0) {
+      receiptHwModels.gpuModels = gpuModels.map(m => String(m || '').trim()).filter(Boolean);
+    }
+  } else if (probe.type === 'cpu' || probe.type === 'memory') {
+    if (hardwareSpec && hardwareSpec.cpuModel) {
+      receiptHwModels.cpuModel = String(hardwareSpec.cpuModel).trim();
+    }
+  } else if (probe.type === 'asic') {
+    if (hardwareSpec && hardwareSpec.asicModel) {
+      receiptHwModels.asicModel = String(hardwareSpec.asicModel).trim();
+    }
+  }
 
   // Generate the canonical receipt payload so the HTTP handler can sign it with the
   // verifier's secp256k1 wallet key before returning it to the worker.
@@ -1111,6 +1213,8 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         roundId: Math.max(0, Math.round(Number(currentRoundId) || 0)),
         chainIndex: workerChainEntry.chainIndex,
         chainHead: workerChainEntry.chainHead,
+        hwPowerW: verifiedHwPowerW,
+        ...receiptHwModels,
       },
       { includeSignature: false },
     );
@@ -1120,6 +1224,11 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     `[PeerProbe] ${probe.type} ${tag} wall=${wallClockMs}ms worker=${entry.workerId}${issues.length ? ' - ' + issues.join('; ') : ''}`,
   );
 
+  // Derive network RTT and pure compute time for the probe log UI.
+  const attestRttMs = entry.workerId ? getWorkerRtt(entry.workerId) : null;
+  const attestComputeTimeMs =
+    attestRttMs !== null && wallClockMs > attestRttMs ? wallClockMs - attestRttMs : null;
+
   // Record in coordinator attest history so the UI can display attested probes.
   peerAttestHistory.unshift({
     ts: Date.now(),
@@ -1128,6 +1237,8 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     workerId: entry.workerId,
     ok,
     wallClockMs,
+    rttMs: attestRttMs,
+    computeTimeMs: attestComputeTimeMs,
     chainIndex: workerChainEntry.chainIndex,
     pixelHash: probe.type === 'gpu' ? String(result.pixelHash || '') : '',
     proof: probe.type !== 'gpu' ? String(result.proof || '') : '',
@@ -1140,6 +1251,8 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     proofValid,
     issues,
     wallClockMs,
+    rttMs: attestRttMs,
+    computeTimeMs: attestComputeTimeMs,
     workerId: entry.workerId,
     receipt,
     probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined,
@@ -1307,6 +1420,7 @@ module.exports = {
   getProbeHistory,
   issuePeerProbe,
   submitPeerProbeResult,
+  updateWorkerRtt,
   getPeerProbeHistory,
   getActiveWorkerCount,
   // Exported for cross-process verification (item 1) and GPU hash (item 3)
@@ -1318,6 +1432,12 @@ module.exports = {
   GPU_PROOF_ITERS,
   // Exported so settlement logic can compute expected probe count per round
   PROBE_INTERVAL_MS,
+  // Exported so contribution verification can derive timing-consistent power caps
+  PROBE_GPU_SIZE,
+  PROBE_GPU_ITERS,
+  PROBE_CPU_ITERS,
+  PROBE_MEM_ENTRIES,
+  PROBE_MEM_ITERS,
   // Authoritative probe chain state (cannot be spoofed by renderer)
   getLocalProbeChain,
   // Per-worker peer-probe verification tracking (coordinator mode)

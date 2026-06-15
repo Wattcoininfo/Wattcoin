@@ -38,7 +38,16 @@ function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
     roundId: Math.max(0, Math.round(toSafeNumber(receipt.roundId))),
     chainIndex: Math.max(0, Math.round(toSafeNumber(receipt.chainIndex))),
     chainHead: receipt.chainHead === null || receipt.chainHead === undefined ? null : String(receipt.chainHead).trim(),
+    hwPowerW: Math.max(0, Math.round(toSafeNumber(receipt.hwPowerW))),
   };
+  // Hardware model fields (optional — only included in the signed payload when
+  // present, so old receipts without them remain verifiable by new code).
+  const gpuModels = Array.isArray(receipt.gpuModels)
+    ? receipt.gpuModels.map(m => String(m || '').trim()).filter(Boolean)
+    : [];
+  if (gpuModels.length > 0) normalized.gpuModels = gpuModels;
+  if (receipt.cpuModel) normalized.cpuModel = String(receipt.cpuModel).trim();
+  if (receipt.asicModel) normalized.asicModel = String(receipt.asicModel).trim();
   if (includeSignature) {
     normalized.signature = normalizeProbeReceiptSignature(receipt.signature || receipt.sig || '');
   }

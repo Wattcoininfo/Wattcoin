@@ -217,9 +217,19 @@ function MiningLog({
           >
             {isAttested ? 'Attested' : 'My HW'}
           </span>
-          {/* Timing */}
+          {/* Timing: total, network, HW compute */}
           {typeof entry.wallClockMs === 'number' && (
             <span style={{ color: '#64748b', fontSize: 11 }}>{Math.round(entry.wallClockMs)} ms</span>
+          )}
+          {typeof entry.rttMs === 'number' && (
+            <span style={{ color: '#475569', fontSize: 10 }}>
+              net {Math.round(entry.rttMs)}ms
+            </span>
+          )}
+          {typeof entry.computeTimeMs === 'number' && (
+            <span style={{ color: '#5b8d5b', fontSize: 10 }}>
+              hw {Math.round(entry.computeTimeMs)}ms
+            </span>
           )}
           {/* Chain index */}
           {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (

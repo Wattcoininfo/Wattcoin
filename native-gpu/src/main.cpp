@@ -1046,7 +1046,16 @@ static void pump_stdin(void) {
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────
-int main(void) {
+int main(int argc, char *argv[]) {
+    // Parse --adapter N to select a specific GPU index (0-based).
+    // When omitted the binary auto-selects the best GPU.
+    int forceAdapter = -1;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--adapter") == 0 && i + 1 < argc) {
+            forceAdapter = atoi(argv[++i]);
+        }
+    }
+
     // DLL injection mitigation: only search system32 for implicit DLL loads
     SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
 
@@ -1062,9 +1071,42 @@ int main(void) {
         Sleep(10);
     }
 
-    if (!select_gpu()) {
-        json_out("{\"t\":\"error\",\"msg\":\"No compatible GPU or DirectX backend found\"}");
-        return 1;
+    if (forceAdapter >= 0) {
+        // Try only the specified adapter index
+        AdapterInfo adapters[MAX_ADAPTERS];
+        int count = try_enum_adapters_dxgi(adapters, MAX_ADAPTERS, 5000);
+        if (forceAdapter >= count) {
+            json_out("{\"t\":\"error\",\"msg\":\"Adapter index %d not found (have %d)\"}", forceAdapter, count);
+            return 1;
+        }
+        GpuInfo cand;
+        memset(&cand, 0, sizeof(cand));
+        BackendType backends[] = { BACKEND_D3D11, BACKEND_D3D12, BACKEND_D3D10, BACKEND_D3D9 };
+        int d3dTimedOut = 0;
+        int ok = 0;
+        for (int b = 0; b < 4 && !ok; b++) {
+            if (d3dTimedOut && backends[b] != BACKEND_D3D9) continue;
+            int ret = try_backend(backends[b], forceAdapter, &cand);
+            if (ret == 1) ok = 1;
+            if (ret == -1) d3dTimedOut = 1;
+        }
+        if (!ok) {
+            json_out("{\"t\":\"error\",\"msg\":\"No compatible DirectX backend for adapter %d\"}", forceAdapter);
+            return 1;
+        }
+        g_info = cand;
+        switch (g_info.type) {
+            case BACKEND_D3D12: g_init = init_d3d12; g_shutdown = shutdown_d3d12; g_dispatch_load = dispatch_load_d3d12; g_dispatch_proof = dispatch_proof_d3d12; break;
+            case BACKEND_D3D11: g_init = init_d3d11; g_shutdown = shutdown_d3d11; g_dispatch_load = dispatch_load_d3d11; g_dispatch_proof = dispatch_proof_d3d11; break;
+            case BACKEND_D3D10: g_init = init_d3d10; g_shutdown = shutdown_d3d10; g_dispatch_load = dispatch_load_d3d10; g_dispatch_proof = dispatch_proof_d3d10; break;
+            case BACKEND_D3D9:  g_init = init_d3d9;  g_shutdown = shutdown_d3d9;  g_dispatch_load = dispatch_load_d3d9;  g_dispatch_proof = dispatch_proof_d3d9;  break;
+            default: break;
+        }
+    } else {
+        if (!select_gpu()) {
+            json_out("{\"t\":\"error\",\"msg\":\"No compatible GPU or DirectX backend found\"}");
+            return 1;
+        }
     }
     g_gpuReady = 1;
 

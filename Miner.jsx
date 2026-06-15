@@ -2550,6 +2550,7 @@ export default function Miner({
                   // Main applies its own calibration factor on top so declaring a wrong model
                   // is penalised by the benchmark-measured ops ratio.
                   declaredUnitPowerW: unitFullPowerWRef.current || 0,
+                  declaredGpuCount: Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0,
                   isBaselineBenchmark: reason === 'startup' || reason === 'slider-stop',
                 })
                 .catch((e) => {
@@ -2884,6 +2885,15 @@ export default function Miner({
             }
           } catch (_) {
             if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
+          }
+        }
+
+        // Initialise native GPU binary path with detected GPU count so that
+        // per-GPU native processes are ready when the slider triggers load.
+        if (allowGpuWorkloads && window.wattcoinHardware && window.wattcoinHardware.invoke) {
+          const gpuCount = Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0;
+          if (gpuCount > 0) {
+            window.wattcoinHardware.invoke('wattcoin-gpu-info', { gpuCount }).catch(() => {});
           }
         }
 
@@ -3503,6 +3513,8 @@ export default function Miner({
       // Cap physical OS load at the trust ceiling so the machine doesn't do work that won't be credited.
       const trustF = Math.min(1.0, 0.2 + (trustScoreRef.current / 100) * 0.8);
       const trustCappedLoad = Math.min(clamped, Math.round(trustF * 100));
+      // Detect number of GPUs from hardware detection
+      const gpuCount = Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0;
       try {
         if (isHardwareOnHold) {
           if (window.wattcoinHardware.stopHardwareLoad) {
@@ -3510,12 +3522,27 @@ export default function Miner({
           } else {
             await window.wattcoinHardware.setHardwareLoad(0);
           }
+          if (gpuCount > 0 && window.wattcoinHardware.invoke) {
+            await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+          }
         } else if (mining) {
           await window.wattcoinHardware.setHardwareLoad(trustCappedLoad);
+          if (gpuCount > 0 && allowGpuWorkloads && window.wattcoinHardware.invoke) {
+            await window.wattcoinHardware.invoke('wattcoin-set-gpu-load', {
+              percent: trustCappedLoad,
+              gpuCount,
+            }).catch(() => {});
+          }
         } else if (window.wattcoinHardware.stopHardwareLoad) {
           await window.wattcoinHardware.stopHardwareLoad();
+          if (gpuCount > 0 && window.wattcoinHardware.invoke) {
+            await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+          }
         } else {
           await window.wattcoinHardware.setHardwareLoad(0);
+          if (gpuCount > 0 && window.wattcoinHardware.invoke) {
+            await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+          }
         }
       } catch (_) {
         if (!cancelled) {
@@ -3777,11 +3804,38 @@ export default function Miner({
           // GPU probe: backend-defined render size with readPixels() for true synchronous completion.
           // Silently skip if the hardware can't run GPU probes — the background poller
           // will fetch a new probe on its next cycle.
-          const gpuResult = allowGpuWorkloads
-            ? await runGpuProbe(probe.params.seed, probe.params.size, probe.params.shaderIterations)
-            : null;
-          if (!gpuResult || !gpuResult.pixelHash) return;
-          probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult.pixelHash };
+          const gpuCount = Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0;
+          if (gpuCount > 1 && window.wattcoinHardware && window.wattcoinHardware.invoke) {
+            // Multi-GPU: run proof on ALL GPUs via native binary and collect per-device hashes
+            const nativeProofs = await window.wattcoinHardware
+              .invoke('wattcoin-gpu-proof', {
+                seed: probe.params.seed,
+                size: probe.params.size,
+                shaderIterations: probe.params.shaderIterations,
+              })
+              .catch(() => null);
+            if (nativeProofs && nativeProofs.ok && Array.isArray(nativeProofs.devices) && nativeProofs.devices.length > 0) {
+              // All GPUs should produce the same hash (deterministic algorithm)
+              const primaryHash = nativeProofs.devices[0].hash;
+              const allMatch = nativeProofs.devices.every((d) => d.hash === primaryHash);
+              probeResult = {
+                id: probe.id,
+                type: 'gpu',
+                pixelHash: primaryHash || '',
+                gpuCount: nativeProofs.devices.length,
+                gpuHashes: nativeProofs.devices.map((d) => ({ deviceIndex: d.deviceIndex, hash: d.hash, elapsedMs: d.elapsedMs })),
+                gpuHashesAllMatch: allMatch,
+              };
+            }
+          }
+          // Fall back to WebGL probe for single-GPU or when native binary unavailable
+          if (!probeResult) {
+            const gpuResult = allowGpuWorkloads
+              ? await runGpuProbe(probe.params.seed, probe.params.size, probe.params.shaderIterations)
+              : null;
+            if (!gpuResult || !gpuResult.pixelHash) return;
+            probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult.pixelHash, gpuCount: 1 };
+          }
         } else if (probe.type === 'asic') {
           // ASIC probe: query the cgminer-compatible API for the summary command.
           let asicHashrateTHs = 0;
@@ -3840,6 +3894,10 @@ export default function Miner({
             measuredCpuOpsPerSec: Number(benchmarkProofRef.current && benchmarkProofRef.current.cpuSpeedOpsPerSec) || 0,
             measuredMemLatencyNs: Number(benchmarkProofRef.current && benchmarkProofRef.current.memLatencyNs) || 0,
             allowGpuWorkloads,
+            hwPowerW: Math.max(0, Math.round(Number(totalHardwareTDPRef.current) || 0)),
+            cpuModel: typeof hardware.cpu === 'string' ? hardware.cpu : '',
+            gpuModels: Array.isArray(hardware.gpus) ? hardware.gpus : [],
+            asicModel: typeof hardware.gpu === 'string' ? hardware.gpu : '',
           },
         };
         let verdict = await hw.submitPeerProbeResult(submitPayload);
@@ -3920,6 +3978,8 @@ export default function Miner({
                       : typeof verdict.wallClockMs === 'number'
                         ? Math.round(verdict.wallClockMs)
                         : null,
+                  rttMs: typeof verdict.rttMs === 'number' ? Math.round(verdict.rttMs) : null,
+                  computeTimeMs: typeof verdict.computeTimeMs === 'number' ? Math.round(verdict.computeTimeMs) : null,
                   pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
                   proof: typeof probeResult.proof === 'string' ? probeResult.proof : '',
                   verifierAddress:
@@ -4014,6 +4074,8 @@ export default function Miner({
           ok: !!h.ok,
           timedOut: Array.isArray(h.issues) && h.issues.some((i) => String(i).includes('timed out')),
           wallClockMs: typeof h.wallClockMs === 'number' ? Math.round(h.wallClockMs) : null,
+          rttMs: typeof h.rttMs === 'number' ? Math.round(h.rttMs) : null,
+          computeTimeMs: typeof h.computeTimeMs === 'number' ? Math.round(h.computeTimeMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
           issues: Array.isArray(h.issues) ? h.issues : [],
         }));
@@ -4027,6 +4089,8 @@ export default function Miner({
           ok: !!h.ok,
           timedOut: false,
           wallClockMs: typeof h.wallClockMs === 'number' ? Math.round(h.wallClockMs) : null,
+          rttMs: typeof h.rttMs === 'number' ? Math.round(h.rttMs) : null,
+          computeTimeMs: typeof h.computeTimeMs === 'number' ? Math.round(h.computeTimeMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
           workerId: typeof h.workerId === 'string' ? h.workerId : '',
           pixelHash: typeof h.pixelHash === 'string' ? h.pixelHash : '',
@@ -5056,6 +5120,9 @@ export default function Miner({
       matched = true;
     }
   }
+  // Snapshot: was hardware matched against exact model tables (not regex fallbacks)?
+  const exactModelMatch = matched;
+
   // Memory power estimate — per-type W/GB based on JEDEC specs at active load.
   // LPDDR (mobile): ~0.15 W/GB (1.1 V, low-power)
   // DDR5 / LPDDR5: ~0.25 W/GB (1.1 V; faster but lower voltage than DDR4)
@@ -5445,6 +5512,11 @@ export default function Miner({
   const tierRewardCoins = rewardForTier(currentTier);
   const minedPct = totalCoinSupply > 0 ? Math.min(100, (chainEmittedCoins / totalCoinSupply) * 100) : 0;
   const hardwareRecognitionFinished = !!(hardware && hardware.source) && (tdpFetchingCount === 0 || tdpFetchTimedOut);
+  const hardwareUnknown =
+    hardwareRecognitionFinished &&
+    (hardware.deviceType === 'Unknown' ||
+      hardware.cpu === 'Unknown' ||
+      (Array.isArray(hardware.gpus) && hardware.gpus.some((g) => g === 'Unknown' || !g)));
   const startupBenchmarkPending = hardwareRecognitionFinished && !benchmarkState.startupDone;
   // Once hardware is fully recognized, measure and persist the card's rendered width so
   // the next launch pre-sizes the card to avoid a layout jump.
@@ -6260,6 +6332,35 @@ export default function Miner({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, width: '100%', maxWidth: 1280 }}>
+      {hardwareUnknown && (
+        <div
+          style={{
+            background: '#1e1b4b',
+            border: '1px solid #6366f1',
+            borderRadius: 8,
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            color: '#c7d2fe',
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>⚠</span>
+          <span>
+            Hardware not recognized — mining is unavailable. Please contact{' '}
+            <a
+              href="mailto:info@wattcoin.ee"
+              style={{ color: '#a5b4fc', textDecoration: 'underline' }}
+            >
+              info@wattcoin.ee
+            </a>{' '}
+            to have your hardware added.
+          </span>
+        </div>
+      )}
       {isHardwareOnHold && (
         <div
           style={{
@@ -7253,6 +7354,7 @@ export default function Miner({
                 }}
                 disabled={
                   mining ||
+                  hardwareUnknown ||
                   !hardwareRecognitionFinished ||
                   benchmarkState.running ||
                   startupBenchmarkPending ||
@@ -7264,6 +7366,7 @@ export default function Miner({
                   width: '100%',
                   background:
                     mining ||
+                    hardwareUnknown ||
                     !hardwareRecognitionFinished ||
                     benchmarkState.running ||
                     startupBenchmarkPending ||
@@ -7282,6 +7385,7 @@ export default function Miner({
                   fontSize: 20,
                   cursor:
                     mining ||
+                    hardwareUnknown ||
                     !hardwareRecognitionFinished ||
                     benchmarkState.running ||
                     startupBenchmarkPending ||
@@ -7292,19 +7396,21 @@ export default function Miner({
                       : 'pointer',
                 }}
               >
-                {isHardwareOnHold
-                  ? `On hold (${Math.floor(holdSecondsLeft / 60)}:${String(holdSecondsLeft % 60).padStart(2, '0')})`
-                  : mining
-                    ? 'Mining active'
-                    : benchmarkState.running || startupBenchmarkPending
-                      ? 'Benchmarking...'
-                      : peerCount === null || peerCount === 0
-                        ? 'No peers'
-                        : showRebenchPrompt
-                          ? 'Re-Benchmark'
-                          : hardwareRecognitionFinished
-                            ? 'Start mining'
-                            : 'Detecting hardware...'}
+                {hardwareUnknown
+                  ? 'Hardware unknown'
+                  : isHardwareOnHold
+                    ? `On hold (${Math.floor(holdSecondsLeft / 60)}:${String(holdSecondsLeft % 60).padStart(2, '0')})`
+                    : mining
+                      ? 'Mining active'
+                      : benchmarkState.running || startupBenchmarkPending
+                        ? 'Benchmarking...'
+                        : peerCount === null || peerCount === 0
+                          ? 'No peers'
+                          : showRebenchPrompt
+                            ? 'Re-Benchmark'
+                            : hardwareRecognitionFinished
+                              ? 'Start mining'
+                              : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>
