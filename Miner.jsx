@@ -2090,6 +2090,8 @@ export default function Miner({
   const [holdSecondsLeft, setHoldSecondsLeft] = React.useState(0);
   const isHardwareOnHold = ENABLE_HARDWARE_HOLD && hardwareHoldUntilMs > Date.now();
 
+  const [hardwareRecognizedByNetwork, setHardwareRecognizedByNetwork] = React.useState(true);
+
   // Try to load hardware info from sessionStorage first
   const [hardware, setHardware] = React.useState(() => {
     // eslint-disable-line no-unused-vars
@@ -5525,7 +5527,8 @@ export default function Miner({
   const hardwareRecognitionFinished = !!(hardware && hardware.source) && (tdpFetchingCount === 0 || tdpFetchTimedOut);
   const hardwareUnknown =
     hardwareRecognitionFinished &&
-    (hardware.deviceType === 'Unknown' ||
+    (!hardwareRecognizedByNetwork ||
+      hardware.deviceType === 'Unknown' ||
       hardware.cpu === 'Unknown' ||
       (Array.isArray(hardware.gpus) && hardware.gpus.some((g) => g === 'Unknown' || !g)));
   const startupBenchmarkPending = hardwareRecognitionFinished && !benchmarkState.startupDone;
@@ -5547,6 +5550,36 @@ export default function Miner({
       }
     }, 300);
     return () => clearTimeout(t);
+  }, [hardwareRecognitionFinished]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once hardware recognition finishes, confirm against the coordinator's authoritative tables.
+  React.useEffect(() => {
+    if (!hardwareRecognitionFinished) return;
+    let cancelled = false;
+    const gpuModels = [];
+    if (Array.isArray(hardware.gpus)) {
+      for (const g of hardware.gpus) {
+        if (g && g !== 'Unknown') gpuModels.push(g);
+      }
+    }
+    const cpuModel = hardware.cpu && hardware.cpu !== 'Unknown' ? hardware.cpu : null;
+    const asicModel = hardware.deviceType === 'ASIC' && hardware.gpu && hardware.gpu !== 'Unknown' ? hardware.gpu : null;
+    const deviceType = hardware.deviceType || 'Unknown';
+    const isWholeUnit = deviceType === 'Laptop' || deviceType === 'Mini PC';
+    if (isWholeUnit) return;
+    if (gpuModels.length === 0 && !cpuModel && !asicModel) {
+      setHardwareRecognizedByNetwork(false);
+      return;
+    }
+    window.wattcoinHardware.isHardwareRecognized({ deviceType, gpuModels, cpuModel, asicModel }).then((res) => {
+      if (!cancelled && res && !res.recognized) {
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Unrecognized hardware:', res.unrecognized);
+        setHardwareRecognizedByNetwork(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setHardwareRecognizedByNetwork(false);
+    });
+    return () => { cancelled = true; };
   }, [hardwareRecognitionFinished]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Weighted suspicious-event trigger: anomaly score increases benchmark trigger probability.

@@ -5311,6 +5311,26 @@ ipcMain.handle('wattcoin-set-primary-address', async (_, targetAddress) => {
   }
 });
 
+ipcMain.handle('wattcoin-is-hardware-recognized', (_event, { deviceType, gpuModels, cpuModel, asicModel } = {}) => {
+  // Whole-unit devices (Laptop, Mini PC) use make+model power estimation, not component tables.
+  if (deviceType === 'Laptop' || deviceType === 'Mini PC') {
+    return { recognized: true, unrecognized: [] };
+  }
+  const unrecognized = [];
+  if (Array.isArray(gpuModels)) {
+    for (const m of gpuModels) {
+      if (m && getGpuTdpW(m) === 0) unrecognized.push({ type: 'gpu', model: m });
+    }
+  }
+  if (cpuModel && getExpectedCpuSpeedOps(cpuModel) === 0) {
+    unrecognized.push({ type: 'cpu', model: cpuModel });
+  }
+  if (asicModel && getAsicPowerW(asicModel) === 0) {
+    unrecognized.push({ type: 'asic', model: asicModel });
+  }
+  return { recognized: unrecognized.length === 0, unrecognized };
+});
+
 ipcMain.handle('wattcoin-get-benchmark-capabilities', () => {
   return getBenchmarkCapabilities();
 });
