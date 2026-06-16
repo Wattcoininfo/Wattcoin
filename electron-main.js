@@ -10235,6 +10235,19 @@ function startLedgerNetworkServer() {
           });
           return;
         }
+        // Round binding: reject receipts whose roundId does not match the
+        // current network round.  This prevents replaying probe receipts
+        // generated in a prior round (or in isolation with a stale roundId).
+        const currentRoundId = getCurrentNetworkRoundId();
+        const receiptRoundId = Math.max(0, Math.floor(Number(normalizedReceipt.roundId) || 0));
+        if (receiptRoundId !== currentRoundId) {
+          sendJson(res, 409, {
+            ok: false,
+            code: 'RECEIPT_ROUND_MISMATCH',
+            message: `Receipt roundId ${receiptRoundId} does not match current round ${currentRoundId}.`,
+          });
+          return;
+        }
         recordPeerAttestation(normalizedReceipt.verifierAddress, normalizedReceipt.workerId);
         // Store the receipt keyed by worker address + chainIndex.
         const workerAddr = normalizedReceipt.workerId;
@@ -10649,9 +10662,10 @@ function startLedgerNetworkServer() {
         // achievable with continuous operation at credible hardware power.
         // This prevents colluding peers from injecting fake large chunks.
         const prevWh = roundLedger.getRoundContribution(address);
-        if (prevWh > 0) {
-          const prevUpdatedAt = roundLedger.getRoundContributionUpdatedAt(address);
-          if (prevUpdatedAt > 0 && updatedAtMs > prevUpdatedAt) {
+        const prevUpdatedAt = roundLedger.getRoundContributionUpdatedAt(address);
+        const hasPriorContribution = prevWh > 0 && prevUpdatedAt > 0;
+        if (hasPriorContribution) {
+          if (updatedAtMs > prevUpdatedAt) {
             const elapsedMs = updatedAtMs - prevUpdatedAt;
             const increment = totalWh - prevWh;
             // Use attested hardware power with 2Ã— tolerance for network jitter and clock skew.
@@ -10664,6 +10678,27 @@ function startLedgerNetworkServer() {
                   `Energy increment ${increment.toFixed(4)} Wh exceeds max credible ` +
                   `${maxIncrement.toFixed(4)} Wh over ${elapsedMs}ms ` +
                   `(${((increment / Math.max(1, elapsedMs)) * 3600000).toFixed(0)}W equivalent).`,
+              });
+              return;
+            }
+          }
+        } else if (totalWh > 0 && attestedPowerW > 0) {
+          // First contribution this round — rate-bind against round start time
+          // instead of skipping the check entirely.  Prevents a colluder from
+          // dropping in mid-round with a large pre-built chain index and claiming
+          // the full probe-capped amount regardless of actual round elapsed time.
+          const roundStartMs = roundLedger.getCurrentRoundStartMs();
+          if (roundStartMs > 0 && updatedAtMs > roundStartMs) {
+            const elapsedMs = updatedAtMs - roundStartMs;
+            const maxIncrement = (attestedPowerW / 3600000) * elapsedMs * 2;
+            if (totalWh > maxIncrement && maxIncrement > 0.001) {
+              sendJson(res, 409, {
+                ok: false,
+                code: 'CONTRIBUTION_RATE_EXCEEDED',
+                message:
+                  `Energy total ${totalWh.toFixed(4)} Wh exceeds max credible ` +
+                  `${maxIncrement.toFixed(4)} Wh since round start (${elapsedMs}ms) ` +
+                  `(${((totalWh / Math.max(1, elapsedMs)) * 3600000).toFixed(0)}W equivalent).`,
               });
               return;
             }

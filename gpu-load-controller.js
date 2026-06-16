@@ -1,18 +1,13 @@
 const { spawn } = require('child_process');
 const path = require('path');
-const crypto = require('crypto');
-const fs = require('fs');
 
 // Per-GPU process states
-const gpuStates = new Map(); // deviceIndex -> { process, info, telemetry, pendingResolve, pendingTimeout, rawBuf, xorKey, xorKeyStr }
-let gpuCount = 0;
+const gpuStates = new Map(); // deviceIndex -> { process, info, telemetry, pendingResolve, pendingTimeout, rawBuf }
 let currentPercent = 0;
 let targetPercent = 0;
 let rampUpStartTime = 0;
 let rampUpTimer = null;
 const RAMP_UP_DURATION_MS = 3000;
-
-const EXPECTED_BIN_HASH = '640d1748410a8cc998d92abc6158a03f0c19390870ebf412c70fee24892417e1';
 
 const GPU_BINARY_NAME = 'gpu-miner.exe';
 
@@ -31,39 +26,6 @@ let gpuTelemetry = {
   benchScore: 0,
   error: null,
 };
-
-function xorEncrypt(buf, xorKey) {
-  if (!xorKey) return buf;
-  const len = buf.length;
-  const keyLen = xorKey.length;
-  const out = Buffer.alloc(len);
-  for (let i = 0; i < len; i++) {
-    out[i] = buf[i] ^ xorKey.charCodeAt(i % keyLen);
-  }
-  return out;
-}
-
-function generateSessionKey() {
-  const raw = crypto.randomBytes(32);
-  return raw.toString('hex');
-}
-
-function verifyBinaryHash(binaryPath) {
-  try {
-    const hash = crypto.createHash('sha256');
-    const data = fs.readFileSync(binaryPath);
-    hash.update(data);
-    const digest = hash.digest('hex');
-    if (digest !== EXPECTED_BIN_HASH) {
-      gpuTelemetry.error = `Binary hash mismatch: expected ${EXPECTED_BIN_HASH}, got ${digest}`;
-      return false;
-    }
-    return true;
-  } catch (err) {
-    gpuTelemetry.error = `Binary hash verification failed: ${err.message}`;
-    return false;
-  }
-}
 
 function findGpuBinary() {
   const isPackaged = !!process.resourcesPath;
@@ -90,13 +52,6 @@ function spawnGpuProcess(deviceIndex) {
     gpuTelemetry.error = 'GPU native binary not found';
     return false;
   }
-
-  if (!verifyBinaryHash(binaryPath)) {
-    return false;
-  }
-
-  const xorKey = generateSessionKey();
-  const xorKeyStr = 'key:' + xorKey;
 
   let process;
   try {
@@ -129,14 +84,9 @@ function spawnGpuProcess(deviceIndex) {
     pendingResolve: null,
     pendingTimeout: null,
     rawBuf: Buffer.alloc(0),
-    xorKey,
-    xorKeyStr,
   };
 
   gpuStates.set(deviceIndex, state);
-
-  // Send the XOR session key as the first message
-  process.stdin.write(xorKeyStr + '\n');
 
   process.stdout.on('data', (data) => {
     state.rawBuf = Buffer.concat([state.rawBuf, data]);
@@ -174,23 +124,10 @@ function spawnGpuProcess(deviceIndex) {
 }
 
 function processRawBuffer(state) {
-  if (!state.xorKey || state.xorKey.length === 0) {
-    state.rawBuf = Buffer.alloc(0);
-    return;
-  }
-  const keyLen = state.xorKey.length;
   let lineStart = 0;
-  let i = 0;
-  while (i < state.rawBuf.length) {
-    const kIdx = (i - lineStart) % keyLen;
-    const decrypted = state.rawBuf[i] ^ state.xorKey.charCodeAt(kIdx);
-    if (decrypted === 0x0a) {
-      const lineLen = i - lineStart + 1;
-      const lineBuf = Buffer.alloc(lineLen);
-      for (let j = 0; j < lineLen; j++) {
-        lineBuf[j] = state.rawBuf[lineStart + j] ^ state.xorKey.charCodeAt(j % keyLen);
-      }
-      const line = lineBuf.toString('utf8').trim();
+  for (let i = 0; i < state.rawBuf.length; i++) {
+    if (state.rawBuf[i] === 0x0a) {
+      const line = state.rawBuf.toString('utf8', lineStart, i).trim();
       if (line) {
         try {
           const msg = JSON.parse(line);
@@ -201,7 +138,6 @@ function processRawBuffer(state) {
       }
       lineStart = i + 1;
     }
-    i++;
   }
   if (lineStart > 0) {
     state.rawBuf = state.rawBuf.slice(lineStart);
@@ -364,7 +300,7 @@ function sendCommand(deviceIndex, cmd) {
       reject(new Error(`GPU command timeout on device ${deviceIndex}`));
     }, 30000);
     const payload = JSON.stringify(cmd) + '\n';
-    state.process.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8'), state.xorKey));
+    state.process.stdin.write(payload, 'utf8');
   });
 }
 
@@ -374,17 +310,6 @@ function broadcastCommand(cmd) {
     promises.push(sendCommand(deviceIndex, cmd).catch(() => null));
   }
   return Promise.all(promises);
-}
-
-function cleanupDevice(deviceIndex) {
-  const state = getState(deviceIndex);
-  if (state) {
-    if (state.pendingTimeout) {
-      clearTimeout(state.pendingTimeout);
-    }
-    state.pendingResolve = null;
-    state.pendingTimeout = null;
-  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -421,7 +346,7 @@ async function ensureGpu(numGpus) {
   }
 
   // Wait for all to be ready
-  for (const [deviceIndex, state] of gpuStates) {
+  for (const [, state] of gpuStates) {
     if (state.info) continue;
     const deadline = Date.now() + 30000;
     while (!state.info && Date.now() < deadline) {
@@ -441,7 +366,6 @@ async function ensureGpu(numGpus) {
     }
   }
 
-  gpuCount = count;
   mergeTelemetry();
   return true;
 }
@@ -624,16 +548,16 @@ function stopGpuHardwareLoad() {
 
 function shutdownGpu() {
   stopRampUp();
-  for (const [deviceIndex, state] of gpuStates) {
+  for (const [, state] of gpuStates) {
     try {
       const payload = JSON.stringify({ quit: true }) + '\n';
-      state.process.stdin.write(xorEncrypt(Buffer.from(payload, 'utf8'), state.xorKey));
+      state.process.stdin.write(payload, 'utf8');
     } catch (_) {
       /* write may fail if pipe closed */
     }
   }
   setTimeout(() => {
-    for (const [deviceIndex, state] of gpuStates) {
+    for (const [, state] of gpuStates) {
       try {
         state.process.kill();
       } catch (_) {

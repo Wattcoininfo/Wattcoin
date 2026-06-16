@@ -36,8 +36,6 @@
 // ── Constants ─────────────────────────────────────────────────────────────
 #define TIMER_FLOOR_MS 4.0
 #define MAX_ADAPTERS 32
-#define XOR_KEY_MAX 64
-
 // ── Types ─────────────────────────────────────────────────────────────────
 typedef enum {
     BACKEND_NONE = 0,
@@ -66,8 +64,6 @@ static HANDLE         g_stdout;
 static int            g_running;
 static double         g_loadFrac;    // 0.0 – 1.0
 static double         g_measDuty;
-static char           g_xorKey[XOR_KEY_MAX];
-static int            g_xorKeyLen;
 
 // Backend function pointers
 static int      (*g_init)(int adapterIdx, GpuInfo *info);
@@ -84,13 +80,6 @@ static double now_ms(void) {
     return (double)c.QuadPart * 1000.0 / (double)f.QuadPart;
 }
 
-// ── XOR pipe encryption helpers ─────────────────────────────────────────
-static void xor_apply(char *buf, int len) {
-    for (int i = 0; i < len; i++) {
-        buf[i] ^= g_xorKey[i % g_xorKeyLen];
-    }
-}
-
 static void json_out(const char *fmt, ...) {
     char buf[8192 + 4];
     int n;
@@ -101,14 +90,9 @@ static void json_out(const char *fmt, ...) {
     if (n > 0) {
         buf[n] = '\n';
         n++;
-        if (g_xorKeyLen > 0) xor_apply(buf, n);
         DWORD w;
         WriteFile(g_stdout, buf, n, &w, NULL);
     }
-}
-
-static void decrypt_inplace(char *buf, int len) {
-    if (g_xorKeyLen > 0) xor_apply(buf, len);
 }
 
 // ── Safe init-with-timeout (no TerminateThread) ──────────────────────────
@@ -1010,35 +994,13 @@ static void pump_stdin(void) {
     while (PeekNamedPipe(g_stdin, NULL, 0, NULL, &read, NULL) && read > 0) {
         if (!ReadFile(g_stdin, buf, sizeof(buf) - 1, &read, NULL) || read == 0) break;
         buf[read] = 0;
-        decrypt_inplace(buf, (int)read);
         char *line = buf;
         while (line && *line) {
             char *nl = strchr(line, '\n');
             if (nl) *nl = 0;
             char *cr = strchr(line, '\r');
             if (cr) *cr = 0;
-            if (*line) {
-                // First command must be the XOR key
-                if (g_xorKeyLen == 0) {
-                    const char *prefix = "key:";
-                    if (strncmp(line, prefix, strlen(prefix)) == 0) {
-                        int keyLen = (int)strlen(line + 4);
-                        if (keyLen > XOR_KEY_MAX) keyLen = XOR_KEY_MAX;
-                        memcpy(g_xorKey, line + 4, keyLen);
-                        g_xorKeyLen = keyLen;
-                        // Decrypt any remaining data in the buffer that was read
-                        // past the key line — the initial decrypt_inplace was a
-                        // no-op because the key wasn't set yet.
-                        if (nl) {
-                            int remaining = (int)((buf + read) - (nl + 1));
-                            if (remaining > 0) decrypt_inplace(nl + 1, remaining);
-                        }
-                        goto next_line;
-                    }
-                }
-                if (g_gpuReady) handle_cmd(line);
-            }
-            next_line:
+            if (*line && g_gpuReady) handle_cmd(line);
             if (!nl) break;
             line = nl + 1;
         }
@@ -1063,13 +1025,6 @@ int main(int argc, char *argv[]) {
     g_stdout = GetStdHandle(STD_OUTPUT_HANDLE);
     _setmode(_fileno(stdout), _O_BINARY);
     _setmode(_fileno(stdin), _O_BINARY);
-
-    // Wait for XOR key handshake first so all output (including select_gpu
-    // diagnostics) is consistently encrypted.
-    while (g_xorKeyLen == 0) {
-        pump_stdin();
-        Sleep(10);
-    }
 
     if (forceAdapter >= 0) {
         // Try only the specified adapter index

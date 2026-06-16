@@ -55,7 +55,8 @@ $outExe = Join-Path $outDir "gpu-miner.exe"
 
 $compileCmd = @"
 call "$vcvars" > nul
-cl.exe /nologo /O2 /MT /GL- /EHsc /Fe"$outExe" "$SrcDir\main.cpp" "$SrcDir\gen\shaders.c" "$SrcDir\gen\shaders_d3d9.c" user32.lib d3d10_1.lib
+rc.exe /nologo /fo"$SrcDir\version.res" "$SrcDir\version.rc"
+cl.exe /nologo /O2 /MT /GL- /EHsc /Fe"$outExe" "$SrcDir\main.cpp" "$SrcDir\gen\shaders.c" "$SrcDir\gen\shaders_d3d9.c" "$SrcDir\version.res" user32.lib d3d10_1.lib
 "@
 Write-Host "Compiling main.cpp with MSVC..."
 cmd /c $compileCmd
@@ -65,8 +66,9 @@ if ($LASTEXITCODE -ne 0) {
     exit $exitCode
 }
 
-# Remove .obj files
+# Remove intermediate files
 Get-ChildItem "$SrcDir\*.obj" -ErrorAction SilentlyContinue | Remove-Item
+Get-ChildItem "$SrcDir\*.res" -ErrorAction SilentlyContinue | Remove-Item
 Get-ChildItem "$PSScriptRoot\*.obj" -ErrorAction SilentlyContinue | Remove-Item
 
 Write-Host "=== Done: $outExe ==="
