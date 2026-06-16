@@ -12357,6 +12357,11 @@ app.on('window-all-closed', () => {
   } catch (e) {
     console.error('Failed to stop hardware load controller:', e);
   }
+  try {
+    _closeBgProbeWs();
+  } catch (e) {
+    console.error('Failed to close probe WebSocket:', e);
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
