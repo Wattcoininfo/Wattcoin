@@ -6456,13 +6456,13 @@ function _closeBgProbeWs() {
     try {
       if (c.ws.readyState === WebSocket.OPEN) {
         c.ws.send(JSON.stringify({ type: 'worker-done' }), () => {
-          try { c.ws.close(); } catch (_) {}
+          try { c.ws.close(); } catch (_) { /* ws already closed */ }
         });
       } else {
-        try { c.ws.close(); } catch (_) {}
+        try { c.ws.close(); } catch (_) { /* ws already closed */ }
       }
     } catch (_) {
-      try { c.ws.close(); } catch (_) {}
+      try { c.ws.close(); } catch (_) { /* ws already closed */ }
     }
     // Detach from ping/pong timer that may fire after clearInterval races.
     c.ws._probePushPingInterval = null;
@@ -6479,7 +6479,7 @@ function _closeBgProbeWs() {
   if (typeof setImmediate === 'function') {
     setImmediate(() => {
       for (const c of conns) {
-        try { c.ws.terminate(); } catch (_) {}
+        try { c.ws.terminate(); } catch (_) { /* ws already closed */ }
       }
     });
   }
