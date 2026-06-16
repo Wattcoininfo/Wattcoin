@@ -178,6 +178,7 @@ const config = {
     installerIcon: 'assets/icons/icon.ico',
     uninstallerIcon: 'assets/icons/icon.ico',
     installerHeaderIcon: 'assets/icons/icon.ico',
+    include: 'build/installer.nsh',
   },
   mac: {
     target: ['dmg', 'zip'],
