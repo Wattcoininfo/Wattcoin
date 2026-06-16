@@ -388,14 +388,20 @@ async function runBackendBenchmark(_request = {}) {
   }
 }
 
-// --- Runtime probe system ------------------------------------------------------
-// During active mining the node periodically issues a small challenge workload to
-// the renderer.  The renderer runs it and returns a proof hash + elapsed time.
-// Node re-runs the same deterministic computation to verify the hash (CPU + memory).
-// GPU probes are timing-only � Node cannot execute GPU code, but it checks that the
-// wall-clock time is consistent with what the declared GPU should take.
+// --- Calibration probe system ------------------------------------------------
+// There is no solo mining — mining always requires a peer connection and
+// the coordinator sends push probes (see WebSocket push-probe coordinator
+// in electron-main.js; max interval 60 s).  The local probe system below
+// is used ONLY for initial hardware calibration / benchmarking, never
+// during active mining.
 //
-// Probe schedule: one probe every PROBE_INTERVAL_MS of active mining.
+// The renderer runs a small challenge workload and returns a proof hash +
+// elapsed time.  The node re-runs the same deterministic computation to
+// verify the hash (CPU + memory).  GPU probes are timing-only — Node
+// cannot execute GPU code, but it checks that the wall-clock time is
+// consistent with what the declared GPU should take.
+//
+// Calibration probe schedule: 2-8 min random jitter (PROBE_INTERVAL_MIN/MS)._MAX/MS).
 // Three types cycle randomly: 'cpu', 'memory', 'gpu' (only if allowGpuWorkloads).
 // If the renderer does not respond within PROBE_TIMEOUT_MS, it is recorded as a failure.
 //
@@ -415,7 +421,7 @@ async function runBackendBenchmark(_request = {}) {
 // predict or schedule around the timing of upcoming challenges.
 const PROBE_INTERVAL_MIN_MS = 2 * 60 * 1000; // earliest a new probe can fire (2 min)
 const PROBE_INTERVAL_MAX_MS = 8 * 60 * 1000; // latest a new probe can fire (8 min)
-const PROBE_INTERVAL_MS = 5 * 60 * 1000; // retained for coverage-ratio math (used as mean)
+const PROBE_INTERVAL_MS = 60_000; // max push-probe interval (60 s) — during mining only push probes fire, not local probes
 const PROBE_TIMEOUT_MS = 100 * 1000; // 100 s — ~1.67× max push interval (0-60 s)
 const PROBE_CPU_ITERS = 200_000_000; // ~1000-4000 ms - pushes timing above scheduler/network noise
 const PROBE_MEM_ENTRIES = 1 << 24; // 64 MB - large enough to stay in DRAM on mainstream systems

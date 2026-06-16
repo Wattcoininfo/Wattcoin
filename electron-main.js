@@ -6446,22 +6446,26 @@ function _closeBgProbeWs() {
     }
   }
   _pendingConns.clear();
+  // Snapshot active connections before clearing, so the terminate fallback below
+  // still has valid references even after _probeConns is reset.
+  const conns = _probeConns.slice();
   // Notify each coordinator that this worker is done, so they cancel
   // pending probes immediately instead of waiting for TCP timeout.
-  for (const c of _probeConns) {
-    try {
-      if (c.ws.readyState === WebSocket.OPEN) {
-        c.ws.send(JSON.stringify({ type: 'worker-done' }));
-      }
-    } catch (_) {
-      /* ignore */
-    }
+  for (const c of conns) {
     if (c.pingInterval) clearInterval(c.pingInterval);
     try {
-      c.ws.close();
+      if (c.ws.readyState === WebSocket.OPEN) {
+        c.ws.send(JSON.stringify({ type: 'worker-done' }), () => {
+          try { c.ws.close(); } catch (_) {}
+        });
+      } else {
+        try { c.ws.close(); } catch (_) {}
+      }
     } catch (_) {
-      /* ignore */
+      try { c.ws.close(); } catch (_) {}
     }
+    // Detach from ping/pong timer that may fire after clearInterval races.
+    c.ws._probePushPingInterval = null;
   }
   _probeConns = [];
   _pendingProbes = [];
@@ -6470,6 +6474,15 @@ function _closeBgProbeWs() {
   _probeInProgressEpoch = -1;
   _probeEpoch++;
   _clearProbeTimeoutTimer();
+  // Fallback: if the process exits before the send callback fires (e.g. app quit
+  // without Stop), terminate the sockets so the coordinator sees TCP RST instantly.
+  if (typeof setImmediate === 'function') {
+    setImmediate(() => {
+      for (const c of conns) {
+        try { c.ws.terminate(); } catch (_) {}
+      }
+    });
+  }
 }
 
 function _scheduleBgProbeWsReconnect() {
@@ -9070,6 +9083,84 @@ function getSharedRoundSnapshot() {
   return roundLedger.getCurrentRoundSnapshot();
 }
 
+
+/**
+ * Validate contribution probe attestations for an address.
+ * Returns { ok, code?, message?, attestedPowerW? }.
+ * Extracted so both HTTP POST and peer-sync paths use the same logic.
+ */
+function validateContributionProbe(address, totalWh, chainIndex) {
+  let attestedPowerW = 0;
+  if (witnessedProbeReceipts.has(address)) {
+    const verifiedEntry = witnessedProbeReceipts.get(address);
+    const receiptsForClaimedIndex = verifiedEntry.receipts.get(chainIndex) || new Map();
+    if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
+      return { ok: false, code: 'INSUFFICIENT_PROBE_ATTESTATIONS', message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}` };
+    }
+    const verifiedMax = Math.max(0, verifiedEntry.maxChainIndex || 0);
+    if (chainIndex > verifiedMax + 1) {
+      return { ok: false, code: 'PROBE_CHAIN_EXCEEDS_VERIFIED', message: `claimed chainIndex (${chainIndex}) exceeds verified max (${verifiedMax}) by more than 1` };
+    }
+    const powerValues = [];
+    for (const receipt of receiptsForClaimedIndex.values()) {
+      if (receipt.hwPowerW <= 0) continue;
+      let cap = receipt.hwPowerW;
+      if (receipt.type === 'gpu' && Array.isArray(receipt.gpuModels) && receipt.gpuModels.length > 0) {
+        const model = receipt.gpuModels[0];
+        if (model) {
+          try {
+            const tableTdp = getGpuTdpW(model);
+            if (tableTdp > 0 && tableTdp < cap) cap = tableTdp;
+          } catch (_) { /* ignore lookup failure */ }
+        }
+      } else if ((receipt.type === 'cpu' || receipt.type === 'memory') && receipt.cpuModel) {
+        try {
+          const expectedOps = getExpectedCpuSpeedOps(receipt.cpuModel);
+          if (expectedOps > 0) {
+            const cpuCap = Math.round(expectedOps / 10);
+            if (cpuCap > 0 && cpuCap < cap) cap = cpuCap;
+          }
+        } catch (_) { /* ignore lookup failure */ }
+      }
+      if (receipt.wallClockMs > 10) {
+        try {
+          if (receipt.type === 'gpu') {
+            const product = receipt.hwPowerW * receipt.wallClockMs;
+            const MAX_GPU_PROBE_PRODUCT = 120_000;
+            if (product > MAX_GPU_PROBE_PRODUCT) {
+              const powerFromTiming = Math.round(MAX_GPU_PROBE_PRODUCT / receipt.wallClockMs);
+              if (powerFromTiming > 0 && powerFromTiming < cap) cap = powerFromTiming;
+            }
+          } else if (receipt.type === 'cpu') {
+            const measuredCpuOpsPerSec = (PROBE_CPU_ITERS / receipt.wallClockMs) * 1000;
+            const timingCap = Math.round(measuredCpuOpsPerSec / 10);
+            if (timingCap > 0 && timingCap < cap) cap = timingCap;
+          }
+        } catch (_) { /* ignore timing cap failure */ }
+      }
+      powerValues.push(cap);
+    }
+    if (powerValues.length > 0) {
+      attestedPowerW = Math.min(...powerValues);
+    }
+    if (attestedPowerW <= 0) {
+      return { ok: false, code: 'CONTRIBUTION_NO_VERIFIED_POWER', message: `No verifier-attested hardware power for ${address} chainIndex ${chainIndex}.` };
+    }
+    const MAX_WH_PER_PROBE = (attestedPowerW * PROBE_INTERVAL_MS) / 3600000;
+    const maxWhForChainIndex = chainIndex * MAX_WH_PER_PROBE;
+    if (totalWh > maxWhForChainIndex) {
+      return { ok: false, code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT', message: `totalWh (${totalWh}) exceeds max (${maxWhForChainIndex.toFixed(2)}) for chainIndex ${chainIndex} (attested ${attestedPowerW}W)` };
+    }
+  } else if (chainIndex > 0) {
+    return { ok: false, code: 'INSUFFICIENT_PROBE_ATTESTATIONS', message: `No probe attestations witnessed for ${address}; cannot verify chainIndex ${chainIndex}.` };
+  } else if (totalWh > 0) {
+    return { ok: false, code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT', message: `No probe attestations for ${address}; chainIndex is 0 but totalWh is ${totalWh}.` };
+  }
+  return { ok: true, attestedPowerW };
+}
+
+
+
 async function pullContributionsFromPeers() {
   const settings = getLedgerNetworkSettings();
   if (!settings || !settings.enabled || !wtcNode) return;
@@ -9147,12 +9238,14 @@ async function pullContributionsFromPeers() {
       if (message && signature) {
         try {
           if (wtcNode.verifyMessage(address, signature, message)) {
-            if (updatedAtMs > bestVerifiedTime) {
+            const chainIdx = Math.max(-1, Math.floor(Number((snap.probeChainIndex || {})[address]) || -1));
+            const probeCheck = validateContributionProbe(address, totalWh, chainIdx);
+            if (probeCheck.ok && updatedAtMs > bestVerifiedTime) {
               bestVerifiedWh = totalWh;
               bestVerifiedTime = updatedAtMs;
               bestMessage = String(message);
               bestSignature = String(signature);
-              bestChainIndex = Math.max(-1, Math.floor(Number((snap.probeChainIndex || {})[address]) || -1));
+              bestChainIndex = chainIdx;
             }
           }
           // Invalid signature ? skip (peer tampered with stored value)
@@ -9171,6 +9264,7 @@ async function pullContributionsFromPeers() {
         bestMessage,
         bestSignature,
       );
+      if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
       continue;
     }
 
@@ -9203,6 +9297,7 @@ async function pullContributionsFromPeers() {
       // Use the latest snapshot timestamp if available, fall back to Date.now() only as last resort
       const bestTime = latestUpdatedMs > 0 ? latestUpdatedMs : Date.now();
       roundLedger.setRoundContribution(address, bestValue, bestTime);
+      if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
     }
     // If no snapshots contain this address, skip it (nothing to restore)
   }
@@ -10527,134 +10622,12 @@ function startLedgerNetworkServer() {
         }
 
         // Cross-check chainIndex against verifier-witnessed probe receipts.
-        // The worker's claimed chainIndex must be attested by multiple verifiers,
-        // and it must not exceed the highest verified chain index by more than 1.
-        // Also determine attested hardware power from receipts for cap and rate checks.
-        let attestedPowerW = 0;
-        if (witnessedProbeReceipts.has(address)) {
-          const verifiedEntry = witnessedProbeReceipts.get(address);
-          const receiptsForClaimedIndex = verifiedEntry.receipts.get(chainIndex) || new Map();
-          if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
-            sendJson(res, 409, {
-              ok: false,
-              code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
-              message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}`,
-            });
-            return;
-          }
-          const verifiedMax = Math.max(0, verifiedEntry.maxChainIndex || 0);
-          if (chainIndex > verifiedMax + 1) {
-            sendJson(res, 409, {
-              ok: false,
-              code: 'PROBE_CHAIN_EXCEEDS_VERIFIED',
-              message: `claimed chainIndex (${chainIndex}) exceeds verified max (${verifiedMax}) by more than 1`,
-            });
-            return;
-          }
-
-          // Attested hardware power from probe receipts (minimum across verifiers).
-          // For each receipt, derive a timing-consistent power cap from the verifier's
-          // wall-clock measurement and any hardware model in the receipt.  This prevents
-          // a coordinated verifier ring from inflating hwPowerW without also fabricating
-          // a consistent wallClockMs — the verifier must lie on two independent dimensions.
-          const powerValues = [];
-          for (const receipt of receiptsForClaimedIndex.values()) {
-            if (receipt.hwPowerW <= 0) continue;
-            let cap = receipt.hwPowerW;
-
-            // Independent hardware-table lookup: if the receipt carries the GPU model,
-            // look up its real TDP instead of trusting the verifier's hwPowerW.
-            if (receipt.type === 'gpu' && Array.isArray(receipt.gpuModels) && receipt.gpuModels.length > 0) {
-              const model = receipt.gpuModels[0];
-              if (model) {
-                try {
-                  const tableTdp = getGpuTdpW(model);
-                  if (tableTdp > 0 && tableTdp < cap) cap = tableTdp;
-                } catch (_) {
-                  /* ignore lookup failure */
-                }
-              }
-            } else if ((receipt.type === 'cpu' || receipt.type === 'memory') && receipt.cpuModel) {
-              try {
-                const expectedOps = getExpectedCpuSpeedOps(receipt.cpuModel);
-                if (expectedOps > 0) {
-                  const cpuCap = Math.round(expectedOps / 10);
-                  if (cpuCap > 0 && cpuCap < cap) cap = cpuCap;
-                }
-              } catch (_) {
-                /* ignore lookup failure */
-              }
-            }
-
-            // Timing-consistent cap: for a fixed probe workload, throughput scales
-            // roughly linearly with GPU power, so hwPowerW × wallClockMs should be
-            // relatively consistent across tiers.  If the product is too high the
-            // power claim is inflated relative to the measured timing.  Note that
-            // wallClockMs includes network RTT, so the threshold is generous:
-            // 120k allows a 450W GPU up to ~267ms RTT without false positives.
-            if (receipt.wallClockMs > 10) {
-              try {
-                if (receipt.type === 'gpu') {
-                  const product = receipt.hwPowerW * receipt.wallClockMs;
-                  const MAX_GPU_PROBE_PRODUCT = 120_000;
-                  if (product > MAX_GPU_PROBE_PRODUCT) {
-                    const powerFromTiming = Math.round(MAX_GPU_PROBE_PRODUCT / receipt.wallClockMs);
-                    if (powerFromTiming > 0 && powerFromTiming < cap) cap = powerFromTiming;
-                  }
-                } else if (receipt.type === 'cpu') {
-                  const measuredCpuOpsPerSec = (PROBE_CPU_ITERS / receipt.wallClockMs) * 1000;
-                  const timingCap = Math.round(measuredCpuOpsPerSec / 10);
-                  if (timingCap > 0 && timingCap < cap) cap = timingCap;
-                }
-              } catch (_) {
-                /* ignore timing cap failure */
-              }
-            }
-
-            powerValues.push(cap);
-          }
-          if (powerValues.length > 0) {
-            attestedPowerW = Math.min(...powerValues);
-          }
-          if (attestedPowerW <= 0) {
-            sendJson(res, 409, {
-              ok: false,
-              code: 'CONTRIBUTION_NO_VERIFIED_POWER',
-              message: `No verifier-attested hardware power for ${address} chainIndex ${chainIndex}.`,
-            });
-            return;
-          }
-          const MAX_WH_PER_PROBE = (attestedPowerW * 5 * 60 * 1000) / 3600000;
-
-          const maxWhForChainIndex = chainIndex * MAX_WH_PER_PROBE;
-          if (totalWh > maxWhForChainIndex) {
-            sendJson(res, 409, {
-              ok: false,
-              code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT',
-              message: `totalWh (${totalWh}) exceeds max (${maxWhForChainIndex.toFixed(2)}) for chainIndex ${chainIndex} (attested ${attestedPowerW}W)`,
-            });
-            return;
-          }
-        } else if (chainIndex > 0) {
-          // No probe attestations witnessed for this address but it claims
-          // a nonzero chainIndex â€” cannot verify the claim, reject.
-          sendJson(res, 409, {
-            ok: false,
-            code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
-            message: `No probe attestations witnessed for ${address}; cannot verify chainIndex ${chainIndex}.`,
-          });
-          return;
-        } else if (totalWh > 0) {
-          // No probe attestations at all and chainIndex is 0 â€” no probes have
-          // ever been completed by this address.  Without any probe history
-          // there is no basis for a positive contribution.
-          sendJson(res, 409, {
-            ok: false,
-            code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT',
-            message: `No probe attestations for ${address}; chainIndex is 0 but totalWh is ${totalWh}.`,
-          });
+        const probeCheck = validateContributionProbe(address, totalWh, chainIndex);
+        if (!probeCheck.ok) {
+          sendJson(res, 409, { ok: false, code: probeCheck.code, message: probeCheck.message });
           return;
         }
+        const attestedPowerW = probeCheck.attestedPowerW;
 
         alignRoundLedgerToChain(roundId);
 
@@ -10720,6 +10693,7 @@ function startLedgerNetworkServer() {
           });
           return;
         }
+        if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
 
         // Forward accepted contribution to other peers (gossip propagation).
         // Uses a dedup cache keyed by message to prevent forwarding loops.
@@ -11051,17 +11025,20 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
 
   // -- deltaWh ceiling: clamp to one second of trust-capped calibrated power ---
   // This prevents a patched renderer from injecting arbitrarily large energy
-  // values.  At the normal 0.25s tick rate the legitimate value is 4ï¿½ smaller.
+  // values.  At the normal 0.25s tick rate the legitimate value is 4Ã— smaller.
   let clampedDeltaWh = Math.max(0, Number(deltaWh) || 0);
   if (hwAuthority.calibratedUnitPowerW > 0) {
     const tf = Math.min(1.0, 0.2 + (hwAuthority.trustScore / 100) * 0.8);
+    const loadFactor = Math.min(1, Math.max(0.1, (hwAuthority.currentLoadPercent || 100) / 100));
     // 0.5 s of max power: twice the normal 0.25 s tick interval as jitter headroom.
-    // At the 240-calls/min rate limit this caps injection at =2ï¿½ the legitimate rate.
-    const maxDeltaWh = (hwAuthority.calibratedUnitPowerW * tf * 0.5) / 3600;
+    // At the 240-calls/min rate limit this caps injection at =2Ã— the legitimate rate.
+    // Load factor ensures the slider setting is enforced server-side — a patched
+    // renderer cannot bypass it by sending full-power deltaWh at low load.
+    const maxDeltaWh = (hwAuthority.calibratedUnitPowerW * tf * loadFactor * 0.5) / 3600;
     if (clampedDeltaWh > maxDeltaWh) {
       console.warn(
         `[Ledger] deltaWh clamped ${clampedDeltaWh.toFixed(6)} â†’ ${maxDeltaWh.toFixed(6)} Wh` +
-          ` for ${verifiedAddress} (calibratedUnitPowerW=${hwAuthority.calibratedUnitPowerW} W, trust=${hwAuthority.trustScore})`,
+          ` for ${verifiedAddress} (calibratedUnitPowerW=${hwAuthority.calibratedUnitPowerW} W, trust=${hwAuthority.trustScore}, load=${(loadFactor * 100).toFixed(0)}%)`,
       );
       clampedDeltaWh = maxDeltaWh;
     }
@@ -11078,6 +11055,7 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   try {
     alignRoundLedgerToChain();
     const added = roundLedger.addContribution(verifiedAddress, clampedDeltaWh);
+    if (added && wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
     const snapshot = roundLedger.getCurrentRoundSnapshot();
     Promise.resolve(
       broadcastRoundContributionToPeers({

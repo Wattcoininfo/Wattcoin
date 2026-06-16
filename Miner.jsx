@@ -2569,7 +2569,21 @@ export default function Miner({
         const cpuOpsPerSec = Math.max(0, Number(backendBench.cpuOpsPerSec) || 0);
         const memoryMBps = Math.max(0, Number(backendBench.memoryMBps) || 0);
         const jitterRatio = Math.max(0, Number(backendBench.jitterRatio) || 0);
-        const cpuSpeedOpsPerSec = Math.max(0, Number(backendBench.cpuSpeedOpsPerSec) || 0);
+        let cpuSpeedOpsPerSec = Math.max(0, Number(backendBench.cpuSpeedOpsPerSec) || 0);
+        // Renderer-side calibration: runCpuProbe executes in the same V8 isolate and
+        // CPU core affinity as the actual probe, so its measurement reflects the true
+        // probe throughput. On hybrid CPUs (Intel P-core/E-core) the backend benchmark
+        // (Node.js main process) may land on slower E-cores, producing a lower ops/sec
+        // that would inflate expectedMs and trigger false-positive suspiciously-fast flags.
+        try {
+          const CALIBRATION_ITERS = 20000000;
+          const calSeed = Number(backendBench.cpuSpeedInitialSeed) || 1;
+          const calStart = performance.now();
+          runCpuProbe(calSeed, CALIBRATION_ITERS, false);
+          const calElapsed = Math.max(1, performance.now() - calStart);
+          const rendererSpeed = Math.round((CALIBRATION_ITERS / calElapsed) * 1000);
+          if (rendererSpeed > cpuSpeedOpsPerSec) cpuSpeedOpsPerSec = rendererSpeed;
+        } catch (_) { /* renderer calibration is non-fatal */ }
         const _cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
         const memLatencyNs = Math.max(0, Number(backendBench.memLatencyNs) || 0);
 

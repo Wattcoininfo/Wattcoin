@@ -98,6 +98,14 @@ class Consensus {
     this._localAddr = ''; // set by setLocalAddress()
     this._pending = new Map(); // blockHash → { block, votes: Map(addr → sigHex), voteWeight: Number }
     this._committed = new Set(); // committed block hashes (dedup guard)
+
+    // Tracks whether the node has ever received contribution data (from local
+    // mining, gossip, or peer pull).  When false the node is in bootstrap mode
+    // and cannot verify rewardAddresses against contributions — the contribution
+    // cross-check in _validateBlock is skipped.  Once set to true it stays true
+    // for the process lifetime, enforcing the check even when a new round clears
+    // the contribution ledger (the node is established and should wait for data).
+    this._hadContributionsBefore = false;
   }
 
   /** Tell consensus which wallet address this node is mining from. */
@@ -430,10 +438,23 @@ class Consensus {
     // Every address credited in the block must have contributed energy in
     // this round according to the local round ledger.  This prevents a
     // malicious proposer from crediting fake addresses that never mined.
-    // If the peer has no contribution data yet (e.g. just joined), the
-    // check is skipped so valid blocks are not spuriously rejected.
+    //
+    // Bootstrap mode (never received contribution data):
+    //   Skip the check so the first blocks after genesis or a fresh install
+    //   are not spuriously rejected.
+    //
+    // Established mode (received contributions before):
+    //   The check runs unconditionally — a node that was present during the
+    //   previous round should wait for the new round's contributions to arrive
+    //   via gossip/pull rather than accepting a block with unverifiable
+    //   reward distribution.  This closes the round-skip vulnerability where
+    //   a late-joining or newly-restarted node would blindly accept any
+    //   rewardAddresses when the contribution ledger is empty.
     const contribKeys = Object.keys(contribs);
     if (contribKeys.length > 0) {
+      // Normal path: witnessed contribution data exists — check every
+      // rewarded address contributed energy in this round and that the
+      // reward proportions match the witnessed distribution.
       for (const addr of Object.keys(block.rewardAddresses || {})) {
         const wh = Number(contribs[addr]) || 0;
         if (wh <= 0) {
@@ -475,14 +496,22 @@ class Consensus {
           }
         }
       }
+    } else if (this._hadContributionsBefore) {
+      // Established node with empty contribution ledger — the round may have
+      // just cycled or contributions haven't arrived yet.  Reject the block
+      // rather than accepting unverifiable rewardAddresses.
+      return 'no witnessed contributions for current round — waiting for contribution sync';
     }
+    // Bootstrap path (fall-through): _hadContributionsBefore is false, skip
+    // the contribution cross-check and rely on rewardTotal sum / probe
+    // attestation / validator vote threshold for protection.
 
     // ProbesAnswered must not exceed what the round duration allows.
-    // Each probe requires at least PROBE_INTERVAL_MS (5 min) of real work.
+    // During mining only push probes fire (max 60 s interval).
     // This prevents a proposer from claiming an impossible number of probes
     // for the time elapsed since the previous block.  The +1 tolerance
     // accounts for the probe that triggered the block proposal itself.
-    const PROBE_INTERVAL_MS = 5 * 60 * 1000;
+    const PROBE_INTERVAL_MS = 60_000;
     const probesAnswered = Math.max(0, Math.floor(Number(block.probesAnswered) || 0));
     if (probesAnswered > 0 && tip && tip.timestamp) {
       const elapsedMs = Math.max(0, block.timestamp - tip.timestamp);
