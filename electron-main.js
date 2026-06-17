@@ -3566,6 +3566,7 @@ function fetchTextWithTimeout(url, timeoutMs = 5000) {
 // before the renderer can read it.  This handler has no CORS restrictions.
 // Security: only the three whitelisted domains below are accepted; responses are
 // capped at 5 MB; only https is allowed.
+
 ipcMain.handle('wattcoin-fetch-url', (_event, payload) => {
   const ALLOWED_HOSTNAMES = new Set(['api.search.brave.com']);
   // Only these header names may be forwarded from the renderer to an external host.
@@ -6916,6 +6917,9 @@ function _runProbePush() {
 // Renderer calls this after completing a peer probe.
 // Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
+  if (typeof payload !== 'object' || payload === null) {
+    return { ok: false, transient: false, issues: ['payload must be an object'] };
+  }
   const settings = getLedgerNetworkSettings();
   const source = String((payload && payload.source) || 'peer');
   const result = payload && payload.result ? payload.result : {};
@@ -7153,6 +7157,9 @@ ipcMain.handle('wattcoin-seed-authority-state', (_event, payload = {}) => {
 // GPU calibration cannot be computed in the main process (WebGL requires renderer);
 // renderer reports the raw score and this handler stores the ratio securely.
 ipcMain.handle('wattcoin-report-gpu-calibration', async (_event, payload = {}) => {
+  if (typeof payload !== 'object' || payload === null) {
+    return { ok: false, code: 'INVALID_PAYLOAD', personalMeanGpuRatio: 0 };
+  }
   // Rate-limit: a compromised renderer must not be able to flood the personal-mean
   // sample buffer (capped at HISTORY_MAX_SAMPLES=20) with chosen values.
   const gpuActorId = walletAddressCache.address || 'local-client';
@@ -8388,9 +8395,13 @@ ipcMain.handle('wattcoin-get-wallet-readiness', async () => {
 });
 
 ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
+  const pct = Number(percent);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+    return { ok: false, error: 'percent must be a finite number between 0 and 100' };
+  }
   try {
-    const appliedPercent = setHardwareLoadPercent(percent);
-    hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : Number(percent) || 0;
+    const appliedPercent = setHardwareLoadPercent(pct);
+    hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : pct;
     setProbeLoadPercent(hwAuthority.currentLoadPercent);
     return {
       ok: true,
@@ -8429,11 +8440,23 @@ ipcMain.handle('wattcoin-gpu-info', async (_event, payload) => {
 });
 
 ipcMain.handle('wattcoin-set-gpu-load', async (_event, payload) => {
+  let percent, gpuCount;
+  if (payload && typeof payload === 'object') {
+    percent = Number(payload.percent);
+    gpuCount = Number(payload.gpuCount) || 1;
+  } else {
+    percent = Number(payload);
+    gpuCount = 1;
+  }
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+    return { ok: false, error: 'percent must be a finite number between 0 and 100' };
+  }
+  if (!Number.isInteger(gpuCount) || gpuCount < 1 || gpuCount > 8) {
+    return { ok: false, error: 'gpuCount must be an integer between 1 and 8' };
+  }
   try {
-    const percent = payload && typeof payload === 'object' ? Number(payload.percent) : Number(payload) || 0;
-    const gpuCount = payload && typeof payload === 'object' ? Number(payload.gpuCount) || 1 : 1;
     const appliedPercent = typeof setGpuLoadPercentFn === 'function' ? await setGpuLoadPercentFn(percent, gpuCount) : 0;
-    hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : Number(percent) || 0;
+    hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : percent;
     return { ok: true, appliedPercent, ...getGpuLoadState() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to set GPU load' };
@@ -8758,8 +8781,8 @@ function loadBundledSeedPeers() {
             try {
               const decoded = Buffer.from(peer.ipB64, 'base64').toString('utf8').trim();
               if (decoded) return normalizePeerUrl(`http://${decoded}`);
-            } catch (_) {
-              if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
+            } catch (err) {
+              console.warn('[HW-Identity] si.system() failed:', String(err?.message || err).slice(0, 200));
             }
           }
           return normalizePeerUrl(rawUrl);
@@ -11019,11 +11042,16 @@ function stopLedgerNetworkServer() {
 }
 
 ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) => {
+  if (typeof address !== 'string') {
+    return { ok: false, code: 'INVALID_ADDRESS', message: 'Address must be a string.' };
+  }
+  if (!Number.isFinite(Number(deltaWh)) || Number(deltaWh) < 0) {
+    return { ok: false, code: 'INVALID_DELTAWH', message: 'deltaWh must be a non-negative finite number.' };
+  }
   // -- Address: use verified wallet cache; renderer-supplied is only a fallback -
   // Once the wallet is known to main, we ignore the renderer-supplied address so
   // a patched renderer cannot credit energy to an arbitrary wallet.
-  const verifiedAddress =
-    walletAddressCache.address || (typeof address === 'string' && address.trim() ? address.trim() : 'local-client');
+  const verifiedAddress = walletAddressCache.address || (address.trim() ? address.trim() : 'local-client');
 
   // Block if hardware changed but wallet hasn't been regenerated yet.
   if (hwAuthority.hwChangedBlocked) {
@@ -11554,10 +11582,39 @@ ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
   }
 });
 
+// -- Integrity manifest signing key -------------------------------------------
+// ED25519 public key used to verify manifest.sig files.  The corresponding
+// private key is held in CI (never packaged).  If the .sig file is absent or
+// verification fails, a warning is logged but the check passes (graceful
+// fallback) so old manifests without signatures are still accepted.
+const MANIFEST_SIGNING_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAS+Hbx0leVnkpk6O8Oh15Vl87/MIoa8sMofYK/CJrf7U=
+-----END PUBLIC KEY-----`;
+
+function verifyManifestSignature(manifestPath, manifestContent) {
+  const sigPath = manifestPath + '.sig';
+  if (!fs.existsSync(sigPath)) {
+    console.warn(`[Integrity] ${path.basename(sigPath)} not found — manifest is not signed.`);
+    return true;
+  }
+  try {
+    const signature = fs.readFileSync(sigPath);
+    const canonical = Buffer.from(JSON.stringify(manifestContent), 'utf8');
+    const key = crypto.createPublicKey({ key: MANIFEST_SIGNING_PUBLIC_KEY, format: 'pem', type: 'spki' });
+    const ok = crypto.verify(null, canonical, key, signature);
+    if (!ok)
+      console.warn(`[Integrity] ${path.basename(sigPath)} signature INVALID — manifest may have been tampered with.`);
+    return ok;
+  } catch (e) {
+    console.warn(`[Integrity] signature verification error:`, e?.message);
+    return false;
+  }
+}
+
 // -- Binary integrity verification ----------------------------------------------
 // Reads binary-manifest.json (written by scripts/after-sign-windows.js afterSign
 // hook) and verifies the SHA-256 of every bundled binary before the node daemon
-// is launched.  Only runs in packaged builds; dev mode always passes.
+// is launched.
 function verifyBinaryManifest() {
   if (!app.isPackaged) return { ok: true, checked: 0, skipped: 'dev-mode' };
   const manifestPath = path.join(process.resourcesPath, 'binary-manifest.json');
@@ -11585,6 +11642,10 @@ function verifyBinaryManifest() {
       }
     }
     if (failures.length > 0) return { ok: false, checked, failures };
+    const sigOk = verifyManifestSignature(manifestPath, manifest);
+    if (!sigOk) {
+      console.warn('[BinaryIntegrity] manifest signature invalid or missing — proceeding anyway (graceful fallback).');
+    }
     console.log(`[BinaryIntegrity] ${checked} bundled binaries verified OK.`);
     return { ok: true, checked, failures: [] };
   } catch (e) {
@@ -11623,6 +11684,10 @@ function verifyAppIntegrityManifest() {
       }
     }
     if (failures.length > 0) return { ok: false, checked, failures };
+    const sigOk = verifyManifestSignature(manifestPath, manifest);
+    if (!sigOk) {
+      console.warn('[AppIntegrity] manifest signature invalid or missing — proceeding anyway (graceful fallback).');
+    }
     console.log(`[AppIntegrity] ${checked} app modules verified OK.`);
     return { ok: true, checked, failures: [] };
   } catch (e) {
@@ -12266,9 +12331,9 @@ app.whenReady().then(() => {
 
   const appIntegrityResult = verifyAppIntegrityManifest();
   if (!appIntegrityResult.ok) {
-    const failedList = (appIntegrityResult.failures || []).map((f) => `  ï¿½ ${f.rel} (${f.reason})`).join('\n');
+    const failedList = (appIntegrityResult.failures || []).map((f) => `  • ${f.rel} (${f.reason})`).join('\n');
     dialog.showErrorBox(
-      'Wattcoin Miner ï¿½ Integrity Check Failed',
+      'Wattcoin Miner — Integrity Check Failed',
       `One or more application modules have been modified or are missing.\n\n${failedList}\n\nThe application cannot start safely. Please reinstall Wattcoin Miner.`,
     );
     app.quit();

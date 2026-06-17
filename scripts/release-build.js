@@ -123,6 +123,21 @@ function applyReleaseHardening(root) {
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(`[release-build] app-integrity-manifest.json generated (${Object.keys(manifest).length} files).`);
 
+  // Sign the manifest if WATTCOIN_SIGN_KEY is set (CI builds only).
+  // Without a signature the manifest still works — verification degrades gracefully.
+  if (process.env.WATTCOIN_SIGN_KEY) {
+    const sigPath = manifestPath + '.sig';
+    const canonical = Buffer.from(JSON.stringify(manifest), 'utf8');
+    try {
+      const key = crypto.createPrivateKey({ key: process.env.WATTCOIN_SIGN_KEY, format: 'pem', type: 'pkcs8' });
+      const signature = crypto.sign(null, canonical, key);
+      fs.writeFileSync(sigPath, signature);
+      console.log(`[release-build] app-integrity-manifest.json signed (${signature.length} bytes).`);
+    } catch (e) {
+      console.warn('[release-build] Failed to sign manifest (non-fatal):', e.message);
+    }
+  }
+
   return backups;
 }
 
