@@ -536,7 +536,7 @@ async function setGpuLoadPercent(percent, ...args) {
   }
 
   startRampUp(next);
-  return currentPercent;
+  return next;
 }
 
 function stopGpuHardwareLoad() {

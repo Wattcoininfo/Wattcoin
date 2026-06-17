@@ -532,6 +532,13 @@ function setProbeHardwareSpec(spec) {
   probeState.hardwareSpec = spec && typeof spec === 'object' ? { ...spec } : null;
 }
 
+// Called from electron-main when the hardware load slider changes so local probe
+// timing accounts for CPU contention from mining threads.
+let _probeLoadPercent = 100;
+function setProbeLoadPercent(pct) {
+  _probeLoadPercent = Math.max(0, Math.min(100, Number(pct) || 100));
+}
+
 // Called from electron-main after the ASIC hashrate benchmark to set the expected
 // hashrate for the declared model so periodic ASIC probes can compare against it.
 function setAsicHardwareSpec(spec) {
@@ -648,11 +655,11 @@ async function submitProbeResult(result, peerTimed = false) {
       const ratio = wallClockMs / Math.max(1, expectedMs);
       if (ratio < 1 / slack)
         issues.push(
-          `cpu probe suspiciously fast: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms)`,
+          `cpu probe suspiciously fast: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
         );
       if (ratio > slack)
         issues.push(
-          `cpu probe unexpectedly slow: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms)`,
+          `cpu probe unexpectedly slow: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
         );
     }
   } else if (probe.type === 'memory') {
@@ -665,11 +672,11 @@ async function submitProbeResult(result, peerTimed = false) {
       const ratio = wallClockMs / Math.max(1, expectedMs);
       if (ratio < 1 / slack)
         issues.push(
-          `memory probe suspiciously fast: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms)`,
+          `memory probe suspiciously fast: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
         );
       if (ratio > slack)
         issues.push(
-          `memory probe unexpectedly slow: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms)`,
+          `memory probe unexpectedly slow: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
         );
     }
   } else if (probe.type === 'gpu') {
@@ -738,6 +745,7 @@ async function submitProbeResult(result, peerTimed = false) {
     ts: Date.now(),
     chainIndex: probeState.chainIndex,
     chainHead: probeState.chainHead,
+    loadPercent: _probeLoadPercent,
   });
   if (probeState.history.length > 20) probeState.history.length = 20;
 
@@ -754,6 +762,7 @@ async function submitProbeResult(result, peerTimed = false) {
     chainHead: probeState.chainHead,
     chainIndex: probeState.chainIndex,
     chainBroken: probeState.chainBroken,
+    loadPercent: _probeLoadPercent,
   };
 }
 
@@ -1040,16 +1049,17 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
           : 0;
       // Floor: a worker cannot claim to be slower than history shows they actually are.
       const effectiveCpuOpsPerSec = Math.max(hardwareSpec.measuredCpuOpsPerSec, historicalCpuMean);
+      const loadPct = result.loadPercent;
       const expectedMs = (probe.params.iterations / effectiveCpuOpsPerSec) * 1000;
       const probeTimeMs = probeWallClockMs;
       const ratio = probeTimeMs / Math.max(1, expectedMs);
       if (ratio < 1 / PROBE_PEER_SLACK)
         issues.push(
-          `cpu peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
+          `cpu peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms load=${loadPct != null ? loadPct : '?'}%`,
         );
       if (ratio > PROBE_PEER_SLACK)
         issues.push(
-          `cpu peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms (ratio=${ratio.toFixed(2)})`,
+          `cpu peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms (ratio=${ratio.toFixed(2)}) load=${loadPct != null ? loadPct : '?'}%`,
         );
     }
   } else if (probe.type === 'memory') {
@@ -1067,16 +1077,17 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         hardwareSpec.measuredMemLatencyNs,
         historicalMemMean > 0 ? historicalMemMean : hardwareSpec.measuredMemLatencyNs,
       );
+      const loadPct = result.loadPercent;
       const expectedMs = (probe.params.iterations * effectiveMemLatencyNs) / 1e6;
       const probeTimeMs = probeWallClockMs;
       const ratio = probeTimeMs / Math.max(1, expectedMs);
       if (ratio < 1 / PROBE_PEER_SLACK)
         issues.push(
-          `memory peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
+          `memory peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms load=${loadPct != null ? loadPct : '?'}%`,
         );
       if (ratio > PROBE_PEER_SLACK)
         issues.push(
-          `memory peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms`,
+          `memory peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms load=${loadPct != null ? loadPct : '?'}%`,
         );
     }
   } else if (probe.type === 'gpu') {
@@ -1248,6 +1259,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     pixelHash: probe.type === 'gpu' ? String(result.pixelHash || '') : '',
     proof: probe.type !== 'gpu' ? String(result.proof || '') : '',
     issues,
+    loadPercent: result.loadPercent,
   });
   if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
 
@@ -1261,6 +1273,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     workerId: entry.workerId,
     receipt,
     probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined,
+    loadPercent: result.loadPercent,
   };
 }
 
@@ -1419,6 +1432,7 @@ module.exports = {
   getBenchmarkCapabilities,
   runBackendBenchmark,
   setProbeHardwareSpec,
+  setProbeLoadPercent,
   setAsicHardwareSpec,
   getPendingProbe,
   submitProbeResult,

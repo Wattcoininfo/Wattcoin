@@ -162,8 +162,13 @@ function MiningLog({
           fontSize: 13,
         }}
       >
-        {/* Row 1: time */}
-        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 5 }}>{entry.time}</div>
+        {/* Row 1: time + load % on the right */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 5 }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>{entry.time}</span>
+          {typeof entry.loadPercent === 'number' && (
+            <span style={{ color: '#5b8d5b', fontSize: 11, marginLeft: 'auto' }}>load {entry.loadPercent}%</span>
+          )}
+        </div>
         {/* Row 2: badges */}
         <div
           style={{

@@ -25,6 +25,7 @@ const {
   getBenchmarkCapabilities,
   runBackendBenchmark,
   setProbeHardwareSpec,
+  setProbeLoadPercent,
   getPendingProbe,
   submitProbeResult,
   getProbeHistory,
@@ -6456,13 +6457,25 @@ function _closeBgProbeWs() {
     try {
       if (c.ws.readyState === WebSocket.OPEN) {
         c.ws.send(JSON.stringify({ type: 'worker-done' }), () => {
-          try { c.ws.close(); } catch (_) { /* ws already closed */ }
+          try {
+            c.ws.close();
+          } catch (_) {
+            /* ws already closed */
+          }
         });
       } else {
-        try { c.ws.close(); } catch (_) { /* ws already closed */ }
+        try {
+          c.ws.close();
+        } catch (_) {
+          /* ws already closed */
+        }
       }
     } catch (_) {
-      try { c.ws.close(); } catch (_) { /* ws already closed */ }
+      try {
+        c.ws.close();
+      } catch (_) {
+        /* ws already closed */
+      }
     }
     // Detach from ping/pong timer that may fire after clearInterval races.
     c.ws._probePushPingInterval = null;
@@ -6479,7 +6492,11 @@ function _closeBgProbeWs() {
   if (typeof setImmediate === 'function') {
     setImmediate(() => {
       for (const c of conns) {
-        try { c.ws.terminate(); } catch (_) { /* ws already closed */ }
+        try {
+          c.ws.terminate();
+        } catch (_) {
+          /* ws already closed */
+        }
       }
     });
   }
@@ -6924,6 +6941,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           pixelHash: result.pixelHash || '',
           probeWallClockMs: typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : null,
           hardwareSpec: hardwareSpec,
+          loadPercent: hwAuthority.currentLoadPercent,
         };
         let verdict;
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -8373,6 +8391,7 @@ ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
   try {
     const appliedPercent = setHardwareLoadPercent(percent);
     hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : Number(percent) || 0;
+    setProbeLoadPercent(hwAuthority.currentLoadPercent);
     return {
       ok: true,
       appliedPercent,
@@ -8389,6 +8408,7 @@ ipcMain.handle('wattcoin-stop-hardware-load', () => {
     stopHardwareLoad();
     _closeBgProbeWs();
     hwAuthority.currentLoadPercent = 0;
+    setProbeLoadPercent(0);
     return { ok: true, ...getHardwareLoadState() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to stop hardware load' };
@@ -9083,7 +9103,6 @@ function getSharedRoundSnapshot() {
   return roundLedger.getCurrentRoundSnapshot();
 }
 
-
 /**
  * Validate contribution probe attestations for an address.
  * Returns { ok, code?, message?, attestedPowerW? }.
@@ -9095,11 +9114,19 @@ function validateContributionProbe(address, totalWh, chainIndex) {
     const verifiedEntry = witnessedProbeReceipts.get(address);
     const receiptsForClaimedIndex = verifiedEntry.receipts.get(chainIndex) || new Map();
     if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
-      return { ok: false, code: 'INSUFFICIENT_PROBE_ATTESTATIONS', message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}` };
+      return {
+        ok: false,
+        code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
+        message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}`,
+      };
     }
     const verifiedMax = Math.max(0, verifiedEntry.maxChainIndex || 0);
     if (chainIndex > verifiedMax + 1) {
-      return { ok: false, code: 'PROBE_CHAIN_EXCEEDS_VERIFIED', message: `claimed chainIndex (${chainIndex}) exceeds verified max (${verifiedMax}) by more than 1` };
+      return {
+        ok: false,
+        code: 'PROBE_CHAIN_EXCEEDS_VERIFIED',
+        message: `claimed chainIndex (${chainIndex}) exceeds verified max (${verifiedMax}) by more than 1`,
+      };
     }
     const powerValues = [];
     for (const receipt of receiptsForClaimedIndex.values()) {
@@ -9111,7 +9138,9 @@ function validateContributionProbe(address, totalWh, chainIndex) {
           try {
             const tableTdp = getGpuTdpW(model);
             if (tableTdp > 0 && tableTdp < cap) cap = tableTdp;
-          } catch (_) { /* ignore lookup failure */ }
+          } catch (_) {
+            /* ignore lookup failure */
+          }
         }
       } else if ((receipt.type === 'cpu' || receipt.type === 'memory') && receipt.cpuModel) {
         try {
@@ -9120,7 +9149,9 @@ function validateContributionProbe(address, totalWh, chainIndex) {
             const cpuCap = Math.round(expectedOps / 10);
             if (cpuCap > 0 && cpuCap < cap) cap = cpuCap;
           }
-        } catch (_) { /* ignore lookup failure */ }
+        } catch (_) {
+          /* ignore lookup failure */
+        }
       }
       if (receipt.wallClockMs > 10) {
         try {
@@ -9136,7 +9167,9 @@ function validateContributionProbe(address, totalWh, chainIndex) {
             const timingCap = Math.round(measuredCpuOpsPerSec / 10);
             if (timingCap > 0 && timingCap < cap) cap = timingCap;
           }
-        } catch (_) { /* ignore timing cap failure */ }
+        } catch (_) {
+          /* ignore timing cap failure */
+        }
       }
       powerValues.push(cap);
     }
@@ -9144,22 +9177,36 @@ function validateContributionProbe(address, totalWh, chainIndex) {
       attestedPowerW = Math.min(...powerValues);
     }
     if (attestedPowerW <= 0) {
-      return { ok: false, code: 'CONTRIBUTION_NO_VERIFIED_POWER', message: `No verifier-attested hardware power for ${address} chainIndex ${chainIndex}.` };
+      return {
+        ok: false,
+        code: 'CONTRIBUTION_NO_VERIFIED_POWER',
+        message: `No verifier-attested hardware power for ${address} chainIndex ${chainIndex}.`,
+      };
     }
     const MAX_WH_PER_PROBE = (attestedPowerW * PROBE_INTERVAL_MS) / 3600000;
     const maxWhForChainIndex = chainIndex * MAX_WH_PER_PROBE;
     if (totalWh > maxWhForChainIndex) {
-      return { ok: false, code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT', message: `totalWh (${totalWh}) exceeds max (${maxWhForChainIndex.toFixed(2)}) for chainIndex ${chainIndex} (attested ${attestedPowerW}W)` };
+      return {
+        ok: false,
+        code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT',
+        message: `totalWh (${totalWh}) exceeds max (${maxWhForChainIndex.toFixed(2)}) for chainIndex ${chainIndex} (attested ${attestedPowerW}W)`,
+      };
     }
   } else if (chainIndex > 0) {
-    return { ok: false, code: 'INSUFFICIENT_PROBE_ATTESTATIONS', message: `No probe attestations witnessed for ${address}; cannot verify chainIndex ${chainIndex}.` };
+    return {
+      ok: false,
+      code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
+      message: `No probe attestations witnessed for ${address}; cannot verify chainIndex ${chainIndex}.`,
+    };
   } else if (totalWh > 0) {
-    return { ok: false, code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT', message: `No probe attestations for ${address}; chainIndex is 0 but totalWh is ${totalWh}.` };
+    return {
+      ok: false,
+      code: 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT',
+      message: `No probe attestations for ${address}; chainIndex is 0 but totalWh is ${totalWh}.`,
+    };
   }
   return { ok: true, attestedPowerW };
 }
-
-
 
 async function pullContributionsFromPeers() {
   const settings = getLedgerNetworkSettings();
@@ -10231,6 +10278,7 @@ function startLedgerNetworkServer() {
           proof: body && body.proof ? String(body.proof) : '',
           pixelHash: body && body.pixelHash ? String(body.pixelHash) : '',
           probeWallClockMs: body && typeof body.probeWallClockMs === 'number' ? body.probeWallClockMs : undefined,
+          loadPercent: body && typeof body.loadPercent === 'number' ? body.loadPercent : undefined,
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
         const probeRoundId = getCurrentNetworkRoundId();

@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>How to Mine Cryptocurrency with GPU — Wattcoin Guide | Wattcoin Blog</title>
+    <title>Wattcoin Tokenomics Deep Dive | Wattcoin Blog</title>
     <meta
       name="description"
-      content="Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining."
+      content="A complete breakdown of Wattcoin's economic model — 21M hard cap, tier-based halving schedule, energy-backed value floor, and the 1M WTC staking rewards pool."
     />
-    <link rel="canonical" href="https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html" />
-    <meta property="og:title" content="How to Mine Cryptocurrency with GPU — Wattcoin Guide" />
+    <link rel="canonical" href="https://wattcoin.ee/blog/tokenomics-deep-dive.html" />
+    <meta property="og:title" content="Wattcoin Tokenomics Deep Dive" />
     <meta
       property="og:description"
-      content="Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining."
+      content="A complete breakdown of Wattcoin's economic model — 21M hard cap, tier-based halving schedule, energy-backed value floor, and the 1M WTC staking rewards pool."
     />
-    <meta property="og:url" content="https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html" />
+    <meta property="og:url" content="https://wattcoin.ee/blog/tokenomics-deep-dive.html" />
     <meta property="og:type" content="article" />
     <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <meta property="og:image:width" content="1024" />
@@ -24,10 +24,10 @@
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Wattcoin Foundation" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="How to Mine Cryptocurrency with GPU — Wattcoin Guide | Wattcoin Blog" />
+    <meta name="twitter:title" content="Wattcoin Tokenomics Deep Dive | Wattcoin Blog" />
     <meta
       name="twitter:description"
-      content="Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining."
+      content="A complete breakdown of Wattcoin's economic model — 21M hard cap, tier-based halving schedule, energy-backed value floor, and the 1M WTC staking rewards pool."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
@@ -42,82 +42,26 @@
         "@graph": [
           {
             "@type": "Article",
-            "@id": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html#article",
-            "headline": "How to Mine Cryptocurrency with GPU — Wattcoin Guide",
-            "url": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html",
-            "datePublished": "2026-05-31",
-            "author": {
-              "@type": "Organization",
-              "name": "Wattcoin Foundation"
-            },
-            "publisher": {
-              "@id": "https://wattcoin.ee/#organization"
-            },
-            "description": "Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining.",
-            "mainEntityOfPage": {
-              "@type": "WebPage",
-              "@id": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html"
-            }
+            "@id": "https://wattcoin.ee/blog/tokenomics-deep-dive.html#article",
+            "headline": "Wattcoin Tokenomics Deep Dive",
+            "url": "https://wattcoin.ee/blog/tokenomics-deep-dive.html",
+            "datePublished": "2026-06-17",
+            "author": { "@type": "Organization", "name": "Wattcoin Foundation" },
+            "publisher": { "@id": "https://wattcoin.ee/#organization" },
+            "description": "A complete breakdown of Wattcoin's economic model — 21M hard cap, tier-based halving schedule, energy-backed value floor, and the 1M WTC staking rewards pool.",
+            "mainEntityOfPage": { "@type": "WebPage", "@id": "https://wattcoin.ee/blog/tokenomics-deep-dive.html" }
           },
           {
             "@type": "BreadcrumbList",
-            "@id": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html#breadcrumb",
+            "@id": "https://wattcoin.ee/blog/tokenomics-deep-dive.html#breadcrumb",
             "itemListElement": [
-              {
-                "@type": "ListItem",
-                "position": 1,
-                "name": "Home",
-                "item": "https://wattcoin.ee/"
-              },
-              {
-                "@type": "ListItem",
-                "position": 2,
-                "name": "Blog",
-                "item": "https://wattcoin.ee/blog.html"
-              },
+              { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://wattcoin.ee/" },
+              { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://wattcoin.ee/blog.html" },
               {
                 "@type": "ListItem",
                 "position": 3,
-                "name": "How to Mine Cryptocurrency with GPU — Wattcoin Guide",
-                "item": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html"
-              }
-            ]
-          },
-          {
-            "@type": "HowTo",
-            "@id": "https://wattcoin.ee/blog/mine-cryptocurrency-with-gpu.html#howto",
-            "name": "How to Mine Cryptocurrency with GPU — Wattcoin Guide",
-            "description": "Step-by-step guide to mining WTC with any GPU. DirectX compute shader workloads, multi-GPU rigs, and efficiency tips for Proof-of-Energy mining.",
-            "step": [
-              {
-                "@type": "HowToStep",
-                "position": 1,
-                "name": "Download the Wattcoin Miner",
-                "text": "Download the Wattcoin Miner"
-              },
-              {
-                "@type": "HowToStep",
-                "position": 2,
-                "name": "GPUs Detected Automatically",
-                "text": "GPUs Detected Automatically"
-              },
-              {
-                "@type": "HowToStep",
-                "position": 3,
-                "name": "Set Load and Start",
-                "text": "Set Load and Start"
-              },
-              {
-                "@type": "HowToStep",
-                "position": 4,
-                "name": "Earn Every Block",
-                "text": "Earn Every Block"
-              },
-              {
-                "@type": "HowToStep",
-                "position": 5,
-                "name": "Combine with CPU or RAM",
-                "text": "Combine with CPU or RAM"
+                "name": "Wattcoin Tokenomics Deep Dive",
+                "item": "https://wattcoin.ee/blog/tokenomics-deep-dive.html"
               }
             ]
           }
@@ -168,7 +112,6 @@
         background: rgba(6, 14, 6, 0.92);
         backdrop-filter: blur(10px);
         border-bottom: 1px solid #1a2a1a;
-
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -315,7 +258,6 @@
       .blog-post {
         padding: 60px 0;
       }
-
       .blog-post h2 {
         font-family: 'Playfair Display', serif;
         font-size: clamp(24px, 3.5vw, 32px);
@@ -504,7 +446,7 @@
           padding: 120px 0 40px;
         }
         .blog-post {
-          padding: 40px 0;
+          padding: 60px 0;
         }
         .post-card {
           flex-direction: column;
@@ -535,167 +477,218 @@
     </nav>
     <div style="padding-top: 100px">
       <div class="container">
-        <article class="blog-post" id="how-to-mine-cryptocurrency-with-gpu">
+        <article class="blog-post" id="wattcoin-tokenomics-deep-dive">
           <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
           <div class="tag-row">
-            <span class="tag">Mining</span>
-            <span class="tag">GPU</span>
-            <span class="tag">Guide</span>
+            <span class="tag">Tokenomics</span>
+            <span class="tag">Economics</span>
+            <span class="tag">Supply</span>
           </div>
-          <h1>How to Mine Cryptocurrency with GPU — Wattcoin Guide</h1>
-          <div class="meta">May 31, 2026 &nbsp;&mdash;&nbsp; 6 min read</div>
+          <h1>Wattcoin Tokenomics Deep Dive</h1>
+          <div class="meta">June 17, 2026 &nbsp;&mdash;&nbsp; 8 min read</div>
 
           <p>
-            Before Proof-of-Energy, GPU mining was a battle of memory bandwidth and shading units. Ethereum required ~4
-            GB of VRAM. Ravencoin needed KawPow. Every algorithm locked out certain hardware. Wattcoin changes the game
-            entirely — <strong>any GPU works, and every GPU pays the same energy cost per coin</strong>.
+            Understanding a cryptocurrency's tokenomics means knowing three things: how many coins will ever exist, how
+            they enter circulation, and what backs their value. For Wattcoin, all three answers are rooted in
+            <strong>physical energy</strong>. This post walks through the full economic model — the hard cap, the
+            emission schedule, the tier ratchet, the staking pool, and the energy-based value floor.
           </p>
 
-          <h3>How GPU Mining Works on Wattcoin</h3>
-
+          <h3>Hard Cap: 21 Million WTC</h3>
           <p>
-            Proof-of-Energy exercises the GPU through a <strong>native DirectX compute shader</strong> workload. The
-            miner dispatches DirectX compute shaders (D3D11/D3D12) that run a verifiable floating-point vector math loop
-            across the GPU's compute units at a configurable load level. GPU proof hashes are generated via a
-            deterministic integer XOR-shift compute shader. The protocol estimates your energy contribution from your
-            GPU's thermal design power (TDP) and the configured duty cycle:
+            Wattcoin has a strict supply limit of <strong>21,000,000 WTC</strong>, split across 21 tiers of 1,000,000
+            coins each. This is close to Bitcoin's 21 million cap, but the mechanism is fundamentally different:
           </p>
-
-          <div class="viz-box">
-            <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>Energy (Wh) = GPU TDP (W) &times; Load (%) &times; Time (h)</div>
-              <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Same formula as CPU — hardware only affects speed, not cost
-              </div>
-            </div>
-          </div>
-
-          <p>
-            A 300W RTX 4090 and a 150W desktop GPU pay the <strong>same 20 kWh per WTC</strong> in Tier 1. The RTX 4090
-            simply finishes the work faster. Speed scales with shader count and clock speed; cost scales only with
-            watt-hours consumed.
-          </p>
-
-          <h3>GPU vs CPU on Wattcoin</h3>
-
-          <table class="comparison-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>CPU Miner</th>
-                <th>GPU Miner</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Typical power draw</td>
-                <td>15–150 W</td>
-                <td>75–450 W</td>
-              </tr>
-              <tr>
-                <td>Workload type</td>
-                <td>Integer hashing</td>
-                <td>Compute shaders</td>
-              </tr>
-              <tr>
-                <td>Energy per WTC (Tier 1)</td>
-                <td>20 kWh</td>
-                <td>20 kWh</td>
-              </tr>
-              <tr>
-                <td>Mining speed</td>
-                <td>Baseline</td>
-                <td>2–5x faster</td>
-              </tr>
-              <tr>
-                <td>Best for</td>
-                <td>Always-on, low-power</td>
-                <td>Dedicated mining, faster rewards</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h3>Step-by-Step Guide</h3>
-
-          <ol class="step-list">
-            <li>
-              <strong>Download the Wattcoin Miner</strong><br />
-              Get the Windows installer from <a href="https://wattcoin.ee/">wattcoin.ee</a>. The miner detects all
-              compatible GPUs automatically — no driver hacks, no CUDA toolkits, no configuration files.
-            </li>
-            <li>
-              <strong>GPUs Detected Automatically</strong><br />
-              Every GPU in your system — NVIDIA, AMD, or Intel Arc — is detected automatically. Multiple GPUs are
-              supported and their energy contributions are summed.
-            </li>
-            <li>
-              <strong>Set Load and Start</strong><br />
-              Choose a GPU load percentage. 50–70% is recommended if you also use your display. The app caps load at
-              ~85% maximum. Start lower (~20%) and increase gradually so the algorithm calibrates properly. Click
-              <strong>Start Mining</strong>.
-            </li>
-            <li>
-              <strong>Earn Every Block</strong><br />
-              Your reward is proportional to your verified energy — paid every block, every time. No pools, no luck, no
-              winners and losers.
-            </li>
-            <li>
-              <strong>Combine with CPU or RAM</strong><br />
-              The miner can run CPU integer hashing + GPU compute shaders + memory stride walks simultaneously. All
-              energy contributions are summed for a larger share of the block reward.
-            </li>
-          </ol>
-
-          <h3>What GPUs Work?</h3>
-
-          <p>
-            <strong>Any dedicated GPU with shading units.</strong> That includes every modern graphics card from NVIDIA
-            (GTX 900 series through RTX 50 series), AMD (RX 400 through RX 9000 series), and Intel Arc.
-          </p>
-
-          <div class="viz-box">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px">
-              <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 8px; padding: 14px">
-                <div style="font-size: 24px; margin-bottom: 4px">&#x1F5B1;</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #4ade80">Desktop GPU</div>
-                <div style="font-size: 11px; color: #5a8a5a">150–450W TDP</div>
-              </div>
-              <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 8px; padding: 14px">
-                <div style="font-size: 24px; margin-bottom: 4px">&#x1F4E1;</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #4ade80">Multi-GPU Rig</div>
-                <div style="font-size: 11px; color: #5a8a5a">600–1800W total</div>
-              </div>
-            </div>
-            <div class="caption">Desktop GPUs and multi-GPU rigs — power draw determines contribution.</div>
-          </div>
-
-          <h3>Tips for GPU Mining</h3>
-
           <ul>
             <li>
-              <strong>Watch your thermals.</strong> GPU shading loads generate heat. Keep junction temperatures below
-              95&deg;C. The miner throttles automatically if limits are exceeded.
+              <strong>Tier 0</strong> (1,000,000 WTC) — premined at the genesis block and allocated to the
+              <strong>Foundation Reserve</strong>, which distributed it on-chain to four wallets: Foundation Reserve
+              (200,000 WTC), Public Sale (333,333 WTC), Staking Rewards (166,667 WTC), and Governance Treasury (300,000
+              WTC). Every allocation is verifiable on the public chain.
             </li>
             <li>
-              <strong>Multi-GPU scaling.</strong> Every additional GPU adds its energy contribution. A 4x RTX 4090 rig
-              at ~85% load contributes ~1530W — the highest possible energy share outside of server deployments.
-            </li>
-            <li>
-              <strong>Ramp up gradually.</strong> Start at ~20% load for the first hour so the algorithm calibrates to
-              your specific GPU, then increase in 10% steps every 30 minutes up to your target load.
-            </li>
-            <li>
-              <strong>Hybrid mining.</strong> Run GPU compute shaders alongside CPU hashing and memory walks for maximum
-              verified energy per machine.
+              <strong>Tiers 1 through 20</strong> (20,000,000 WTC total) — mined by energy contributors. Every coin in
+              these tiers is backed by verifiable electrical energy expenditure.
             </li>
           </ul>
 
+          <h3>Block Reward Halving Schedule</h3>
           <p>
-            <a href="/#download">Download the Wattcoin Miner and start mining with your GPU today &rarr;</a>
+            Unlike Bitcoin's fixed-interval halving (every 210,000 blocks), Wattcoin's halving is
+            <strong>tier-based</strong>. Each tier of 1,000,000 WTC must be fully mined before the next tier begins, and
+            the per-block reward halves with each tier:
           </p>
-          <a href="/blog.html" class="back-link" style="display: inline-block; margin-top: 32px"
-            >&larr; Back to all posts</a
-          >
+          <div class="viz-box">
+            <table class="comparison-table" style="font-size: 13px">
+              <tr>
+                <th>Tier</th>
+                <th>Reward/Block</th>
+                <th>Blocks in Tier</th>
+                <th>Cumulative WTC</th>
+                <th>Energy/Coin</th>
+              </tr>
+              <tr class="wtc-row">
+                <td>0</td>
+                <td>Premine</td>
+                <td>1 (genesis)</td>
+                <td>1,000,000</td>
+                <td>—</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>1</td>
+                <td>500 WTC</td>
+                <td>2,000</td>
+                <td>2,000,000</td>
+                <td>20 kWh</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>2</td>
+                <td>250 WTC</td>
+                <td>4,000</td>
+                <td>3,000,000</td>
+                <td>40 kWh</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>3</td>
+                <td>125 WTC</td>
+                <td>8,000</td>
+                <td>4,000,000</td>
+                <td>80 kWh</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>4</td>
+                <td>62.5 WTC</td>
+                <td>16,000</td>
+                <td>5,000,000</td>
+                <td>160 kWh</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>5</td>
+                <td>31.25 WTC</td>
+                <td>32,000</td>
+                <td>6,000,000</td>
+                <td>320 kWh</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>10</td>
+                <td>≈0.98 WTC</td>
+                <td>≈1,024,000</td>
+                <td>11,000,000</td>
+                <td>10,240 kWh</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>20</td>
+                <td>≈0.00095 WTC</td>
+                <td>≈1,048,576,000</td>
+                <td>21,000,000</td>
+                <td>≈10.5 GWh</td>
+              </tr>
+            </table>
+            <div class="caption">Block reward halves each tier; block count per tier doubles</div>
+          </div>
+          <p>
+            The formula is straightforward: <code>reward = 1000 / 2^tier</code>. Tier 1 starts at 500 WTC per block.
+            Tier 2 drops to 250 WTC. By tier 10, a block produces roughly 0.98 WTC. By tier 20, it's under 0.001 WTC per
+            block, and the total supply asymptotically approaches 21 million.
+          </p>
+
+          <h3>Energy-Backed Value Floor</h3>
+          <p>
+            Every coin mined in tiers 1–20 requires a minimum energy expenditure set by the protocol. In tier 1, a miner
+            must spend at least <strong>20 kWh</strong> of verified electrical energy to earn one WTC. In tier 2, the
+            requirement doubles to 40 kWh. In tier 5, it reaches 320 kWh.
+          </p>
+          <p>
+            At the live global average electricity price fetched by the miner app (≈$0.174/kWh as of Q1 2026, sourced
+            from globalpetrolprices.com), tier 1 coins have a production cost floor of about
+            <strong>$3.48 per WTC</strong>. Tier 5 coins cost approximately <strong>$55.68</strong>. Importantly, every
+            tier advance pulls the <strong>entire supply's floor upward</strong> — later coins cost more energy to mine,
+            and no rational miner sells below their production cost. This creates a
+            <strong>natural appreciating price floor</strong> that is independent of market speculation.
+          </p>
+          <div class="info-callout">
+            <strong>Key insight:</strong> The energy floor is not a price peg — it's a production cost. If the market
+            price drops below the energy cost of the current tier, miners in that tier mine at a loss and reduce
+            hashrate until the remaining miners are those with access to cheaper power. This self-balancing mechanism is
+            common to Proof-of-Work, but PoE makes it transparent and measurable per-coin rather than per-hash.
+          </div>
+
+          <h3>Proportional Block Rewards</h3>
+          <p>
+            Wattcoin does not use a winner-take-all lottery. Every block's freshly minted WTC is distributed
+            <strong>proportionally</strong> to every miner based on their verified energy contribution during that
+            round. A miner who contributed 1% of the network's total energy receives 1% of the block reward. Every
+            active miner gets paid every block.
+          </p>
+          <p>
+            This design eliminates the luck variance that makes small-scale Bitcoin mining impractical without pools. On
+            Wattcoin, a single CPU miner earns their proportional share of every block — no pool fees, no minimum payout
+            thresholds, no orphan risk from pool centralization.
+          </p>
+
+          <h3>The Staking Rewards Pool</h3>
+          <p>
+            The genesis distribution allocated <strong>166,667 WTC</strong> to the staking rewards pool. These coins are
+            distributed automatically to WTC stakers through the protocol's on-chain staking queue:
+          </p>
+          <ul>
+            <li>
+              <strong>APY formula:</strong> <code>apy = floor(totalStakedWTC / 10,000)</code> percent per year. 100,000
+              WTC staked yields 10% APY; 200,000 WTC yields 20% APY. The minimum meaningful stake is 10,000 WTC, which
+              earns 1% APY.
+            </li>
+            <li><strong>Minimum entry:</strong> 100 WTC per stake transaction.</li>
+            <li>
+              <strong>Distribution:</strong> Staking rewards are paid out automatically — the queue flushes after every
+              mined block, processing all pending entries in batch. No manual claim required. The pool address is fixed
+              and cannot be changed.
+            </li>
+            <li>
+              <strong>Transparency:</strong> Anyone can verify the pool's remaining balance on-chain — the coins are
+              visible at the staking pool address, and every reward transaction is recorded in a block.
+            </li>
+          </ul>
+          <p>
+            The staking pool has a fixed supply of 166,667 WTC. Once fully distributed, staking rewards end. This
+            creates a natural time-limited incentive for early stakers while the mining emission is still ramping up in
+            the early tiers.
+          </p>
+
+          <h3>Circulating Supply Over Time</h3>
+          <p>
+            Unlike Bitcoin's predictable block-interval emission, Wattcoin's emission rate depends on
+            <strong>miner participation</strong>. The reward per block is fixed per tier, but the number of blocks mined
+            per day depends on the total energy contributed by the network:
+          </p>
+          <ul>
+            <li>
+              <strong>More miners → more energy → more blocks per day → faster tier progression.</strong> The supply
+              emission accelerates with network growth, but each individual coin still costs the same energy to mine.
+            </li>
+            <li>
+              <strong>Fixed supply, variable time.</strong> Unlike Bitcoin's 2140 horizon, Wattcoin's 21st tier is
+              reached when all 21,000,000 WTC have been mined — which could be decades or centuries depending on miner
+              participation and the energy per coin ratchet.
+            </li>
+          </ul>
+
+          <h3>Summary</h3>
+          <p>
+            Wattcoin's tokenomics are designed around one principle:
+            <strong>every coin is backed by a measurable, verifiable quantity of electrical energy</strong>. The 21-tier
+            emission schedule, proportional block rewards, energy-doubling ratchet, and staking pool create an economic
+            model where the production cost of each coin is transparent and rises predictably over time.
+          </p>
+
+          <div class="info-callout">
+            <strong>Want to see the code?</strong> The tokenomics parameters are defined in
+            <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer"
+              >wtc-chain.js</a
+            >
+            — <code>HARD_CAP</code>, <code>rewardForHeight()</code>, <code>energyForHeight()</code>, and the staking
+            queue logic in <code>wtc-staking-queue.js</code>. All open source, all independently verifiable.
+          </div>
+          <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
         </article>
       </div>
     </div>

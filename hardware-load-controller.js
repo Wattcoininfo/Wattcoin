@@ -229,7 +229,7 @@ function setHardwareLoadPercent(percent) {
 
   // Start ramping CPU and memory load gradually from current to next over 3 seconds
   startRampUp(next);
-  return currentPercent;
+  return next;
 }
 
 function stopHardwareLoad() {

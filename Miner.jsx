@@ -2583,7 +2583,9 @@ export default function Miner({
           const calElapsed = Math.max(1, performance.now() - calStart);
           const rendererSpeed = Math.round((CALIBRATION_ITERS / calElapsed) * 1000);
           if (rendererSpeed > cpuSpeedOpsPerSec) cpuSpeedOpsPerSec = rendererSpeed;
-        } catch (_) { /* renderer calibration is non-fatal */ }
+        } catch (_) {
+          /* renderer calibration is non-fatal */
+        }
         const _cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
         const memLatencyNs = Math.max(0, Number(backendBench.memLatencyNs) || 0);
 
@@ -4020,6 +4022,7 @@ export default function Miner({
                         ? verdict.receipt.chainIndex
                         : null,
                   issues: Array.isArray(verdict.issues) ? verdict.issues : [],
+                  loadPercent: typeof verdict.loadPercent === 'number' ? verdict.loadPercent : null,
                   trustDelta:
                     typeof verdict.trustScoreAfter === 'number' && typeof verdict.trustScoreBefore === 'number'
                       ? verdict.trustScoreAfter - verdict.trustScoreBefore
@@ -4105,6 +4108,7 @@ export default function Miner({
           computeTimeMs: typeof h.computeTimeMs === 'number' ? Math.round(h.computeTimeMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
           issues: Array.isArray(h.issues) ? h.issues : [],
+          loadPercent: typeof h.loadPercent === 'number' ? h.loadPercent : null,
         }));
         const attestEntries = attestHistory.map((h) => ({
           ts: typeof h.ts === 'number' ? h.ts : 0,
@@ -4123,6 +4127,7 @@ export default function Miner({
           pixelHash: typeof h.pixelHash === 'string' ? h.pixelHash : '',
           proof: typeof h.proof === 'string' ? h.proof : '',
           issues: Array.isArray(h.issues) ? h.issues : [],
+          loadPercent: typeof h.loadPercent === 'number' ? h.loadPercent : null,
         }));
 
         setProbeLog((prev) => {

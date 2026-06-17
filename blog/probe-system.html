@@ -502,6 +502,8 @@
           stronger hardware) or above <strong>3.0</strong> (suspiciously slow — likely throttled or different hardware
           than declared). The <code>effectiveCpuOpsPerSec</code> uses <em>the maximum of</em> the declared ops/sec and
           the worker's own historical mean, preventing a miner from claiming artificially low speed to hide outsourcing.
+          The current <strong>load percent</strong> is included alongside every timing issue (<code>load=85%</code>) as
+          diagnostic context, helping distinguish genuine hardware throttling from contention caused by mining threads.
         </p>
 
         <h2>Trust Score — How Probes Drive Mining Power</h2>
@@ -517,7 +519,14 @@
           "
         >
           trustFactor = 0.2 + (trustScore / 100) × 0.8<br />
-          maxDeltaWh = (calibratedUnitPowerW × trustFactor × 0.5) / 3600
+          maxDeltaWh = (calibratedUnitPowerW × trustFactor × loadFactor × 0.5) / 3600
+        </p>
+        <p>
+          The <strong>loadFactor</strong> is derived from the miner's hardware load slider setting (<code
+            >Math.min(1, Math.max(0.1, loadPercent / 100))</code
+          >). If the miner sets load to 50 %, the loadFactor is 0.5, halving the per-tick contribution ceiling. This
+          gives the server-side authoritative enforcement over the load slider — a patched renderer cannot bypass it by
+          sending full-power deltaWh at low load.
         </p>
         <p>
           At trust score 0, the miner contributes at only 20 % of their calibrated power. At trust score 100, they
@@ -602,7 +611,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.350 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.352 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;
