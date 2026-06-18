@@ -50,7 +50,7 @@ other's mining hardware to keep the network honest.$\r$\n$\r$\n\
 To enable this, the installer will add a Windows Firewall inbound rule:$\r$\n$\r$\n\
     Name:      ${WATTCOIN_FW_RULE_NAME}$\r$\n\
     Protocol:  TCP$\r$\n\
-    Port:      39310 (local network only)$\r$\n\
+    Port:      39310 (internet / all networks)$\r$\n\
     Direction: Inbound$\r$\n$\r$\n\
 The rule is removed automatically when you uninstall Wattcoin Miner.$\r$\n$\r$\n\
 Click OK to allow this rule.$\r$\n\

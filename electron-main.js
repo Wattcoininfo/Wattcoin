@@ -7333,6 +7333,37 @@ ipcMain.handle('wattcoin-get-network-info', () => {
   };
 });
 
+ipcMain.handle('wattcoin-check-firewall-rule', () => {
+  if (process.platform !== 'win32') return { windows: false };
+  const { execSync } = require('child_process');
+  const errors = [];
+  // Check via netsh: list all inbound rules and look for port 39310.
+  // This catches any rule regardless of name — manually added or installer-created.
+  try {
+    const out = execSync(
+      'netsh advfirewall firewall show rule name=all dir=in',
+      { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 512 * 1024 },
+    );
+    if (out && typeof out === 'string') {
+      const lines = out.split(/\r?\n/);
+      let found = false;
+      for (const line of lines) {
+        if (line.includes('LocalPort:') && line.includes('39310')) {
+          found = true;
+          break;
+        }
+      }
+      if (found) return { windows: true, exists: true };
+      errors.push('netsh listed rules but none matched port 39310');
+    }
+  } catch (e) {
+    const stderr = e.stderr ? String(e.stderr).slice(0, 200) : '';
+    errors.push(String(e.message || e).slice(0, 200) + (stderr ? ' | ' + stderr : ''));
+  }
+  console.warn('[Firewall check] No inbound rule found for port 39310:', errors.join(' | '));
+  return { windows: true, exists: false, errors };
+});
+
 // Safe external URL opener.
 // Allows:
 //   1. ethereum: EIP-681 payment request URIs (opened by the OS-registered wallet app)

@@ -67,6 +67,7 @@ try {
       // deviceId (SHA-256 of local secret) is the stable public identifier for this device.
       getDeviceIdentity: () => ipcRenderer.invoke('wattcoin-get-device-identity'),
       getPeerCount: () => ipcRenderer.invoke('wattcoin-get-peer-count'),
+      checkFirewallRule: () => ipcRenderer.invoke('wattcoin-check-firewall-rule'),
       // Generic invoke method for other IPC handlers.
       // Uses an explicit allowlist — any channel not on the list is silently rejected so
       // newly-added sensitive handlers are protected by default (secure-by-default).
@@ -95,6 +96,7 @@ try {
           'wattcoin-write-fingerprint',
           'wattcoin-get-device-identity',
           'wattcoin-get-peer-count',
+          'wattcoin-check-firewall-rule',
           'wattcoin-get-authority-state',
           'wattcoin-reset-hardware-identity',
           'wattcoin-clear-search-cache',

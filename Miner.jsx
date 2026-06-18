@@ -1963,6 +1963,7 @@ export default function Miner({
   onBlockMined,
   chainHeight = -1,
   hardwareLookupResetNonce = 0,
+  firewallBlocked = false,
 }) {
   // Helper for timestamp
   const now = React.useCallback(() => new Date().toLocaleString('en-GB'), []);
@@ -6447,6 +6448,30 @@ export default function Miner({
           </span>
         </div>
       )}
+      {firewallBlocked && (
+        <div
+          style={{
+            background: '#7f1d1d',
+            border: '1px solid #ef4444',
+            borderRadius: 8,
+            padding: '10px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            color: '#fecaca',
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>⚠</span>
+          <span>
+            No Windows Firewall rule was created during install — peer attestation cannot receive inbound
+            connections. Mining is disabled. Reinstall the app and accept the firewall prompt, or manually add an
+            inbound rule for TCP port 39310.
+          </span>
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'row', gap: 32, alignItems: 'stretch', width: '100%' }}>
         {/* Left column: Hardware recognition */}
@@ -7415,16 +7440,17 @@ export default function Miner({
                     setMining(true);
                   }
                 }}
-                disabled={
-                  mining ||
-                  hardwareUnknown ||
-                  !hardwareRecognitionFinished ||
-                  benchmarkState.running ||
-                  startupBenchmarkPending ||
-                  isHardwareOnHold ||
-                  peerCount === null ||
-                  peerCount === 0
-                }
+    disabled={
+      mining ||
+      hardwareUnknown ||
+      !hardwareRecognitionFinished ||
+      benchmarkState.running ||
+      startupBenchmarkPending ||
+      isHardwareOnHold ||
+      firewallBlocked ||
+      peerCount === null ||
+      peerCount === 0
+    }
                 style={{
                   width: '100%',
                   background:
@@ -7434,6 +7460,7 @@ export default function Miner({
                     benchmarkState.running ||
                     startupBenchmarkPending ||
                     isHardwareOnHold ||
+                    firewallBlocked ||
                     peerCount === null ||
                     peerCount === 0
                       ? '#7aa88a'
@@ -7453,6 +7480,7 @@ export default function Miner({
                     benchmarkState.running ||
                     startupBenchmarkPending ||
                     isHardwareOnHold ||
+                    firewallBlocked ||
                     peerCount === null ||
                     peerCount === 0
                       ? 'not-allowed'
@@ -7467,13 +7495,15 @@ export default function Miner({
                       ? 'Mining active'
                       : benchmarkState.running || startupBenchmarkPending
                         ? 'Benchmarking...'
-                        : peerCount === null || peerCount === 0
-                          ? 'No peers'
-                          : showRebenchPrompt
-                            ? 'Re-Benchmark'
-                            : hardwareRecognitionFinished
-                              ? 'Start mining'
-                              : 'Detecting hardware...'}
+                        : firewallBlocked
+                          ? 'Firewall blocked'
+                          : peerCount === null || peerCount === 0
+                            ? 'No peers'
+                            : showRebenchPrompt
+                              ? 'Re-Benchmark'
+                              : hardwareRecognitionFinished
+                                ? 'Start mining'
+                                : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>

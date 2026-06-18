@@ -231,6 +231,7 @@ export default function AppTabs() {
   const [hwResetCooldownRemainingMs, setHwResetCooldownRemainingMs] = useState(0);
   const [searchCacheOnCooldown, setSearchCacheOnCooldown] = useState(false);
   const [miningWarning, setMiningWarning] = useState(null);
+  const [firewallBlocked, setFirewallBlocked] = useState(false);
   const [searchCacheCooldownRemainingMs, setSearchCacheCooldownRemainingMs] = useState(0);
   const [_betaPolicy, _setBetaPolicy] = useState({
     loading: true,
@@ -302,6 +303,31 @@ export default function AppTabs() {
       }
     }
     fetchHwResetCooldown();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function checkFirewall() {
+      try {
+        const hw = window.wattcoinHardware;
+        if (!hw || !hw.checkFirewallRule) return;
+        const result = await hw.checkFirewallRule();
+        if (!cancelled) {
+          if (result && result.windows && !result.exists) {
+            if (result.errors) {
+              console.warn('[Firewall] Detection errors:', result.errors);
+            }
+            setFirewallBlocked(true);
+          } else {
+            setFirewallBlocked(false);
+          }
+        }
+      } catch (_) {
+        if (!cancelled) setFirewallBlocked(false);
+      }
+    }
+    checkFirewall();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -888,6 +914,7 @@ export default function AppTabs() {
               onBlockMined={handleBlockMined}
               chainHeight={chainHeight}
               hardwareLookupResetNonce={hardwareLookupResetNonce}
+              firewallBlocked={firewallBlocked}
             />
           )}
         </div>
