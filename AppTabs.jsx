@@ -327,7 +327,9 @@ export default function AppTabs() {
       }
     }
     checkFirewall();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

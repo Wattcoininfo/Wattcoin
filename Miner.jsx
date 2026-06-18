@@ -6466,9 +6466,9 @@ export default function Miner({
         >
           <span style={{ fontSize: 16 }}>⚠</span>
           <span>
-            No Windows Firewall rule was created during install — peer attestation cannot receive inbound
-            connections. Mining is disabled. Reinstall the app and accept the firewall prompt, or manually add an
-            inbound rule for TCP port 39310.
+            No Windows Firewall rule was created during install — peer attestation cannot receive inbound connections.
+            Mining is disabled. Reinstall the app and accept the firewall prompt, or manually add an inbound rule for
+            TCP port 39310.
           </span>
         </div>
       )}
@@ -7440,17 +7440,17 @@ export default function Miner({
                     setMining(true);
                   }
                 }}
-    disabled={
-      mining ||
-      hardwareUnknown ||
-      !hardwareRecognitionFinished ||
-      benchmarkState.running ||
-      startupBenchmarkPending ||
-      isHardwareOnHold ||
-      firewallBlocked ||
-      peerCount === null ||
-      peerCount === 0
-    }
+                disabled={
+                  mining ||
+                  hardwareUnknown ||
+                  !hardwareRecognitionFinished ||
+                  benchmarkState.running ||
+                  startupBenchmarkPending ||
+                  isHardwareOnHold ||
+                  firewallBlocked ||
+                  peerCount === null ||
+                  peerCount === 0
+                }
                 style={{
                   width: '100%',
                   background:

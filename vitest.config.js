@@ -1,8 +1,15 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  plugins: [react()],
   test: {
-    include: ['tests/**/*.test.js', 'tests/**/*.integration.test.js', 'tests/**/*.runtime.test.js'],
+    include: [
+      'tests/**/*.test.js',
+      'tests/**/*.test.jsx',
+      'tests/**/*.integration.test.js',
+      'tests/**/*.runtime.test.js',
+    ],
     exclude: ['node_modules', 'dist', 'releases'],
     passWithNoTests: true,
     testTimeout: 30000,
@@ -13,6 +20,9 @@ export default defineConfig({
         singleFork: false,
       },
     },
+    environment: 'node',
+    environmentMatchGlobs: [['tests/**/*.test.jsx', 'happy-dom']],
+    setupFiles: ['tests/setup.js'],
     coverage: {
       provider: 'v8',
       include: [

@@ -7340,10 +7340,12 @@ ipcMain.handle('wattcoin-check-firewall-rule', () => {
   // Check via netsh: list all inbound rules and look for port 39310.
   // This catches any rule regardless of name — manually added or installer-created.
   try {
-    const out = execSync(
-      'netsh advfirewall firewall show rule name=all dir=in',
-      { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 512 * 1024 },
-    );
+    const out = execSync('netsh advfirewall firewall show rule name=all dir=in', {
+      timeout: 10000,
+      windowsHide: true,
+      encoding: 'utf8',
+      maxBuffer: 512 * 1024,
+    });
     if (out && typeof out === 'string') {
       const lines = out.split(/\r?\n/);
       let found = false;
