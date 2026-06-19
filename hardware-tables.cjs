@@ -429,6 +429,16 @@ function getGpuTdpW(model) {
   if (/Radeon.*RX 5700/i.test(m))                     return 180;
   if (/Radeon.*RX 5600 XT/i.test(m))                  return 150;
   if (/Radeon.*RX 5500 XT/i.test(m))                  return 130;
+  // ── AMD RX 500 series (Polaris Refresh) ──────────────────────────────────
+  if (/Radeon.*RX 590/i.test(m))                      return 225;
+  if (/Radeon.*RX 580/i.test(m))                      return 185;
+  if (/Radeon.*RX 570/i.test(m))                      return 150;
+  if (/Radeon.*RX 560/i.test(m))                      return 75;
+  if (/Radeon.*RX 550/i.test(m))                      return 50;
+  // ── AMD RX 400 series (Polaris) ──────────────────────────────────────────
+  if (/Radeon.*RX 480/i.test(m))                      return 150;
+  if (/Radeon.*RX 470/i.test(m))                      return 120;
+  if (/Radeon.*RX 460/i.test(m))                      return 75;
   // ── Intel Arc ────────────────────────────────────────────────────────────
   if (/Intel.*Arc A770/i.test(m))                     return 225;
   if (/Intel.*Arc A750/i.test(m))                     return 225;

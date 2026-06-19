@@ -46,7 +46,7 @@ function findGpuBinary() {
   return null;
 }
 
-function spawnGpuProcess(deviceIndex) {
+function spawnGpuProcess(deviceIndex, adapterIndex) {
   const binaryPath = findGpuBinary();
   if (!binaryPath) {
     gpuTelemetry.error = 'GPU native binary not found';
@@ -55,7 +55,10 @@ function spawnGpuProcess(deviceIndex) {
 
   let process;
   try {
-    process = spawn(binaryPath, ['--adapter', String(deviceIndex)], {
+    // When no specific adapter index is given (first GPU on a filtered list),
+    // omit --adapter so the native binary auto-selects the best discrete GPU.
+    const args = adapterIndex !== undefined ? ['--adapter', String(adapterIndex)] : [];
+    process = spawn(binaryPath, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -337,9 +340,14 @@ async function ensureGpu(numGpus) {
     return true;
   }
 
-  // Spawn missing processes
+  // Spawn missing processes.
+  // For the first GPU, omit --adapter so the native binary auto-selects the
+  // best (discrete-first) adapter.  Additional GPUs pass their sequential
+  // index — this works when all remaining adapters are discrete and DXGI
+  // enumerates them contiguously after the integrated one.
   for (let i = gpuStates.size; i < count; i++) {
-    if (!spawnGpuProcess(i)) {
+    const adapterIndex = i === 0 ? undefined : i;
+    if (!spawnGpuProcess(i, adapterIndex)) {
       gpuTelemetry.error = `Failed to spawn GPU process for device ${i}`;
       return false;
     }

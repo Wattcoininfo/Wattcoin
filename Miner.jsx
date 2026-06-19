@@ -553,9 +553,9 @@ async function getHardwareInfo() {
         sys.cpu && sys.cpu.brand
           ? `${sys.cpu.brand} (${logicalCores} logical cores${cpuSockets > 1 ? `, ${cpuSockets} CPUs` : ''})`
           : 'Unknown';
-      const gpu = sys.gpu.model || 'Unknown';
+      let gpu = sys.gpu.model || 'Unknown';
       // Collect all GPU models for multi-GPU support
-      const gpus =
+      let gpus =
         Array.isArray(sys.gpus) && sys.gpus.length > 0
           ? sys.gpus.filter((g) => g && g.model).map((g) => g.model)
           : gpu !== 'Unknown'
@@ -563,7 +563,7 @@ async function getHardwareInfo() {
             : [];
       // Build detailed GPU list: include VRAM size and GDDR type for dedicated GPUs.
       // Skip entries where vramDynamic=true (shared/integrated memory) for VRAM display.
-      const gpuDetailsList = (
+      let gpuDetailsList = (
         Array.isArray(sys.gpus) && sys.gpus.length > 0 ? sys.gpus : sys.gpu && sys.gpu.model ? [sys.gpu] : []
       )
         .filter((g) => g && g.model)
@@ -741,6 +741,28 @@ async function getHardwareInfo() {
         })
       ) {
         deviceType = 'Mini PC';
+      }
+      // On desktop PCs, filter out integrated/motherboard GPUs (e.g. Intel HD/UHD,
+      // Radeon Graphics on CPU) so only dedicated GPUs are counted and spawned.
+      if (deviceType === 'PC' && gpuDetailsList.length > 0) {
+        const dedicatedEntryIndices = [];
+        gpuDetailsList.forEach((entry, idx) => {
+          const model = String((entry && entry.model) || '');
+          const sharedMemory = !!(entry && entry.sharedMemory);
+          const vramGb = Math.max(0, Number(entry && entry.vramGb) || 0);
+          if ((!sharedMemory && vramGb >= 1) || DISCRETE_GPU_MODEL_HINTS.test(model)) {
+            dedicatedEntryIndices.push(idx);
+          }
+        });
+        if (dedicatedEntryIndices.length > 0) {
+          gpuDetailsList = dedicatedEntryIndices.map((i) => gpuDetailsList[i]);
+          gpus = dedicatedEntryIndices.map((i) => gpus[i]).filter(Boolean);
+          gpu = gpus[0] || 'Unknown';
+        } else {
+          gpuDetailsList = [];
+          gpus = [];
+          gpu = 'Unknown';
+        }
       }
       const osName = sys.os && sys.os.distro ? sys.os.distro : sys.os && sys.os.platform ? sys.os.platform : 'Unknown';
       return {
