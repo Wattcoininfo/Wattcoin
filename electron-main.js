@@ -6879,7 +6879,6 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
 const _probePushConns = new Map(); // workerId -> { ws, allowGpu }
 let _probePushWss = null;
 let _probePushTimer = null;
-let _miningActive = true;
 const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
 
 function _clearProbePushTimer() {
@@ -6900,7 +6899,7 @@ function _scheduleProbePush() {
 function _runProbePush() {
   try {
     if (_probePushConns.size === 0) return;
-    if (!_miningActive) return;
+    if (hwAuthority.currentLoadPercent <= 0) return;
     const deadWorkers = [];
     const liveWorkers = [];
     // First pass: separate dead connections from eligible workers.
@@ -8637,7 +8636,6 @@ ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
     const appliedPercent = setHardwareLoadPercent(pct);
     hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : pct;
     setProbeLoadPercent(hwAuthority.currentLoadPercent);
-    _miningActive = pct > 0;
     return {
       ok: true,
       appliedPercent,
@@ -8655,7 +8653,6 @@ ipcMain.handle('wattcoin-stop-hardware-load', () => {
     _closeBgProbeWs();
     hwAuthority.currentLoadPercent = 0;
     setProbeLoadPercent(0);
-    _miningActive = false;
     return { ok: true, ...getHardwareLoadState() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to stop hardware load' };
