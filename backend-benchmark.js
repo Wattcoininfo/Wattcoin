@@ -977,9 +977,6 @@ function issuePeerProbe(workerId, allowGpuWorkloads) {
   // submitting (e.g. a transient network failure on the submit path).
   for (const [existingId, existingEntry] of peerProbeIssuances) {
     if (existingEntry.workerId === workerId) {
-      console.log(
-        `[PeerProbe] Returning in-flight ${existingEntry.probe.type} probe id=${existingId} for worker=${workerId}`,
-      );
       return { ...existingEntry.probe };
     }
   }

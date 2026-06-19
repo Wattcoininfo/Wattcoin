@@ -5142,7 +5142,6 @@ async function computeWalletSyncState(reason = 'refresh') {
     };
   }
 
-  const readiness = await wtcNode.getWalletReadiness();
   const addresses = Array.isArray(wtcNode.getAddresses()) ? wtcNode.getAddresses() : [];
   const selectedAddress =
     typeof wtcNode.getPrimaryAddress === 'function' ? String(wtcNode.getPrimaryAddress() || '').trim() : '';
@@ -5151,36 +5150,52 @@ async function computeWalletSyncState(reason = 'refresh') {
     setCoordinatorIdentityKey(selectedAddress);
   }
 
-  return {
+  const synced = {
     ok: true,
     nodeReady: true,
-    rpcReachable: readiness && readiness.rpcReachable !== false,
+    rpcReachable: true,
     selectedAddress,
     addresses,
-    walletReadiness:
-      readiness && typeof readiness === 'object'
-        ? {
-            ok: readiness.ok !== false,
-            status: readiness.status || 'syncing',
-            message: readiness.message || 'Checking wallet sync status...',
-            spendReady: !!readiness.spendReady,
-            blocks: Math.max(0, Number(readiness.blocks) || 0),
-            headers: Math.max(0, Number(readiness.headers) || 0),
-            connections: Math.max(0, Number(readiness.connections) || 0),
-            verificationProgress: Math.max(0, Math.min(1, Number(readiness.verificationProgress) || 0)),
-            localBlocks: Math.max(-1, Number(readiness.localBlocks) || 0),
-            bestPeerHeight: Math.max(-1, Number(readiness.bestPeerHeight) || 0),
-            lagBlocks: Math.max(0, Number(readiness.lagBlocks) || 0),
-            bestPeer: typeof readiness.bestPeer === 'string' ? readiness.bestPeer : '',
-            scanning: !!readiness.scanning,
-            initialBlockDownload: !!readiness.initialBlockDownload,
-            lastSyncResult: readiness.lastSyncResult || null,
-            syncBlockedReason: typeof readiness.syncBlockedReason === 'string' ? readiness.syncBlockedReason : '',
-          }
-        : walletSyncState.walletReadiness,
+    walletReadiness: walletSyncState.walletReadiness,
     updatedAt: Date.now(),
     reason,
   };
+
+  wtcNode.getWalletReadiness().then((readiness) => {
+    if (!readiness || typeof readiness !== 'object') return;
+    const next = {
+      ...synced,
+      rpcReachable: readiness.rpcReachable !== false,
+      walletReadiness: {
+        ok: readiness.ok !== false,
+        status: readiness.status || 'syncing',
+        message: readiness.message || 'Checking wallet sync status...',
+        spendReady: !!readiness.spendReady,
+        blocks: Math.max(0, Number(readiness.blocks) || 0),
+        headers: Math.max(0, Number(readiness.headers) || 0),
+        connections: Math.max(0, Number(readiness.connections) || 0),
+        verificationProgress: Math.max(0, Math.min(1, Number(readiness.verificationProgress) || 0)),
+        localBlocks: Math.max(-1, Number(readiness.localBlocks) || 0),
+        bestPeerHeight: Math.max(-1, Number(readiness.bestPeerHeight) || 0),
+        lagBlocks: Math.max(0, Number(readiness.lagBlocks) || 0),
+        bestPeer: typeof readiness.bestPeer === 'string' ? readiness.bestPeer : '',
+        scanning: !!readiness.scanning,
+        initialBlockDownload: !!readiness.initialBlockDownload,
+        lastSyncResult: readiness.lastSyncResult || null,
+        syncBlockedReason: typeof readiness.syncBlockedReason === 'string' ? readiness.syncBlockedReason : '',
+      },
+      updatedAt: Date.now(),
+      reason,
+    };
+    const prevSerialized = JSON.stringify(walletSyncState);
+    const nextSerialized = JSON.stringify(next);
+    walletSyncState = next;
+    if (prevSerialized !== nextSerialized) {
+      broadcastWalletSyncState();
+    }
+  }).catch(() => {});
+
+  return synced;
 }
 
 function refreshWalletSyncState(reason = 'refresh', { force = false } = {}) {
