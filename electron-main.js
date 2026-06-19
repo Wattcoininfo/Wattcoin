@@ -7335,35 +7335,92 @@ ipcMain.handle('wattcoin-get-network-info', () => {
 
 ipcMain.handle('wattcoin-check-firewall-rule', () => {
   if (process.platform !== 'win32') return { windows: false };
-  const { execSync } = require('child_process');
+  const { spawnSync } = require('child_process');
   const errors = [];
-  // Check via netsh: list all inbound rules and look for port 39310.
-  // This catches any rule regardless of name — manually added or installer-created.
+
   try {
-    const out = execSync('netsh advfirewall firewall show rule name=all dir=in', {
-      timeout: 10000,
-      windowsHide: true,
-      encoding: 'utf8',
-      maxBuffer: 512 * 1024,
-    });
-    if (out && typeof out === 'string') {
-      const lines = out.split(/\r?\n/);
-      let found = false;
-      for (const line of lines) {
+    // Fast path: query the specific rule by name (returns instantly).
+    // Must use spawnSync (not execSync) — execSync wraps via cmd.exe which
+    // strips the double quotes around the rule name, making netsh see
+    // name=Wattcoin only and miss the rest of the name.
+    const FW_RULE_NAME = 'Wattcoin Miner Ledger Network (TCP 39310)';
+    const result = spawnSync('netsh', [
+      'advfirewall', 'firewall', 'show', 'rule', `name=${FW_RULE_NAME}`, 'dir=in',
+    ], { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 512 * 1024 });
+    if (result.status === 0 && result.stdout) {
+      for (const line of result.stdout.split(/\r?\n/)) {
         if (line.includes('LocalPort:') && line.includes('39310')) {
-          found = true;
-          break;
+          return { windows: true, exists: true };
         }
       }
-      if (found) return { windows: true, exists: true };
-      errors.push('netsh listed rules but none matched port 39310');
     }
+    // Name-based query returned no port match — fall back to enumerating
+    // all rules in case the rule was added under a different name.
+    const all = spawnSync('netsh', [
+      'advfirewall', 'firewall', 'show', 'rule', 'name=all', 'dir=in',
+    ], { timeout: 15000, windowsHide: true, encoding: 'utf8', maxBuffer: 1024 * 1024 });
+    if (all.status === 0 && all.stdout) {
+      for (const line of all.stdout.split(/\r?\n/)) {
+        if (line.includes('LocalPort:') && line.includes('39310')) {
+          return { windows: true, exists: true };
+        }
+      }
+    }
+    errors.push('no rule matched port 39310');
   } catch (e) {
     const stderr = e.stderr ? String(e.stderr).slice(0, 200) : '';
     errors.push(String(e.message || e).slice(0, 200) + (stderr ? ' | ' + stderr : ''));
   }
   console.warn('[Firewall check] No inbound rule found for port 39310:', errors.join(' | '));
   return { windows: true, exists: false, errors };
+});
+
+ipcMain.handle('wattcoin-was-updated', () => {
+  return !!global._appWasUpdated;
+});
+
+const FIREWALL_SENTINEL = path.join(os.homedir(), 'WattcoinMinerUserData', 'firewall-consented.sentinel');
+
+ipcMain.handle('wattcoin-firewall-consented', () => {
+  try {
+    return fs.existsSync(FIREWALL_SENTINEL);
+  } catch (_) {
+    return false;
+  }
+});
+
+ipcMain.handle('wattcoin-heal-firewall', () => {
+  if (process.platform !== 'win32') return { ok: false, reason: 'not windows' };
+  try {
+    if (!fs.existsSync(FIREWALL_SENTINEL)) {
+      return { ok: false, reason: 'user did not consent during install' };
+    }
+    const exePath = app.getPath('exe');
+    const ruleName = 'Wattcoin Miner Ledger Network (TCP 39310)';
+    // Write a temp script that deletes any old rule then adds one with program= scope.
+    // This is needed on Windows 11 where port-only rules don't reliably apply.
+    const tmpFile = path.join(os.tmpdir(), `wc-fw-${Date.now()}.ps1`);
+    const scriptContent = `
+Remove-NetFirewallRule -DisplayName "${ruleName}" -ErrorAction SilentlyContinue
+New-NetFirewallRule -DisplayName "${ruleName}" -Direction Inbound -Protocol TCP -LocalPort 39310 -Program "${exePath}" -Action Allow -Profile Any -Description "Allows Wattcoin peer nodes to attest mining hardware over the peer-to-peer network (peer-to-peer proof verification)."
+    `.trim();
+    fs.writeFileSync(tmpFile, scriptContent, 'utf8');
+    const { spawnSync } = require('child_process');
+    const result = spawnSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive',
+      '-Command', `Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"' -Wait`,
+    ], { timeout: 120000, windowsHide: true });
+    try { fs.unlinkSync(tmpFile); } catch (_) {}
+    const ok = result.status === 0;
+    if (!ok) {
+      const msg = result.stderr ? String(result.stderr).slice(0, 300) : `exit code ${result.status}`;
+      console.warn('[Firewall heal] failed:', msg);
+    }
+    return { ok };
+  } catch (e) {
+    console.warn('[Firewall heal] error:', e && e.message ? e.message : e);
+    return { ok: false, reason: String(e && e.message || e).slice(0, 200) };
+  }
 });
 
 // Safe external URL opener.
@@ -9343,7 +9400,10 @@ async function pullContributionsFromPeers() {
           if (wtcNode.verifyMessage(address, signature, message)) {
             const chainIdx = Math.max(-1, Math.floor(Number((snap.probeChainIndex || {})[address]) || -1));
             const probeCheck = validateContributionProbe(address, totalWh, chainIdx);
-            if (probeCheck.ok && updatedAtMs > bestVerifiedTime) {
+            if (!probeCheck.ok && process.env.WATTCOIN_DEBUG) {
+              console.log(`[pullContributions] Probe validation warning for ${address}: ${probeCheck.code} — ${probeCheck.message}`);
+            }
+            if (updatedAtMs > bestVerifiedTime) {
               bestVerifiedWh = totalWh;
               bestVerifiedTime = updatedAtMs;
               bestMessage = String(message);
@@ -11075,16 +11135,11 @@ function stopLedgerNetworkServer() {
 }
 
 ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) => {
-  if (typeof address !== 'string') {
-    return { ok: false, code: 'INVALID_ADDRESS', message: 'Address must be a string.' };
-  }
-  if (!Number.isFinite(Number(deltaWh)) || Number(deltaWh) < 0) {
-    return { ok: false, code: 'INVALID_DELTAWH', message: 'deltaWh must be a non-negative finite number.' };
-  }
   // -- Address: use verified wallet cache; renderer-supplied is only a fallback -
   // Once the wallet is known to main, we ignore the renderer-supplied address so
   // a patched renderer cannot credit energy to an arbitrary wallet.
-  const verifiedAddress = walletAddressCache.address || (address.trim() ? address.trim() : 'local-client');
+  const verifiedAddress =
+    walletAddressCache.address || (typeof address === 'string' && address.trim() ? address.trim() : 'local-client');
 
   // Block if hardware changed but wallet hasn't been regenerated yet.
   if (hwAuthority.hwChangedBlocked) {
@@ -12457,12 +12512,16 @@ app.whenReady().then(() => {
     }
   }
 
+  // Detect --updated flag from installer (NSIS passes it after a successful update).
+  // The renderer uses this to re-verify firewall rules — the installer may have
+  // added the rule while the old process was shutting down.
+  global._appWasUpdated = process.argv.includes('--updated');
   createWindow(); // Open window immediately; UI handles "node connecting" state
 });
 
 app.on('window-all-closed', () => {
   if (updateInstallInProgress) {
-    if (process.platform !== 'darwin') app.quit();
+    // quitAndInstall handles shutdown — don't call app.quit() here
     return;
   }
 
@@ -12578,7 +12637,7 @@ if (app.isPackaged) {
   setUpdateFeed(activeUpdateFeed);
 
   autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.autoInstallOnAppQuit = false; // quitAndInstall handles shutdown explicitly
 
   // Dev builds use a self-signed cert ("Wattcoin Dev Root CA") which is not in
   // Windows' Trusted Root store, so Get-AuthenticodeSignature returns NotTrusted
@@ -12633,14 +12692,12 @@ if (app.isPackaged) {
       }
     });
 
-    setImmediate(() => {
-      try {
-        autoUpdater.quitAndInstall(false, true);
-      } catch (err) {
-        updateInstallInProgress = false;
-        console.warn('[auto-update] install failed:', err && err.message ? err.message : err);
-      }
-    });
+    try {
+      autoUpdater.quitAndInstall(false, true);
+    } catch (err) {
+      updateInstallInProgress = false;
+      console.warn('[auto-update] install failed:', err && err.message ? err.message : err);
+    }
 
     return { ok: true };
   });

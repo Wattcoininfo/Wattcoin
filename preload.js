@@ -68,6 +68,9 @@ try {
       getDeviceIdentity: () => ipcRenderer.invoke('wattcoin-get-device-identity'),
       getPeerCount: () => ipcRenderer.invoke('wattcoin-get-peer-count'),
       checkFirewallRule: () => ipcRenderer.invoke('wattcoin-check-firewall-rule'),
+      wasUpdated: () => ipcRenderer.invoke('wattcoin-was-updated'),
+      firewallConsented: () => ipcRenderer.invoke('wattcoin-firewall-consented'),
+      healFirewall: () => ipcRenderer.invoke('wattcoin-heal-firewall'),
       // Generic invoke method for other IPC handlers.
       // Uses an explicit allowlist — any channel not on the list is silently rejected so
       // newly-added sensitive handlers are protected by default (secure-by-default).

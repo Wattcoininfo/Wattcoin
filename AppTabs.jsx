@@ -311,11 +311,28 @@ export default function AppTabs() {
       try {
         const hw = window.wattcoinHardware;
         if (!hw || !hw.checkFirewallRule) return;
+
+        // Re-check after update: the installer may have added the rule while the
+        // old process was shutting down.  A fresh check ensures the UI reflects
+        // the post-update state even if the initial mount check ran too early.
+        const wasUpdated = typeof hw.wasUpdated === 'function' ? await hw.wasUpdated() : false;
+
         const result = await hw.checkFirewallRule();
         if (!cancelled) {
           if (result && result.windows && !result.exists) {
             if (result.errors) {
               console.warn('[Firewall] Detection errors:', result.errors);
+            }
+            if (wasUpdated) {
+              // Just updated but rule still missing — retry once after a short
+              // delay in case Windows is still applying the firewall policy.
+              await new Promise((r) => setTimeout(r, 3000));
+              if (cancelled) return;
+              const retry = await hw.checkFirewallRule();
+              if (retry && retry.windows && retry.exists) {
+                setFirewallBlocked(false);
+                return;
+              }
             }
             setFirewallBlocked(true);
           } else {
@@ -331,6 +348,29 @@ export default function AppTabs() {
       cancelled = true;
     };
   }, []);
+
+  const [firewallHealing, setFirewallHealing] = useState(false);
+
+  async function handleHealFirewall() {
+    try {
+      const hw = window.wattcoinHardware;
+      if (!hw || typeof hw.healFirewall !== 'function') return;
+      setFirewallHealing(true);
+      const result = await hw.healFirewall();
+      if (result && result.ok) {
+        const recheck = await hw.checkFirewallRule();
+        if (recheck && recheck.windows && recheck.exists) {
+          setFirewallBlocked(false);
+        }
+      } else {
+        console.warn('[Firewall] Heal failed:', result && result.reason ? result.reason : 'unknown');
+      }
+    } catch (e) {
+      console.warn('[Firewall] Heal error:', e && e.message ? e.message : e);
+    } finally {
+      setFirewallHealing(false);
+    }
+  }
 
   useEffect(() => {
     try {
@@ -917,6 +957,8 @@ export default function AppTabs() {
               chainHeight={chainHeight}
               hardwareLookupResetNonce={hardwareLookupResetNonce}
               firewallBlocked={firewallBlocked}
+              firewallHealing={firewallHealing}
+              onHealFirewall={firewallBlocked ? handleHealFirewall : undefined}
             />
           )}
         </div>

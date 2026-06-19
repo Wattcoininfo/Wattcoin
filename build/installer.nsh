@@ -59,10 +59,20 @@ will not work and your trust score may be affected." \
     IDCANCEL skip_fw_rule
 
   nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="${WATTCOIN_FW_RULE_NAME}" dir=in'
-  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="${WATTCOIN_FW_RULE_NAME}" dir=in action=allow protocol=TCP localport=39310 description="Allows Wattcoin peer nodes to attest mining hardware over the peer-to-peer network (peer-to-peer proof verification)."'
+  nsExec::ExecToLog 'netsh advfirewall firewall add rule name="${WATTCOIN_FW_RULE_NAME}" dir=in action=allow protocol=TCP localport=39310 program="$INSTDIR\${PRODUCT_NAME}.exe" description="Allows Wattcoin peer nodes to attest mining hardware over the peer-to-peer network (peer-to-peer proof verification)."'
+
+  ; Write consent sentinel so the app knows the user approved the firewall rule.
+  ; The app reads this file to decide whether to self-heal on Windows 11 where
+  ; port-based rules don't always apply — it can then re-add the rule with the
+  ; program= parameter pointing to the actual app exe.  Cleaned up on uninstall.
+  IfFileExists "$PROFILE\WattcoinMinerUserData" +2 0
+  CreateDirectory "$PROFILE\WattcoinMinerUserData"
+  FileOpen $0 "$PROFILE\WattcoinMinerUserData\firewall-consented.sentinel" w
+  FileClose $0
   skip_fw_rule:
 !macroend
 
 !macro customUnInstall
   nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="${WATTCOIN_FW_RULE_NAME}" dir=in'
+  Delete "$PROFILE\WattcoinMinerUserData\firewall-consented.sentinel"
 !macroend

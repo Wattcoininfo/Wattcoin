@@ -1964,6 +1964,8 @@ export default function Miner({
   chainHeight = -1,
   hardwareLookupResetNonce = 0,
   firewallBlocked = false,
+  firewallHealing = false,
+  onHealFirewall,
 }) {
   // Helper for timestamp
   const now = React.useCallback(() => new Date().toLocaleString('en-GB'), []);
@@ -6467,9 +6469,29 @@ export default function Miner({
           <span style={{ fontSize: 16 }}>⚠</span>
           <span>
             No Windows Firewall rule was created during install — peer attestation cannot receive inbound connections.
-            Mining is disabled. Reinstall the app and accept the firewall prompt, or manually add an inbound rule for
-            TCP port 39310.
+            Mining is disabled.
           </span>
+          {typeof onHealFirewall === 'function' && (
+            <button
+              onClick={onHealFirewall}
+              disabled={firewallHealing}
+              style={{
+                marginLeft: 'auto',
+                background: firewallHealing ? '#881337' : '#dc2626',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '6px 14px',
+                cursor: firewallHealing ? 'not-allowed' : 'pointer',
+                fontWeight: 600,
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+                opacity: firewallHealing ? 0.6 : 1,
+              }}
+            >
+              {firewallHealing ? 'Fixing...' : 'Fix Firewall'}
+            </button>
+          )}
         </div>
       )}
 
