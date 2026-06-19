@@ -975,7 +975,7 @@ function issuePeerProbe(workerId, allowGpuWorkloads) {
   // behaviour of getPendingProbe() for local probes � prevents entries from
   // accumulating in peerProbeIssuances when a worker polls repeatedly without
   // submitting (e.g. a transient network failure on the submit path).
-  for (const [existingId, existingEntry] of peerProbeIssuances) {
+  for (const [_existingId, existingEntry] of peerProbeIssuances) {
     if (existingEntry.workerId === workerId) {
       return { ...existingEntry.probe };
     }

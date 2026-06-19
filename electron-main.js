@@ -5119,7 +5119,7 @@ function broadcastWalletSyncState() {
   walletSyncEmitter.emit('changed', snapshot);
 }
 
-async function computeWalletSyncState(reason = 'refresh') {
+function computeWalletSyncState(reason = 'refresh') {
   if (!wtcNode) {
     return {
       ok: false,
@@ -7547,7 +7547,7 @@ New-NetFirewallRule -DisplayName "${ruleName}" -Direction Inbound -Protocol TCP 
     );
     try {
       fs.unlinkSync(tmpFile);
-    } catch (_) {}
+    } catch (_) { /* ignore */ }
     const ok = result.status === 0;
     if (!ok) {
       const msg = result.stderr ? String(result.stderr).slice(0, 300) : `exit code ${result.status}`;
