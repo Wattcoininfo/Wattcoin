@@ -6899,7 +6899,6 @@ function _scheduleProbePush() {
 function _runProbePush() {
   try {
     if (_probePushConns.size === 0) return;
-    if (hwAuthority.currentLoadPercent <= 0) return;
     const deadWorkers = [];
     const liveWorkers = [];
     // First pass: separate dead connections from eligible workers.

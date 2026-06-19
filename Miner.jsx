@@ -5599,9 +5599,7 @@ export default function Miner({
           setHardwareRecognizedByNetwork(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) setHardwareRecognizedByNetwork(false);
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
