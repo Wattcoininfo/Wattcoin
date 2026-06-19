@@ -6879,7 +6879,7 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
 const _probePushConns = new Map(); // workerId -> { ws, allowGpu }
 let _probePushWss = null;
 let _probePushTimer = null;
-let _miningActive = false;
+let _miningActive = true;
 const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
 
 function _clearProbePushTimer() {
