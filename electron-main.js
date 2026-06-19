@@ -5161,39 +5161,42 @@ function computeWalletSyncState(reason = 'refresh') {
     reason,
   };
 
-  wtcNode.getWalletReadiness().then((readiness) => {
-    if (!readiness || typeof readiness !== 'object') return;
-    const next = {
-      ...synced,
-      rpcReachable: readiness.rpcReachable !== false,
-      walletReadiness: {
-        ok: readiness.ok !== false,
-        status: readiness.status || 'syncing',
-        message: readiness.message || 'Checking wallet sync status...',
-        spendReady: !!readiness.spendReady,
-        blocks: Math.max(0, Number(readiness.blocks) || 0),
-        headers: Math.max(0, Number(readiness.headers) || 0),
-        connections: Math.max(0, Number(readiness.connections) || 0),
-        verificationProgress: Math.max(0, Math.min(1, Number(readiness.verificationProgress) || 0)),
-        localBlocks: Math.max(-1, Number(readiness.localBlocks) || 0),
-        bestPeerHeight: Math.max(-1, Number(readiness.bestPeerHeight) || 0),
-        lagBlocks: Math.max(0, Number(readiness.lagBlocks) || 0),
-        bestPeer: typeof readiness.bestPeer === 'string' ? readiness.bestPeer : '',
-        scanning: !!readiness.scanning,
-        initialBlockDownload: !!readiness.initialBlockDownload,
-        lastSyncResult: readiness.lastSyncResult || null,
-        syncBlockedReason: typeof readiness.syncBlockedReason === 'string' ? readiness.syncBlockedReason : '',
-      },
-      updatedAt: Date.now(),
-      reason,
-    };
-    const prevSerialized = JSON.stringify(walletSyncState);
-    const nextSerialized = JSON.stringify(next);
-    walletSyncState = next;
-    if (prevSerialized !== nextSerialized) {
-      broadcastWalletSyncState();
-    }
-  }).catch(() => {});
+  wtcNode
+    .getWalletReadiness()
+    .then((readiness) => {
+      if (!readiness || typeof readiness !== 'object') return;
+      const next = {
+        ...synced,
+        rpcReachable: readiness.rpcReachable !== false,
+        walletReadiness: {
+          ok: readiness.ok !== false,
+          status: readiness.status || 'syncing',
+          message: readiness.message || 'Checking wallet sync status...',
+          spendReady: !!readiness.spendReady,
+          blocks: Math.max(0, Number(readiness.blocks) || 0),
+          headers: Math.max(0, Number(readiness.headers) || 0),
+          connections: Math.max(0, Number(readiness.connections) || 0),
+          verificationProgress: Math.max(0, Math.min(1, Number(readiness.verificationProgress) || 0)),
+          localBlocks: Math.max(-1, Number(readiness.localBlocks) || 0),
+          bestPeerHeight: Math.max(-1, Number(readiness.bestPeerHeight) || 0),
+          lagBlocks: Math.max(0, Number(readiness.lagBlocks) || 0),
+          bestPeer: typeof readiness.bestPeer === 'string' ? readiness.bestPeer : '',
+          scanning: !!readiness.scanning,
+          initialBlockDownload: !!readiness.initialBlockDownload,
+          lastSyncResult: readiness.lastSyncResult || null,
+          syncBlockedReason: typeof readiness.syncBlockedReason === 'string' ? readiness.syncBlockedReason : '',
+        },
+        updatedAt: Date.now(),
+        reason,
+      };
+      const prevSerialized = JSON.stringify(walletSyncState);
+      const nextSerialized = JSON.stringify(next);
+      walletSyncState = next;
+      if (prevSerialized !== nextSerialized) {
+        broadcastWalletSyncState();
+      }
+    })
+    .catch(() => {});
 
   return synced;
 }
@@ -6876,6 +6879,7 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
 const _probePushConns = new Map(); // workerId -> { ws, allowGpu }
 let _probePushWss = null;
 let _probePushTimer = null;
+let _miningActive = false;
 const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
 
 function _clearProbePushTimer() {
@@ -6896,6 +6900,7 @@ function _scheduleProbePush() {
 function _runProbePush() {
   try {
     if (_probePushConns.size === 0) return;
+    if (!_miningActive) return;
     const deadWorkers = [];
     const liveWorkers = [];
     // First pass: separate dead connections from eligible workers.
@@ -7547,7 +7552,9 @@ New-NetFirewallRule -DisplayName "${ruleName}" -Direction Inbound -Protocol TCP 
     );
     try {
       fs.unlinkSync(tmpFile);
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
     const ok = result.status === 0;
     if (!ok) {
       const msg = result.stderr ? String(result.stderr).slice(0, 300) : `exit code ${result.status}`;
@@ -8630,6 +8637,7 @@ ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
     const appliedPercent = setHardwareLoadPercent(pct);
     hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : pct;
     setProbeLoadPercent(hwAuthority.currentLoadPercent);
+    _miningActive = pct > 0;
     return {
       ok: true,
       appliedPercent,
@@ -8647,6 +8655,7 @@ ipcMain.handle('wattcoin-stop-hardware-load', () => {
     _closeBgProbeWs();
     hwAuthority.currentLoadPercent = 0;
     setProbeLoadPercent(0);
+    _miningActive = false;
     return { ok: true, ...getHardwareLoadState() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to stop hardware load' };
