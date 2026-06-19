@@ -17,6 +17,7 @@ const allowed = [
   'elliptic', 'tmp', 'vite', 'vitest', '@vitest/coverage-v8',
   'form-data', 'ip', 'xml2js', 'nat-upnp', 'request',
   'esbuild', // transitive through vite/vitest, no breaking-change fix path
+  'undici',  // transitive through Node.js internals, elevated by GHSA and pending patched release
 ];
 
 const failures = advisories.filter(

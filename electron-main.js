@@ -2613,6 +2613,8 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
                 handleWorkerBusy(workerId, msg.probeId);
               } else if (msg.type === 'worker-done') {
                 dropWorker(workerId);
+              } else if (msg.type === 'probe-result') {
+                _handleWsProbeResult(workerId, msg, ws).catch(() => {});
               }
             } catch (_) {
               /* ignore */
@@ -6419,6 +6421,7 @@ const _PROBE_TIMEOUT_MS = 100 * 1000; // 100 s â€” ~1.67Ã— max push inte
 const _PROBE_TRUST_WINDOW = 50; // sliding window size for fail-ratio penalty
 const _PROBE_FAIL_RATIO_THRESHOLD = 0.3; // 30% fail rate triggers -1 trust
 let _probeInProgress = false; // renderer has a probe and hasn't submitted result yet
+const _pendingProbeVerdicts = new Map(); // probeId -> { resolve, reject, timer } for WS-submitted probes
 let _probeInProgressId = ''; // probe ID of the currently running probe
 let _probeInProgressEpoch = -1; // _probeEpoch value when the current probe was dequeued
 let _probeTimeoutTimer = null; // setTimeout handle for the in-progress probe timeout
@@ -6676,6 +6679,13 @@ function _startBgProbeWs(peerUrl) {
           msg.data.probe._peerUrl = peerUrl;
           if (_pendingProbes.length >= _PENDING_PROBES_MAX) _pendingProbes.shift();
           _pendingProbes.push({ probe: msg.data.probe, source: 'peer', peerUrl });
+        } else if (msg.type === 'probe-verdict') {
+          const pending = _pendingProbeVerdicts.get(msg.probeId);
+          if (pending) {
+            clearTimeout(pending.timer);
+            _pendingProbeVerdicts.delete(msg.probeId);
+            pending.resolve(msg);
+          }
         }
       } catch (_) {
         /* ignore parse errors */
@@ -6914,6 +6924,84 @@ function _runProbePush() {
   }
 }
 
+// Coordinator handles a probe result submitted via WebSocket push channel.
+// Mirrors the HTTP POST /api/v1/probe/submit handler but uses the WS for transport.
+async function _handleWsProbeResult(workerId, msg, ws) {
+  try {
+    refreshCoordinatorIdentityKey();
+    const probeResult = {
+      id: msg.probeId || '',
+      proof: msg.proof || '',
+      pixelHash: msg.pixelHash || '',
+      probeWallClockMs: typeof msg.probeWallClockMs === 'number' ? msg.probeWallClockMs : undefined,
+      loadPercent: typeof msg.loadPercent === 'number' ? msg.loadPercent : undefined,
+    };
+    const hardwareSpec = msg.hardwareSpec || null;
+    const probeRoundId = getCurrentNetworkRoundId();
+    const verdict = await submitPeerProbeResult(probeResult, hardwareSpec, probeRoundId);
+
+    // Sign receipt and broadcast (same as HTTP POST handler)
+    if (verdict && verdict.receipt && wtcNode && typeof wtcNode.signMessage === 'function') {
+      const verifierAddress = String(verdict.receipt.verifierAddress || '').trim();
+      const wid = String(verdict.receipt.workerId || '').trim();
+      if (verifierAddress && wid && verifierAddress === wid) {
+        verdict.ok = false;
+        verdict.issues = [...(Array.isArray(verdict.issues) ? verdict.issues : []), 'self-verification is not allowed'];
+        verdict.receipt = null;
+      } else {
+        const signingPayload = getProbeReceiptSigningPayload(verdict.receipt);
+        if (verifierAddress && signingPayload) {
+          try {
+            const signed = wtcNode.signMessage(verifierAddress, signingPayload);
+            verdict.receipt = attachProbeReceiptSignature(verdict.receipt, signed && signed.signature);
+            if (verdict.receipt) {
+              recordPeerAttestation(verifierAddress, wid);
+              broadcastProbeReceiptToPeers(verdict.receipt);
+            }
+          } catch (error) {
+            console.warn('[PeerProbe/WS] Failed to sign probe receipt:', error && error.message);
+          }
+        }
+      }
+    }
+
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'probe-verdict', probeId: msg.probeId, ...verdict }));
+    }
+  } catch (error) {
+    console.warn('[PeerProbe/WS] Error handling WS probe result:', error && error.message);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'probe-verdict',
+          probeId: msg.probeId,
+          ok: false,
+          issues: ['internal error: ' + (error && error.message)],
+        }),
+      );
+    }
+  }
+}
+
+// Worker submits a probe result via WebSocket and waits for the verdict.
+// Returns the verdict on success, or null if WS is unavailable.
+function _submitViaWs(ws, probeId, body, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      _pendingProbeVerdicts.delete(probeId);
+      reject(new Error('probe verdict timed out'));
+    }, timeoutMs || 15000);
+    _pendingProbeVerdicts.set(probeId, { resolve, reject, timer });
+    try {
+      ws.send(JSON.stringify({ type: 'probe-result', probeId, ...body }));
+    } catch (e) {
+      clearTimeout(timer);
+      _pendingProbeVerdicts.delete(probeId);
+      reject(e);
+    }
+  });
+}
+
 // Renderer calls this after completing a peer probe.
 // Coordinator verification via /api/v1/probe/submit is required; local fallback is disabled.
 ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {}) => {
@@ -6948,22 +7036,35 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           loadPercent: hwAuthority.currentLoadPercent,
         };
         let verdict;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          if (attempt > 0) {
-            await new Promise((r) => setTimeout(r, 3000));
-          }
+        // Try WebSocket submission first — avoids AV/firewall issues with HTTP POST
+        const wsConn = _probeConns.find((c) => c.peerUrl === peerUrl);
+        if (wsConn && wsConn.ws.readyState === WebSocket.OPEN) {
           try {
-            verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
-              trackReachability: false,
-              suppressPeerDiscovery: true,
-              source: 'peer-probe-submit',
-              timeoutMs: 15000,
-            });
-            if (verdict && (verdict.ok || !verdict.transient)) break;
-          } catch (e) {
-            console.warn('[PeerProbe] Submit attempt ' + (attempt + 1) + '/2 failed:', e.message);
-            if (attempt === 1) throw e;
-            continue;
+            verdict = await _submitViaWs(wsConn.ws, result.id, body, 15000);
+          } catch (_) {
+            console.warn('[PeerProbe] WS submit failed, falling back to HTTP');
+            verdict = null;
+          }
+        }
+        // Fall back to HTTP POST if WS was unavailable or timed out
+        if (!verdict) {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) {
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+            try {
+              verdict = await requestPeerJson(peerUrl, 'POST', '/api/v1/probe/submit', body, undefined, {
+                trackReachability: false,
+                suppressPeerDiscovery: true,
+                source: 'peer-probe-submit',
+                timeoutMs: 15000,
+              });
+              if (verdict && (verdict.ok || !verdict.transient)) break;
+            } catch (e) {
+              console.warn('[PeerProbe] HTTP submit attempt ' + (attempt + 1) + '/2 failed:', e.message);
+              if (attempt === 1) throw e;
+              continue;
+            }
           }
         }
         if (verdict && verdict.ok) {
@@ -7344,9 +7445,12 @@ ipcMain.handle('wattcoin-check-firewall-rule', () => {
     // strips the double quotes around the rule name, making netsh see
     // name=Wattcoin only and miss the rest of the name.
     const FW_RULE_NAME = 'Wattcoin Miner Ledger Network (TCP 39310)';
-    const result = spawnSync('netsh', [
-      'advfirewall', 'firewall', 'show', 'rule', `name=${FW_RULE_NAME}`, 'dir=in',
-    ], { timeout: 10000, windowsHide: true, encoding: 'utf8', maxBuffer: 512 * 1024 });
+    const result = spawnSync('netsh', ['advfirewall', 'firewall', 'show', 'rule', `name=${FW_RULE_NAME}`, 'dir=in'], {
+      timeout: 10000,
+      windowsHide: true,
+      encoding: 'utf8',
+      maxBuffer: 512 * 1024,
+    });
     if (result.status === 0 && result.stdout) {
       for (const line of result.stdout.split(/\r?\n/)) {
         if (line.includes('LocalPort:') && line.includes('39310')) {
@@ -7356,9 +7460,12 @@ ipcMain.handle('wattcoin-check-firewall-rule', () => {
     }
     // Name-based query returned no port match — fall back to enumerating
     // all rules in case the rule was added under a different name.
-    const all = spawnSync('netsh', [
-      'advfirewall', 'firewall', 'show', 'rule', 'name=all', 'dir=in',
-    ], { timeout: 15000, windowsHide: true, encoding: 'utf8', maxBuffer: 1024 * 1024 });
+    const all = spawnSync('netsh', ['advfirewall', 'firewall', 'show', 'rule', 'name=all', 'dir=in'], {
+      timeout: 15000,
+      windowsHide: true,
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024,
+    });
     if (all.status === 0 && all.stdout) {
       for (const line of all.stdout.split(/\r?\n/)) {
         if (line.includes('LocalPort:') && line.includes('39310')) {
@@ -7406,11 +7513,19 @@ New-NetFirewallRule -DisplayName "${ruleName}" -Direction Inbound -Protocol TCP 
     `.trim();
     fs.writeFileSync(tmpFile, scriptContent, 'utf8');
     const { spawnSync } = require('child_process');
-    const result = spawnSync('powershell.exe', [
-      '-NoProfile', '-NonInteractive',
-      '-Command', `Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"' -Wait`,
-    ], { timeout: 120000, windowsHide: true });
-    try { fs.unlinkSync(tmpFile); } catch (_) {}
+    const result = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "${tmpFile}"' -Wait`,
+      ],
+      { timeout: 120000, windowsHide: true },
+    );
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch (_) {}
     const ok = result.status === 0;
     if (!ok) {
       const msg = result.stderr ? String(result.stderr).slice(0, 300) : `exit code ${result.status}`;
@@ -7419,7 +7534,7 @@ New-NetFirewallRule -DisplayName "${ruleName}" -Direction Inbound -Protocol TCP 
     return { ok };
   } catch (e) {
     console.warn('[Firewall heal] error:', e && e.message ? e.message : e);
-    return { ok: false, reason: String(e && e.message || e).slice(0, 200) };
+    return { ok: false, reason: String((e && e.message) || e).slice(0, 200) };
   }
 });
 
@@ -9401,7 +9516,9 @@ async function pullContributionsFromPeers() {
             const chainIdx = Math.max(-1, Math.floor(Number((snap.probeChainIndex || {})[address]) || -1));
             const probeCheck = validateContributionProbe(address, totalWh, chainIdx);
             if (!probeCheck.ok && process.env.WATTCOIN_DEBUG) {
-              console.log(`[pullContributions] Probe validation warning for ${address}: ${probeCheck.code} — ${probeCheck.message}`);
+              console.log(
+                `[pullContributions] Probe validation warning for ${address}: ${probeCheck.code} — ${probeCheck.message}`,
+              );
             }
             if (updatedAtMs > bestVerifiedTime) {
               bestVerifiedWh = totalWh;
