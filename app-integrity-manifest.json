@@ -1,6 +1,6 @@
 {
-  "electron-main.js": "4f6f0af1bd039d000a45477b3c3ab0a32597029681b28eebe69ec50b9e9473c2",
-  "preload.js": "675b573519ffae6720713d42fab846c9a7f2436a6169681e6d6ea3dc570c4139",
+  "electron-main.js": "ba95a15d9cbd0e1373302d814b5bd9c207e2da1a6707093a7a704f0bffc2565d",
+  "preload.js": "70b22c5ca96b13e6a330ca5b628ac7bfd7b0c712906bc9503891a5a929fcf07a",
   "backend-benchmark.js": "50cd6cc1b54966f83428a2837c5f5f79544256c7af6eb9b00c7e321fb56e6dcd",
   "hardware-load-controller.js": "2bb3b6d1ac992ad41d9170d18aaf5584334b9d5ec448982b729a0fe15c8ee5a5",
   "gpu-load-controller.js": "71e616a5f47897129e9240244776d7d72ce6bfe4a050e0247d13561ecb1b5825",

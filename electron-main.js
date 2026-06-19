@@ -2574,7 +2574,14 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
               /* ws already closed */
             }
           }
+          const hadWorkers = _probePushConns.size > 0;
           _probePushConns.set(workerId, { ws, allowGpu });
+          // First worker just connected — push a probe immediately instead of
+          // waiting up to 60s for the next random _scheduleProbePush cycle.
+          if (!hadWorkers) {
+            _clearProbePushTimer();
+            _runProbePush();
+          }
           const dropWorker = (id) => {
             clearInterval(ws._probePushPingInterval);
             if (_probePushConns.get(id) && _probePushConns.get(id).ws === ws) {
