@@ -5814,6 +5814,15 @@ export default function Miner({
     }
   }, [mining, miningAddress, currentTier, tierEnergyPerCoinWh, tierRewardCoins, setLog, now]);
 
+  // Notify main process when mining starts/stops so it can forward the status
+  // to coordinators. Coordinators skip sending probes to idle workers.
+  React.useEffect(() => {
+    const hw = window.wattcoinHardware;
+    if (hw && hw.invoke) {
+      hw.invoke('wattcoin-mining-status', { mining: !!mining }).catch(() => {});
+    }
+  }, [mining]);
+
   // Continuous mining loop where power->energy drives when blocks are mined.
   React.useEffect(() => {
     if (!mining) {

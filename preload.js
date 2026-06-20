@@ -172,6 +172,7 @@ try {
           'wattcoin-explorer-get-address',
           'wattcoin-explorer-search',
           'wattcoin-explorer-get-tx-detail',
+          'wattcoin-mining-status',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

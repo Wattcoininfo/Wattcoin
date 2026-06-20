@@ -2576,6 +2576,16 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           }
           const hadWorkers = _probePushConns.size > 0;
           _probePushConns.set(workerId, { ws, allowGpu });
+          // Mark worker as pending — don't issue probes until we know its
+          // mining status. A 5s safety timeout falls back to unknown
+          // (probe) for workers that never send mining-status (old clients).
+          _workerIsMining.set(workerId, null);
+          const _pendingMiningTimeout = setTimeout(() => {
+            if (_workerIsMining.get(workerId) === null) {
+              _workerIsMining.delete(workerId);
+            }
+          }, 5000);
+          ws._pendingMiningTimeout = _pendingMiningTimeout;
           // First worker just connected — push a probe immediately instead of
           // waiting up to 60s for the next random _scheduleProbePush cycle.
           if (!hadWorkers) {
@@ -2584,9 +2594,14 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
           }
           const dropWorker = (id) => {
             clearInterval(ws._probePushPingInterval);
+            if (ws._pendingMiningTimeout) {
+              clearTimeout(ws._pendingMiningTimeout);
+              ws._pendingMiningTimeout = null;
+            }
             if (_probePushConns.get(id) && _probePushConns.get(id).ws === ws) {
               _probePushConns.delete(id);
             }
+            _workerIsMining.delete(id);
             cancelPendingPeerProbesForWorker(id);
           };
           ws.on('close', () => dropWorker(workerId));
@@ -2622,6 +2637,10 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
                 dropWorker(workerId);
               } else if (msg.type === 'probe-result') {
                 _handleWsProbeResult(workerId, msg, ws).catch(() => {});
+              } else if (msg.type === 'mining-status') {
+                if (msg.data && typeof msg.data.mining === 'boolean') {
+                  _workerIsMining.set(workerId, msg.data.mining);
+                }
               }
             } catch (_) {
               /* ignore */
@@ -3028,6 +3047,15 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
     }
     const virtualWs = createRelayVirtualWs(workerId);
     _probePushConns.set(workerId, { ws: virtualWs, allowGpu });
+    _workerIsMining.set(workerId, null);
+    // Fallback: if the tunneled worker never sends mining-status within
+    // 5s, treat as unknown (backward compat).
+    const _pendingTimeout = setTimeout(() => {
+      if (_workerIsMining.get(workerId) === null) {
+        _workerIsMining.delete(workerId);
+      }
+    }, 5000);
+    virtualWs._pendingMiningTimeout = _pendingTimeout;
     console.log(`[RelayWS] Worker ${workerId} connected via relay tunnel`);
     return;
   }
@@ -3044,7 +3072,12 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
     const workerId = String(message.workerId || '');
     const conn = _probePushConns.get(workerId);
     if (conn && conn.ws && conn.ws._isRelayWs) {
+      if (conn.ws._pendingMiningTimeout) {
+        clearTimeout(conn.ws._pendingMiningTimeout);
+        conn.ws._pendingMiningTimeout = null;
+      }
       _probePushConns.delete(workerId);
+      _workerIsMining.delete(workerId);
       cancelPendingPeerProbesForWorker(workerId);
       conn.ws._emitClose();
     }
@@ -6641,6 +6674,11 @@ function _startBgProbeWs(peerUrl) {
       const conn = { ws, connId, peerUrl, pingInterval: null };
       _probeConns.push(conn);
       conn.ws._connectedWorkerId = walletAddressCache.address || 'unknown';
+      // Tell the coordinator whether we are actively mining so it can
+      // skip sending probes when we are idle.
+      try {
+        ws.send(JSON.stringify({ type: 'mining-status', data: { mining: _localMiningStatus } }));
+      } catch (_) {}
       try {
         if (ws._socket) ws._socket.setKeepAlive(true, 15000);
       } catch (_) {
@@ -6800,6 +6838,30 @@ async function _connectBgProbeWs() {
   }
 }
 
+// Renderer notifies main process when its mining status changes.
+// The main process forwards this to all connected coordinators so they
+// can skip sending probes when the worker is idle.
+ipcMain.handle('wattcoin-mining-status', (_event, { mining }) => {
+  _localMiningStatus = !!mining;
+  if (!_localMiningStatus) {
+    // Mining stopped: discard queued and in-flight probes so they don't
+    // surface as stale "unknown or expired probe id" errors on restart.
+    _pendingProbes = [];
+    _clearProbeTimeoutTimer();
+    _probeInProgress = false;
+    _probeInProgressId = '';
+    _probeInProgressEpoch = -1;
+  }
+  for (const conn of _probeConns) {
+    if (conn.ws && conn.ws.readyState === WebSocket.OPEN) {
+      try {
+        conn.ws.send(JSON.stringify({ type: 'mining-status', data: { mining: _localMiningStatus } }));
+      } catch (_) {}
+    }
+  }
+  return { ok: true };
+});
+
 // Renderer calls this to obtain a probe. Returns immediately from cache;
 // no network I/O. Probes arrive via WebSocket push at unpredictable times.
 ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
@@ -6881,6 +6943,19 @@ let _probePushWss = null;
 let _probePushTimer = null;
 const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
 
+// Tracks whether this node's own renderer is actively mining (worker side).
+// Forwarded to coordinators so they only send probes when useful.
+let _localMiningStatus = false;
+
+// On the coordinator side: tracks which connected workers have reported
+// they are actively mining. Workers that explicitly signal non-mining
+// (idle) are skipped in _runProbePush to avoid sending probes that
+// would time out. Workers that haven't reported a status default to
+// unknown (undefined), which preserves backward compatibility — they
+// continue to receive probes. New connections start as null (pending)
+// and are skipped until the first mining-status message or a 5s timeout.
+const _workerIsMining = new Map(); // workerId → boolean | null | undefined
+
 function _clearProbePushTimer() {
   if (_probePushTimer) {
     clearTimeout(_probePushTimer);
@@ -6912,6 +6987,7 @@ function _runProbePush() {
     // Clean up dead connections.
     for (const wid of deadWorkers) {
       _probePushConns.delete(wid);
+      _workerIsMining.delete(wid);
       cancelPendingPeerProbesForWorker(wid);
     }
     // Issue a probe to every eligible worker in this push cycle.
@@ -6922,11 +6998,18 @@ function _runProbePush() {
       // closed the TCP socket yet. Let ping/pong terminate them instead of stacking
       // more probes that will time out.
       if (conn.ws._probePushMissedPongs > 0) continue;
+      // Only probe workers that have explicitly signaled active mining.
+      // Workers that are idle (false), pending (null), or never reported
+      // (undefined) are skipped — probing them wastes resources since
+      // their side isn't responding to challenges.
+      const _miningStatus = _workerIsMining.get(wid);
+      if (_miningStatus !== true) continue;
       try {
         const probe = issuePeerProbe(wid, conn.allowGpu);
         if (probe === null) {
           // Worker quarantined â€” close the WS and remove from push list.
           _probePushConns.delete(wid);
+          _workerIsMining.delete(wid);
           cancelPendingPeerProbesForWorker(wid);
           try {
             conn.ws.close();
