@@ -6041,10 +6041,10 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         );
       } else {
         console.log(`[HW-Verify] ASIC liveness OK: ${livenessResult.elapsedMs}ms on port ${livenessResult.port}`);
-        // -- ASIC share validation: verify the D3 is submitting valid X11 shares --
+        // -- ASIC share validation: verify the ASIC is submitting valid X11 shares --
         // The stratum server tracks shares validated by actual X11 hash of the
-        // block header.  If the D3 is connected and hashing, we'll see ~4-5
-        // shares/sec at difficulty 1.  Zero shares indicates the D3 may not be
+        // block header.  If the ASIC is connected and hashing, we'll see ~4-5
+        // shares/sec at difficulty 1.  Zero shares indicates the ASIC may not be
         // connected to the local stratum, or the stratum isn't receiving real
         // work.
         if (livenessResult.shareDelta !== null) {
@@ -6056,7 +6056,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           } else {
             console.warn(
               `[HW-Verify] ASIC share validation WARNING: 0 valid X11 shares during check. ` +
-                `D3 may not be connected to local stratum server.`,
+                `ASIC may not be connected to local stratum server.`,
             );
           }
         }
@@ -6452,7 +6452,7 @@ function getHostLanIp() {
   return '127.0.0.1';
 }
 
-async function configureD3Pool(asicIp, apiPort, stratumPort, hostIp) {
+async function configureAsicPool(asicIp, apiPort, stratumPort, hostIp) {
   const poolHost = hostIp || getHostLanIp();
   try {
     const ctrl = new AbortController();
@@ -6487,7 +6487,7 @@ async function configureD3Pool(asicIp, apiPort, stratumPort, hostIp) {
   }
 }
 
-async function disableD3Pool(asicIp, apiPort) {
+async function disableAsicPool(asicIp, apiPort) {
   try {
     const res = await fetch(`http://${asicIp}:${apiPort}`, {
       method: 'POST',
@@ -6630,7 +6630,7 @@ ipcMain.handle('wattcoin-asic-inject-custom-job', async (_event, prevHashHex) =>
 
 ipcMain.handle('wattcoin-asic-start-mining', async () => {
   if (_asicConfig.length === 0) return { ok: true, started: 0, failures: 0 };
-  const results = await Promise.allSettled(_asicConfig.map((a) => configureD3Pool(a.ip, a.apiPort, a.stratumPort)));
+  const results = await Promise.allSettled(_asicConfig.map((a) => configureAsicPool(a.ip, a.apiPort, a.stratumPort)));
   const failures = results.filter((r) => r.status === 'rejected' || r.value === false).length;
   _recalculateAsicPower();
   return { ok: true, started: _asicConfig.length - failures, failures };
@@ -6638,7 +6638,7 @@ ipcMain.handle('wattcoin-asic-start-mining', async () => {
 
 ipcMain.handle('wattcoin-asic-stop-mining', async () => {
   if (_asicConfig.length === 0) return { ok: true, stopped: 0, failures: 0 };
-  const results = await Promise.allSettled(_asicConfig.map((a) => disableD3Pool(a.ip, a.apiPort)));
+  const results = await Promise.allSettled(_asicConfig.map((a) => disableAsicPool(a.ip, a.apiPort)));
   const failures = results.filter((r) => r.status === 'rejected' || r.value === false).length;
   _recalculateAsicPower();
   return { ok: true, stopped: _asicConfig.length - failures, failures };
