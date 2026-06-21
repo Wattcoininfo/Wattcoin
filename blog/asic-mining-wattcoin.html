@@ -510,43 +510,44 @@
           <p>
             Application-Specific Integrated Circuits (ASICs) have dominated cryptocurrency mining for over a decade.
             From Bitcoin's SHA-256 to Litecoin's Scrypt, ASICs concentrated mining power in the hands of those with
-            access to fabrication and cheap electricity. On Wattcoin, ASICs are <strong>fully supported</strong> — the
-            miner detects Antminer, Whatsminer, and other ASIC hardware and treats them as whole-device mining units.
+            access to fabrication and cheap electricity.             On Wattcoin, ASICs are <strong>fully supported</strong> — the
+            miner detects Antminer, Whatsminer, Jasminer, Elphapex, Volcminer, NMMiner, and other ASIC hardware (via the "Scan Network" button) and treats them as whole-device mining units.
           </p>
 
           <h3>How ASICs Work on Wattcoin</h3>
 
           <p>
-            The Wattcoin miner identifies ASIC hardware by model name (Antminer S21, Whatsminer M60, etc.) and
-            classifies it as a <strong>whole-device mining unit</strong>. Unlike desktop PCs where power is decomposed
-            into CPU + GPU + memory components, ASICs are treated as whole-device units. The miner identifies the model
-            (Antminer S21, Whatsminer M60, etc.) and looks up its actual rated power draw — up to
-            <strong>3800 W</strong> for high-end units. Every known ASIC model has its specific power value in the
-            hardware table, with a protocol ceiling of 5000 W. Unknown models conservatively fall back to
-            <strong>500 W</strong>. The protocol estimates energy contribution the same way as any other hardware:
+            The Wattcoin miner classifies ASICs as <strong>whole-device mining units</strong> — unlike desktop
+            PCs where power is decomposed into CPU + GPU + memory components, each ASIC is treated as one unit. You
+            declare the ASIC model during benchmark (e.g. Antminer S21) and its rated power is looked up from the
+            hardware table — up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
+            <strong>Unknown models are rejected</strong> — only models present in the hardware table are accepted.
+            The protocol estimates energy contribution as follows:
           </p>
 
           <div class="viz-box">
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>Energy (Wh) = ASIC Power (W) &times; Load (%) &times; Time (h)</div>
+              <div>Energy (Wh) = Active ASICs &times; ASIC Power (W) &times; Time (h)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Same formula — ASICs contribute by drawing power, not by hashing
+                // Each active ASIC contributes at its full rated power — no partial load
               </div>
             </div>
           </div>
 
           <p>
             An Antminer S21 draws <strong>3500 W</strong> — roughly <strong>8x the power</strong> of a high-end GPU rig,
-            earning rewards proportionally faster. The key difference from PoW: the ASIC's hash logic plays no role.
-            What matters is the verifiable power draw.
+            earning rewards proportionally faster. The key difference from PoW: hash rate does not determine rewards.
+            However, the ASIC must compute real X11 hashes and submit valid stratum shares to prove liveness — hash
+            capability is verified, it just does not affect the reward calculation.
           </p>
 
           <h3>ASIC Advantage Reversed</h3>
 
           <p>
-            In Proof-of-Work, ASICs win by computing more hashes per watt. On Proof-of-Energy, there are no hashes to
-            compute — the protocol only counts kilowatt-hours. An ASIC's specialized SHA-256 engines neither help nor
-            hurt. The ASIC contributes purely through its power draw, just like any other device plugged into the wall.
+            In Proof-of-Work, ASICs win by computing more hashes per watt. On Proof-of-Energy, the ASIC must still
+            compute real X11 hashes and submit valid shares to prove it is alive and hashing — but hash rate does not
+            determine rewards. The ASIC contributes energy through its power draw, and the reward is proportional to
+            that energy contribution, not to how fast it can hash.
           </p>
 
           <div class="viz-box">
@@ -594,9 +595,9 @@
                 <td>Any ASIC works at any age</td>
               </tr>
               <tr>
-                <td>Hash logic required</td>
-                <td>Yes — SHA-256, Scrypt, etc.</td>
-                <td>No — only power matters</td>
+                <td>Hash logic mattering for rewards</td>
+                <td>Yes — higher hash rate = more rewards</td>
+                <td>No — hash verified for liveness, not for rewards</td>
               </tr>
               <tr>
                 <td>E-waste per coin</td>
@@ -610,27 +611,29 @@
 
           <ol class="step-list">
             <li>
-              <strong>Plug in and connect</strong><br />
-              Connect your ASIC to power and network. The Wattcoin Miner detects supported models (Antminer, Whatsminer,
-              and compatible ASICs) automatically.
+              <strong>Plug in and scan</strong><br />
+              Connect your ASIC to power and network. In the Wattcoin Miner, click <strong>"Scan Network"</strong> to
+              auto-detect supported models (Antminer, Whatsminer, Jasminer, Elphapex, Volcminer, NMMiner, and
+              cgminer-compatible ASICs).
             </li>
             <li>
               <strong>Configure in the miner app</strong><br />
-              The miner lists detected ASICs as whole-device mining units. Verify the power estimate and set your wallet
-              address.
+              The miner lists detected ASICs as whole-device mining units. Declare your ASIC model during benchmark to
+              set the power estimate — all ASICs on this host use that model's power rating.
             </li>
             <li>
               <strong>Start mining</strong><br />
-              The ASIC draws power and the protocol credits your energy contribution proportionally. No pool
-              configuration, no hash target — just power and time.
+              The app auto-configures each ASIC to connect to a built-in local stratum pool and starts verifying
+              liveness via hash challenges and share submission. The protocol credits your energy contribution
+              proportionally — no external pool setup needed.
             </li>
           </ol>
 
           <div class="info-callout">
             <strong>Key takeaway:</strong> ASICs are first-class citizens on Wattcoin. Their high power draw makes them
-            powerful mining machines — but their hashing advantage is irrelevant. Any ASIC, old or new, contributes
-            purely through the electricity it consumes. The arms race becomes a race toward cheaper power, not newer
-            silicon.
+            powerful mining machines — but their hash rate speed does not affect rewards. Each ASIC's hashing is
+            verified through challenges and share submission to prove liveness, then it contributes energy at its rated
+            power. The arms race becomes a race toward cheaper power, not newer silicon.
           </div>
 
           <p>
@@ -645,7 +648,7 @@
       </div>
     </div>
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.379 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.380 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

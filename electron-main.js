@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, shell } = require('electron');
+﻿const { app, BrowserWindow, Menu, ipcMain, dialog, safeStorage, shell } = require('electron');
 // Keep the GPU compositor active even when the window is minimized or occluded.
 // backgroundThrottling:false (set on the BrowserWindow) stops JS timer throttling but
 // Chromium's GPU process still pauses WebGL rasterisation for invisible windows.
@@ -60,6 +60,7 @@ const {
   waitForFreshShares,
   injectCustomJob,
 } = require('./local-stratum');
+const asicDrivers = require('./asic-drivers');
 const {
   setHardwareLoadPercent,
   stopHardwareLoad,
@@ -695,187 +696,56 @@ function fetchTdpFromBrave(modelString) {
 
 // -- ASIC liveness check: hash challenge via cgminer API ----------------------
 // Connects to the ASIC's local API (standard ports 4028-4030) and sends a
-// hashing challenge.  Real ASIC chips complete near-instantly via their hash
-// boards; software fakes (or absent hardware) take orders of magnitude longer.
-// We send 8 rounds of 1 KB chunks, expecting < 500 ms total for any real ASIC.
-function doubleSha256(buf) {
-  return crypto.createHash('sha256').update(crypto.createHash('sha256').update(buf).digest()).digest('hex');
-}
-
-async function probeAsicTelemetry(ip, port) {
-  const api = (cmd) =>
-    fetch(`http://${ip}:${port}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmd }),
-      signal: AbortSignal.timeout(8000),
-    })
-      .then((r) => r.json())
-      .catch(() => null);
-
-  const [statsJson, devsJson, versionJson, poolsJson] = await Promise.all([
-    api('stats'),
-    api('devs'),
-    api('version'),
-    api('pools'),
-  ]);
-
-  const stats = statsJson && (statsJson.STATS || [])[0];
-  const devs = devsJson && devsJson.DEVS;
-  const ver = versionJson && (versionJson.VERSION || [])[0];
-  const pools = poolsJson && poolsJson.POOLS;
-
-  const telemetry = {
-    tempInlet: stats ? parseFloat(stats['temp1'] || stats['temp_inlet'] || 0) : null,
-    tempOutlet: stats ? parseFloat(stats['temp2'] || stats['temp_outlet'] || 0) : null,
-    tempChip: stats ? parseFloat(stats['temp3'] || stats['temp_chip'] || stats['temp'] || 0) : null,
-    fanSpeedRpm: stats ? parseInt(stats['fan1'] || stats['fan_speed'] || 0, 10) : null,
-    fanNum: stats ? parseInt(stats['fan_num'] || 0, 10) : null,
-    chainNum: stats ? parseInt(stats['chain_num'] || stats['ChainNum'] || 0, 10) : null,
-    chipCount: stats ? parseInt(stats['ChipCount'] || stats['chip_count'] || stats['TotalASC'] || 0, 10) : null,
-    voltage: stats ? parseFloat(stats['voltage'] || stats['Voltage'] || 0) : null,
-    frequency: stats ? parseInt(stats['frequency'] || stats['Frequency'] || stats['clock'] || 0, 10) : null,
-    hwErrors: stats ? parseInt(stats['Hardware Errors'] || stats['hw_errors'] || 0, 10) : null,
-    acceptedShares: stats ? parseInt(stats['Accepted'] || stats['accepted'] || 0, 10) : null,
-    rejectedShares: stats ? parseInt(stats['Rejected'] || stats['rejected'] || 0, 10) : null,
-    uptimeSeconds: stats ? parseInt(stats['Elapsed'] || stats['uptime'] || 0, 10) : null,
-    minerType: ver ? String(ver['Type'] || ver['Miner'] || '').trim() : '',
-    minerVersion: ver ? String(ver['Version'] || ver['API'] || '').trim() : '',
-    poolCount: Array.isArray(pools) ? pools.length : null,
-    devCount: Array.isArray(devs) ? devs.length : null,
-    devDetails: Array.isArray(devs)
-      ? devs.slice(0, 6).map((d) => ({
-          name: d['Name'] || '',
-          temp: parseFloat(d['Temperature'] || 0),
-          freq: parseInt(d['Frequency'] || 0, 10),
-          hashrate: parseFloat(d['MHS 5s'] || d['MHS av'] || d['GHS 5s'] || d['GHS av'] || 0),
-          status: String(d['Status'] || '').trim(),
-          hw: parseFloat(d['Hardware Errors'] || 0),
-        }))
-      : [],
-  };
-
-  let signalScore = 0;
-  let maxSignals = 0;
-
-  if (telemetry.tempInlet !== null && telemetry.tempInlet > 15 && telemetry.tempInlet < 60) signalScore++;
-  maxSignals++;
-  if (telemetry.tempOutlet !== null && telemetry.tempOutlet > telemetry.tempInlet && telemetry.tempOutlet < 90)
-    signalScore++;
-  maxSignals++;
-  if (telemetry.tempChip !== null && telemetry.tempChip >= telemetry.tempOutlet && telemetry.tempChip < 110)
-    signalScore++;
-  maxSignals++;
-
-  if (telemetry.fanSpeedRpm !== null && telemetry.fanSpeedRpm >= 1500 && telemetry.fanSpeedRpm <= 8000) signalScore++;
-  maxSignals++;
-  if (telemetry.fanNum !== null && telemetry.fanNum >= 1) signalScore++;
-  maxSignals++;
-
-  if (telemetry.chainNum !== null && telemetry.chainNum >= 1) signalScore++;
-  maxSignals++;
-  if (telemetry.chipCount !== null && telemetry.chipCount > 0) signalScore++;
-  maxSignals++;
-
-  if (telemetry.voltage !== null && telemetry.voltage > 5 && telemetry.voltage < 25) signalScore++;
-  maxSignals++;
-  if (telemetry.frequency !== null && telemetry.frequency >= 100 && telemetry.frequency <= 1500) signalScore++;
-  maxSignals++;
-
-  if (telemetry.hwErrors !== null) signalScore++;
-  maxSignals++;
-  if (telemetry.uptimeSeconds !== null && telemetry.uptimeSeconds > 0) signalScore++;
-  maxSignals++;
-
-  if (telemetry.devCount !== null && telemetry.devCount >= 1) signalScore++;
-  maxSignals++;
-  if (telemetry.minerType.length > 0) signalScore++;
-  maxSignals++;
-
-  telemetry.signalScore = signalScore;
-  telemetry.maxSignals = maxSignals;
-  telemetry.signalRatio = maxSignals > 0 ? signalScore / maxSignals : 0;
-  telemetry.isRealHardware = telemetry.signalRatio >= 0.6;
-  return telemetry;
-}
-
 async function verifyAsicLiveness(_modelName) {
-  const ROUNDS = 8;
-  const CHUNK_BYTES = 1024;
   const config = getAsicConfig();
-
-  const checkOne = async (ip, port, stratumPort) => {
-    const startShares =
-      stratumPort && _stratumHandles.has(stratumPort) ? _stratumHandles.get(stratumPort).getShareCount() : null;
-    const startMs = Date.now();
-    let asicType = '';
-    for (let i = 0; i < ROUNDS; i++) {
-      const data = crypto.randomBytes(CHUNK_BYTES);
-      const expected = doubleSha256(data);
-      const hex = data.toString('hex');
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      let res;
-      try {
-        res = await fetch(`http://${ip}:${port}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: 'check', parameter: hex }),
-          signal: controller.signal,
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-      const json = await res.json();
-      const record = json && json.check && json.check[0];
-      const actual = record && record.Hash;
-      if (!actual || String(actual).toLowerCase() !== expected) {
-        throw new Error(`hash mismatch at round ${i}`);
-      }
-      if (i === 0) {
-        asicType = String(record.Type || record.Miner || record.Description || '').trim();
-      }
-    }
-    const elapsedMs = Date.now() - startMs;
-    const telemetry = await probeAsicTelemetry(ip, port);
-    const endShares =
-      stratumPort && _stratumHandles.has(stratumPort) ? _stratumHandles.get(stratumPort).getShareCount() : null;
-    const shareDelta = startShares !== null && endShares !== null ? endShares - startShares : null;
-    const shareRatePerSec = shareDelta !== null && elapsedMs > 0 ? (shareDelta / elapsedMs) * 1000 : null;
-    return {
-      ok: true,
-      elapsedMs,
-      rounds: ROUNDS,
-      bytesTotal: ROUNDS * CHUNK_BYTES,
-      port,
-      asicType,
-      ip,
-      telemetry,
-      shareDelta,
-      shareRatePerSec,
-    };
-  };
 
   if (config.length > 0) {
     const results = [];
     for (const entry of config) {
       try {
-        results.push(await checkOne(entry.ip, entry.apiPort, entry.stratumPort));
+        const driver = asicDrivers.getDriver(entry.driverName || 'cgminer');
+        if (!driver) throw new Error(`no driver for ${entry.driverName}`);
+        const result = await driver.verifyLiveness(
+          entry.ip,
+          entry.apiPort,
+          entry.stratumPort,
+          _stratumHandles,
+          entry.driverConfig,
+        );
+        results.push({
+          ...result,
+          driverName: entry.driverName || 'cgminer',
+          driverConfig: entry.driverConfig,
+        });
       } catch (_) {
-        results.push({ ok: false, elapsedMs: 0, asicType: '', ip: entry.ip, telemetry: null });
+        results.push({
+          ok: false,
+          elapsedMs: 0,
+          rounds: 0,
+          bytesTotal: 0,
+          asicType: '',
+          ip: entry.ip,
+          telemetry: null,
+          shareDelta: null,
+          shareRatePerSec: null,
+          driverName: entry.driverName || 'cgminer',
+          driverConfig: entry.driverConfig,
+        });
       }
     }
     const ok = results.find((r) => r.ok);
     return ok || results[results.length - 1];
   }
 
+  const cgminerDriver = asicDrivers.getDriver('cgminer');
   const PORTS = [4028, 4029, 4030];
   for (const port of PORTS) {
     try {
-      return await checkOne('127.0.0.1', port);
+      const result = await cgminerDriver.verifyLiveness('127.0.0.1', port, null, _stratumHandles);
+      return { ...result, driverName: 'cgminer', driverConfig: null };
     } catch (_) {}
   }
-  return { ok: false, elapsedMs: 0, asicType: '', telemetry: null };
+  return { ok: false, elapsedMs: 0, asicType: '', telemetry: null, driverName: 'cgminer', driverConfig: null };
 }
 
 // Compare two hardware model strings � returns true if they refer to the same
@@ -916,104 +786,13 @@ function hardwareModelsMatch(osModel, declaredModel) {
 // A patched firmware must consistently lie across all of: check, version, stats.
 // If any endpoint reports a different model identity, the firmware is modified.
 // Also checks compile time and firmware version for consistency.
-async function verifyAsicFirmware(ip, port, checkModel, _modelName) {
-  const result = {
-    ok: true,
-    identities: [], // model strings reported by each API command
-    compileTimes: [], // compile timestamps from each API command
-    issues: [],
-  };
-
-  ip = ip || '127.0.0.1';
-
-  // Include the check command's reported model as the baseline identity.
-  if (checkModel) {
-    result.identities.push({ source: 'check.Type', value: checkModel });
+async function verifyAsicFirmware(ip, port, checkModel, _modelName, driverName, driverConfig) {
+  const driver = asicDrivers.getDriver(driverName || 'cgminer');
+  if (!driver) {
+    return { ok: false, identities: [], compileTimes: [], issues: ['unknown driver'] };
   }
-
-  // 1. Query the version command.
-  try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 10000);
-    let r;
-    try {
-      r = await fetch(`http://${ip}:${port}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'version' }),
-        signal: ctrl.signal,
-      });
-    } finally {
-      clearTimeout(to);
-    }
-    const json = await r.json();
-    const versionRecord = json && json.VERSION && json.VERSION[0];
-    if (versionRecord) {
-      const type = String(versionRecord.Type || '').trim();
-      const miner = String(versionRecord.Miner || '').trim();
-      const compileTime = String(versionRecord.CompileTime || '').trim();
-      if (type) result.identities.push({ source: 'version.Type', value: type });
-      if (miner) result.identities.push({ source: 'version.Miner', value: miner });
-      if (compileTime) result.compileTimes.push(compileTime);
-    }
-  } catch (_) {
-    result.issues.push('version command failed');
-  }
-
-  // 2. Query the stats command.
-  try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 10000);
-    let r;
-    try {
-      r = await fetch(`http://${ip}:${port}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'stats' }),
-        signal: ctrl.signal,
-      });
-    } finally {
-      clearTimeout(to);
-    }
-    const json = await r.json();
-    const statsRecords = json && json.STATS;
-    if (Array.isArray(statsRecords) && statsRecords.length > 0) {
-      // Skip the "STATS" summary record (id=0) � look at individual miner records.
-      for (const rec of statsRecords) {
-        if (rec && rec.id !== 0) {
-          const type = String(rec.Type || '').trim();
-          const miner = String(rec.Miner || '').trim();
-          const compileTime = String(rec.CompileTime || '').trim();
-          if (type) result.identities.push({ source: 'stats.Type', value: type });
-          if (miner) result.identities.push({ source: 'stats.Miner', value: miner });
-          if (compileTime) result.compileTimes.push(compileTime);
-        }
-      }
-    }
-  } catch (_) {
-    result.issues.push('stats command failed');
-  }
-
-  // 3. Cross-reference identities across all sources.
-  // If we have at least 2 identity reports, check they all agree.
-  const identityValues = result.identities.map((i) => i.value);
-  const uniqueIdentities = new Set(identityValues.map((v) => v.toLowerCase().replace(/\s+/g, ' ').trim()));
-  if (identityValues.length >= 2 && uniqueIdentities.size > 1) {
-    result.issues.push(
-      `firmware model mismatch: conflicting identities [${[...new Set(identityValues)].join(', ')}]` +
-        ` across check/version/stats API commands � firmware may be modified`,
-    );
-  }
-
-  // 4. Check compile time is present.
-  if (result.compileTimes.length === 0) {
-    result.issues.push('no compile time reported � firmware info may be suppressed');
-  }
-
-  result.ok = result.issues.length === 0;
-  return result;
+  return driver.verifyFirmware(ip, port, checkModel, _modelName, driverConfig);
 }
-
 // -- Hardware fingerprint & per-wallet benchmark history ----------------------
 // The fingerprint records the CPU+memory descriptor from the first calibrated
 // benchmark.  If the descriptor changes but the wallet stays the same,
@@ -6104,45 +5883,27 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         const livenessPort = livenessResult.port;
         if (_expectedHashrateTHs > 0) {
           try {
-            const ctrl = new AbortController();
-            const to = setTimeout(() => ctrl.abort(), 10000);
-            let r;
-            try {
-              r = await fetch(`http://127.0.0.1:${livenessPort}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: 'summary' }),
-                signal: ctrl.signal,
-              });
-            } finally {
-              clearTimeout(to);
-            }
-            const json = await r.json();
-            const summary = json && json.SUMMARY && json.SUMMARY[0];
-            if (summary) {
-              const ghsAv = parseFloat(summary['GHS av'] || 0);
-              const ghs5s = parseFloat(summary['GHS 5s'] || 0);
-              const mhsAv = parseFloat(summary['MHS av'] || 0);
-              const mhs5s = parseFloat(summary['MHS 5s'] || 0);
-              measuredHashrateTHs = Math.max(ghsAv, ghs5s) / 1000 || Math.max(mhsAv, mhs5s) / 1_000_000;
+            const hashDriver = asicDrivers.getDriver(livenessResult.driverName);
+            if (hashDriver) {
+              measuredHashrateTHs = await hashDriver.getHashrate(livenessIp, livenessPort, livenessResult.driverConfig);
             }
           } catch (_e) {
-            // Summary command failed � non-fatal, probes will re-check.
+            // Hashrate query failed non-fatal, probes will re-check.
           }
-          const ASIC_MIN_HASHRATE_RATIO = 0.85;
-          if (measuredHashrateTHs > 0 && measuredHashrateTHs < _expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO) {
-            asicHashrateLow = true;
-            console.warn(
-              `[HW-Verify] ASIC hashrate too low: ${measuredHashrateTHs.toFixed(1)} TH/s measured, ` +
-                `expected >= ${(_expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
-                `for "${_declaredAsicModel}" � hash boards may be underperforming or misidentified`,
-            );
-          } else if (measuredHashrateTHs > 0) {
-            console.log(
-              `[HW-Verify] ASIC hashrate OK: ${measuredHashrateTHs.toFixed(1)} TH/s ` +
-                `(expected ${_expectedHashrateTHs} TH/s for "${_declaredAsicModel}")`,
-            );
-          }
+        }
+        const ASIC_MIN_HASHRATE_RATIO = 0.85;
+        if (measuredHashrateTHs > 0 && measuredHashrateTHs < _expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO) {
+          asicHashrateLow = true;
+          console.warn(
+            `[HW-Verify] ASIC hashrate too low: ${measuredHashrateTHs.toFixed(1)} TH/s measured, ` +
+              `expected >= ${(_expectedHashrateTHs * ASIC_MIN_HASHRATE_RATIO).toFixed(1)} TH/s ` +
+              `for "${_declaredAsicModel}" � hash boards may be underperforming or misidentified`,
+          );
+        } else if (measuredHashrateTHs > 0) {
+          console.log(
+            `[HW-Verify] ASIC hashrate OK: ${measuredHashrateTHs.toFixed(1)} TH/s ` +
+              `(expected ${_expectedHashrateTHs} TH/s for "${_declaredAsicModel}")`,
+          );
         }
         // Set the hardware spec for the periodic ASIC probe system so subsequent
         // probes can verify the hashrate is still consistent with the model.
@@ -6158,6 +5919,8 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           livenessPort,
           livenessResult.asicType,
           _declaredAsicModel,
+          livenessResult.driverName,
+          livenessResult.driverConfig,
         );
         if (!firmwareAttest.ok) {
           asicFirmwareIssue = true;
@@ -6438,6 +6201,14 @@ let _asicConfig = []; // [{ ip, apiPort, stratumPort }]
 let _stratumHandles = new Map(); // port -> { getShareCount }
 let _declaredAsicModel = ''; // set during hardware verification, used by _recalculateAsicPower
 
+// Per-ASIC share-liveness tracking.  Updated every ASIC_LIVENESS_CHECK_MS while mining.
+// After ASIC_IDLE_THRESHOLD consecutive checks with zero new shares, the ASIC is marked
+// inactive and its power is excluded from the energy ceiling.
+const _asicLivenessState = new Map(); // "ip:apiPort:stratumPort" -> { lastShareCount, lastActiveMs, isActive, consecutiveIdleChecks }
+let _asicLivenessInterval = null;
+const ASIC_LIVENESS_CHECK_MS = 30000;
+const ASIC_IDLE_THRESHOLD = 2;
+
 function getAsicConfig() {
   return _asicConfig;
 }
@@ -6452,60 +6223,86 @@ function getHostLanIp() {
   return '127.0.0.1';
 }
 
-async function configureAsicPool(asicIp, apiPort, stratumPort, hostIp) {
+async function configureAsicPool(asicIp, apiPort, stratumPort, hostIp, driverName, driverConfig) {
+  const driver = asicDrivers.getDriver(driverName || 'cgminer');
+  if (!driver) return false;
   const poolHost = hostIp || getHostLanIp();
+  const poolUrl = `stratum+tcp://${poolHost}:${stratumPort}`;
   try {
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 10000);
-    let res;
-    try {
-      res = await fetch(`http://${asicIp}:${apiPort}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          command: 'addpool',
-          parameter: `stratum+tcp://${poolHost}:${stratumPort},wtc,0`,
-        }),
-        signal: ctrl.signal,
-      });
-    } finally {
-      clearTimeout(to);
-    }
-    const json = await res.json();
-    if (json && (json.addpool === true || Array.isArray(json.addpool))) {
-      await fetch(`http://${asicIp}:${apiPort}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'enablepool', parameter: '0' }),
-        signal: AbortSignal.timeout(5000),
-      });
-      return true;
-    }
-    return false;
+    return await driver.configurePool(asicIp, apiPort, poolUrl, driverConfig);
   } catch (_) {
     return false;
   }
 }
 
-async function disableAsicPool(asicIp, apiPort) {
+async function disableAsicPool(asicIp, apiPort, driverName, driverConfig) {
+  const driver = asicDrivers.getDriver(driverName || 'cgminer');
+  if (!driver) return false;
   try {
-    const res = await fetch(`http://${asicIp}:${apiPort}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'disablepool', parameter: '0' }),
-      signal: AbortSignal.timeout(5000),
-    });
-    const json = await res.json();
-    return !!(json && json.disablepool === true);
+    return await driver.disablePool(asicIp, apiPort, driverConfig);
   } catch (_) {
     return false;
+  }
+}
+
+// Periodically check each configured ASIC's stratum share count.
+// ASICs with no new shares for ASIC_IDLE_THRESHOLD consecutive checks
+// are marked inactive and excluded from the power ceiling.
+function _checkAsicLiveness() {
+  for (const entry of _asicConfig) {
+    const key = `${entry.ip}:${entry.apiPort}:${entry.stratumPort}`;
+    const handle = _stratumHandles.get(entry.stratumPort);
+    if (!handle) {
+      const state = _asicLivenessState.get(key);
+      if (state) state.isActive = false;
+      continue;
+    }
+    const currentShares = handle.getShareCount();
+    const state = _asicLivenessState.get(key) || {
+      lastShareCount: -1,
+      lastActiveMs: 0,
+      isActive: true,
+      consecutiveIdleChecks: 0,
+    };
+    if (currentShares > state.lastShareCount) {
+      state.isActive = true;
+      state.lastShareCount = currentShares;
+      state.lastActiveMs = Date.now();
+      state.consecutiveIdleChecks = 0;
+    } else {
+      state.consecutiveIdleChecks++;
+      if (state.consecutiveIdleChecks >= ASIC_IDLE_THRESHOLD) {
+        state.isActive = false;
+      }
+    }
+    _asicLivenessState.set(key, state);
+  }
+  _recalculateAsicPower();
+}
+
+function _startAsicLivenessChecks() {
+  _stopAsicLivenessChecks();
+  _checkAsicLiveness();
+  _asicLivenessInterval = setInterval(_checkAsicLiveness, ASIC_LIVENESS_CHECK_MS);
+}
+
+function _stopAsicLivenessChecks() {
+  if (_asicLivenessInterval) {
+    clearInterval(_asicLivenessInterval);
+    _asicLivenessInterval = null;
   }
 }
 
 function _recalculateAsicPower() {
   const prevAsicPowerW = hwAuthority.asicPowerW || 0;
-  const totalAsicPowerW =
-    _asicConfig.length > 0 && _declaredAsicModel ? _asicConfig.length * getAsicPowerW(_declaredAsicModel) : 0;
+  let activeCount = 0;
+  for (const entry of _asicConfig) {
+    const key = `${entry.ip}:${entry.apiPort}:${entry.stratumPort}`;
+    const state = _asicLivenessState.get(key);
+    if (state && state.isActive === false) continue;
+    activeCount++;
+  }
+  const totalAsicPowerW = activeCount > 0 && _declaredAsicModel ? activeCount * getAsicPowerW(_declaredAsicModel) : 0;
   const delta = totalAsicPowerW - prevAsicPowerW;
   if (delta !== 0) {
     hwAuthority.asicPowerW = totalAsicPowerW;
@@ -6522,7 +6319,13 @@ ipcMain.handle('wattcoin-asic-set-config', async (_event, config) => {
     const apiPort = Math.max(1, Math.min(65535, Number(entry.apiPort) || 4028));
     const stratumPort = Math.max(1024, Math.min(65535, Number(entry.stratumPort) || 3333));
     if (!ip || !net.isIPv4(ip)) return { ok: false, message: `invalid IP: ${ip}` };
-    validated.push({ ip, apiPort, stratumPort });
+    validated.push({
+      ip,
+      apiPort,
+      stratumPort,
+      driverName: String(entry.driverName || '').trim(),
+      driverConfig: entry.driverConfig || null,
+    });
   }
   // Stop old stratum servers, start new ones
   for (const prev of _asicConfig) stopStratumServer(prev.stratumPort);
@@ -6532,6 +6335,18 @@ ipcMain.handle('wattcoin-asic-set-config', async (_event, config) => {
     if (handle) _stratumHandles.set(entry.stratumPort, handle);
   }
   _asicConfig = validated;
+  // Initialise per-ASIC liveness tracking (all start as active, grace period before
+  // first idle check).  Stratum handles are available at this point.
+  _asicLivenessState.clear();
+  for (const entry of validated) {
+    const key = `${entry.ip}:${entry.apiPort}:${entry.stratumPort}`;
+    _asicLivenessState.set(key, {
+      lastShareCount: 0,
+      lastActiveMs: Date.now(),
+      isActive: true,
+      consecutiveIdleChecks: 0,
+    });
+  }
   // Reconnect probe WS so coordinators learn about updated ASIC capability
   _closeBgProbeWs();
   _connectBgProbeWs();
@@ -6565,46 +6380,27 @@ ipcMain.handle('wattcoin-asic-scan', async () => {
       probedIps.add(ip);
       promises.push(
         (async () => {
-          for (const port of [4028, 4029, 4030]) {
-            try {
-              const r = await fetch(`http://${ip}:${port}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: 'version' }),
-                signal: AbortSignal.timeout(3000),
-              }).catch(() => null);
-              if (!r) continue;
-              const json = await r.json().catch(() => null);
-              const ver = json && json.VERSION && json.VERSION[0];
-              if (ver && (ver.Type || ver.Miner)) {
-                const telemetry = await probeAsicTelemetry(ip, port).catch(() => null);
-                let summaryHashrate = 0;
-                try {
-                  const s = await fetch(`http://${ip}:${port}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'summary' }),
-                    signal: AbortSignal.timeout(3000),
-                  }).then((r2) => r2.json());
-                  const sum = s && s.SUMMARY && s.SUMMARY[0];
-                  if (sum) {
-                    const ghsAv = parseFloat(sum['GHS av'] || 0);
-                    const ghs5s = parseFloat(sum['GHS 5s'] || 0);
-                    summaryHashrate = Math.max(ghsAv, ghs5s) / 1000 || 0;
-                  }
-                } catch (_) {}
-                results.push({
-                  ip,
-                  port,
-                  model: String(ver.Type || ver.Miner || '').trim(),
-                  version: String(ver.Version || '').trim(),
-                  hashrateTHs: summaryHashrate,
-                  telemetry,
-                });
-                return;
-              }
-            } catch (_) {}
-          }
+          try {
+            const detections = await asicDrivers.tryDetectAll(ip);
+            for (const det of detections) {
+              const driver = asicDrivers.getDriver(det.driverName);
+              const driverConfig = det.preset ? { preset: det.preset } : null;
+              const telemetry = driver
+                ? await driver.getTelemetry(ip, det.apiPort, driverConfig).catch(() => null)
+                : null;
+              const hashrateTHs = driver ? await driver.getHashrate(ip, det.apiPort, driverConfig).catch(() => 0) : 0;
+              results.push({
+                ip,
+                port: det.apiPort,
+                model: det.model,
+                version: det.version || '',
+                hashrateTHs,
+                telemetry,
+                driverName: det.driverName,
+                driverConfig,
+              });
+            }
+          } catch (_) {}
         })(),
       );
     }
@@ -6630,18 +6426,42 @@ ipcMain.handle('wattcoin-asic-inject-custom-job', async (_event, prevHashHex) =>
 
 ipcMain.handle('wattcoin-asic-start-mining', async () => {
   if (_asicConfig.length === 0) return { ok: true, started: 0, failures: 0 };
-  const results = await Promise.allSettled(_asicConfig.map((a) => configureAsicPool(a.ip, a.apiPort, a.stratumPort)));
+  const results = await Promise.allSettled(
+    _asicConfig.map((a) => configureAsicPool(a.ip, a.apiPort, a.stratumPort, undefined, a.driverName, a.driverConfig)),
+  );
   const failures = results.filter((r) => r.status === 'rejected' || r.value === false).length;
   _recalculateAsicPower();
+  _startAsicLivenessChecks();
   return { ok: true, started: _asicConfig.length - failures, failures };
 });
 
 ipcMain.handle('wattcoin-asic-stop-mining', async () => {
   if (_asicConfig.length === 0) return { ok: true, stopped: 0, failures: 0 };
-  const results = await Promise.allSettled(_asicConfig.map((a) => disableAsicPool(a.ip, a.apiPort)));
+  const results = await Promise.allSettled(
+    _asicConfig.map((a) => disableAsicPool(a.ip, a.apiPort, a.driverName, a.driverConfig)),
+  );
   const failures = results.filter((r) => r.status === 'rejected' || r.value === false).length;
   _recalculateAsicPower();
+  _stopAsicLivenessChecks();
   return { ok: true, stopped: _asicConfig.length - failures, failures };
+});
+
+ipcMain.handle('wattcoin-asic-liveness-status', () => {
+  const status = [];
+  for (const entry of _asicConfig) {
+    const key = `${entry.ip}:${entry.apiPort}:${entry.stratumPort}`;
+    const state = _asicLivenessState.get(key) || { isActive: true, lastShareCount: 0, lastActiveMs: 0 };
+    status.push({
+      ip: entry.ip,
+      port: entry.apiPort,
+      stratumPort: entry.stratumPort,
+      isActive: state.isActive,
+      lastActiveMs: state.lastActiveMs,
+      totalShares: state.lastShareCount,
+      driverName: entry.driverName,
+    });
+  }
+  return { ok: true, status };
 });
 
 ipcMain.handle('wattcoin-get-pending-probe', () => {

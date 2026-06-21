@@ -2241,6 +2241,7 @@ export default function Miner({
   const [asicConfigStatus, setAsicConfigStatus] = React.useState('');
   const [discoveredAsics, setDiscoveredAsics] = React.useState([]);
   const [scanning, setScanning] = React.useState(false);
+  const [asicLiveness, setAsicLiveness] = React.useState([]);
 
   React.useEffect(() => {
     if (hardwareLookupResetNonce <= 0) return;
@@ -5818,6 +5819,30 @@ export default function Miner({
     }
   }, [mining]);
 
+  // Poll per-ASIC liveness status every 30s while mining is active.
+  React.useEffect(() => {
+    if (!mining) {
+      setAsicLiveness([]);
+      return;
+    }
+    const hw = window.wattcoinHardware;
+    if (!hw || !hw.invoke) return;
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        const res = await hw.invoke('wattcoin-asic-liveness-status');
+        if (!cancelled && res && res.ok) setAsicLiveness(res.status || []);
+      } catch (_) {}
+    };
+    poll();
+    const timer = setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [mining]);
+
   // Continuous mining loop where power->energy drives when blocks are mined.
   React.useEffect(() => {
     if (!mining) {
@@ -6641,6 +6666,8 @@ export default function Miner({
                           ip: a.ip,
                           apiPort: a.port || 4028,
                           stratumPort: 3333,
+                          driverName: a.driverName || '',
+                          driverConfig: a.driverConfig || null,
                         }));
                         await window.wattcoinHardware.setAsicConfig(config);
                         setDiscoveredAsics(asics);
@@ -6706,6 +6733,33 @@ export default function Miner({
               </div>
             )}
             {asicConfigStatus && <div style={{ color: '#facc15', fontSize: 11, marginTop: 4 }}>{asicConfigStatus}</div>}
+            {asicLiveness.length > 0 && (
+              <div style={{ marginTop: 6, borderTop: '1px solid #1e3a1e', paddingTop: 4 }}>
+                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, color: '#4ade80', marginBottom: 4 }}>
+                  Live status
+                </div>
+                {asicLiveness.map((a) => (
+                  <div
+                    key={`${a.ip}:${a.port}`}
+                    style={{
+                      fontSize: 10,
+                      color: a.isActive ? '#4ade80' : '#ef4444',
+                      marginBottom: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <span style={{ fontSize: 8 }}>{a.isActive ? '\u25CF' : '\u25CB'}</span>
+                    {a.ip}:{a.port}
+                    {a.isActive && a.totalShares > 0 && (
+                      <span style={{ color: '#6aaa6a' }}>{a.totalShares} shares</span>
+                    )}
+                    {!a.isActive && <span style={{ color: '#ef4444' }}>idle</span>}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ marginTop: 'auto', width: '100%', borderTop: '1px solid #1e3a1e', paddingTop: 10 }}>
             <div

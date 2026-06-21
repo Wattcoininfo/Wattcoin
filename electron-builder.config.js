@@ -127,6 +127,7 @@ const config = {
     'upnp-port-forward.js',
     'protocol-constants.js',
     'gpu-load-controller.js',
+    'asic-drivers/**/*',
     'app-integrity-manifest.json',
     'package.json',
   ],

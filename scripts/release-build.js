@@ -23,6 +23,10 @@ const APP_INTEGRITY_FILES = [
   'wtc-sale-queue.js',
   'wtc-staking-queue.js',
   'runtime-config.js',
+  'asic-drivers/index.js',
+  'asic-drivers/cgminer.js',
+  'asic-drivers/nmminer.js',
+  'asic-drivers/webminer.js',
 ];
 
 function assertReleaseObfuscationDisabled() {
@@ -82,7 +86,18 @@ function assertMainProcessRuntimeFilesPackaged(root) {
   while ((match = requirePattern.exec(source))) {
     const target = String(match[1] || '').trim();
     if (!target || target === 'package.json' || target === 'peer-privacy-dev') continue;
-    runtimeRequires.add(target.includes('.') ? target : `${target}.js`);
+    // If the required path is a directory (no file extension), check that the
+    // whitelist covers its contents rather than a single .js file.
+    if (target.includes('.')) {
+      runtimeRequires.add(target);
+    } else {
+      const resolvedDir = path.resolve(root, target);
+      if (fs.existsSync(resolvedDir) && fs.statSync(resolvedDir).isDirectory()) {
+        runtimeRequires.add(`${target}/**/*`);
+      } else {
+        runtimeRequires.add(`${target}.js`);
+      }
+    }
   }
 
   const missing = [...runtimeRequires]
