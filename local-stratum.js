@@ -42,11 +42,15 @@ function makeJob() {
   return {
     jobId: Date.now().toString(36) + crypto.randomBytes(2).toString('hex'),
     prevHashHex: hashLE(prevHash).toString('hex'),
-    coinb1: '01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff' + crypto.randomBytes(4).toString('hex'),
+    coinb1:
+      '01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff' +
+      crypto.randomBytes(4).toString('hex'),
     coinb2: 'ffffffff' + extra.toString('hex'),
     versionHex: '20000000',
     nbitsHex: _computeNbits,
-    ntimeHex: Math.floor(Date.now() / 1000).toString(16).padStart(8, '0'),
+    ntimeHex: Math.floor(Date.now() / 1000)
+      .toString(16)
+      .padStart(8, '0'),
     cleanJobs: true,
   };
 }
@@ -88,7 +92,9 @@ class StratumSession {
     for (const line of lines) {
       const m = line.trim();
       if (!m) continue;
-      try { this._handle(JSON.parse(m)); } catch (_) {}
+      try {
+        this._handle(JSON.parse(m));
+      } catch (_) {}
     }
   }
 
@@ -104,7 +110,7 @@ class StratumSession {
       this.subscribed = true;
       this._pushJob();
     } else if (msg.method === 'mining.authorize') {
-      this.workerName = String(msg.params && msg.params[0] || '');
+      this.workerName = String((msg.params && msg.params[0]) || '');
       this.send({ id: msg.id, result: true, error: null });
     } else if (msg.method === 'mining.submit') {
       const [, jobId, extranonce2, ntime, nonce] = msg.params || [];
@@ -130,9 +136,10 @@ class StratumSession {
       Buffer.from(extranonce2, 'hex'),
       Buffer.from(job.coinb2, 'hex'),
     ]);
-    const coinbaseHash = crypto.createHash('sha256').update(
-      crypto.createHash('sha256').update(coinbase).digest()
-    ).digest();
+    const coinbaseHash = crypto
+      .createHash('sha256')
+      .update(crypto.createHash('sha256').update(coinbase).digest())
+      .digest();
 
     const header = Buffer.concat([
       Buffer.from(job.versionHex, 'hex').reverse(),
@@ -172,10 +179,18 @@ class StratumSession {
     const job = makeJob();
     this.lastJob = job;
     this.send({
-      id: null, method: 'mining.notify',
+      id: null,
+      method: 'mining.notify',
       params: [
-        job.jobId, job.prevHashHex, job.coinb1, job.coinb2,
-        [], job.versionHex, job.nbitsHex, job.ntimeHex, job.cleanJobs,
+        job.jobId,
+        job.prevHashHex,
+        job.coinb1,
+        job.coinb2,
+        [],
+        job.versionHex,
+        job.nbitsHex,
+        job.ntimeHex,
+        job.cleanJobs,
       ],
     });
   }
@@ -196,19 +211,31 @@ function injectCustomJob(port, prevHashHex) {
     const job = {
       jobId,
       prevHashHex,
-      coinb1: '01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff' + crypto.randomBytes(4).toString('hex'),
+      coinb1:
+        '01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff' +
+        crypto.randomBytes(4).toString('hex'),
       coinb2: 'ffffffff' + crypto.randomBytes(8).toString('hex'),
       versionHex: '20000000',
       nbitsHex: _computeNbits,
-      ntimeHex: Math.floor(Date.now() / 1000).toString(16).padStart(8, '0'),
+      ntimeHex: Math.floor(Date.now() / 1000)
+        .toString(16)
+        .padStart(8, '0'),
       cleanJobs: true,
     };
     session.lastJob = job;
     session.send({
-      id: null, method: 'mining.notify',
+      id: null,
+      method: 'mining.notify',
       params: [
-        job.jobId, job.prevHashHex, job.coinb1, job.coinb2,
-        [], job.versionHex, job.nbitsHex, job.ntimeHex, job.cleanJobs,
+        job.jobId,
+        job.prevHashHex,
+        job.coinb1,
+        job.coinb2,
+        [],
+        job.versionHex,
+        job.nbitsHex,
+        job.ntimeHex,
+        job.cleanJobs,
       ],
     });
   }
@@ -231,14 +258,19 @@ async function startStratumServer(port) {
   server.listen(port, '0.0.0.0');
   SERVERS.set(port, server);
   return {
-    getShareCount: () => { const s = SERVER_STATS.get(port); return s ? s.validShares : 0; },
+    getShareCount: () => {
+      const s = SERVER_STATS.get(port);
+      return s ? s.validShares : 0;
+    },
   };
 }
 
 function stopStratumServer(port) {
   const server = SERVERS.get(port);
   if (!server) return;
-  try { server.close(); } catch (_) {}
+  try {
+    server.close();
+  } catch (_) {}
   SERVERS.delete(port);
   SERVER_STATS.delete(port);
   SHARE_BUFFERS.delete(port);
@@ -274,7 +306,7 @@ async function waitForFreshShares(count, sinceMs) {
       if (collected.length >= count) break;
     }
     if (collected.length < count) {
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 100));
     }
   }
   return { shares: collected.slice(0, count), shareCount: getTotalValidShares() };
@@ -303,4 +335,13 @@ async function verifyX11Share(headerHex, hashHex, nbitsHex) {
   return hashVal > 0n && hashVal <= targetVal;
 }
 
-module.exports = { startStratumServer, stopStratumServer, stopAll, getTotalValidShares, waitForFreshShares, verifyX11Share, injectCustomJob, STRATUM_DIFFICULTY };
+module.exports = {
+  startStratumServer,
+  stopStratumServer,
+  stopAll,
+  getTotalValidShares,
+  waitForFreshShares,
+  verifyX11Share,
+  injectCustomJob,
+  STRATUM_DIFFICULTY,
+};

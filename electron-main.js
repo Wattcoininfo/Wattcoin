@@ -53,7 +53,13 @@ const {
   getAsicHashrateTHs,
   getGpuTdpW,
 } = require('./hardware-tables.cjs');
-const { startStratumServer, stopStratumServer, stopAll: stopAllStrata, waitForFreshShares, injectCustomJob } = require('./local-stratum');
+const {
+  startStratumServer,
+  stopStratumServer,
+  stopAll: stopAllStrata,
+  waitForFreshShares,
+  injectCustomJob,
+} = require('./local-stratum');
 const {
   setHardwareLoadPercent,
   stopHardwareLoad,
@@ -703,7 +709,9 @@ async function probeAsicTelemetry(ip, port) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command: cmd }),
       signal: AbortSignal.timeout(8000),
-    }).then((r) => r.json()).catch(() => null);
+    })
+      .then((r) => r.json())
+      .catch(() => null);
 
   const [statsJson, devsJson, versionJson, poolsJson] = await Promise.all([
     api('stats'),
@@ -735,14 +743,16 @@ async function probeAsicTelemetry(ip, port) {
     minerVersion: ver ? String(ver['Version'] || ver['API'] || '').trim() : '',
     poolCount: Array.isArray(pools) ? pools.length : null,
     devCount: Array.isArray(devs) ? devs.length : null,
-    devDetails: Array.isArray(devs) ? devs.slice(0, 6).map((d) => ({
-      name: d['Name'] || '',
-      temp: parseFloat(d['Temperature'] || 0),
-      freq: parseInt(d['Frequency'] || 0, 10),
-      hashrate: parseFloat(d['MHS 5s'] || d['MHS av'] || d['GHS 5s'] || d['GHS av'] || 0),
-      status: String(d['Status'] || '').trim(),
-      hw: parseFloat(d['Hardware Errors'] || 0),
-    })) : [],
+    devDetails: Array.isArray(devs)
+      ? devs.slice(0, 6).map((d) => ({
+          name: d['Name'] || '',
+          temp: parseFloat(d['Temperature'] || 0),
+          freq: parseInt(d['Frequency'] || 0, 10),
+          hashrate: parseFloat(d['MHS 5s'] || d['MHS av'] || d['GHS 5s'] || d['GHS av'] || 0),
+          status: String(d['Status'] || '').trim(),
+          hw: parseFloat(d['Hardware Errors'] || 0),
+        }))
+      : [],
   };
 
   let signalScore = 0;
@@ -750,9 +760,11 @@ async function probeAsicTelemetry(ip, port) {
 
   if (telemetry.tempInlet !== null && telemetry.tempInlet > 15 && telemetry.tempInlet < 60) signalScore++;
   maxSignals++;
-  if (telemetry.tempOutlet !== null && telemetry.tempOutlet > telemetry.tempInlet && telemetry.tempOutlet < 90) signalScore++;
+  if (telemetry.tempOutlet !== null && telemetry.tempOutlet > telemetry.tempInlet && telemetry.tempOutlet < 90)
+    signalScore++;
   maxSignals++;
-  if (telemetry.tempChip !== null && telemetry.tempChip >= telemetry.tempOutlet && telemetry.tempChip < 110) signalScore++;
+  if (telemetry.tempChip !== null && telemetry.tempChip >= telemetry.tempOutlet && telemetry.tempChip < 110)
+    signalScore++;
   maxSignals++;
 
   if (telemetry.fanSpeedRpm !== null && telemetry.fanSpeedRpm >= 1500 && telemetry.fanSpeedRpm <= 8000) signalScore++;
@@ -793,8 +805,8 @@ async function verifyAsicLiveness(_modelName) {
   const config = getAsicConfig();
 
   const checkOne = async (ip, port, stratumPort) => {
-    const startShares = stratumPort && _stratumHandles.has(stratumPort)
-      ? _stratumHandles.get(stratumPort).getShareCount() : null;
+    const startShares =
+      stratumPort && _stratumHandles.has(stratumPort) ? _stratumHandles.get(stratumPort).getShareCount() : null;
     const startMs = Date.now();
     let asicType = '';
     for (let i = 0; i < ROUNDS; i++) {
@@ -811,7 +823,9 @@ async function verifyAsicLiveness(_modelName) {
           body: JSON.stringify({ command: 'check', parameter: hex }),
           signal: controller.signal,
         });
-      } finally { clearTimeout(timeout); }
+      } finally {
+        clearTimeout(timeout);
+      }
       const json = await res.json();
       const record = json && json.check && json.check[0];
       const actual = record && record.Hash;
@@ -824,13 +838,21 @@ async function verifyAsicLiveness(_modelName) {
     }
     const elapsedMs = Date.now() - startMs;
     const telemetry = await probeAsicTelemetry(ip, port);
-    const endShares = stratumPort && _stratumHandles.has(stratumPort)
-      ? _stratumHandles.get(stratumPort).getShareCount() : null;
-    const shareDelta = (startShares !== null && endShares !== null) ? endShares - startShares : null;
-    const shareRatePerSec = (shareDelta !== null && elapsedMs > 0) ? (shareDelta / elapsedMs) * 1000 : null;
+    const endShares =
+      stratumPort && _stratumHandles.has(stratumPort) ? _stratumHandles.get(stratumPort).getShareCount() : null;
+    const shareDelta = startShares !== null && endShares !== null ? endShares - startShares : null;
+    const shareRatePerSec = shareDelta !== null && elapsedMs > 0 ? (shareDelta / elapsedMs) * 1000 : null;
     return {
-      ok: true, elapsedMs, rounds: ROUNDS, bytesTotal: ROUNDS * CHUNK_BYTES, port, asicType, ip, telemetry,
-      shareDelta, shareRatePerSec,
+      ok: true,
+      elapsedMs,
+      rounds: ROUNDS,
+      bytesTotal: ROUNDS * CHUNK_BYTES,
+      port,
+      asicType,
+      ip,
+      telemetry,
+      shareDelta,
+      shareRatePerSec,
     };
   };
 
@@ -6131,7 +6153,12 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         // -- ASIC firmware attestation: cross-reference multiple API commands ------
         // Query version and stats commands and verify they all report the same model
         // identity.  A patched firmware must consistently lie across every endpoint.
-        const firmwareAttest = await verifyAsicFirmware(livenessIp, livenessPort, livenessResult.asicType, _declaredAsicModel);
+        const firmwareAttest = await verifyAsicFirmware(
+          livenessIp,
+          livenessPort,
+          livenessResult.asicType,
+          _declaredAsicModel,
+        );
         if (!firmwareAttest.ok) {
           asicFirmwareIssue = true;
           console.warn(`[HW-Verify] ASIC firmware attestation failed: ${firmwareAttest.issues.join(', ')}`);
@@ -6298,7 +6325,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         if (asicPowerToRemove > 0) {
           const before = declaredUnitPowerW;
           declaredUnitPowerW = Math.max(0, declaredUnitPowerW - asicPowerToRemove);
-          const inactiveCount = (_asicConfig.length - (totalActiveAsicPowerW / perAsicPower));
+          const inactiveCount = _asicConfig.length - totalActiveAsicPowerW / perAsicPower;
           console.warn(
             `[HW-Verify] ASIC share gate: ${Math.round(inactiveCount)} ASIC(s) with 0 valid ` +
               `X11 shares → subtracting ${asicPowerToRemove}W ` +
@@ -6411,7 +6438,9 @@ let _asicConfig = []; // [{ ip, apiPort, stratumPort }]
 let _stratumHandles = new Map(); // port -> { getShareCount }
 let _declaredAsicModel = ''; // set during hardware verification, used by _recalculateAsicPower
 
-function getAsicConfig() { return _asicConfig; }
+function getAsicConfig() {
+  return _asicConfig;
+}
 
 function getHostLanIp() {
   const ifaces = os.networkInterfaces();
@@ -6439,7 +6468,9 @@ async function configureD3Pool(asicIp, apiPort, stratumPort, hostIp) {
         }),
         signal: ctrl.signal,
       });
-    } finally { clearTimeout(to); }
+    } finally {
+      clearTimeout(to);
+    }
     const json = await res.json();
     if (json && (json.addpool === true || Array.isArray(json.addpool))) {
       await fetch(`http://${asicIp}:${apiPort}`, {
@@ -6451,7 +6482,9 @@ async function configureD3Pool(asicIp, apiPort, stratumPort, hostIp) {
       return true;
     }
     return false;
-  } catch (_) { return false; }
+  } catch (_) {
+    return false;
+  }
 }
 
 async function disableD3Pool(asicIp, apiPort) {
@@ -6464,14 +6497,15 @@ async function disableD3Pool(asicIp, apiPort) {
     });
     const json = await res.json();
     return !!(json && json.disablepool === true);
-  } catch (_) { return false; }
+  } catch (_) {
+    return false;
+  }
 }
 
 function _recalculateAsicPower() {
   const prevAsicPowerW = hwAuthority.asicPowerW || 0;
-  const totalAsicPowerW = (_asicConfig.length > 0 && _declaredAsicModel)
-    ? _asicConfig.length * getAsicPowerW(_declaredAsicModel)
-    : 0;
+  const totalAsicPowerW =
+    _asicConfig.length > 0 && _declaredAsicModel ? _asicConfig.length * getAsicPowerW(_declaredAsicModel) : 0;
   const delta = totalAsicPowerW - prevAsicPowerW;
   if (delta !== 0) {
     hwAuthority.asicPowerW = totalAsicPowerW;
@@ -6596,9 +6630,7 @@ ipcMain.handle('wattcoin-asic-inject-custom-job', async (_event, prevHashHex) =>
 
 ipcMain.handle('wattcoin-asic-start-mining', async () => {
   if (_asicConfig.length === 0) return { ok: true, started: 0, failures: 0 };
-  const results = await Promise.allSettled(
-    _asicConfig.map((a) => configureD3Pool(a.ip, a.apiPort, a.stratumPort)),
-  );
+  const results = await Promise.allSettled(_asicConfig.map((a) => configureD3Pool(a.ip, a.apiPort, a.stratumPort)));
   const failures = results.filter((r) => r.status === 'rejected' || r.value === false).length;
   _recalculateAsicPower();
   return { ok: true, started: _asicConfig.length - failures, failures };
@@ -6606,9 +6638,7 @@ ipcMain.handle('wattcoin-asic-start-mining', async () => {
 
 ipcMain.handle('wattcoin-asic-stop-mining', async () => {
   if (_asicConfig.length === 0) return { ok: true, stopped: 0, failures: 0 };
-  const results = await Promise.allSettled(
-    _asicConfig.map((a) => disableD3Pool(a.ip, a.apiPort)),
-  );
+  const results = await Promise.allSettled(_asicConfig.map((a) => disableD3Pool(a.ip, a.apiPort)));
   const failures = results.filter((r) => r.status === 'rejected' || r.value === false).length;
   _recalculateAsicPower();
   return { ok: true, stopped: _asicConfig.length - failures, failures };
@@ -7058,7 +7088,13 @@ function _startBgProbeWs(peerUrl) {
   const workerId = walletAddressCache.address || 'unknown';
   try {
     const ws = new WebSocket(
-      wsUrl + '?workerId=' + encodeURIComponent(workerId) + '&allowGpu=' + (_allowGpuWorkloads ? 'true' : 'false') + '&hasAsic=' + (_asicConfig.length > 0 ? 'true' : 'false'),
+      wsUrl +
+        '?workerId=' +
+        encodeURIComponent(workerId) +
+        '&allowGpu=' +
+        (_allowGpuWorkloads ? 'true' : 'false') +
+        '&hasAsic=' +
+        (_asicConfig.length > 0 ? 'true' : 'false'),
     );
     // Track as pending BEFORE the WS opens so the slot is reserved immediately.
     _pendingConns.set(peerUrl, { ws, connId });

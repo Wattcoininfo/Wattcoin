@@ -6624,92 +6624,89 @@ export default function Miner({
             <b>Power calculation:</b> {hardwareCardPowerCalcBreakdown}
           </div>
           <div style={{ marginTop: 8, borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
-              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 15, color: '#4ade80', marginBottom: 12 }}>
-                ASIC Recognition
-              </div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-                <button
-                  onClick={async () => {
-                    setAsicConfigStatus('Scanning...');
-                    setScanning(true);
-                    try {
-                      const res = await window.wattcoinHardware.scanAsicNetwork();
-                      if (res.ok) {
-                        const asics = res.asics || [];
-                        if (asics.length > 0) {
-                          const config = asics.map((a) => ({
-                            ip: a.ip,
-                            apiPort: a.port || 4028,
-                            stratumPort: 3333,
-                          }));
-                          await window.wattcoinHardware.setAsicConfig(config);
-                          setDiscoveredAsics(asics);
-                          setAsicConfigStatus(`Scan complete: ${asics.length} ASIC(s) configured`);
-                        } else {
-                          setDiscoveredAsics([]);
-                          await window.wattcoinHardware.setAsicConfig([]);
-                          setAsicConfigStatus('Scan complete: no ASICs found');
-                        }
-                      } else {
-                        setAsicConfigStatus('Scan failed');
-                      }
-                    } catch (err) {
-                      setAsicConfigStatus(`Scan error: ${String(err.message || err).slice(0, 80)}`);
-                    }
-                    setScanning(false);
-                  }}
-                  disabled={scanning}
-                  style={{
-                    background: '#1e3a1e',
-                    color: '#4ade80',
-                    border: '1px solid #2a5a2a',
-                    borderRadius: 4,
-                    padding: '4px 10px',
-                    cursor: 'pointer',
-                    fontSize: 12,
-                  }}
-                >
-                  {scanning ? 'Scanning...' : 'Scan Network'}
-                </button>
-              </div>
-              {discoveredAsics.length > 0 && (
-                <div style={{ marginBottom: 6 }}>
-                  {discoveredAsics.map((asic) => (
-                    <div
-                      key={asic.ip}
-                      style={{
-                        background: '#0f2a0f',
-                        border: '1px solid #1e3a1e',
-                        borderRadius: 4,
-                        padding: '6px 8px',
-                        marginBottom: 4,
-                        fontSize: 11,
-                        color: '#e8f5e8',
-                      }}
-                    >
-                      <div>
-                        <b>{asic.model}</b> @ {asic.ip}:{asic.port}
-                      </div>
-                      {asic.hashrateTHs > 0 && (
-                        <div style={{ color: '#6aaa6a', marginTop: 2 }}>
-                          Hashrate: {asic.hashrateTHs.toFixed(3)} TH/s
-                        </div>
-                      )}
-                      {asic.telemetry && (asic.telemetry.tempInlet > 0 || asic.telemetry.fanSpeedRpm > 0) && (
-                        <div style={{ color: '#888', marginTop: 1 }}>
-                          {asic.telemetry.tempInlet > 0 && `${asic.telemetry.tempInlet}-${asic.telemetry.tempOutlet || '?'}-${asic.telemetry.tempChip || '?'} C`}
-                          {asic.telemetry.fanSpeedRpm > 0 && ` | Fan: ${asic.telemetry.fanSpeedRpm} RPM`}
-                          {asic.telemetry.chipCount > 0 && ` | Chips: ${asic.telemetry.chipCount}`}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {asicConfigStatus && (
-                <div style={{ color: '#facc15', fontSize: 11, marginTop: 4 }}>{asicConfigStatus}</div>
-              )}
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 15, color: '#4ade80', marginBottom: 12 }}>
+              ASIC Recognition
             </div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+              <button
+                onClick={async () => {
+                  setAsicConfigStatus('Scanning...');
+                  setScanning(true);
+                  try {
+                    const res = await window.wattcoinHardware.scanAsicNetwork();
+                    if (res.ok) {
+                      const asics = res.asics || [];
+                      if (asics.length > 0) {
+                        const config = asics.map((a) => ({
+                          ip: a.ip,
+                          apiPort: a.port || 4028,
+                          stratumPort: 3333,
+                        }));
+                        await window.wattcoinHardware.setAsicConfig(config);
+                        setDiscoveredAsics(asics);
+                        setAsicConfigStatus(`Scan complete: ${asics.length} ASIC(s) configured`);
+                      } else {
+                        setDiscoveredAsics([]);
+                        await window.wattcoinHardware.setAsicConfig([]);
+                        setAsicConfigStatus('Scan complete: no ASICs found');
+                      }
+                    } else {
+                      setAsicConfigStatus('Scan failed');
+                    }
+                  } catch (err) {
+                    setAsicConfigStatus(`Scan error: ${String(err.message || err).slice(0, 80)}`);
+                  }
+                  setScanning(false);
+                }}
+                disabled={scanning}
+                style={{
+                  background: '#1e3a1e',
+                  color: '#4ade80',
+                  border: '1px solid #2a5a2a',
+                  borderRadius: 4,
+                  padding: '4px 10px',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                }}
+              >
+                {scanning ? 'Scanning...' : 'Scan Network'}
+              </button>
+            </div>
+            {discoveredAsics.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                {discoveredAsics.map((asic) => (
+                  <div
+                    key={asic.ip}
+                    style={{
+                      background: '#0f2a0f',
+                      border: '1px solid #1e3a1e',
+                      borderRadius: 4,
+                      padding: '6px 8px',
+                      marginBottom: 4,
+                      fontSize: 11,
+                      color: '#e8f5e8',
+                    }}
+                  >
+                    <div>
+                      <b>{asic.model}</b> @ {asic.ip}:{asic.port}
+                    </div>
+                    {asic.hashrateTHs > 0 && (
+                      <div style={{ color: '#6aaa6a', marginTop: 2 }}>Hashrate: {asic.hashrateTHs.toFixed(3)} TH/s</div>
+                    )}
+                    {asic.telemetry && (asic.telemetry.tempInlet > 0 || asic.telemetry.fanSpeedRpm > 0) && (
+                      <div style={{ color: '#888', marginTop: 1 }}>
+                        {asic.telemetry.tempInlet > 0 &&
+                          `${asic.telemetry.tempInlet}-${asic.telemetry.tempOutlet || '?'}-${asic.telemetry.tempChip || '?'} C`}
+                        {asic.telemetry.fanSpeedRpm > 0 && ` | Fan: ${asic.telemetry.fanSpeedRpm} RPM`}
+                        {asic.telemetry.chipCount > 0 && ` | Chips: ${asic.telemetry.chipCount}`}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {asicConfigStatus && <div style={{ color: '#facc15', fontSize: 11, marginTop: 4 }}>{asicConfigStatus}</div>}
+          </div>
           <div style={{ marginTop: 'auto', width: '100%', borderTop: '1px solid #1e3a1e', paddingTop: 10 }}>
             <div
               style={{ color: benchmarkState.running || startupBenchmarkPending ? '#facc15' : '#4ade80', fontSize: 12 }}
@@ -7560,16 +7557,32 @@ export default function Miner({
                   }
                 }}
                 disabled={
-                  mining || hardwareUnknown || !hardwareRecognitionFinished || benchmarkState.running ||
-                  startupBenchmarkPending || isHardwareOnHold || firewallBlocked || peerCount === null || peerCount === 0
+                  mining ||
+                  hardwareUnknown ||
+                  !hardwareRecognitionFinished ||
+                  benchmarkState.running ||
+                  startupBenchmarkPending ||
+                  isHardwareOnHold ||
+                  firewallBlocked ||
+                  peerCount === null ||
+                  peerCount === 0
                 }
                 style={{
                   width: '100%',
                   background:
-                    mining || hardwareUnknown || !hardwareRecognitionFinished || benchmarkState.running ||
-                    startupBenchmarkPending || isHardwareOnHold || firewallBlocked || peerCount === null || peerCount === 0
+                    mining ||
+                    hardwareUnknown ||
+                    !hardwareRecognitionFinished ||
+                    benchmarkState.running ||
+                    startupBenchmarkPending ||
+                    isHardwareOnHold ||
+                    firewallBlocked ||
+                    peerCount === null ||
+                    peerCount === 0
                       ? '#7aa88a'
-                      : showRebenchPrompt ? '#ea580c' : '#4ade80',
+                      : showRebenchPrompt
+                        ? '#ea580c'
+                        : '#4ade80',
                   color: showRebenchPrompt ? '#fff' : '#0d1a0d',
                   border: 'none',
                   borderRadius: 8,
@@ -7577,22 +7590,36 @@ export default function Miner({
                   fontWeight: 700,
                   fontSize: 20,
                   cursor:
-                    mining || hardwareUnknown || !hardwareRecognitionFinished || benchmarkState.running ||
-                    startupBenchmarkPending || isHardwareOnHold || firewallBlocked || peerCount === null || peerCount === 0
-                      ? 'not-allowed' : 'pointer',
+                    mining ||
+                    hardwareUnknown ||
+                    !hardwareRecognitionFinished ||
+                    benchmarkState.running ||
+                    startupBenchmarkPending ||
+                    isHardwareOnHold ||
+                    firewallBlocked ||
+                    peerCount === null ||
+                    peerCount === 0
+                      ? 'not-allowed'
+                      : 'pointer',
                 }}
               >
                 {hardwareUnknown
                   ? 'Hardware unknown'
                   : isHardwareOnHold
                     ? `On hold (${Math.floor(holdSecondsLeft / 60)}:${String(holdSecondsLeft % 60).padStart(2, '0')})`
-                    : mining ? 'Mining active'
-                    : benchmarkState.running || startupBenchmarkPending ? 'Benchmarking...'
-                    : firewallBlocked ? 'Firewall blocked'
-                    : peerCount === null || peerCount === 0 ? 'No peers'
-                    : showRebenchPrompt ? 'Re-Benchmark'
-                    : hardwareRecognitionFinished ? 'Start mining'
-                    : 'Detecting hardware...'}
+                    : mining
+                      ? 'Mining active'
+                      : benchmarkState.running || startupBenchmarkPending
+                        ? 'Benchmarking...'
+                        : firewallBlocked
+                          ? 'Firewall blocked'
+                          : peerCount === null || peerCount === 0
+                            ? 'No peers'
+                            : showRebenchPrompt
+                              ? 'Re-Benchmark'
+                              : hardwareRecognitionFinished
+                                ? 'Start mining'
+                                : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>
@@ -7606,7 +7633,8 @@ export default function Miner({
                       await window.wattcoinHardware.setHardwareLoad(0);
                     }
                   } catch (_) {
-                    if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
+                    if (process.env.WATTCOIN_DEBUG)
+                      console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
                   }
                 }}
                 disabled={!mining}
@@ -7627,9 +7655,7 @@ export default function Miner({
             </div>
           </div>
           {coins >= totalCoinSupply && (
-            <div style={{ color: '#4ade80', fontFamily: "'DM Mono', monospace" }}>
-              Total supply cap reached (21M).
-            </div>
+            <div style={{ color: '#4ade80', fontFamily: "'DM Mono', monospace" }}>Total supply cap reached (21M).</div>
           )}
         </div>
       </div>

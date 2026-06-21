@@ -746,7 +746,7 @@ async function submitProbeResult(result, peerTimed = false) {
       proofValid = allValid;
       // Timing check: expected wall clock based on ASIC hashrate and stratum difficulty
       if (proofValid && expectedTHs > 0 && shares.length > 0) {
-        const expectedMs = (shares.length * STRATUM_DIFFICULTY * 4294967296) / (expectedTHs * 1e12) * 1000;
+        const expectedMs = ((shares.length * STRATUM_DIFFICULTY * 4294967296) / (expectedTHs * 1e12)) * 1000;
         if (wallClockMs > 0 && wallClockMs < expectedMs * 0.1) {
           issues.push(
             `asic probe suspiciously fast: ${Math.round(wallClockMs)}ms for ${shares.length} shares ` +
@@ -761,7 +761,7 @@ async function submitProbeResult(result, peerTimed = false) {
         const delta = result.shareCount - probeState.lastShareCount;
         const elapsedMs = Date.now() - probeState.lastShareCheckTime;
         if (elapsedMs > 20000 && delta < 3) {
-          const expectedDelta = (elapsedMs / 1000) * (expectedTHs * 1e12) / (STRATUM_DIFFICULTY * 4294967296);
+          const expectedDelta = ((elapsedMs / 1000) * (expectedTHs * 1e12)) / (STRATUM_DIFFICULTY * 4294967296);
           if (expectedDelta > 5 && delta < expectedDelta * 0.1) {
             issues.push(
               `asic probe: only ${delta} shares since last probe in ${(elapsedMs / 1000).toFixed(0)}s ` +
@@ -1033,7 +1033,12 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic) {
       // instead of re-deriving from the same stale chain head.
       const wc = workerChainState.get(entry.workerId);
       if (wc) {
-        workerChainState.set(entry.workerId, { chainHead: null, chainIndex: wc.chainIndex || 0, lastShareCount: wc.lastShareCount, lastShareCheckTime: wc.lastShareCheckTime });
+        workerChainState.set(entry.workerId, {
+          chainHead: null,
+          chainIndex: wc.chainIndex || 0,
+          lastShareCount: wc.lastShareCount,
+          lastShareCheckTime: wc.lastShareCheckTime,
+        });
       }
       // Track consecutive timeouts so the coordinator can quarantine the worker.
       const to = (workerConsecutiveTimeouts.get(entry.workerId) || 0) + 1;
@@ -1190,26 +1195,26 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       let allValid = true;
       for (let i = 0; i < shares.length; i++) {
         const s = shares[i];
-          if (!s.headerHex || !s.hashHex || !s.nbitsHex) {
+        if (!s.headerHex || !s.hashHex || !s.nbitsHex) {
+          allValid = false;
+          issues.push(`asic peer-probe: share ${i} missing header/hash/nbits`);
+          continue;
+        }
+        const verified = await verifyX11Share(s.headerHex, s.hashHex, s.nbitsHex);
+        if (!verified) {
+          allValid = false;
+          issues.push(`asic peer-probe: share ${i} X11 verification failed`);
+        } else if (entry.challengePrevHash) {
+          // Verify the share header contains the peer-generated prevHash challenge.
+          // Header bytes 4-35 (0-indexed) are the prevHash in little-endian.
+          const headerBuf = Buffer.from(s.headerHex, 'hex');
+          const sharePrevHashLE = headerBuf.subarray(4, 36);
+          const sharePrevHashBE = Buffer.from(sharePrevHashLE).reverse().toString('hex');
+          if (sharePrevHashBE !== entry.challengePrevHash) {
             allValid = false;
-            issues.push(`asic peer-probe: share ${i} missing header/hash/nbits`);
-            continue;
+            issues.push(`asic peer-probe: share ${i} prevHash does not match liveness challenge`);
           }
-          const verified = await verifyX11Share(s.headerHex, s.hashHex, s.nbitsHex);
-          if (!verified) {
-            allValid = false;
-            issues.push(`asic peer-probe: share ${i} X11 verification failed`);
-          } else if (entry.challengePrevHash) {
-            // Verify the share header contains the peer-generated prevHash challenge.
-            // Header bytes 4-35 (0-indexed) are the prevHash in little-endian.
-            const headerBuf = Buffer.from(s.headerHex, 'hex');
-            const sharePrevHashLE = headerBuf.subarray(4, 36);
-            const sharePrevHashBE = Buffer.from(sharePrevHashLE).reverse().toString('hex');
-            if (sharePrevHashBE !== entry.challengePrevHash) {
-              allValid = false;
-              issues.push(`asic peer-probe: share ${i} prevHash does not match liveness challenge`);
-            }
-          } else if (probe.issuedAt && s.timestamp && s.timestamp < probe.issuedAt - 5000) {
+        } else if (probe.issuedAt && s.timestamp && s.timestamp < probe.issuedAt - 5000) {
           allValid = false;
           issues.push(`asic peer-probe: share ${i} timestamp ${s.timestamp} is before probe issuance`);
         }
@@ -1217,7 +1222,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       proofValid = allValid;
       // Timing consistency: expected wall clock based on declared ASIC hashrate and stratum difficulty
       if (proofValid && expectedTHs > 0 && shares.length > 0) {
-        const expectedMs = (shares.length * STRATUM_DIFFICULTY * 4294967296) / (expectedTHs * 1e12) * 1000;
+        const expectedMs = ((shares.length * STRATUM_DIFFICULTY * 4294967296) / (expectedTHs * 1e12)) * 1000;
         if (wallClockMs > 0 && wallClockMs < expectedMs * 0.1) {
           issues.push(
             `asic peer-probe suspiciously fast: ${Math.round(wallClockMs)}ms for ${shares.length} shares ` +
@@ -1230,11 +1235,16 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         const wc = workerChainState.get(entry.workerId) || { chainHead: null, chainIndex: 0 };
         const lastCount = wc.lastShareCount;
         const lastCheckTime = wc.lastShareCheckTime || 0;
-        if (typeof lastCount === 'number' && lastCount >= 0 && typeof result.shareCount === 'number' && result.shareCount >= 0) {
+        if (
+          typeof lastCount === 'number' &&
+          lastCount >= 0 &&
+          typeof result.shareCount === 'number' &&
+          result.shareCount >= 0
+        ) {
           const delta = result.shareCount - lastCount;
           const elapsedMs = Date.now() - lastCheckTime;
           if (elapsedMs > 20000 && delta < 3) {
-            const expectedDelta = (elapsedMs / 1000) * (expectedTHs * 1e12) / (STRATUM_DIFFICULTY * 4294967296);
+            const expectedDelta = ((elapsedMs / 1000) * (expectedTHs * 1e12)) / (STRATUM_DIFFICULTY * 4294967296);
             if (expectedDelta > 5 && delta < expectedDelta * 0.1) {
               issues.push(
                 `asic peer-probe: only ${delta} shares since last probe in ${(elapsedMs / 1000).toFixed(0)}s ` +
@@ -1274,7 +1284,12 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   }
 
   // Advance or break the worker's chain based on outcome.
-  const workerChainEntry = workerChainState.get(entry.workerId) || { chainHead: null, chainIndex: 0, lastShareCount: -1, lastShareCheckTime: 0 };
+  const workerChainEntry = workerChainState.get(entry.workerId) || {
+    chainHead: null,
+    chainIndex: 0,
+    lastShareCount: -1,
+    lastShareCheckTime: 0,
+  };
   if (proofValid && ok) {
     const proofKey = probe.type === 'gpu' ? result.pixelHash || '' : result.proof || '';
     workerChainEntry.chainHead = proofKey;
@@ -1567,7 +1582,12 @@ setInterval(() => {
       // Break the worker's chain on timeout so the next probe uses a fresh random seed.
       const wc = workerChainState.get(entry.workerId);
       if (wc) {
-        workerChainState.set(entry.workerId, { chainHead: null, chainIndex: wc.chainIndex || 0, lastShareCount: wc.lastShareCount, lastShareCheckTime: wc.lastShareCheckTime });
+        workerChainState.set(entry.workerId, {
+          chainHead: null,
+          chainIndex: wc.chainIndex || 0,
+          lastShareCount: wc.lastShareCount,
+          lastShareCheckTime: wc.lastShareCheckTime,
+        });
       }
       // Track consecutive timeouts so the coordinator can quarantine the worker.
       const to = (workerConsecutiveTimeouts.get(entry.workerId) || 0) + 1;
