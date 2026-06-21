@@ -5918,7 +5918,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     // lookup source (Brave AI or local hardware table), the energy model
     // cannot bound the miner's contribution � reject outright.
     if (_isAsicDevice) {
-      const _declaredAsicModel = String((request && request.declaredGpuModel) || '');
+      _declaredAsicModel = String((request && request.declaredGpuModel) || '');
       if (!_declaredAsicModel) {
         console.warn(`[HW-Verify] ASIC declared but no model specified � rejecting`);
         return {
@@ -6000,7 +6000,6 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     let asicModelMismatch = false;
     let asicHashrateLow = false;
     let asicFirmwareIssue = false;
-    const _declaredAsicModel = String((request && request.declaredGpuModel) || '');
     if (_isAsicDevice) {
       const livenessResult = await verifyAsicLiveness(_declaredAsicModel);
       if (!livenessResult.ok) {
@@ -6410,6 +6409,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
 // The renderer sends this when the user saves ASIC network settings.
 let _asicConfig = []; // [{ ip, apiPort, stratumPort }]
 let _stratumHandles = new Map(); // port -> { getShareCount }
+let _declaredAsicModel = ''; // set during hardware verification, used by _recalculateAsicPower
 
 function getAsicConfig() { return _asicConfig; }
 
