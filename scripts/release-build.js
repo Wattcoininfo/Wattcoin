@@ -11,6 +11,7 @@ const APP_INTEGRITY_FILES = [
   'backend-benchmark.js',
   'hardware-load-controller.js',
   'gpu-load-controller.js',
+  'local-stratum.js',
   'cpu-load-worker.js',
   'ddr-load-worker.js',
   'probe-attestation.js',

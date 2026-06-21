@@ -121,6 +121,7 @@ const config = {
     'peer-privacy.js',
     'peer-self-filter.js',
     'local-subnet-discovery.js',
+    'local-stratum.js',
     'stun-client.js',
     'tcp-hole-punch.js',
     'upnp-port-forward.js',

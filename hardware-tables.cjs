@@ -274,6 +274,7 @@ function getAsicPowerW(model) {
   if (/Antminer.*T17/i.test(m))               return 2200;
   if (/Antminer.*S15/i.test(m))               return 1590;
   if (/Antminer.*T15/i.test(m))               return 1540;
+  if (/Antminer.*D3/i.test(m))                return 1350;
   if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))  return 1400;
   if (/Antminer.*S9/i.test(m))                return 1350;
 
@@ -331,6 +332,7 @@ function getAsicHashrateTHs(model) {
   if (/Antminer.*T17/i.test(m))               return 56;
   if (/Antminer.*S15/i.test(m))               return 28;
   if (/Antminer.*T15/i.test(m))               return 23;
+  if (/Antminer.*D3/i.test(m))                return 0.0193;
   if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))  return 14;
   if (/Antminer.*S9/i.test(m))                return 13.5;
 

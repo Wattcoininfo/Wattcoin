@@ -1,6 +1,6 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.373",
+  "version": "1.0.378",
   "description": "Wattcoin Miner — energy-backed cryptocurrency miner",
   "author": "Wattcoin",
   "license": "MIT",
@@ -65,6 +65,7 @@
     "react-dom": "^18.0.0",
     "ssh2": "^1.17.0",
     "systeminformation": "^5.31.5",
+    "wasm-x11-hash": "^0.0.2",
     "ws": "^8.20.0"
   },
   "devDependencies": {

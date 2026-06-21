@@ -55,6 +55,13 @@ try {
         console.log('[Wattcoin preload] mineBlock called with address:', address);
         return ipcRenderer.invoke('wattcoin-mine-block', address, proofData || null);
       },
+      getAsicConfig: () => ipcRenderer.invoke('wattcoin-asic-get-config'),
+      setAsicConfig: (config) => ipcRenderer.invoke('wattcoin-asic-set-config', config),
+      scanAsicNetwork: () => ipcRenderer.invoke('wattcoin-asic-scan'),
+      waitForFreshShares: (count) => ipcRenderer.invoke('wattcoin-asic-wait-fresh-shares', count),
+      injectAsicCustomJob: (prevHashHex) => ipcRenderer.invoke('wattcoin-asic-inject-custom-job', prevHashHex),
+      startAsicMining: () => ipcRenderer.invoke('wattcoin-asic-start-mining'),
+      stopAsicMining: () => ipcRenderer.invoke('wattcoin-asic-stop-mining'),
       getPendingProbe: () => ipcRenderer.invoke('wattcoin-get-pending-probe'),
       submitProbeResult: (result) => ipcRenderer.invoke('wattcoin-submit-probe-result', result || {}),
       getProbeHistory: () => ipcRenderer.invoke('wattcoin-get-probe-history'),
@@ -173,6 +180,13 @@ try {
           'wattcoin-explorer-search',
           'wattcoin-explorer-get-tx-detail',
           'wattcoin-mining-status',
+          'wattcoin-asic-set-config',
+          'wattcoin-asic-get-config',
+          'wattcoin-asic-scan',
+          'wattcoin-asic-wait-fresh-shares',
+          'wattcoin-asic-inject-custom-job',
+          'wattcoin-asic-start-mining',
+          'wattcoin-asic-stop-mining',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));
