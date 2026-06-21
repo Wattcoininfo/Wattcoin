@@ -510,19 +510,20 @@
           <p>
             Application-Specific Integrated Circuits (ASICs) have dominated cryptocurrency mining for over a decade.
             From Bitcoin's SHA-256 to Litecoin's Scrypt, ASICs concentrated mining power in the hands of those with
-            access to fabrication and cheap electricity.             On Wattcoin, ASICs are <strong>fully supported</strong> — the
-            miner detects Antminer, Whatsminer, Jasminer, Elphapex, Volcminer, NMMiner, and other ASIC hardware (via the "Scan Network" button) and treats them as whole-device mining units.
+            access to fabrication and cheap electricity. On Wattcoin, ASICs are <strong>fully supported</strong> — the
+            miner detects Antminer, Whatsminer, Jasminer, Elphapex, Volcminer, NMMiner, and other ASIC hardware (via the
+            "Scan Network" button) and treats them as whole-device mining units.
           </p>
 
           <h3>How ASICs Work on Wattcoin</h3>
 
           <p>
-            The Wattcoin miner classifies ASICs as <strong>whole-device mining units</strong> — unlike desktop
-            PCs where power is decomposed into CPU + GPU + memory components, each ASIC is treated as one unit. You
-            declare the ASIC model during benchmark (e.g. Antminer S21) and its rated power is looked up from the
-            hardware table — up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
-            <strong>Unknown models are rejected</strong> — only models present in the hardware table are accepted.
-            The protocol estimates energy contribution as follows:
+            The Wattcoin miner classifies ASICs as <strong>whole-device mining units</strong> — unlike desktop PCs where
+            power is decomposed into CPU + GPU + memory components, each ASIC is treated as one unit. You declare the
+            ASIC model during benchmark (e.g. Antminer S21) and its rated power is looked up from the hardware table —
+            up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
+            <strong>Unknown models are rejected</strong> — only models present in the hardware table are accepted. The
+            protocol estimates energy contribution as follows:
           </p>
 
           <div class="viz-box">
