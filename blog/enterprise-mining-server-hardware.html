@@ -1,15 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Enterprise Mining — Server Hardware on Wattcoin | Wattcoin Blog</title>
+    <title>Enterprise Mining â€” Server Hardware on Wattcoin | Wattcoin Blog</title>
     <meta
       name="description"
       content="Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
     />
     <link rel="canonical" href="https://wattcoin.ee/blog/enterprise-mining-server-hardware.html" />
-    <meta property="og:title" content="Enterprise Mining — Server Hardware on Wattcoin" />
+    <meta property="og:title" content="Enterprise Mining â€” Server Hardware on Wattcoin" />
     <meta
       property="og:description"
       content="Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
@@ -24,7 +24,7 @@
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Wattcoin Foundation" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Enterprise Mining — Server Hardware on Wattcoin | Wattcoin Blog" />
+    <meta name="twitter:title" content="Enterprise Mining â€” Server Hardware on Wattcoin | Wattcoin Blog" />
     <meta
       name="twitter:description"
       content="Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
@@ -43,7 +43,7 @@
           {
             "@type": "Article",
             "@id": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html#article",
-            "headline": "Enterprise Mining — Server Hardware on Wattcoin",
+            "headline": "Enterprise Mining â€” Server Hardware on Wattcoin",
             "url": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html",
             "datePublished": "2026-05-31",
             "author": {
@@ -78,7 +78,7 @@
               {
                 "@type": "ListItem",
                 "position": 3,
-                "name": "Enterprise Mining — Server Hardware on Wattcoin",
+                "name": "Enterprise Mining â€” Server Hardware on Wattcoin",
                 "item": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html"
               }
             ]
@@ -86,7 +86,7 @@
           {
             "@type": "HowTo",
             "@id": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html#howto",
-            "name": "Enterprise Mining — Server Hardware on Wattcoin",
+            "name": "Enterprise Mining â€” Server Hardware on Wattcoin",
             "description": "Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.",
             "step": [
               {
@@ -542,11 +542,11 @@
             <span class="tag">Server</span>
             <span class="tag">Enterprise</span>
           </div>
-          <h1>Enterprise Mining — Server Hardware on Wattcoin</h1>
+          <h1>Enterprise Mining â€” Server Hardware on Wattcoin</h1>
           <div class="meta">May 31, 2026 &nbsp;&mdash;&nbsp; 5 min read</div>
 
           <p>
-            Server hardware has always been the backbone of cryptocurrency mining — but only as a management layer for
+            Server hardware has always been the backbone of cryptocurrency mining â€” but only as a management layer for
             ASIC racks. Wattcoin is the first cryptocurrency where
             <strong>server CPUs and enterprise memory are first-class mining hardware</strong>, capable of competing
             with consumer GPUs on energy contribution.
@@ -556,7 +556,7 @@
 
           <p>
             Proof-of-Energy rewards raw energy consumption, and servers consume a lot of it. A dual-socket EPYC or Xeon
-            workstation can draw 300–600W under full load before adding memory modules. Every watt contributes equally
+            workstation can draw 300â€“600W under full load before adding memory modules. Every watt contributes equally
             to your block reward share:
           </p>
 
@@ -564,7 +564,7 @@
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
               <div>Server Contribution = CPU (W) + Memory (W) + Platform (W)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Every subsystem contributes — summed for total verified energy
+                // Every subsystem contributes â€” summed for total verified energy
               </div>
             </div>
           </div>
@@ -573,15 +573,15 @@
 
           <ul>
             <li>
-              <strong>Higher sustained TDP</strong> — Server CPUs are designed for 24/7 full-load operation. A 280W EPYC
-              9654 runs at 100% duty cycle indefinitely with proper cooling.
+              <strong>Higher sustained TDP</strong> â€” Server CPUs are designed for 24/7 full-load operation. A 280W
+              EPYC 9654 runs at 100% duty cycle indefinitely with proper cooling.
             </li>
             <li>
-              <strong>Massive memory capacity</strong> — With 12 DDR5 channels and 2 TB+ of RAM, servers dominate the
+              <strong>Massive memory capacity</strong> â€” With 12 DDR5 channels and 2 TB+ of RAM, servers dominate the
               memory stride walk workload, adding hundreds of watts of verified energy from RAM alone.
             </li>
             <li>
-              <strong>Density</strong> — A single 4U server can hold 4+ dual-socket nodes, 8 TB of RAM, and multiple
+              <strong>Density</strong> â€” A single 4U server can hold 4+ dual-socket nodes, 8 TB of RAM, and multiple
               GPUs, all contributing their energy to the same wallet.
             </li>
           </ul>
@@ -592,13 +592,13 @@
             <li>
               <strong>Install the Miner on Each Node</strong><br />
               The Wattcoin Miner runs on Windows Server and most Linux distributions. Use the CLI version for headless
-              server deployments — configure once and deploy with config management (Ansible, Puppet, or a simple
+              server deployments â€” configure once and deploy with config management (Ansible, Puppet, or a simple
               startup script).
             </li>
             <li>
               <strong>Configure CPU and Memory Workloads</strong><br />
               Enable both CPU integer hashing and memory stride walks. On server hardware, memory often contributes
-              30–50% of total verified energy due to the large number of DIMMs and high memory bandwidth.
+              30â€“50% of total verified energy due to the large number of DIMMs and high memory bandwidth.
             </li>
             <li>
               <strong>Set Duty Cycle</strong><br />
@@ -607,12 +607,12 @@
             </li>
             <li>
               <strong>Point to Your Wallet</strong><br />
-              Use the same WTC address for all nodes in your rack. Energy contributions are summed protocol-side — no
+              Use the same WTC address for all nodes in your rack. Energy contributions are summed protocol-side â€” no
               pool, no coordinator, no single point of failure.
             </li>
             <li>
               <strong>Monitor and Scale</strong><br />
-              Track per-node energy contribution in the miner dashboard. Add nodes as needed — each additional server
+              Track per-node energy contribution in the miner dashboard. Add nodes as needed â€” each additional server
               increases your proportional share of every block reward.
             </li>
           </ol>
@@ -624,17 +624,17 @@
               <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 8px; padding: 14px">
                 <div style="font-size: 24px; margin-bottom: 4px">&#x1F4E1;</div>
                 <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #4ade80">Dual EPYC / Xeon</div>
-                <div style="font-size: 11px; color: #5a8a5a">400–600W system</div>
+                <div style="font-size: 11px; color: #5a8a5a">400â€“600W system</div>
               </div>
               <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 8px; padding: 14px">
                 <div style="font-size: 24px; margin-bottom: 4px">&#x1F4DD;</div>
                 <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #4ade80">High-capacity RAM</div>
-                <div style="font-size: 11px; color: #5a8a5a">512 GB – 2 TB</div>
+                <div style="font-size: 11px; color: #5a8a5a">512 GB â€“ 2 TB</div>
               </div>
               <div style="background: #0d1a0d; border: 1px solid #1e3a1e; border-radius: 8px; padding: 14px">
                 <div style="font-size: 24px; margin-bottom: 4px">&#x1F4CA;</div>
                 <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #4ade80">Blade / 4U chassis</div>
-                <div style="font-size: 11px; color: #5a8a5a">4–8 nodes per rack</div>
+                <div style="font-size: 11px; color: #5a8a5a">4â€“8 nodes per rack</div>
               </div>
             </div>
             <div class="caption">
@@ -643,8 +643,8 @@
           </div>
 
           <div class="info-callout">
-            <strong>Key takeaway:</strong> Server hardware isn't just compatible with Wattcoin — it's optimal. High TDP
-            CPUs, massive memory bandwidth, and 24/7 operation make data centers some of the most effective mining
+            <strong>Key takeaway:</strong> Server hardware isn't just compatible with Wattcoin â€” it's optimal. High
+            TDP CPUs, massive memory bandwidth, and 24/7 operation make data centers some of the most effective mining
             environments in the network.
           </div>
 
@@ -675,10 +675,10 @@
           if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
           return n;
         }
-        var counted = sessionStorage.getItem('wtc_pg_blog');
+        var counted = sessionStorage.getItem('wtc_pg_enterprise-mining-server-hardware');
         var method = counted ? 'GET' : 'POST';
-        if (!counted) sessionStorage.setItem('wtc_pg_blog', '1');
-        fetch(BASE + 'blogpage', { method: method })
+        if (!counted) sessionStorage.setItem('wtc_pg_enterprise-mining-server-hardware', '1');
+        fetch(BASE + 'blog-enterprise-mining-server-hardware', { method: method })
           .then(function (r) {
             return r.json();
           })

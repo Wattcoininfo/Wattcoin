@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -509,9 +509,9 @@
 
           <p>
             If you delete the Wattcoin app or reinstall your operating system, your local mining data is gone. Your
-            wallet can be recovered from your seed phrase — but what about the mid-round contributions you already made?
-            Those contributions were always broadcast to your peers and stored in their round ledgers, but there was no
-            way to retrieve them after a reinstall. You had to wait for the next round to start earning again.
+            wallet can be recovered from your seed phrase â€” but what about the mid-round contributions you already
+            made? Those contributions were always broadcast to your peers and stored in their round ledgers, but there
+            was no way to retrieve them after a reinstall. You had to wait for the next round to start earning again.
           </p>
 
           <p>
@@ -524,7 +524,7 @@
 
           <p>
             Even before this patch, every mining round your app broadcast your contribution to all connected peers.
-            Peers validated and stored it in their local round ledgers. This validation is critical to consensus — but
+            Peers validated and stored it in their local round ledgers. This validation is critical to consensus â€” but
             the mechanism was one-way. Your contributions safely existed on every peer's machine, but your app could not
             ask for them back after a local data loss. The round settlement data (rewards) was permanently committed to
             the chain, but mid-round progress was stranded on other nodes unless you never lost your local copy.
@@ -556,7 +556,7 @@
             </li>
             <li>
               <strong>Merge contributions</strong><br />
-              Each peer responds with their current round ledger — a snapshot of every miner's contribution for the
+              Each peer responds with their current round ledger â€” a snapshot of every miner's contribution for the
               current round. Your app scans the responses for contributions matching your wallet address and merges them
               into your local round ledger. If multiple peers report different values, the most recent
               (highest-timestamp) entry wins.
@@ -571,7 +571,7 @@
 
           <p>
             In a Proof-of-Energy network, every kilowatt-hour of verified energy expenditure earns rewards
-            proportionally. Losing mid-round contributions meant losing the energy you already spent — and the rewards
+            proportionally. Losing mid-round contributions meant losing the energy you already spent â€” and the rewards
             it would have earned at round settlement. For miners who reinstall mid-round, peer recovery closes this gap
             entirely.
           </p>
@@ -586,9 +586,9 @@
 
           <p>
             If your app starts and no peers are reachable, mining will not begin. The button shows "No peers" and the
-            app waits until at least one peer connects. This is intentional — without peers, there is no one to validate
-            your contributions, and no round snapshot to recover from. Once a peer comes online, the recovery process
-            runs and mining can start.
+            app waits until at least one peer connects. This is intentional â€” without peers, there is no one to
+            validate your contributions, and no round snapshot to recover from. Once a peer comes online, the recovery
+            process runs and mining can start.
           </p>
 
           <p>
@@ -631,10 +631,10 @@
           if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
           return n;
         }
-        var counted = sessionStorage.getItem('wtc_pg_blog');
+        var counted = sessionStorage.getItem('wtc_pg_recovering-contributions-after-reinstall');
         var method = counted ? 'GET' : 'POST';
-        if (!counted) sessionStorage.setItem('wtc_pg_blog', '1');
-        fetch(BASE + 'blogpage', { method: method })
+        if (!counted) sessionStorage.setItem('wtc_pg_recovering-contributions-after-reinstall', '1');
+        fetch(BASE + 'blog-recovering-contributions-after-reinstall', { method: method })
           .then(function (r) {
             return r.json();
           })

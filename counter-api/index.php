@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // ── Validate page name ────────────────────────────────────────────────────────
 const ALLOWED = ['homepage', 'whitepaper', 'wallet', 'download', 'whitepaper-pdf', 'blogpage'];
 $page = isset($_GET['page']) ? (string)$_GET['page'] : '';
-if (!in_array($page, ALLOWED, true)) {
+if (!in_array($page, ALLOWED, true) && !preg_match('/^blog-[a-z0-9-]+$/', $page)) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'error' => 'invalid page']);
     exit;

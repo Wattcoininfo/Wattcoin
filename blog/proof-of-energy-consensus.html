@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -6,13 +6,13 @@
     <title>What Is Proof-of-Energy Consensus? | Wattcoin Blog</title>
     <meta
       name="description"
-      content="A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
+      content="A complete guide to Proof-of-Energy consensus â€” how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
     />
     <link rel="canonical" href="https://wattcoin.ee/blog/proof-of-energy-consensus.html" />
     <meta property="og:title" content="What Is Proof-of-Energy Consensus?" />
     <meta
       property="og:description"
-      content="A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
+      content="A complete guide to Proof-of-Energy consensus â€” how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
     />
     <meta property="og:url" content="https://wattcoin.ee/blog/proof-of-energy-consensus.html" />
     <meta property="og:type" content="article" />
@@ -27,7 +27,7 @@
     <meta name="twitter:title" content="What Is Proof-of-Energy Consensus? | Wattcoin Blog" />
     <meta
       name="twitter:description"
-      content="A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
+      content="A complete guide to Proof-of-Energy consensus â€” how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
@@ -53,7 +53,7 @@
             "publisher": {
               "@id": "https://wattcoin.ee/#organization"
             },
-            "description": "A complete guide to Proof-of-Energy consensus — how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards.",
+            "description": "A complete guide to Proof-of-Energy consensus â€” how it replaces hash-based mining with verifiable energy expenditure, the tier ratchet, and proportional block rewards.",
             "mainEntityOfPage": {
               "@type": "WebPage",
               "@id": "https://wattcoin.ee/blog/proof-of-energy-consensus.html"
@@ -508,8 +508,8 @@
           <div class="meta">May 31, 2026 &nbsp;&mdash;&nbsp; 6 min read</div>
 
           <p>
-            Bitcoin proved that consensus can emerge from energy expenditure. But it chose a different kind of energy —
-            useless, repetitive hash computation that consumes electricity without producing anything of intrinsic
+            Bitcoin proved that consensus can emerge from energy expenditure. But it chose a different kind of energy
+            â€” useless, repetitive hash computation that consumes electricity without producing anything of intrinsic
             value.
             <strong>Proof-of-Energy (PoE)</strong> corrects this by tying consensus directly to
             <strong>verifiable electrical energy consumption</strong>, measured in kilowatt-hours rather than abstract
@@ -520,7 +520,7 @@
 
           <p>
             Instead of racing to solve a hash puzzle, every miner runs benchmark-verified computational tasks that
-            exercise specific hardware components — <strong>CPU integer hashing</strong>,
+            exercise specific hardware components â€” <strong>CPU integer hashing</strong>,
             <strong>GPU compute shaders</strong>, and <strong>memory stride walks</strong>. The protocol estimates the
             electrical energy consumed using each hardware component's known power draw and the miner's configured
             duty-cycle load:
@@ -530,7 +530,7 @@
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
               <div>Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Every miner, every hardware type — same formula
+                // Every miner, every hardware type â€” same formula
               </div>
             </div>
           </div>
@@ -586,8 +586,8 @@
 
           <p>
             When the network advances from Tier N to Tier N+1, the mining cost floor for new coins doubles. Since no
-            rational miner sells below their cost, the effective market floor for <strong>all WTC</strong> — including
-            coins mined in earlier tiers — is pulled upward by every tier advance.
+            rational miner sells below their cost, the effective market floor for <strong>all WTC</strong> â€” including
+            coins mined in earlier tiers â€” is pulled upward by every tier advance.
           </p>
 
           <h3>Proportional Block Rewards</h3>
@@ -632,10 +632,10 @@
           if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
           return n;
         }
-        var counted = sessionStorage.getItem('wtc_pg_blog');
+        var counted = sessionStorage.getItem('wtc_pg_proof-of-energy-consensus');
         var method = counted ? 'GET' : 'POST';
-        if (!counted) sessionStorage.setItem('wtc_pg_blog', '1');
-        fetch(BASE + 'blogpage', { method: method })
+        if (!counted) sessionStorage.setItem('wtc_pg_proof-of-energy-consensus', '1');
+        fetch(BASE + 'blog-proof-of-energy-consensus', { method: method })
           .then(function (r) {
             return r.json();
           })
