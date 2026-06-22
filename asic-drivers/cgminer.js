@@ -27,7 +27,7 @@ async function apiFetch(ip, port, command, parameter, timeoutMs = 8000) {
 }
 
 async function detect(ip, port) {
-  const json = await apiFetch(ip, port, 'version', null, 3000);
+  const json = await apiFetch(ip, port, 'version', null, 8000);
   const ver = json && json.VERSION && json.VERSION[0];
   if (ver && (ver.Type || ver.Miner)) {
     return {

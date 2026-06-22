@@ -6372,39 +6372,40 @@ ipcMain.handle('wattcoin-asic-scan', async () => {
   }
   if (subnets.size === 0) return { ok: true, asics: [] };
   const probedIps = new Set();
+  const allIps = [];
   for (const subnet of subnets) {
-    const promises = [];
     for (let i = 1; i <= 254; i++) {
       const ip = `${subnet.slice(0, subnet.lastIndexOf('.'))}.${i}`;
       if (probedIps.has(ip)) continue;
       probedIps.add(ip);
-      promises.push(
-        (async () => {
-          try {
-            const detections = await asicDrivers.tryDetectAll(ip);
-            for (const det of detections) {
-              const driver = asicDrivers.getDriver(det.driverName);
-              const driverConfig = det.preset ? { preset: det.preset } : null;
-              const telemetry = driver
-                ? await driver.getTelemetry(ip, det.apiPort, driverConfig).catch(() => null)
-                : null;
-              const hashrateTHs = driver ? await driver.getHashrate(ip, det.apiPort, driverConfig).catch(() => 0) : 0;
-              results.push({
-                ip,
-                port: det.apiPort,
-                model: det.model,
-                version: det.version || '',
-                hashrateTHs,
-                telemetry,
-                driverName: det.driverName,
-                driverConfig,
-              });
-            }
-          } catch (_) {}
-        })(),
-      );
+      allIps.push(ip);
     }
-    await Promise.all(promises);
+  }
+  async function probeIp(ip) {
+    try {
+      const detections = await asicDrivers.tryDetectAll(ip);
+      for (const det of detections) {
+        const driver = asicDrivers.getDriver(det.driverName);
+        const driverConfig = det.preset ? { preset: det.preset } : null;
+        const telemetry = driver ? await driver.getTelemetry(ip, det.apiPort, driverConfig).catch(() => null) : null;
+        const hashrateTHs = driver ? await driver.getHashrate(ip, det.apiPort, driverConfig).catch(() => 0) : 0;
+        results.push({
+          ip,
+          port: det.apiPort,
+          model: det.model,
+          version: det.version || '',
+          hashrateTHs,
+          telemetry,
+          driverName: det.driverName,
+          driverConfig,
+        });
+      }
+    } catch (_) {}
+  }
+  const CONCURRENCY = 20;
+  for (let i = 0; i < allIps.length; i += CONCURRENCY) {
+    const chunk = allIps.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map((ip) => probeIp(ip)));
   }
   return { ok: true, asics: results };
 });
