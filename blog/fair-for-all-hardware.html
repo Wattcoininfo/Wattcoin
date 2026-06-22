@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fair for All Hardware — Why PoE Treats Every Chip Equally | Wattcoin Blog</title>
+    <meta
+      name="description"
+      content="Proof-of-Energy is the only consensus mechanism where a 10-year-old CPU, a gaming GPU, and a warehouse of ASICs compete on equal terms — per watt."
+    />
+    <link rel="canonical" href="https://wattcoin.ee/blog/fair-for-all-hardware.html" />
+    <meta property="og:title" content="Fair for All Hardware — Why PoE Treats Every Chip Equally" />
+    <meta
+      property="og:description"
+      content="Proof-of-Energy is the only consensus mechanism where a 10-year-old CPU, a gaming GPU, and a warehouse of ASICs compete on equal terms — per watt."
+    />
+    <meta property="og:url" content="https://wattcoin.ee/blog/fair-for-all-hardware.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Wattcoin" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Wattcoin Foundation" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Fair for All Hardware — Why PoE Treats Every Chip Equally | Wattcoin Blog" />
+    <meta
+      name="twitter:description"
+      content="Proof-of-Energy is the only consensus mechanism where a 10-year-old CPU, a gaming GPU, and a warehouse of ASICs compete on equal terms — per watt."
+    />
+    <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/assets/icons/icon-256.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://wattcoin.ee/blog/fair-for-all-hardware.html#article",
+            "headline": "Fair for All Hardware — Why PoE Treats Every Chip Equally",
+            "url": "https://wattcoin.ee/blog/fair-for-all-hardware.html",
+            "datePublished": "2026-06-22",
+            "author": {
+              "@type": "Organization",
+              "name": "Wattcoin Foundation"
+            },
+            "publisher": {
+              "@id": "https://wattcoin.ee/#organization"
+            },
+            "description": "Proof-of-Energy is the only consensus mechanism where a 10-year-old CPU, a gaming GPU, and a warehouse of ASICs compete on equal terms — per watt.",
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://wattcoin.ee/blog/fair-for-all-hardware.html"
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://wattcoin.ee/blog/fair-for-all-hardware.html#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://wattcoin.ee/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": "https://wattcoin.ee/blog.html"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Fair for All Hardware — Why PoE Treats Every Chip Equally",
+                "item": "https://wattcoin.ee/blog/fair-for-all-hardware.html"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: #060e06;
+        background-image:
+          linear-gradient(rgba(26, 58, 26, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(26, 58, 26, 0.12) 1px, transparent 1px);
+        background-size: 60px 60px;
+        color: #e8f5e8;
+        font-family: Georgia, serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: #4ade80;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: rgba(6, 14, 6, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #1a2a1a;
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        padding: 0 24px;
+      }
+      .nav-logo {
+        font-family: 'Playfair Display', serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: #e8f5e8;
+        text-decoration: none;
+      }
+      .nav-logo:hover {
+        text-decoration: none;
+      }
+      .nav-logo span {
+        color: #4ade80;
+      }
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #6b9a6b;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: #4ade80;
+      }
+      .nav-links a.nav-blog {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .nav-links a.nav-wallet {
+        color: #fbbf24;
+      }
+      .nav-links a.nav-wallet:hover {
+        color: #fde68a;
+      }
+
+      .blog-header {
+        padding: 120px 0 40px;
+        border-bottom: 1px solid #1a2a1a;
+      }
+      .blog-header h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(28px, 4.5vw, 42px);
+        font-weight: 900;
+        color: #e8f5e8;
+        letter-spacing: -0.03em;
+        margin-bottom: 12px;
+      }
+      .blog-header h1 span {
+        color: #4ade80;
+      }
+      .blog-header p {
+        font-size: 15px;
+        color: #6b9a6b;
+        font-family: Georgia, serif;
+        line-height: 1.6;
+      }
+      .hero-pill-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+      }
+      .hero-pill {
+        font-family: 'DM Mono', monospace;
+        font-size: 9px;
+        padding: 4px 12px;
+        border-radius: 99px;
+        border: 1px solid #4ade8050;
+        color: #4ade80;
+        letter-spacing: 0.1em;
+      }
+      .post-card {
+        background: #0a1a0a;
+        border: 1px solid #1e3a1e;
+        border-radius: 10px;
+        padding: 18px 22px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        transition: border-color 0.2s;
+      }
+      .post-card:hover {
+        border-color: #4ade8050;
+      }
+      .post-card-num {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #4ade80;
+        min-width: 28px;
+        text-align: center;
+      }
+      .post-card h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 16px;
+        font-weight: 700;
+        color: #d7ffd9;
+      }
+      .post-card p {
+        font-size: 13px;
+        color: #6b8f6b;
+        line-height: 1.5;
+        margin-top: 3px;
+      }
+
+      .blog-post {
+        padding: 60px 0;
+      }
+
+      .blog-post h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(24px, 3.5vw, 32px);
+        font-weight: 900;
+        color: #e8f5e8;
+        margin-bottom: 20px;
+        letter-spacing: -0.02em;
+      }
+      .blog-post h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 20px;
+        font-weight: 700;
+        color: #d7ffd9;
+        margin: 28px 0 12px;
+      }
+      .blog-post h4 {
+        font-family: 'DM Mono', monospace;
+        font-size: 12px;
+        font-weight: 700;
+        color: #4ade80;
+        letter-spacing: 0.06em;
+        margin: 20px 0 8px;
+        text-transform: uppercase;
+      }
+      .blog-post p {
+        font-size: 16px;
+        color: #9ac79f;
+        line-height: 1.85;
+        margin-bottom: 16px;
+      }
+      .blog-post p strong {
+        color: #e8f5e8;
+      }
+      .blog-post ul,
+      .blog-post ol {
+        font-size: 15px;
+        color: #9ac79f;
+        line-height: 1.8;
+        margin: 0 0 16px 24px;
+      }
+      .blog-post li {
+        margin-bottom: 6px;
+      }
+      .blog-post li strong {
+        color: #e8f5e8;
+      }
+      .blog-post .meta {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link {
+        display: inline-block;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link:hover {
+        color: #4ade80;
+      }
+
+      .info-callout {
+        background: #0a1a0a;
+        border-left: 3px solid #4ade80;
+        border-radius: 0 8px 8px 0;
+        padding: 16px 20px;
+        margin: 20px 0;
+        font-size: 14px;
+        color: #b7f5bc;
+        line-height: 1.7;
+      }
+      .info-callout strong {
+        color: #4ade80;
+      }
+      .viz-box {
+        background: #0a1a0a;
+        border: 1px solid #1e3a1e;
+        border-radius: 12px;
+        padding: 28px;
+        margin: 24px 0;
+        text-align: center;
+        overflow-x: auto;
+      }
+      .viz-box .caption {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #5a8a5a;
+        margin-top: 12px;
+        letter-spacing: 0.06em;
+      }
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'DM Mono', monospace;
+        font-size: 12px;
+        margin: 20px 0;
+      }
+      .comparison-table th {
+        padding: 10px 14px;
+        color: #4ade80;
+        font-weight: 500;
+        text-align: left;
+        border-bottom: 1px solid #1e3a1e;
+      }
+      .comparison-table td {
+        padding: 10px 14px;
+        color: #b7f5bc;
+        border-bottom: 1px solid #0f1f0f;
+      }
+      .comparison-table td:first-child {
+        color: #7aaa7a;
+      }
+      .comparison-table .wtc-row td {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .step-list {
+        counter-reset: step;
+        list-style: none;
+        margin: 20px 0 !important;
+        padding: 0 !important;
+      }
+      .step-list li {
+        counter-increment: step;
+        padding: 14px 18px 14px 48px;
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        position: relative;
+        font-size: 14px;
+        color: #9ac79f;
+        line-height: 1.6;
+      }
+      .step-list li::before {
+        content: counter(step);
+        position: absolute;
+        left: 14px;
+        top: 14px;
+        font-family: 'DM Mono', monospace;
+        font-size: 12px;
+        color: #4ade80;
+        font-weight: 700;
+      }
+
+      .tag-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .tag {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        padding: 3px 10px;
+        border-radius: 99px;
+        border: 1px solid #4ade8050;
+        color: #4ade80;
+        letter-spacing: 0.06em;
+      }
+
+      footer {
+        padding: 40px;
+        text-align: center;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        border-top: 1px solid #1e3a1e;
+      }
+      footer a {
+        color: #7aaa7a;
+      }
+      footer a:hover {
+        color: #4ade80;
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          padding: 0 16px;
+        }
+        .blog-header {
+          padding: 120px 0 40px;
+        }
+        .blog-post {
+          padding: 40px 0;
+        }
+        .post-card {
+          flex-direction: column;
+          text-align: center;
+        }
+        .viz-box {
+          padding: 16px;
+        }
+        .comparison-table {
+          font-size: 10px;
+        }
+        .comparison-table th,
+        .comparison-table td {
+          padding: 6px 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="nav-logo">Watt<span>coin</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/wattcoin-whitepaper.html" class="nav-whitepaper">Whitepaper</a></li>
+        <li><a href="/blog.html" class="nav-blog">Blog</a></li>
+        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
+      </ul>
+    </nav>
+    <div style="padding-top: 100px">
+      <div class="container">
+        <article class="blog-post" id="fair-for-all-hardware">
+          <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
+          <div class="tag-row">
+            <span class="tag">Philosophy</span>
+            <span class="tag">Hardware</span>
+            <span class="tag">Proof-of-Energy</span>
+          </div>
+          <h1>Fair for All Hardware — Why PoE Treats Every Chip Equally</h1>
+          <div class="meta">June 22, 2026 &nbsp;&mdash;&nbsp; 7 min read</div>
+
+          <p>
+            Cryptocurrency mining has always been a game of <strong>hardware privilege</strong>. Bitcoin's SHA-256 arms
+            race means only the newest ASICs on the smallest fab nodes can compete. Ethereum's DAG size locked out 4 GB
+            GPUs. Monero's RandomX shifts advantage toward specific CPU microarchitectures. In every case, the protocol
+            picks winners and losers — and the losers become e-waste.
+          </p>
+
+          <p>
+            Wattcoin's Proof-of-Energy is the <strong>only consensus mechanism</strong> that does not care what chip you
+            use. A 65 W laptop CPU from 2015, a 300 W RTX 4090, and a 1350 W Antminer D3 all compete on exactly one
+            metric: <strong>watts drawn, verified, and proven to the network</strong>.
+          </p>
+
+          <div class="info-callout">
+            <strong>Core principle:</strong> Energy is fungible. One kilowatt-hour from a decade-old Pentium is
+            identical to one kilowatt-hour from a brand-new ASIC. PoE rewards the energy, not the chip that burned it.
+          </div>
+
+          <h3>Why Other Protocols Are Tiered by Hardware</h3>
+
+          <p>
+            Proof-of-Work consensus equates "mining work" with "hash operations per second." This seems neutral — anyone
+            can run SHA-256 — but the physics of silicon fabrication makes it deeply unequal. Each new generation of
+            ASICs delivers 2-3x the hash rate per watt. A miner running S19j Pros at 0.33 J/GH cannot compete with
+            someone running S21 XP units at 0.18 J/GH. The older hardware is priced out of profitability regardless of
+            its power draw.
+          </p>
+
+          <p>
+            This creates a winner-take-all dynamic: the latest hardware earns the most, old hardware becomes
+            unprofitable and is discarded, and the barrier to entry rises with every halving cycle. The result is a
+            industry where only those with access to the newest fabrication nodes and bulk purchasing power can
+            participate. The "mining" in Proof-of-Work has become a manufacturing supply chain competition, not an
+            energy market.
+          </p>
+
+          <h3>How PoE Removes the Hardware Advantage</h3>
+
+          <p>
+            Proof-of-Energy breaks the link between hash rate and rewards entirely. Mining work is defined as
+            <strong>verifiable energy consumption</strong>, not hash computations. The protocol measures three things:
+          </p>
+
+          <ul>
+            <li>
+              <strong>Power draw (W)</strong> — rated per the hardware model, verified through the on-device benchmark
+              and cross-referenced against peer probes.
+            </li>
+            <li>
+              <strong>Duty cycle (%)</strong> — the fraction of the round the hardware was actively processing workloads
+              under load.
+            </li>
+            <li>
+              <strong>Liveness proof</strong> — hash challenges and share submission confirm the hardware was genuinely
+              running, not just pretending.
+            </li>
+          </ul>
+
+          <p>
+            The formula is trivial: <strong>energy (kWh) = power (kW) &times; duty cycle (h)</strong>. A CPU that draws
+            65 W and runs 100% of a 24-hour round contributes 1.56 kWh. A 1350 W ASIC running 100% contributes 32.4 kWh.
+            Both are paid proportionally to their energy at the same rate per kilowatt-hour. The ASIC earns more because
+            it <em>consumes more power</em>, not because it computes faster.
+          </p>
+
+          <div class="viz-box">
+            <div style="display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; padding: 10px 0">
+              <div style="text-align: center">
+                <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a; margin-bottom: 8px">
+                  PROOF-OF-WORK
+                </div>
+                <svg width="200" height="120" viewBox="0 0 200 120">
+                  <rect x="10" y="80" width="30" height="20" fill="#fbbf24" opacity="0.3" rx="2" />
+                  <rect x="50" y="60" width="30" height="40" fill="#fbbf24" opacity="0.5" rx="2" />
+                  <rect x="90" y="40" width="30" height="60" fill="#fbbf24" opacity="0.7" rx="2" />
+                  <rect x="130" y="20" width="30" height="80" fill="#fbbf24" rx="2" />
+                  <text x="10" y="115" fill="#5a8a5a" font-family="DM Mono,monospace" font-size="8">
+                    Old ASIC &rarr; New ASIC (reward by hash rate)
+                  </text>
+                </svg>
+              </div>
+              <div style="text-align: center">
+                <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: #5a8a5a; margin-bottom: 8px">
+                  PROOF-OF-ENERGY
+                </div>
+                <svg width="200" height="120" viewBox="0 0 200 120">
+                  <rect x="10" y="40" width="30" height="60" fill="#4ade80" rx="2" />
+                  <rect x="60" y="20" width="30" height="80" fill="#4ade80" rx="2" />
+                  <rect x="110" y="60" width="30" height="40" fill="#4ade80" rx="2" />
+                  <rect x="160" y="0" width="30" height="100" fill="#4ade80" rx="2" />
+                  <text x="10" y="115" fill="#5a8a5a" font-family="DM Mono,monospace" font-size="8">
+                    Any hardware (reward by wattage &times; uptime)
+                  </text>
+                </svg>
+              </div>
+            </div>
+            <div class="caption">
+              PoW rewards hash rate (newest hardware wins). PoE rewards energy (all hardware equal per watt).
+            </div>
+          </div>
+
+          <h3>What This Means for Miners</h3>
+
+          <h4>No Obsolescence</h4>
+
+          <p>
+            An Antminer S9 from 2016 draws ~1350 W. An Antminer S21 XP from 2025 draws ~3700 W. On Bitcoin, the S9 is
+            e-waste — its hash rate is too low to cover electricity. On Wattcoin, the S9 earns
+            <strong>exactly the same per watt</strong> as the S21 XP. The S21 XP earns more total because it draws more
+            power, but the rate is identical. The S9 remains profitable for as long as electricity costs less than the
+            coin's energy floor — which could be <em>decades</em>.
+          </p>
+
+          <h4>Lower Barrier to Entry</h4>
+
+          <p>
+            You do not need to raise capital for the latest ASIC batch to mine Wattcoin profitably. A used Antminer D3
+            on eBay for $50 draws 1350 W and earns exactly what a brand-new miner of the same wattage would earn. A
+            desktop PC with a 65 W CPU earns proportionally less — but at the same rate per kilowatt-hour. Mining is
+            accessible to anyone who can plug in a machine.
+          </p>
+
+          <h4>E-Waste Reversal</h4>
+
+          <p>
+            The crypto industry produces an estimated 30,000+ tonnes of e-waste annually from obsolete ASICs and GPUs.
+            Proof-of-Energy makes every retired chip productive again. That RTX 1060 in a drawer, that old Pentium
+            server, that pallet of S9s gathering dust — all of them earn at the same rate per watt as the day they were
+            manufactured. The concept of "obsolete mining hardware" simply does not exist on Wattcoin.
+          </p>
+
+          <h3>What This Means for the Network</h3>
+
+          <h4>Decentralization by Default</h4>
+
+          <p>
+            When hardware does not confer an advantage, the mining base naturally diversifies. Wattcoin's network
+            already includes CPU miners in dorm rooms, GPU miners in gaming PCs, server miners in data centers, and ASIC
+            miners in dedicated rigs. No single hardware class can dominate because no hardware class has a structural
+            edge. The only competitive variable is <strong>electricity price</strong>, which is local and cannot be
+            monopolized.
+          </p>
+
+          <h4>Stable Energy Floor</h4>
+
+          <p>
+            Because every miner earns the same rate per kilowatt-hour, the protocol's energy floor is not distorted by
+            hardware efficiency variance. The cost to produce one WTC is the same whether it was mined on a CPU or an
+            ASIC. This makes the floor legible, predictable, and resistant to the kind of hash-rate-driven price
+            compression that makes PoW coins volatile to mine.
+          </p>
+
+          <h3>Hardware Comparison: PoW vs PoE</h3>
+
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Proof-of-Work</th>
+                <th>Proof-of-Energy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Reward basis</td>
+                <td>Hash rate (operations/sec)</td>
+                <td>Energy (kWh verified)</td>
+              </tr>
+              <tr>
+                <td>Hardware advantage</td>
+                <td>Newest, fastest chip wins</td>
+                <td>No advantage — per-watt equality</td>
+              </tr>
+              <tr>
+                <td>Old hardware</td>
+                <td>E-waste after 18-24 months</td>
+                <td>Still earns full per-watt rate</td>
+              </tr>
+              <tr>
+                <td>Entry cost</td>
+                <td>High — latest ASICs required</td>
+                <td>Low — any power-drawing device works</td>
+              </tr>
+              <tr>
+                <td>Monopoly vector</td>
+                <td>Fab node access, bulk purchasing</td>
+                <td>Electricity price (local, unbuyable)</td>
+              </tr>
+              <tr>
+                <td>Decentralization</td>
+                <td>Concentrates in industrial mines</td>
+                <td>Distributes across all hardware types</td>
+              </tr>
+              <tr class="wtc-row">
+                <td>E-waste per coin</td>
+                <td>Massive — chips made obsolete</td>
+                <td>Zero — all hardware remains useful</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>The Only Fair Consensus</h3>
+
+          <p>
+            Proof-of-Energy is not just a novel economic design — it is the <strong>only consensus mechanism</strong>
+            that treats every piece of hardware equally, per watt, without exception. It does not favor ASICs over GPUs,
+            CPUs over servers, or new chips over old ones. It rewards the one thing every miner actually pays for:
+            electricity.
+          </p>
+
+          <p>
+            In a world where mining has become an industrial arms race, Wattcoin returns mining to its original promise:
+            anyone with a computer and an electricity bill can participate, compete, and earn — on exactly the same
+            terms as the largest mining operation in the world.
+          </p>
+
+          <div class="info-callout">
+            <strong>The bottom line:</strong> Hash rate is a proxy for work. Energy <em>is</em> the work. When you
+            reward the thing itself instead of a proxy, the hardware becomes irrelevant. What matters is how much power
+            you can draw — not how fast you can compute.
+          </div>
+
+          <p>
+            <a href="/wattcoin-whitepaper.html"
+              >Read the whitepaper for the complete Proof-of-Energy specification &rarr;</a
+            >
+          </p>
+          <a href="/blog.html" class="back-link" style="display: inline-block; margin-top: 32px"
+            >&larr; Back to all posts</a
+          >
+        </article>
+      </div>
+    </div>
+    <footer>
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.381 &nbsp;&mdash;&nbsp;
+      <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
+      <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer">Github</a>
+      &nbsp;&mdash;&nbsp; JUNE 2026 <br /><span id="page-visit-count" style="font-size: 10px; color: #3a5a3a"></span>
+    </footer>
+    <script>
+      (function () {
+        'use strict';
+        var BASE = '/counter-api/?page=';
+        function fmt(n) {
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+          return n;
+        }
+        var counted = sessionStorage.getItem('wtc_pg_fair');
+        var method = counted ? 'GET' : 'POST';
+        if (!counted) sessionStorage.setItem('wtc_pg_fair', '1');
+        fetch(BASE + 'blogpage', { method: method })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('page-visit-count');
+            if (el && d.ok) el.textContent = fmt(d.count);
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>
