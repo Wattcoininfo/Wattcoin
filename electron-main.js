@@ -11186,12 +11186,23 @@ function startLedgerNetworkServer() {
                     console.log(
                       `[HolePunch] Direct TCP connection established to ${requesterIp}:${requestedPunchPort}`,
                     );
-                    if (referrerPeerUrl) {
-                      const viaUrl = normalizePeerUrl(`http://${requesterIp}:${requesterPort}`);
-                      if (viaUrl && viaUrl !== referrerPeerUrl) {
+                    const viaUrl = normalizePeerUrl(`http://${requesterIp}:${requesterPort}`);
+                    if (viaUrl) {
+                      peerReachabilityCache.set(viaUrl, {
+                        ok: true,
+                        lastAttemptAtMs: Date.now(),
+                        lastSuccessAtMs: Date.now(),
+                      });
+                      if (!referrerPeerUrl || viaUrl !== referrerPeerUrl) {
                         rememberDiscoveredPeer(viaUrl, { source: 'hole-punch', quiet: true });
                       }
                     }
+                  }
+                  if (result && result.socket && !result.socket.destroyed) {
+                    try {
+                      result.socket.end();
+                      result.socket.destroy();
+                    } catch (_) {}
                   }
                 })
                 .catch(() => {});
@@ -12395,6 +12406,17 @@ function attemptHolePunchToSeedPeers(settings = getLedgerNetworkSettings()) {
     .then((result) => {
       if (result && result.ok && result.socket) {
         console.log(`[HolePunch] Direct connection to seed peer ${targetUrl} via NAT punch`);
+        const np = normalizePeerUrl(targetUrl);
+        if (np) {
+          peerReachabilityCache.set(np, { ok: true, lastAttemptAtMs: Date.now(), lastSuccessAtMs: Date.now() });
+          rememberDiscoveredPeer(np, { source: 'hole-punch', quiet: true });
+        }
+      }
+      if (result && result.socket && !result.socket.destroyed) {
+        try {
+          result.socket.end();
+          result.socket.destroy();
+        } catch (_) {}
       }
     })
     .catch(() => {});
@@ -12434,6 +12456,17 @@ function tryHolePunchToPeers(peerUrls, settings = getLedgerNetworkSettings()) {
       .then((result) => {
         if (result && result.ok && result.socket) {
           console.log(`[HolePunch] Direct connection to ${targetUrl} via NAT punch`);
+          const np = normalizePeerUrl(targetUrl);
+          if (np) {
+            peerReachabilityCache.set(np, { ok: true, lastAttemptAtMs: Date.now(), lastSuccessAtMs: Date.now() });
+            rememberDiscoveredPeer(np, { source: 'hole-punch', quiet: true });
+          }
+        }
+        if (result && result.socket && !result.socket.destroyed) {
+          try {
+            result.socket.end();
+            result.socket.destroy();
+          } catch (_) {}
         }
       })
       .catch(() => {});
