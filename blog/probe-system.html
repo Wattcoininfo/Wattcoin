@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -377,7 +377,7 @@
         </div>
         <h1>How the Peer Probe System <span>Prevents Cheating</span></h1>
         <p>
-          Understanding Wattcoin's multi-layered computational attestation â€” from proof hashes and timing ratios to
+          Understanding Wattcoin's multi-layered computational attestation — from proof hashes and timing ratios to
           hardware identity verification and trust penalties.
         </p>
       </div>
@@ -392,17 +392,17 @@
         <p>
           Proof-of-Energy mining requires an honest answer to a hard question:
           <em>is this miner actually burning the energy they claim?</em> Traditional Proof-of-Work avoids the question
-          entirely â€” energy expenditure is implicit in the hash rate, and the protocol never asks <em>how</em> the
-          work was done. Wattcoin faces a different problem: contributions are proportional to declared hardware TDP, so
-          the network must independently verify that each miner is running the hardware they say they are, that it is
+          entirely — energy expenditure is implicit in the hash rate, and the protocol never asks <em>how</em> the work
+          was done. Wattcoin faces a different problem: contributions are proportional to declared hardware TDP, so the
+          network must independently verify that each miner is running the hardware they say they are, that it is
           actually computing, and that it is computing at the expected speed.
         </p>
         <p>
           The <strong>peer probe system</strong> is the mechanism that answers these questions. Every miner on the
-          network periodically receives a computational challenge â€” a <em>probe</em> â€” from multiple peer
-          coordinators. The probe must be solved locally and the result submitted within a strict time window. The
-          outcome determines the miner's trust score, which scales their mining contribution from 20 % to 100 % of their
-          hardware's rated power.
+          network periodically receives a computational challenge — a <em>probe</em> — from multiple peer coordinators.
+          The probe must be solved locally and the result submitted within a strict time window. The outcome determines
+          the miner's trust score, which scales their mining contribution from 20 % to 100 % of their hardware's rated
+          power.
         </p>
         <p>
           This post is a technical walkthrough of how the probe system works, what attacks it prevents, and where its
@@ -416,29 +416,29 @@
         </p>
         <ul>
           <li>
-            <strong>CPU probe</strong> â€” an integer hash-chain loop with a known iteration count. Both the coordinator
+            <strong>CPU probe</strong> — an integer hash-chain loop with a known iteration count. Both the coordinator
             and the worker independently compute the same function; the coordinator compares the resulting proof hash
             against its own computation. A mismatch is conclusive evidence of tampering.
           </li>
           <li>
-            <strong>Memory probe</strong> â€” a pointer-chase across a large array with a fixed number of random walks.
+            <strong>Memory probe</strong> — a pointer-chase across a large array with a fixed number of random walks.
             Memory latency is measured directly. The coordinator re-computes the walk in software and verifies the final
             proof hash.
           </li>
           <li>
-            <strong>GPU probe</strong> â€” a DirectX compute shader that renders a deterministic pattern using an
-            integer XOR-shift algorithm. The coordinator pre-computes the expected pixel hash in pure JavaScript before
-            issuing the probe; the worker's GLSL output must match exactly.
+            <strong>GPU probe</strong> — a DirectX compute shader that renders a deterministic pattern using an integer
+            XOR-shift algorithm. The coordinator pre-computes the expected pixel hash in pure JavaScript before issuing
+            the probe; the worker's GLSL output must match exactly.
           </li>
           <li>
-            <strong>ASIC probe</strong> â€” the coordinator issues a cryptographic liveness challenge (random prevHash)
+            <strong>ASIC probe</strong> — the coordinator issues a cryptographic liveness challenge (random prevHash)
             that the worker injects into the local stratum pool. The ASIC must mine valid X11 shares containing the
             challenge; the coordinator cryptographically verifies each share and checks that the share production rate
             matches the declared hashrate.
           </li>
         </ul>
 
-        <h2>Hardware Attestation â€” You Cannot Lie About What You Have</h2>
+        <h2>Hardware Attestation — You Cannot Lie About What You Have</h2>
         <p>
           Before any probe is issued, every miner must pass a <strong>hardware verification</strong> step during
           benchmark. The renderer sends its hardware strings (CPU model, GPU model, device type, declared TDP) to the
@@ -446,9 +446,9 @@
         </p>
         <ul>
           <li>
-            The <strong>CPU model</strong> is read from <code>os.cpus()[0].model</code> â€” the operating system kernel,
-            not the renderer, decides what CPU is installed. Any mismatch triggers a âˆ’20 trust penalty and caps
-            declared power to the real CPU's TDP via Brave lookup.
+            The <strong>CPU model</strong> is read from <code>os.cpus()[0].model</code> — the operating system kernel,
+            not the renderer, decides what CPU is installed. Any mismatch triggers a −20 trust penalty and caps declared
+            power to the real CPU's TDP via Brave lookup.
           </li>
           <li>
             The <strong>GPU model</strong> is verified through two independent channels: the OS-level
@@ -461,21 +461,21 @@
             OS reports "laptop" triggers a clamp to the laptop CPU's TDP (or 35 W fallback).
           </li>
           <li>
-            <strong>Virtual machines</strong> are blocked entirely â€” CPUID, SMBIOS, and GPU identity can all be
-            spoofed in a VM, making OS-level attestation unreliable.
+            <strong>Virtual machines</strong> are blocked entirely — CPUID, SMBIOS, and GPU identity can all be spoofed
+            in a VM, making OS-level attestation unreliable.
           </li>
         </ul>
         <p>
-          After identity verification, a <strong>calibration factor</strong> (range 0.2Ã— to 1.2Ã—) is computed by
+          After identity verification, a <strong>calibration factor</strong> (range 0.2× to 1.2×) is computed by
           comparing the miner's actual benchmark speed against a reference table for the declared hardware. The final
-          contribution ceiling is <code>declaredUnitPowerW Ã— calibrationFactor</code>, and the trust factor (0.2 to
-          1.0) is applied at contribution time.
+          contribution ceiling is <code>declaredUnitPowerW × calibrationFactor</code>, and the trust factor (0.2 to 1.0)
+          is applied at contribution time.
         </p>
 
-        <h2>Proof Hash Chain â€” Sequential Computation Required</h2>
+        <h2>Proof Hash Chain — Sequential Computation Required</h2>
         <p>
           Probes are chained together cryptographically. Each probe's seed is derived from the proof hash of the
-          previous probe in the chain. This means a miner cannot pre-compute probes or skip ahead â€” the seed for the
+          previous probe in the chain. This means a miner cannot pre-compute probes or skip ahead — the seed for the
           next probe is unknown until the current probe's result is produced. If the chain is broken (e.g., the probe
           times out and the worker resets to <code>null</code>), the next seed is a fresh random value with no link to
           prior work.
@@ -496,19 +496,19 @@
             border-radius: 8px;
           "
         >
-          expectedMs = iterations / effectiveCpuOpsPerSec Ã— 1000<br />
+          expectedMs = iterations / effectiveCpuOpsPerSec × 1000<br />
           ratio = probeWallClockMs / expectedMs
         </p>
         <p>
-          The probe is flagged if the ratio is below <strong>1/3.0</strong> (suspiciously fast â€” likely outsourcing to
-          stronger hardware) or above <strong>3.0</strong> (suspiciously slow â€” likely throttled or different hardware
+          The probe is flagged if the ratio is below <strong>1/3.0</strong> (suspiciously fast — likely outsourcing to
+          stronger hardware) or above <strong>3.0</strong> (suspiciously slow — likely throttled or different hardware
           than declared). The <code>effectiveCpuOpsPerSec</code> uses <em>the maximum of</em> the declared ops/sec and
           the worker's own historical mean, preventing a miner from claiming artificially low speed to hide outsourcing.
           The current <strong>load percent</strong> is included alongside every timing issue (<code>load=85%</code>) as
           diagnostic context, helping distinguish genuine hardware throttling from contention caused by mining threads.
         </p>
 
-        <h2>Trust Score â€” How Probes Drive Mining Power</h2>
+        <h2>Trust Score — How Probes Drive Mining Power</h2>
         <p>Every probe result updates the miner's trust score, which scales their contribution linearly:</p>
         <p
           style="
@@ -520,15 +520,15 @@
             border-radius: 8px;
           "
         >
-          trustFactor = 0.2 + (trustScore / 100) Ã— 0.8<br />
-          maxDeltaWh = (calibratedUnitPowerW Ã— trustFactor Ã— loadFactor Ã— 0.5) / 3600
+          trustFactor = 0.2 + (trustScore / 100) × 0.8<br />
+          maxDeltaWh = (calibratedUnitPowerW × trustFactor × loadFactor × 0.5) / 3600
         </p>
         <p>
           The <strong>loadFactor</strong> is derived from the miner's hardware load slider setting (<code
             >Math.min(1, Math.max(0.1, loadPercent / 100))</code
           >). If the miner sets load to 50 %, the loadFactor is 0.5, halving the per-tick contribution ceiling. This
-          gives the server-side authoritative enforcement over the load slider â€” a patched renderer cannot bypass it
-          by sending full-power deltaWh at low load.
+          gives the server-side authoritative enforcement over the load slider — a patched renderer cannot bypass it by
+          sending full-power deltaWh at low load.
         </p>
         <p>
           At trust score 0, the miner contributes at only 20 % of their calibrated power. At trust score 100, they
@@ -536,10 +536,10 @@
         </p>
         <ul>
           <li><strong>+1</strong> for 25 consecutive verified probes with no issues</li>
-          <li><strong>âˆ’1</strong> per failed probe (mismatch or timing violation)</li>
-          <li><strong>âˆ’3</strong> per proof/pixel hash mismatch (strong evidence of cheating)</li>
-          <li><strong>âˆ’1</strong> additional if the last 50 probes have a failure rate above 30 %</li>
-          <li><strong>âˆ’20</strong> for a hardware identity mismatch (detected at benchmark time)</li>
+          <li><strong>−1</strong> per failed probe (mismatch or timing violation)</li>
+          <li><strong>−3</strong> per proof/pixel hash mismatch (strong evidence of cheating)</li>
+          <li><strong>−1</strong> additional if the last 50 probes have a failure rate above 30 %</li>
+          <li><strong>−20</strong> for a hardware identity mismatch (detected at benchmark time)</li>
         </ul>
 
         <h2>Multi-Coordinator Cross-Attestation</h2>
@@ -547,11 +547,11 @@
           A single malicious coordinator could issue easy probes or accept fake results. To prevent this, every miner
           connects to <strong>multiple coordinators simultaneously</strong>, and each independently issues probes. At
           settlement time, the protocol checks that at least <strong>3 verifier attestations</strong> exist for the
-          claimed chain index â€” requiring a majority of coordinators to collude before the protection is bypassed.
+          claimed chain index — requiring a majority of coordinators to collude before the protection is bypassed.
         </p>
         <p>
           Connections are maintained via persistent WebSocket channels. If a coordinator goes offline, only that slot is
-          replaced leaves the other two connections intact. This design makes the probe stream resilient â€” a miner
+          replaced leaves the other two connections intact. This design makes the probe stream resilient — a miner
           receives probes from multiple coordinators at random intervals averaging one every ~10 seconds.
         </p>
 
@@ -588,8 +588,8 @@
         </p>
         <h4>Sybil</h4>
         <p>
-          Multiple worker identities on the same hardware do not increase total mining power â€” contribution is bound
-          to the physical machine's verified TDP, not the number of identities.
+          Multiple worker identities on the same hardware do not increase total mining power — contribution is bound to
+          the physical machine's verified TDP, not the number of identities.
         </p>
 
         <h2>Summary</h2>
