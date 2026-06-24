@@ -24,7 +24,9 @@ async function detectAsic(ip) {
         if (result && result.isAsic) {
           return { ...result, apiPort: port };
         }
-      } catch {}
+      } catch {
+        /* not an ASIC */
+      }
     }
   }
   return null;
@@ -42,7 +44,9 @@ async function tryDetectAll(ip) {
         if (result && result.isAsic) {
           results.push({ ...result, apiPort: port });
         }
-      } catch {}
+      } catch {
+        /* not an ASIC */
+      }
     }
   }
   return results;

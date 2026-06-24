@@ -78,224 +78,6 @@ const CONFIDENCE_TIER_LABELS = {
   estimated: 'Estimated (model)',
 };
 
-const ONLINE_TDP_CACHE_KEY = 'wattcoin-online-tdp-v2';
-const ONLINE_CPU_TDP_CACHE_KEY = 'wattcoin-online-cpu-tdp-v2';
-const ONLINE_LAPTOP_POWER_CACHE_KEY = 'wattcoin-online-laptop-power-v8';
-const HARDWARE_CARD_WIDTH_KEY = 'wattcoin-hw-card-width-v1';
-const ONLINE_TDP_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days (successful lookup)
-const ONLINE_TDP_CACHE_MISS_TTL_MS = 60 * 60 * 1000; // 1 hour  (failed lookup — retry sooner)
-
-// Proxy external fetch() calls through the main process using Node's https module.
-// Renderer fetch() uses Chromium's networking stack which enforces CORS.  TechPowerUp
-// spec pages, NotebookCheck HTML, and Reddit all lack Access-Control-Allow-Origin headers,
-// so every response body is CORS-blocked before the renderer can read it.  The main
-// process has no CORS restrictions at all.
-async function fetchUrlViaMain(url, opts = {}) {
-  if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-    const res = await window.wattcoinHardware.invoke('wattcoin-fetch-url', {
-      url,
-      timeoutMs: opts.timeoutMs || 8000,
-      headers: opts.headers || {},
-      method: opts.method || 'GET',
-      body: opts.body || null,
-    });
-    if (res && res.ok) return res.text;
-    throw new Error(res && res.error ? res.error : 'fetch-via-main failed');
-  }
-  // Dev-mode fallback: direct fetch (Vite dev server, no packaged Electron context)
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), opts.timeoutMs || 8000);
-  try {
-    const r = await fetch(url, {
-      method: opts.method || 'GET',
-      signal: ctrl.signal,
-      headers: opts.headers,
-      body: opts.body || undefined,
-    });
-    return await r.text();
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-// Strips HTML tags, scripts, and styles from a string, returning plain text.
-function _stripHtml(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#\d+;/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-// Returns the first plausible wattage value (10–800 W) found in plain text.
-function _parseFirstWattage(text) {
-  const m = text.match(/\b(\d{1,3}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/);
-  if (m) {
-    const w = parseFloat(m[1]);
-    if (w >= 10 && w <= 800) return Math.round(w);
-  }
-  return null;
-}
-
-function normalizeWattageText(text) {
-  return String(text || '')
-    .replace(/\$\$/g, ' ')
-    .replace(/\\[,;!:\s]*\\(?:text|mathrm)\{\s*([Ww])\s*\}/g, ' $1')
-    .replace(/\\(?:text|mathrm)\{\s*[Ww]\s*\}/g, 'W')
-    .replace(/\{\s*[Ww]\s*\}/g, 'W')
-    .replace(/\\[,;!:\s]*/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-// Smarter wattage extraction: scores each candidate based on context keywords.
-// Prefers values near "TDP", "consumption", "load", "max power draw", etc.
-// Penalises values near "adapter", "charger", "power supply", "idle".
-function parseBestWattage(text) {
-  const normalized = normalizeWattageText(text);
-  const re = /\b(\d{1,4}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/g;
-  let best = null,
-    bestScore = -Infinity;
-  let m;
-  while ((m = re.exec(normalized)) !== null) {
-    const w = parseFloat(m[1]);
-    if (w < 10 || w > 5000) continue;
-    // Look at ~80 chars surrounding the match for context clues
-    const ctx = normalized.substring(Math.max(0, m.index - 80), m.index + m[0].length + 80).toLowerCase();
-    let score = 0;
-    if (/\btdp\b/.test(ctx)) score += 3;
-    if (/consumption|under load|max.{0,10}power|full load|power draw|stress/i.test(ctx)) score += 2;
-    if (/rated|maximum|peak/i.test(ctx)) score += 1;
-    if (/adapter|charger|power supply|ac adapter|psu/i.test(ctx)) score -= 3;
-    if (/idle|sleep|standby/i.test(ctx)) score -= 2;
-    if (score > bestScore || (score === bestScore && best === null)) {
-      best = Math.round(w);
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-// Brave Answers AI config — used as the primary GPU/CPU TDP data source for all hardware.
-// Priority 1: User-configured key via localStorage key 'braveAnswersKey' (settable in settings).
-// Priority 2: Built-in shared Brave Answers subscription token.
-// This token is intentionally shipped so TDP lookups work out-of-the-box for all hardware.
-// Operators may set their own key via localStorage.setItem('braveAnswersKey', '...') for dedicated quota.
-const BRAVE_ANSWERS_KEY = (() => {
-  try {
-    const userKey = localStorage.getItem('braveAnswersKey');
-    if (userKey) return userKey;
-  } catch (_) {
-    /* localStorage unavailable */
-  }
-  if (process.env.REACT_APP_BRAVE_ANSWERS_KEY) return process.env.REACT_APP_BRAVE_ANSWERS_KEY;
-  return atob('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA==');
-})();
-const BRAVE_ANSWERS_URL = 'https://api.search.brave.com/res/v1/chat/completions';
-
-// Fetch GPU TDP via Brave Answers AI (first option for all models)
-async function fetchGpuTDPOnline(gpuModel) {
-  try {
-    const clean = gpuModel
-      .replace(/\(R\)|\(TM\)/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const question = `${clean} tdp`;
-    const body = JSON.stringify({ stream: false, messages: [{ role: 'user', content: question }] });
-    const text = await fetchUrlViaMain(BRAVE_ANSWERS_URL, {
-      method: 'POST',
-      timeoutMs: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'x-subscription-token': BRAVE_ANSWERS_KEY,
-      },
-      body,
-    });
-    const data = typeof text === 'string' ? JSON.parse(text) : text;
-    const answer =
-      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    return answer ? parseBestWattage(answer) : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-// Fetch CPU TDP via Brave Answers AI (first option for all models)
-async function fetchCpuTDPOnline(cpuModel) {
-  try {
-    const clean = cpuModel
-      .replace(/\(R\)|\(TM\)/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-    const question = `${clean} tdp`;
-    const body = JSON.stringify({ stream: false, messages: [{ role: 'user', content: question }] });
-    const text = await fetchUrlViaMain(BRAVE_ANSWERS_URL, {
-      method: 'POST',
-      timeoutMs: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'x-subscription-token': BRAVE_ANSWERS_KEY,
-      },
-      body,
-    });
-    const data = typeof text === 'string' ? JSON.parse(text) : text;
-    const answer =
-      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    return answer ? parseBestWattage(answer) : null;
-  } catch (_) {
-    return null;
-  }
-}
-
-// Fetch real measured whole-laptop system power via Brave Answers AI.
-async function fetchLaptopSystemPowerOnline(manufacturer, version, cpu, logFn) {
-  const log = typeof logFn === 'function' ? logFn : () => {};
-  const parts = [];
-  if (manufacturer && !/^unknown$/i.test(manufacturer)) parts.push(manufacturer.trim());
-  if (version && !/^unknown$/i.test(version) && version !== manufacturer) parts.push(version.trim());
-  if (!parts.length && cpu) parts.push(cpu.split(' (')[0].trim());
-  if (!parts.length) {
-    log('laptop-power: no usable model identifier, aborting');
-    return null;
-  }
-  const modelQuery = parts.join(' ');
-  const question = `${modelQuery} tdp`;
-  log(`laptop-power: query="${question}"`);
-
-  try {
-    const body = JSON.stringify({ stream: false, messages: [{ role: 'user', content: question }] });
-    const text = await fetchUrlViaMain(BRAVE_ANSWERS_URL, {
-      method: 'POST',
-      timeoutMs: 15000,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'x-subscription-token': BRAVE_ANSWERS_KEY,
-      },
-      body,
-    });
-    const data = typeof text === 'string' ? JSON.parse(text) : text;
-    const answer =
-      data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if (answer) {
-      const result = parseBestWattage(answer);
-      if (result !== null) {
-        log(`laptop-power: Brave AI → ${result} W`);
-        return result;
-      }
-    }
-    log('laptop-power: Brave AI no usable wattage in answer');
-  } catch (e) {
-    log(`laptop-power: Brave AI error: ${e && e.message}`);
-  }
-
-  log('laptop-power: all sources exhausted, no result');
-  return null;
-}
-
 function detectMotherboardFormFactor(...values) {
   const haystack = values
     .filter(Boolean)
@@ -2144,19 +1926,13 @@ export default function Miner({
   });
 
   const [benchPower, setBenchPower] = React.useState(null);
-  const [tdpFetchingCount, setTdpFetchingCount] = React.useState(0);
-  // Safety net: if online TDP fetches haven't resolved within 15s, stop blocking the UI.
-  const [tdpFetchTimedOut, setTdpFetchTimedOut] = React.useState(false);
-  React.useEffect(() => {
-    if (tdpFetchingCount === 0) return;
-    const t = setTimeout(() => setTdpFetchTimedOut(true), 15000);
-    return () => clearTimeout(t);
-  }, [tdpFetchingCount]);
+
   // Persisted hardware card width — saved after hardware is recognized so the card
   // doesn't jump from "Unknown" placeholder size to full content size on next launch.
+  // Minimum threshold prevents caching a loading-state narrow width.
   const [savedHwCardWidth, setSavedHwCardWidth] = React.useState(() => {
     try {
-      const v = parseInt(localStorage.getItem(HARDWARE_CARD_WIDTH_KEY), 10);
+      const v = parseInt(localStorage.getItem('wattcoin-hw-card-width'), 10);
       return v > 0 ? v : null;
     } catch (_) {
       return null;
@@ -2188,56 +1964,6 @@ export default function Miner({
   const [electricityPrice, setElectricityPrice] = React.useState(null);
   const [electricityPriceSource, setElectricityPriceSource] = React.useState(null);
 
-  const [dynamicTDPCache, setDynamicTDPCache] = React.useState(() => {
-    // Load from localStorage.
-    // Successful lookups are kept for 14 days; failed lookups are kept only for
-    // ONLINE_TDP_CACHE_MISS_TTL_MS so transient API failures retry automatically.
-    try {
-      const s = localStorage.getItem(ONLINE_TDP_CACHE_KEY);
-      if (s) {
-        const parsed = JSON.parse(s);
-        const t = Date.now();
-        const fresh = {};
-        for (const [k, v] of Object.entries(parsed)) {
-          if (!v || typeof v.ts !== 'number') continue;
-          const ttl = typeof v.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
-          if (t - v.ts < ttl) fresh[k] = v;
-        }
-        return fresh;
-      }
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-    }
-    return {};
-  });
-
-  const [dynamicCPUTDPCache, setDynamicCPUTDPCache] = React.useState(() => {
-    // Load from localStorage.
-    // Successful lookups are kept for 14 days; failed lookups are kept only for
-    // ONLINE_TDP_CACHE_MISS_TTL_MS so transient API failures retry automatically.
-    try {
-      const s = localStorage.getItem(ONLINE_CPU_TDP_CACHE_KEY);
-      if (s) {
-        const parsed = JSON.parse(s);
-        const t = Date.now();
-        const fresh = {};
-        for (const [k, v] of Object.entries(parsed)) {
-          if (!v || typeof v.ts !== 'number') continue;
-          const ttl = typeof v.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
-          if (t - v.ts < ttl) fresh[k] = v;
-        }
-        return fresh;
-      }
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-    }
-    return {};
-  });
-
-  const [laptopLivePowerW, setLaptopLivePowerW] = React.useState(() => {
-    return null;
-  });
-
   const [asicConfigStatus, setAsicConfigStatus] = React.useState('');
   const [discoveredAsics, setDiscoveredAsics] = React.useState([]);
   const [scanning, setScanning] = React.useState(false);
@@ -2259,12 +1985,8 @@ export default function Miner({
       lastReason: '',
     }));
     benchmarkInFlightRef.current = false;
-    setDynamicTDPCache({});
-    setDynamicCPUTDPCache({});
-    setLaptopLivePowerW(null);
     setBenchmarkPowerCapW(null);
     consecutiveUnderestimateRef.current = 0;
-    setTdpFetchTimedOut(false);
   }, [hardwareLookupResetNonce]);
 
   const allGpuModels = React.useMemo(() => {
@@ -3692,11 +3414,8 @@ export default function Miner({
             const navCoresEst = Math.max(1, navigator.hardwareConcurrency || 1);
             const validSocketsEst = Math.min(cpuSocketCount, Math.max(1, Math.floor(navCoresEst / 2)));
             if (hardware.cpu) {
-              const cpuKey = hardware.cpu.split(' (')[0];
-              const staticW = cpuTDPTable[cpuKey];
-              const dynEntry = dynamicCPUTDPCache[cpuKey];
-              const dynW = dynEntry && typeof dynEntry.tdp === 'number' ? dynEntry.tdp : null;
-              const w = staticW || dynW;
+              const cpuKey = hardware.cpu.replace(/ CPU(?: @ [\d.]+GHz?)?$/i, '').split(' (')[0];
+              const w = cpuTDPTable[cpuKey];
               if (w) cpuTDP = w * validSocketsEst;
             }
             if (hardware.gpu && gpuTDPTable[hardware.gpu]) gpuTDP = gpuTDPTable[hardware.gpu];
@@ -3716,15 +3435,12 @@ export default function Miner({
       if (timeoutId) clearTimeout(timeoutId);
     };
     // cpuTDPTable/gpuTDPTable are stable useMemo — omitted to avoid TDZ (declared later)
-  }, [hardware, isActive, dynamicCPUTDPCache]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hardware, isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Startup benchmark runs after hardware recognition AND online TDP fetches are complete.
+  // Startup benchmark runs after hardware recognition.
   // Not dashboard-gated: it must also run when another in-app tab is active.
   React.useEffect(() => {
     if (!(hardware && hardware.source)) return;
-    // Wait for in-flight TDP lookups — they affect the cap ceiling computed inside runBenchmark.
-    // If the 15-second timeout fires, proceed anyway so the benchmark isn't blocked indefinitely.
-    if (tdpFetchingCount > 0 && !tdpFetchTimedOut) return;
     if (isHardwareOnHold) return;
     if (benchmarkState.startupDone || benchmarkState.running) return;
     const timeoutId = setTimeout(() => {
@@ -3734,8 +3450,6 @@ export default function Miner({
   }, [
     isHardwareOnHold,
     hardware,
-    tdpFetchingCount,
-    tdpFetchTimedOut,
     benchmarkState.startupDone,
     benchmarkState.running,
     runBenchmark,
@@ -3910,7 +3624,9 @@ export default function Miner({
               shares = fresh.shares;
               shareCount = fresh.shareCount || 0;
             }
-          } catch (_) {}
+          } catch (_) {
+            /* timeout — proceed */
+          }
           probeResult = {
             id: probe.id,
             type: 'asic',
@@ -4482,11 +4198,11 @@ export default function Miner({
       'Apple M1': 20,
       'Apple M1 Pro': 30,
       'Apple M1 Max': 60,
-      'Apple M1 Ultra': 60,
+      'Apple M1 Ultra': 100,
       'Apple M2': 22,
       'Apple M2 Pro': 35,
       'Apple M2 Max': 60,
-      'Apple M2 Ultra': 60,
+      'Apple M2 Ultra': 100,
       'Apple M3': 22,
       'Apple M3 Pro': 35,
       'Apple M3 Max': 92,
@@ -4655,6 +4371,265 @@ export default function Miner({
       'AMD Phenom(tm) II X4 965': 125,
       'AMD Phenom(tm) II X4 955': 125,
       'AMD Phenom(tm) II X4 945': 95,
+      // ── Intel Core 7th Gen Mobile (Kaby Lake-H, additional) ─────────────────
+      'Intel(R) Core(TM) i7-7920HQ': 45,
+      'Intel(R) Core(TM) i7-7820HK': 45,
+      'Intel(R) Core(TM) i7-7820HQ': 45,
+      'Intel(R) Core(TM) i5-7440HQ': 45,
+      'Intel(R) Core(TM) i3-7100H': 35,
+      // ── Intel Core 6th Gen Mobile (Skylake-H, additional) ───────────────────
+      'Intel(R) Core(TM) i7-6970HQ': 45,
+      'Intel(R) Core(TM) i7-6920HQ': 45,
+      'Intel(R) Core(TM) i7-6870HQ': 45,
+      'Intel(R) Core(TM) i7-6820HQ': 45,
+      'Intel(R) Core(TM) i7-6820HK': 45,
+      'Intel(R) Core(TM) i7-6770HQ': 45,
+      'Intel(R) Core(TM) i5-6440HQ': 45,
+      'Intel(R) Core(TM) i5-6350HQ': 45,
+      'Intel(R) Core(TM) i3-6100H': 35,
+      // ── Intel Core 5th Gen Mobile (Broadwell-H, additional) ─────────────────
+      'Intel(R) Core(TM) i7-5950HQ': 47,
+      'Intel(R) Core(TM) i7-5850HQ': 47,
+      'Intel(R) Core(TM) i7-5750HQ': 47,
+      'Intel(R) Core(TM) i5-5350H': 47,
+      // ── Intel Core 4th Gen Mobile (Haswell MQ/HQ, additional) ───────────────
+      'Intel(R) Core(TM) i7-4980HQ': 47,
+      'Intel(R) Core(TM) i7-4960HQ': 47,
+      'Intel(R) Core(TM) i7-4940MX': 57,
+      'Intel(R) Core(TM) i7-4930MX': 57,
+      'Intel(R) Core(TM) i7-4910MQ': 47,
+      'Intel(R) Core(TM) i7-4900MQ': 47,
+      'Intel(R) Core(TM) i7-4870HQ': 47,
+      'Intel(R) Core(TM) i7-4860HQ': 47,
+      'Intel(R) Core(TM) i7-4850HQ': 47,
+      'Intel(R) Core(TM) i7-4810MQ': 47,
+      'Intel(R) Core(TM) i7-4800MQ': 47,
+      'Intel(R) Core(TM) i7-4770HQ': 47,
+      'Intel(R) Core(TM) i7-4760HQ': 47,
+      'Intel(R) Core(TM) i7-4750HQ': 47,
+      'Intel(R) Core(TM) i7-4710HQ': 47,
+      'Intel(R) Core(TM) i7-4712MQ': 37,
+      'Intel(R) Core(TM) i7-4702MQ': 37,
+      'Intel(R) Core(TM) i7-4702HQ': 37,
+      'Intel(R) Core(TM) i5-4340M': 37,
+      'Intel(R) Core(TM) i5-4330M': 37,
+      'Intel(R) Core(TM) i5-4310M': 37,
+      'Intel(R) Core(TM) i5-4300M': 37,
+      'Intel(R) Core(TM) i5-4210M': 37,
+      'Intel(R) Core(TM) i5-4200M': 37,
+      'Intel(R) Core(TM) i5-4200H': 47,
+      'Intel(R) Core(TM) i3-4110M': 37,
+      'Intel(R) Core(TM) i3-4100M': 37,
+      'Intel(R) Core(TM) i3-4000M': 37,
+      // ── Intel Core 3rd Gen Mobile (Ivy Bridge M/QM/XM, additional) ──────────
+      'Intel(R) Core(TM) i7-3940XM': 55,
+      'Intel(R) Core(TM) i7-3920XM': 55,
+      'Intel(R) Core(TM) i7-3840QM': 45,
+      'Intel(R) Core(TM) i7-3820QM': 45,
+      'Intel(R) Core(TM) i7-3740QM': 45,
+      'Intel(R) Core(TM) i7-3610QM': 45,
+      'Intel(R) Core(TM) i7-3632QM': 35,
+      'Intel(R) Core(TM) i7-3612QM': 35,
+      'Intel(R) Core(TM) i7-3540M': 35,
+      'Intel(R) Core(TM) i7-3520M': 35,
+      'Intel(R) Core(TM) i5-3380M': 35,
+      'Intel(R) Core(TM) i5-3360M': 35,
+      'Intel(R) Core(TM) i5-3340M': 35,
+      'Intel(R) Core(TM) i5-3230M': 35,
+      'Intel(R) Core(TM) i3-3130M': 35,
+      'Intel(R) Core(TM) i3-3120M': 35,
+      // ── Intel Core 8th Gen Mobile (Kaby Lake-R / Coffee Lake-H) ─────────────
+      'Intel(R) Core(TM) i9-8950HK': 45,
+      'Intel(R) Core(TM) i7-8850H': 45,
+      'Intel(R) Core(TM) i7-8750H': 45,
+      'Intel(R) Core(TM) i5-8400H': 45,
+      'Intel(R) Core(TM) i5-8300H': 45,
+      'Intel(R) Core(TM) i3-8100H': 45,
+      'Intel(R) Core(TM) i7-8650U': 15,
+      'Intel(R) Core(TM) i7-8550U': 15,
+      'Intel(R) Core(TM) i5-8350U': 15,
+      'Intel(R) Core(TM) i5-8250U': 15,
+      'Intel(R) Core(TM) i3-8130U': 15,
+      // ── Intel Core 9th Gen Mobile (Coffee Lake-H Refresh) ───────────────────
+      'Intel(R) Core(TM) i9-9980HK': 45,
+      'Intel(R) Core(TM) i9-9880H': 45,
+      'Intel(R) Core(TM) i7-9850H': 45,
+      'Intel(R) Core(TM) i7-9750H': 45,
+      'Intel(R) Core(TM) i5-9400H': 45,
+      'Intel(R) Core(TM) i5-9300H': 45,
+      'Intel(R) Core(TM) i5-9300HF': 45,
+      // ── Intel Core 11th Gen H35 (Tiger Lake H35, 35W) ───────────────────────
+      'Intel(R) Core(TM) i7-11390H': 35,
+      'Intel(R) Core(TM) i7-11370H': 35,
+      'Intel(R) Core(TM) i5-11300H': 35,
+      // ── Intel Core 14th Gen Mobile (Raptor Lake HX/H/U Refresh) ─────────────
+      'Intel(R) Core(TM) i9-14900HX': 55,
+      'Intel(R) Core(TM) i7-14700HX': 55,
+      'Intel(R) Core(TM) i7-14650HX': 55,
+      'Intel(R) Core(TM) i5-14500HX': 55,
+      'Intel(R) Core(TM) i5-14450HX': 55,
+      'Intel(R) Core(TM) i9-14900H': 45,
+      'Intel(R) Core(TM) i7-14700H': 45,
+      'Intel(R) Core(TM) i5-14500H': 45,
+      'Intel(R) Core(TM) i5-14400H': 45,
+      'Intel(R) Core(TM) i7-1465U': 15,
+      'Intel(R) Core(TM) i5-1455U': 15,
+      'Intel(R) Core(TM) i3-1415U': 15,
+      // ── Intel Core m / Y-series (Broadwell–Amber Lake) ──────────────────────
+      'Intel(R) Core(TM) m3-7Y30': 4.5,
+      'Intel(R) Core(TM) m3-7Y32': 4.5,
+      'Intel(R) Core(TM) m3-6Y30': 4.5,
+      'Intel(R) Core(TM) m5-6Y57': 4.5,
+      'Intel(R) Core(TM) m7-6Y75': 4.5,
+      'Intel(R) Core(TM) i7-7Y75': 4.5,
+      'Intel(R) Core(TM) i5-7Y54': 4.5,
+      'Intel(R) Core(TM) i7-8500Y': 5,
+      'Intel(R) Core(TM) i5-8200Y': 5,
+      'Intel(R) Core(TM) i7-10510Y': 7,
+      'Intel(R) Core(TM) i5-10310Y': 7,
+      // ── Intel N-series (Alder Lake-N / Jasper Lake / Tremont) ───────────────
+      'Intel(R) N305': 15,
+      'Intel(R) N300': 7,
+      'Intel(R) N200': 6,
+      'Intel(R) N100': 6,
+      'Intel(R) N97': 12,
+      'Intel(R) N95': 15,
+      'Intel(R) N50': 6,
+      'Intel(R) Pentium(R) Silver N6005': 10,
+      'Intel(R) Pentium(R) Silver N6000': 6,
+      'Intel(R) Pentium(R) Silver N5030': 6,
+      'Intel(R) Pentium(R) Silver N5000': 6,
+      'Intel(R) Celeron(R) N5105': 10,
+      'Intel(R) Celeron(R) N5100': 6,
+      'Intel(R) Celeron(R) N5095': 15,
+      'Intel(R) Celeron(R) N4505': 10,
+      'Intel(R) Celeron(R) N4500': 6,
+      'Intel(R) Celeron(R) N4120': 6,
+      'Intel(R) Celeron(R) N4100': 6,
+      'Intel(R) Celeron(R) N4020': 6,
+      'Intel(R) Celeron(R) N4000': 6,
+      'Intel(R) Celeron(R) N3450': 6,
+      'Intel(R) Celeron(R) N3350': 6,
+      'Intel(R) Celeron(R) N3160': 6,
+      'Intel(R) Celeron(R) N3150': 6,
+      'Intel(R) Celeron(R) N3060': 6,
+      'Intel(R) Celeron(R) N3050': 6,
+      'Intel(R) Celeron(R) N2940': 7.5,
+      'Intel(R) Celeron(R) N2930': 7.5,
+      'Intel(R) Celeron(R) N2920': 7.5,
+      'Intel(R) Celeron(R) N2910': 7.5,
+      'Intel(R) Celeron(R) J4125': 10,
+      'Intel(R) Celeron(R) J4105': 10,
+      'Intel(R) Celeron(R) J4005': 10,
+      'Intel(R) Celeron(R) J3455': 10,
+      'Intel(R) Celeron(R) J3355': 10,
+      'Intel(R) Celeron(R) J3160': 6,
+      'Intel(R) Celeron(R) J3060': 6,
+      // ── Intel Pentium / Celeron Mobile (older) ──────────────────────────────
+      'Intel(R) Pentium(R) 4415U': 15,
+      'Intel(R) Pentium(R) 4410Y': 6,
+      'Intel(R) Pentium(R) 4405U': 15,
+      'Intel(R) Celeron(R) 3865U': 15,
+      'Intel(R) Celeron(R) 3855U': 15,
+      'Intel(R) Celeron(R) 3205U': 15,
+      // ── AMD Ryzen 4000 Mobile (Renoir, Zen 2) ───────────────────────────────
+      'AMD Ryzen 9 4900H': 45,
+      'AMD Ryzen 9 4900HS': 35,
+      'AMD Ryzen 7 4800H': 45,
+      'AMD Ryzen 7 4800HS': 35,
+      'AMD Ryzen 5 4600H': 45,
+      'AMD Ryzen 7 4800U': 15,
+      'AMD Ryzen 5 4600U': 15,
+      'AMD Ryzen 5 4500U': 15,
+      'AMD Ryzen 3 4300U': 15,
+      'AMD Ryzen 3 4200U': 15,
+      // ── AMD Ryzen 5000 Mobile (Cezanne, Zen 3) ──────────────────────────────
+      'AMD Ryzen 9 5980HX': 45,
+      'AMD Ryzen 9 5980HS': 35,
+      'AMD Ryzen 9 5900HS': 35,
+      'AMD Ryzen 7 5800HS': 35,
+      'AMD Ryzen 7 5700U': 15,
+      'AMD Ryzen 5 5600U': 15,
+      'AMD Ryzen 5 5500U': 15,
+      'AMD Ryzen 3 5400U': 15,
+      // ── AMD Ryzen 6000 Mobile (Rembrandt, Zen 3+) ───────────────────────────
+      'AMD Ryzen 9 6980HX': 45,
+      'AMD Ryzen 9 6900HX': 45,
+      'AMD Ryzen 9 6900HS': 35,
+      'AMD Ryzen 7 6800H': 45,
+      'AMD Ryzen 7 6800HS': 35,
+      'AMD Ryzen 5 6600H': 45,
+      'AMD Ryzen 5 6600HS': 35,
+      'AMD Ryzen 7 6800U': 15,
+      'AMD Ryzen 5 6600U': 15,
+      // ── AMD Ryzen 7000 Mobile (Dragon Range HX / Phoenix HS) ────────────────
+      'AMD Ryzen 9 7945HX3D': 55,
+      'AMD Ryzen 9 7945HX': 55,
+      'AMD Ryzen 9 7845HX': 55,
+      'AMD Ryzen 7 7745HX': 55,
+      'AMD Ryzen 5 7645HX': 55,
+      'AMD Ryzen 9 7940HS': 45,
+      'AMD Ryzen 7 7840HS': 45,
+      'AMD Ryzen 5 7640HS': 45,
+      'AMD Ryzen 7 7840U': 15,
+      'AMD Ryzen 5 7640U': 15,
+      'AMD Ryzen 5 7540U': 15,
+      'AMD Ryzen 3 7440U': 15,
+      // ── AMD Ryzen 8000 Mobile (Hawk Point, Zen 4) ───────────────────────────
+      'AMD Ryzen 9 8945HS': 45,
+      'AMD Ryzen 7 8845HS': 45,
+      'AMD Ryzen 7 8745HS': 45,
+      'AMD Ryzen 5 8645HS': 45,
+      'AMD Ryzen 5 8640HS': 45,
+      'AMD Ryzen 7 8840U': 15,
+      'AMD Ryzen 5 8640U': 15,
+      'AMD Ryzen 5 8540U': 15,
+      'AMD Ryzen 3 8440U': 15,
+      // ── AMD Ryzen 9000 Mobile (Strix Point, Zen 5) ──────────────────────────
+      'AMD Ryzen AI 9 HX 370': 28,
+      'AMD Ryzen AI 9 365': 28,
+      'AMD Ryzen AI 7 PRO 360': 28,
+      // ── AMD Ryzen 3000 Mobile (Picasso, Zen+) ───────────────────────────────
+      'AMD Ryzen 7 3750H': 35,
+      'AMD Ryzen 5 3550H': 35,
+      'AMD Ryzen 7 3700U': 15,
+      'AMD Ryzen 5 3500U': 15,
+      'AMD Ryzen 3 3300U': 15,
+      'AMD Ryzen 3 3200U': 15,
+      // ── AMD Ryzen 2000 Mobile (Raven Ridge, Zen 1) ──────────────────────────
+      'AMD Ryzen 7 2700U': 15,
+      'AMD Ryzen 5 2500U': 15,
+      'AMD Ryzen 3 2300U': 15,
+      'AMD Ryzen 3 2200U': 15,
+      // ── AMD A-series Mobile / PRO ───────────────────────────────────────────
+      'AMD A12-9720P': 15,
+      'AMD A12-9700P': 15,
+      'AMD A10-9620P': 15,
+      'AMD A10-9600P': 15,
+      'AMD A8-8600P': 15,
+      'AMD A6-8500P': 15,
+      'AMD A10-8700P': 12,
+      'AMD A8-7410': 15,
+      'AMD A6-7310': 15,
+      'AMD A4-7210': 15,
+      'AMD A8-6410': 15,
+      'AMD A6-6310': 15,
+      'AMD A4-6210': 15,
+      'AMD E2-7110': 12,
+      'AMD E2-6110': 15,
+      // ── AMD E / C-series (Bobcat / Jaguar) ──────────────────────────────────
+      'AMD E-350': 18,
+      'AMD E-450': 18,
+      'AMD E-240': 18,
+      'AMD E-300': 15,
+      'AMD E-350D': 18,
+      'AMD E-450D': 18,
+      'AMD C-60': 9,
+      'AMD C-50': 9,
+      'AMD C-30': 9,
+      'AMD C-70': 9,
+      'AMD Z-60': 5,
+      'AMD Z-01': 6,
     }),
     [],
   );
@@ -4847,203 +4822,24 @@ export default function Miner({
     [],
   );
 
-  // Online TDP lookup (Brave Answers AI): fire for all GPU models not yet cached.
-  // Skip entirely for laptops — their power is modelled as one whole-unit thermal envelope
-  // (CPU already includes the iGPU) so a separate GPU TDP lookup is incorrect and noisy.
-  // Also skip integrated GPU models (Intel HD/UHD/Iris) on any device type.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    if (!hardware || !hardware.source) return;
-    if (hardware.deviceType === 'Laptop') return;
-    const modelsToFetch = allGpuModels.filter((m) => {
-      const cached = dynamicTDPCache[m];
-      if (cached && typeof cached.ts === 'number') {
-        const age = Date.now() - cached.ts;
-        const ttl = typeof cached.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
-        if (age < ttl) return false; // fresh cache (success or recent miss)
-      }
-      // Skip integrated GPU models — their power is inside the CPU TDP envelope
-      if (/Intel.*(?:HD|UHD|Iris)/i.test(m)) return false;
-      return true;
-    });
-    if (modelsToFetch.length === 0) return;
-    modelsToFetch.forEach(async (model) => {
-      setTdpFetchingCount((n) => n + 1);
-      try {
-        const tdp = await fetchGpuTDPOnline(model);
-        setDynamicTDPCache((prev) => {
-          const entry = { tdp, ts: Date.now() };
-          const next = { ...prev, [model]: entry };
-          try {
-            localStorage.setItem(ONLINE_TDP_CACHE_KEY, JSON.stringify(next));
-          } catch (_) {
-            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-          }
-          return next;
-        });
-        if (tdp !== null) {
-          setLog((log) => [{ time: now(), msg: `Online GPU TDP: ${model} → ${tdp} W`, type: 'info' }, ...log]);
-        } else {
-          setLog((log) => [
-            { time: now(), msg: `Online GPU TDP: ${model} → no result, using fallback`, type: 'warn' },
-            ...log,
-          ]);
-        }
-      } finally {
-        setTdpFetchingCount((n) => n - 1);
-      }
-    });
-    // gpuTDPTable is static data defined inline — stable, safe to omit from deps
-  }, [hardware, allGpuModels, dynamicTDPCache, hardwareLookupResetNonce]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Online CPU TDP lookup (Brave Answers AI): fire for all CPUs not yet cached.
-  // Laptops are handled as a unit via the whole-laptop system power lookup below.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    if (!hardware || !hardware.source) return;
-    if (hardware.deviceType === 'Laptop') return; // whole-laptop power lookup handles this
-    const cpuKey = hardware.cpu ? hardware.cpu.split(' (')[0] : null;
-    if (!cpuKey) return;
-    const cpuCached = dynamicCPUTDPCache[cpuKey];
-    if (cpuCached && typeof cpuCached.ts === 'number') {
-      const age = Date.now() - cpuCached.ts;
-      const ttl = typeof cpuCached.tdp === 'number' ? ONLINE_TDP_CACHE_TTL_MS : ONLINE_TDP_CACHE_MISS_TTL_MS;
-      if (age < ttl) return; // fresh cache (success or recent miss)
-    }
-    setTdpFetchingCount((n) => n + 1);
-    (async () => {
-      try {
-        const tdp = await fetchCpuTDPOnline(cpuKey);
-        setDynamicCPUTDPCache((prev) => {
-          const entry = { tdp, ts: Date.now() };
-          const next = { ...prev, [cpuKey]: entry };
-          try {
-            localStorage.setItem(ONLINE_CPU_TDP_CACHE_KEY, JSON.stringify(next));
-          } catch (_) {
-            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-          }
-          return next;
-        });
-        if (tdp !== null) {
-          setLog((log) => [{ time: now(), msg: `Online CPU TDP: ${cpuKey} → ${tdp} W`, type: 'info' }, ...log]);
-        } else {
-          setLog((log) => [
-            { time: now(), msg: `Online CPU TDP: ${cpuKey} → no result, using fallback`, type: 'warn' },
-            ...log,
-          ]);
-        }
-      } finally {
-        setTdpFetchingCount((n) => n - 1);
-      }
-    })();
-    // cpuTDPTable is static inline data - safe to omit from deps
-  }, [hardware, dynamicCPUTDPCache, hardwareLookupResetNonce]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Online whole-device system power lookup (measured wall-socket watts at max load).
-  // Used for laptops, ASICs, and mini PCs, where the machine is one thermal/power unit.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
-    if (hardware.deviceType !== 'Laptop' && hardware.deviceType !== 'ASIC' && !isWholeDeviceMiniPcModel) return;
-    if (!hardware.source) return; // hardware not loaded yet
-    // Check if we already have a fresh cached value.
-    // Discard null-result cache entries immediately so a previously-blocked
-    // lookup (e.g. before CSP fix) retries on next launch.
-    const unitLabel =
-      [hardware.manufacturer, hardware.version]
-        .map((s) => (s || '').trim())
-        .filter((s) => s && !/^unknown$/i.test(s))
-        .join(' ')
-        .trim() || (hardware.cpu || 'unknown').trim();
-    try {
-      const s = localStorage.getItem(ONLINE_LAPTOP_POWER_CACHE_KEY);
-      if (s) {
-        const parsed = JSON.parse(s);
-        if (parsed && parsed.tdp === null) {
-          // Stale miss (e.g. previously blocked by CSP) — discard and retry.
-          localStorage.removeItem(ONLINE_LAPTOP_POWER_CACHE_KEY);
-        } else {
-          const ttl = ONLINE_TDP_CACHE_TTL_MS;
-          if (parsed && typeof parsed.ts === 'number' && Date.now() - parsed.ts < ttl) {
-            if (typeof parsed.tdp === 'number') {
-              setLaptopLivePowerW(parsed.tdp);
-              setBenchmarkPowerCapW(null);
-              consecutiveUnderestimateRef.current = 0;
-              // Cached result within 14 days — apply silently, no log
-            }
-            return;
-          }
-        }
-      }
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-    }
-    setTdpFetchingCount((n) => n + 1);
-    (async () => {
-      try {
-        const queryModel = hardware.deviceType === 'ASIC' ? hardware.gpu : null;
-        const tdp = await fetchLaptopSystemPowerOnline(
-          queryModel || hardware.manufacturer,
-          queryModel ? null : hardware.version,
-          queryModel ? null : hardware.cpu,
-          null,
-        );
-        const entry = { tdp, ts: Date.now() };
-        try {
-          localStorage.setItem(ONLINE_LAPTOP_POWER_CACHE_KEY, JSON.stringify(entry));
-        } catch (_) {
-          if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-        }
-        if (tdp !== null) {
-          setLaptopLivePowerW(tdp);
-          // Reset benchmark cap so the next benchmark re-establishes from the live TDP base.
-          setBenchmarkPowerCapW(null);
-          consecutiveUnderestimateRef.current = 0;
-          setLog((log) => [
-            {
-              time: now(),
-              msg: `Online ${hardware.deviceType === 'ASIC' ? 'ASIC' : isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: "${unitLabel}" → ${tdp} W (live, benchmark cap reset)`,
-              type: 'info',
-            },
-            ...log,
-          ]);
-        } else {
-          setLog((log) => [
-            {
-              time: now(),
-              msg: `Online ${hardware.deviceType === 'ASIC' ? 'ASIC' : isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup: no result found for "${unitLabel}", keeping static estimate`,
-              type: 'warn',
-            },
-            ...log,
-          ]);
-        }
-      } catch (e) {
-        setLog((log) => [
-          {
-            time: now(),
-            msg: `Online ${hardware.deviceType === 'ASIC' ? 'ASIC' : isWholeDeviceMiniPcModel ? 'mini PC' : 'laptop'} power lookup failed for "${unitLabel}": ${e && e.message ? e.message : String(e)}`,
-            type: 'warn',
-          },
-          ...log,
-        ]);
-      } finally {
-        setTdpFetchingCount((n) => n - 1);
-      }
-    })();
-  }, [
-    hardware.deviceType,
-    hardware.source,
-    hardware.manufacturer,
-    hardware.version,
-    hardware.cpu,
-    hardware.gpu,
-    hardwareLookupResetNonce,
-    isWholeDeviceMiniPcModel,
-    setLog,
-    now,
-  ]);
-
   // Family regex fallback tables
   const cpuPowerTable = [
+    // ── Mobile/ULP suffix-specific fallback (checked first — more specific) ──
+    { regex: /HX$|HK$/i, power: 55 },
+    { regex: /HS$/i, power: 35 },
+    { regex: /H$|HQ$|QM$/i, power: 45 },
+    { regex: /P$/i, power: 28 },
+    { regex: /U$/i, power: 15 },
+    { regex: /Y$/i, power: 9 },
+    { regex: /M$/i, power: 35 },
+    { regex: /G[147]$/i, power: 15 }, // Tiger Lake / Alder Lake U-series (G7/G4/G1)
+    { regex: /\bN\d{3,4}$/i, power: 8 },
+    { regex: /\bJ\d{4}$/i, power: 10 },
+    { regex: /GE$/i, power: 35 }, // AMD low-power desktop APU
+    { regex: /GT$/i, power: 65 }, // AMD high-clock desktop APU
+    { regex: /G$/i, power: 65 }, // AMD desktop APU
+    { regex: /T$/i, power: 35 }, // Intel low-power desktop T-series
+    // ── Generic tier-based (desktop fallback) ─────────────────────────────────
     { regex: /i9|Ryzen 9/i, power: 125 },
     { regex: /i7|Ryzen 7/i, power: 95 },
     { regex: /i5|Ryzen 5/i, power: 75 },
@@ -5062,17 +4858,12 @@ export default function Miner({
     { regex: /GTX/i, power: 180 },
     { regex: /Radeon/i, power: 200 },
   ];
-  const laptopModelTable = [
-    { regex: /ThinkPad|Lenovo/i, power: 45 },
-    { regex: /MacBook/i, power: 35 },
-    { regex: /XPS|Latitude|EliteBook|Spectre|Yoga|Surface|IdeaPad|Aspire/i, power: 50 },
-  ];
   const asicPowerTable = [
-    { regex: /Antminer.*S21\s*XP/i, power: 3800 },
+    { regex: /Antminer.*S21\s*XP/i, power: 3650 },
     { regex: /Antminer.*S21/i, power: 3500 },
     { regex: /Antminer.*T21/i, power: 3610 },
     { regex: /Antminer.*S19\s*XP/i, power: 3010 },
-    { regex: /Antminer.*S19\s*Pro\+/i, power: 3300 },
+    { regex: /Antminer.*S19\s*Pro\+/i, power: 5000 },
     { regex: /Antminer.*S19\s*Pro/i, power: 3250 },
     { regex: /Antminer.*S19j\s*Pro\+/i, power: 3220 },
     { regex: /Antminer.*S19j\s*Pro/i, power: 3050 },
@@ -5087,10 +4878,10 @@ export default function Miner({
     { regex: /Antminer.*T15/i, power: 1540 },
     { regex: /Antminer.*S9[kji]|S9\s*\(/i, power: 1400 },
     { regex: /Antminer.*S9/i, power: 1350 },
-    { regex: /Whatsminer.*M66/i, power: 2988 },
+    { regex: /Whatsminer.*M66/i, power: 5500 },
     { regex: /Whatsminer.*M60S/i, power: 3500 },
     { regex: /Whatsminer.*M60/i, power: 3306 },
-    { regex: /Whatsminer.*M56/i, power: 3400 },
+    { regex: /Whatsminer.*M56/i, power: 5500 },
     { regex: /Whatsminer.*M50S\+\+/i, power: 3470 },
     { regex: /Whatsminer.*M50S/i, power: 3500 },
     { regex: /Whatsminer.*M50/i, power: 3270 },
@@ -5099,67 +4890,46 @@ export default function Miner({
     { regex: /Whatsminer.*M30S/i, power: 3260 },
     { regex: /Whatsminer.*M30/i, power: 3260 },
     { regex: /Whatsminer.*M32/i, power: 3200 },
-    { regex: /Whatsminer.*M31S/i, power: 2700 },
-    { regex: /Whatsminer.*M21S/i, power: 2700 },
-    { regex: /Whatsminer.*M20S/i, power: 2800 },
+    { regex: /Whatsminer.*M31S/i, power: 3360 },
+    { regex: /Whatsminer.*M21S/i, power: 3360 },
+    { regex: /Whatsminer.*M20S/i, power: 3400 },
     { regex: /Whatsminer.*M20/i, power: 2800 },
     { regex: /Avalon.*A1466I/i, power: 3320 },
-    { regex: /Avalon.*A1366I/i, power: 3250 },
+    { regex: /Avalon.*A1366I/i, power: 3570 },
     { regex: /Avalon.*A1266/i, power: 3420 },
     { regex: /Avalon.*A1166\s*Pro/i, power: 3400 },
     { regex: /Avalon.*A1166/i, power: 3250 },
     { regex: /Avalon.*A1066/i, power: 3200 },
   ];
 
-  const miniPcModelTable = [
-    { regex: /ThinkCentre\s+M\d{3,4}[a-z]?q|ThinkCentre\s+Tiny/i, power: 42 },
-    { regex: /OptiPlex\s+(?:Micro|Ultra)/i, power: 40 },
-    { regex: /ProDesk\s+Mini|EliteDesk\s+Mini/i, power: 40 },
-    { regex: /EliteMini|DeskMini|Veriton\s+N|ExpertCenter\s+PN/i, power: 38 },
-    { regex: /NUC/i, power: 35 },
-    { regex: /BRIX|Cubi|NUCBox|Chromebox/i, power: 35 },
-    { regex: /Beelink|Minisforum|Geekom|GMKtec|Zotac|Shuttle/i, power: 38 },
-    { regex: /Mini\s+PC|Mini-PC|Tiny|Micro|Nano|USFF/i, power: 38 },
-  ];
-
   // 1. Try exact model TDP for CPU + sum TDP of ALL detected GPUs
   let matched = false;
   let cpuTDP = null;
   let gpuTDP = null; // total across all detected GPUs
-  let pcOnlineTdpUsed = false;
   const cpuSocketCount = Math.max(1, Number(hardware.cpuSockets) || 1);
   // Core-count cross-validation: cap socket count against navigator.hardwareConcurrency.
   // Prevents inflated multi-socket claims from multiplying TDP fraudulently.
   const navCores = Math.max(1, navigator.hardwareConcurrency || 1);
   const maxCredibleSockets = Math.max(1, Math.floor(navCores / 2));
   const coreValidatedSocketCount = Math.min(cpuSocketCount, maxCredibleSockets);
+  let cpuKey = '';
 
   if (hardware.cpu) {
-    const cpuKey = hardware.cpu.split(' (')[0];
-    const staticW = cpuTDPTable[cpuKey];
-    const dynEntry = dynamicCPUTDPCache[cpuKey];
-    const dynW = dynEntry && typeof dynEntry.tdp === 'number' ? dynEntry.tdp : null;
-    const w = dynW || staticW;
+    cpuKey = hardware.cpu.split(' (')[0].replace(/(?: CPU)? @ [\d.]+GHz?$/i, '');
+    const w = cpuTDPTable[cpuKey];
     if (w) {
       cpuTDP = w * coreValidatedSocketCount;
       matched = true;
-      if (dynW) pcOnlineTdpUsed = true;
     }
   }
-  // Iterate ALL GPUs for TDP sum (handles multi-GPU systems)
-  // Also checks dynamicTDPCache for models looked up online
   if (allGpuModels.length > 0) {
     let gpuTDPSum = 0;
     let anyGpuMatched = false;
     for (const gpuModel of allGpuModels) {
-      const staticW = gpuTDPTable[gpuModel];
-      const dynEntry = dynamicTDPCache[gpuModel];
-      const dynW = dynEntry && typeof dynEntry.tdp === 'number' ? dynEntry.tdp : null;
-      const w = dynW || staticW;
+      const w = gpuTDPTable[gpuModel];
       if (w) {
         gpuTDPSum += w;
         anyGpuMatched = true;
-        if (dynW) pcOnlineTdpUsed = true;
       }
     }
     if (anyGpuMatched) {
@@ -5178,19 +4948,34 @@ export default function Miner({
   //   because a 4-socket server with 512 GB ECC draws ~300 W from memory alone.
   const memType = (hardware.memType || '').toUpperCase();
   const isServer = hardware.deviceType === 'Server';
+  const isLaptop = hardware.deviceType === 'Laptop' || hardware.deviceType === 'Mini PC';
   const isLPDDR = /LPDDR/.test(memType);
   const isDDR5 = /DDR5/.test(memType);
   const isDDR3 = /DDR3/.test(memType);
-  const wPerGB = isServer ? 0.6 : isLPDDR ? 0.15 : isDDR5 ? 0.25 : isDDR3 ? 0.5 : 0.375; // DDR4 default
+  const wPerGB = isServer
+    ? 0.6
+    : isLPDDR
+      ? 0.15
+      : isDDR5
+        ? isLaptop
+          ? 0.2
+          : 0.25
+        : isDDR3
+          ? isLaptop
+            ? 0.4
+            : 0.5
+          : isLaptop
+            ? 0.3
+            : 0.375;
   const memCapW = isServer ? Infinity : 40;
   const memPowerW = Math.min(memCapW, Math.max(0, Math.round((Number(hardware.memTotalGB) || 0) * wPerGB)));
 
   // Regex fallback for whichever component was not in the exact tables.
   // Without this, a PC with only one matched side (e.g. CPU in table but GPU not)
   // would silently omit the other component from the estimate.
-  if (cpuTDP === null && hardware.cpu) {
+  if (cpuTDP === null && cpuKey) {
     for (const entry of cpuPowerTable) {
-      if (entry.regex.test(hardware.cpu)) {
+      if (entry.regex.test(cpuKey)) {
         cpuTDP = entry.power * coreValidatedSocketCount;
         if (!matched) matched = true;
         break;
@@ -5223,8 +5008,7 @@ export default function Miner({
           break;
         }
       }
-      powerW =
-        asicPower !== null ? asicPower : laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500;
+      if (asicPower !== null) powerW = asicPower;
     } else if (
       hardware.deviceType === 'Desktop' ||
       hardware.deviceType === 'PC' ||
@@ -5235,40 +5019,35 @@ export default function Miner({
       else if (cpuTDP !== null) powerW = cpuTDP;
       else if (gpuTDP !== null) powerW = gpuTDP;
       powerW += memPowerW;
-    } else if (hardware.deviceType === 'Laptop') {
-      // Laptops mine CPU-only (allowGpuWorkloads = false), so only CPU TDP counts.
-      // iGPU power is already inside the CPU TDP envelope — do NOT add GPU TDP.
-      // Base = cpuTDP * 0.60 (40% conservative buffer; benchmark raises it toward 100%).
+    } else if (hardware.deviceType === 'Laptop' || isWholeDeviceMiniPcModel) {
+      // Laptops and Mini PCs mine CPU-only — iGPU power is inside CPU TDP envelope.
       if (cpuTDP !== null) {
-        totalHardwareTDPRef.current = cpuTDP; // ref used by runBenchmark for cap ceiling
-        powerW = Math.round(cpuTDP * 0.6);
+        totalHardwareTDPRef.current = cpuTDP;
+        powerW = cpuTDP + memPowerW;
       }
-      powerW += Math.min(memPowerW, 5); // modest memory contribution for laptops
     }
   }
 
   // 2. Try device type and family regex if not matched — iterate all GPUs for sum
   if (!matched) {
-    if (hardware.deviceType === 'Laptop') {
-      for (const entry of laptopModelTable) {
-        if (hardware.manufacturer && entry.regex.test(hardware.manufacturer)) {
-          powerW = entry.power;
-          matched = true;
-          break;
-        }
-        if (hardware.version && entry.regex.test(hardware.version)) {
-          powerW = entry.power;
-          matched = true;
-          break;
-        }
-        if (hardware.cpu && entry.regex.test(hardware.cpu)) {
-          powerW = entry.power;
-          matched = true;
-          break;
+    if (hardware.deviceType === 'Laptop' || isWholeDeviceMiniPcModel) {
+      // CPU-only: use regex fallback table; no GPU contribution.
+      let regexCpuTDP = null;
+      if (cpuKey) {
+        for (const entry of cpuPowerTable) {
+          if (entry.regex.test(cpuKey)) {
+            regexCpuTDP = entry.power * coreValidatedSocketCount;
+            break;
+          }
         }
       }
-      if (!matched) powerW = 50;
-    } else if (hardware.deviceType === 'Desktop' || hardware.deviceType === 'PC') {
+      if (regexCpuTDP !== null) {
+        totalHardwareTDPRef.current = regexCpuTDP;
+        powerW = regexCpuTDP + memPowerW;
+        matched = true;
+      }
+      // If still not matched, powerW stays 0 (mining impossible)
+    } else if (hardware.deviceType === 'Desktop' || hardware.deviceType === 'PC' || hardware.deviceType === 'Server') {
       // Sum regex TDP estimates across ALL GPUs
       let gpuRegexSum = 0;
       for (const gpuModel of allGpuModels) {
@@ -5283,28 +5062,25 @@ export default function Miner({
         powerW = gpuRegexSum;
         matched = true;
       }
-      if (!matched && hardware.cpu) {
+      if (!matched && cpuKey) {
         for (const entry of cpuPowerTable) {
-          if (entry.regex.test(hardware.cpu)) {
+          if (entry.regex.test(cpuKey)) {
             powerW = entry.power * coreValidatedSocketCount;
             matched = true;
             break;
           }
         }
       }
-      if (!matched) powerW = 120;
       // Add CPU regex estimate when a GPU sum was used as base
-      if (matched && gpuRegexSum > 0 && hardware.cpu) {
+      if (matched && gpuRegexSum > 0 && cpuKey) {
         for (const entry of cpuPowerTable) {
-          if (entry.regex.test(hardware.cpu)) {
+          if (entry.regex.test(cpuKey)) {
             powerW += entry.power * coreValidatedSocketCount;
             break;
           }
         }
       }
-      powerW += memPowerW;
-    } else if (hardware.deviceType === 'Server') {
-      powerW = Math.max(cpuTDP || 0, 250) + memPowerW;
+      if (matched) powerW += memPowerW;
     } else if (hardware.deviceType === 'ASIC') {
       let asicPower = null;
       for (const entry of asicPowerTable) {
@@ -5313,90 +5089,11 @@ export default function Miner({
           break;
         }
       }
-      powerW =
-        asicPower !== null ? asicPower : laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 500;
-    } else if (hardware.deviceType === 'Mac') {
-      powerW = laptopLivePowerW !== null && laptopLivePowerW > 0 ? laptopLivePowerW : 35;
+      if (asicPower !== null) powerW = asicPower;
     }
-  }
-
-  // Mac and ASIC: whole-unit live override (same pattern as Laptop).
-  // laptopLivePowerW is populated by the shared whole-device lookup effect above.
-  if (hardware.deviceType === 'Mac' || hardware.deviceType === 'ASIC' || isWholeDeviceMiniPcModel) {
-    if (laptopLivePowerW !== null && laptopLivePowerW > 0) {
-      powerW = laptopLivePowerW;
-    }
-  }
-
-  // Laptops: ALWAYS override whatever the component-based calc produced.
-  // A laptop is one thermal unit — use a whole-unit system TDP estimate.
-  // The trust factor (applied below) handles the power cap — no hard-coded buffer here.
-  if (hardware.deviceType === 'Laptop') {
-    let unitTDP = null;
-    // 0. Live online measurement overrides everything — real measured wall-socket watts
-    if (laptopLivePowerW !== null && laptopLivePowerW > 0) {
-      unitTDP = laptopLivePowerW;
-    } else {
-      // 1. Known manufacturer / model family
-      for (const entry of laptopModelTable) {
-        if (
-          (hardware.manufacturer && entry.regex.test(hardware.manufacturer)) ||
-          (hardware.version && entry.regex.test(hardware.version)) ||
-          (hardware.cpu && entry.regex.test(hardware.cpu))
-        ) {
-          unitTDP = entry.power;
-          break;
-        }
-      }
-      // 2. CPU generation / tier-based system TDP (whole-unit rough estimate)
-      if (unitTDP === null && hardware.cpu) {
-        if (/i9|Ryzen 9|Ultra 9|HX/i.test(hardware.cpu)) unitTDP = 80;
-        else if (/i7|Ryzen 7|Ultra 7/i.test(hardware.cpu)) unitTDP = 65;
-        else if (/i5|Ryzen 5|Ultra 5/i.test(hardware.cpu)) unitTDP = 55;
-        else if (/i3|Ryzen 3/i.test(hardware.cpu)) unitTDP = 45;
-        else if (/M[1-4]/i.test(hardware.cpu)) unitTDP = 30;
-      }
-      if (!unitTDP) unitTDP = 45; // safe fallback for completely unknown laptops
-    }
-    totalHardwareTDPRef.current = unitTDP;
-    // Live online value is a whole-unit wall measurement — memory already included.
-    // Static table / heuristic values are CPU+GPU only, so add a memory allowance.
-    const liveIsWholUnit = laptopLivePowerW !== null && laptopLivePowerW > 0;
-    powerW = liveIsWholUnit ? unitTDP : unitTDP + Math.min(memPowerW, 5);
-  }
-
-  if (isWholeDeviceMiniPcModel) {
-    let unitTDP = null;
-    if (laptopLivePowerW !== null && laptopLivePowerW > 0) {
-      unitTDP = laptopLivePowerW;
-    } else {
-      for (const entry of miniPcModelTable) {
-        if (
-          (hardware.manufacturer && entry.regex.test(hardware.manufacturer)) ||
-          (hardware.version && entry.regex.test(hardware.version)) ||
-          (hardware.cpu && entry.regex.test(hardware.cpu))
-        ) {
-          unitTDP = entry.power;
-          break;
-        }
-      }
-      if (unitTDP === null && hardware.cpu) {
-        if (/i7|Ryzen 7|Ultra 7/i.test(hardware.cpu)) unitTDP = 50;
-        else if (/i5|Ryzen 5|Ultra 5/i.test(hardware.cpu)) unitTDP = 42;
-        else if (/i3|Ryzen 3|Celeron|Pentium/i.test(hardware.cpu)) unitTDP = 32;
-      }
-      if (!unitTDP) unitTDP = 38;
-    }
-    totalHardwareTDPRef.current = unitTDP;
-    powerW = unitTDP;
   }
 
   const clampedLoadPercent = Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0));
-
-  // Fall back to benchmark or heuristic estimate (desktops only; laptops are handled above).
-  if ((Number(powerW) || 0) <= 0 && Number(benchPower) > 0) {
-    powerW = Number(benchPower);
-  }
 
   // Benchmark-verified cap: clamp hardware-profile estimate to max credible power from measured throughput.
   const hwProfileRaw = powerW;
@@ -5428,8 +5125,6 @@ export default function Miner({
   // has no effect until trust grows — the machine simply won't run hotter than it can be credited for.
   const effectiveLoadPercent = Math.min(clampedLoadPercent, Math.round(trustFactor * 100));
 
-  const benchCapActive = benchmarkPowerCapW !== null && benchmarkPowerCapW > 0 && hwProfileRaw > benchmarkPowerCapW;
-
   const hasEstimate = (Number(powerW) || 0) > 0;
   if (!hasEstimate) powerW = 0;
 
@@ -5450,28 +5145,11 @@ export default function Miner({
   const _normalizedConfidenceTier = 'estimated';
   const _normalizedSourceName = 'local hardware profile model';
 
-  const WHOLE_DEVICE_LIVE_TYPES = ['Laptop', 'Mac', 'ASIC'];
-  const wholeDeviceLiveActive =
-    (WHOLE_DEVICE_LIVE_TYPES.includes(hardware.deviceType) || isWholeDeviceMiniPcModel) &&
-    laptopLivePowerW !== null &&
-    laptopLivePowerW > 0;
-  const pcOnlineActive =
-    !WHOLE_DEVICE_LIVE_TYPES.includes(hardware.deviceType) && !isWholeDeviceMiniPcModel && pcOnlineTdpUsed;
-  const powerSourceAccent = wholeDeviceLiveActive || pcOnlineActive ? '#4ade80' : '#4a7a4a';
+  const powerSourceAccent = '#4a7a4a';
   const powerSourceLabel =
     Number(benchPower) > 0 && basePowerW === Number(benchPower)
       ? 'benchmark fallback estimate'
-      : wholeDeviceLiveActive && benchCapActive
-        ? 'live (online, benchmark-capped)'
-        : wholeDeviceLiveActive
-          ? 'live (online)'
-          : pcOnlineActive && benchCapActive
-            ? 'live (online, benchmark-capped)'
-            : pcOnlineActive
-              ? 'live (online)'
-              : benchCapActive
-                ? 'hardware profile (benchmark-capped)'
-                : 'hardware profile estimate';
+      : 'hardware profile estimate';
   const hardwareCardPowerCalcBreakdown = (() => {
     const dt = hardware.deviceType;
     const isLaptop = dt === 'Laptop';
@@ -5479,11 +5157,7 @@ export default function Miner({
     const isASIC = dt === 'ASIC';
     const isMac = dt === 'Mac';
     if (isLaptop || isASIC || isMac || isWholeDeviceMiniPcModel) {
-      const unitW =
-        wholeDeviceLiveActive || isASIC || isMac || isWholeDeviceMiniPcModel
-          ? Math.round(laptopLivePowerW || hwProfileRaw || 0)
-          : Math.round(hwProfileRaw || 0);
-      return `unit: ${unitW} W`;
+      return `unit: ${Math.round(hwProfileRaw || 0)} W`;
     }
     if (isPC) {
       const parts = [];
@@ -5501,8 +5175,7 @@ export default function Miner({
     const isASIC = dt === 'ASIC';
     const isMac = dt === 'Mac';
     if (isLaptop) {
-      const w = wholeDeviceLiveActive ? Math.round(laptopLivePowerW) : Math.round(unitFullPowerW);
-      return `unit: ${w} W`;
+      return `unit: ${Math.round(unitFullPowerW)} W`;
     }
     if (isASIC) return `unit: ${unitFullPowerW > 0 ? unitFullPowerW : 3500} W`;
     if (isMac) return `unit: ${unitFullPowerW} W`;
@@ -5555,7 +5228,7 @@ export default function Miner({
   const tierEnergyPerCoinWh = energyForTier(currentTier);
   const tierRewardCoins = rewardForTier(currentTier);
   const minedPct = totalCoinSupply > 0 ? Math.min(100, (chainEmittedCoins / totalCoinSupply) * 100) : 0;
-  const hardwareRecognitionFinished = !!(hardware && hardware.source) && (tdpFetchingCount === 0 || tdpFetchTimedOut);
+  const hardwareRecognitionFinished = !!(hardware && hardware.source);
   const hardwareUnknown =
     hardwareRecognitionFinished &&
     (!hardwareRecognizedByNetwork ||
@@ -5563,17 +5236,16 @@ export default function Miner({
       hardware.cpu === 'Unknown' ||
       (Array.isArray(hardware.gpus) && hardware.gpus.some((g) => g === 'Unknown' || !g)));
   const startupBenchmarkPending = hardwareRecognitionFinished && !benchmarkState.startupDone;
-  // Once hardware is fully recognized, measure and persist the card's rendered width so
-  // the next launch pre-sizes the card to avoid a layout jump.
+  // Persist the card's rendered width once hardware is fully loaded so the next
+  // launch pre-sizes the card and avoids a layout jump.
   React.useEffect(() => {
     if (!hardwareRecognitionFinished) return;
     if (!hwCardRef.current) return;
-    // Short delay to let the DOM settle after the final state update.
     const t = setTimeout(() => {
       const w = hwCardRef.current && hwCardRef.current.offsetWidth;
       if (w > 0) {
         try {
-          localStorage.setItem(HARDWARE_CARD_WIDTH_KEY, String(w));
+          localStorage.setItem('wattcoin-hw-card-width', String(w));
         } catch (_) {
           if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
@@ -5581,8 +5253,7 @@ export default function Miner({
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [hardwareRecognitionFinished]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  }, [hardwareRecognitionFinished, hardware]); // eslint-disable-line react-hooks/exhaustive-deps
   // Once hardware recognition finishes, confirm against the coordinator's authoritative tables.
   React.useEffect(() => {
     if (!hardwareRecognitionFinished) return;
@@ -5597,8 +5268,10 @@ export default function Miner({
     const asicModel =
       hardware.deviceType === 'ASIC' && hardware.gpu && hardware.gpu !== 'Unknown' ? hardware.gpu : null;
     const deviceType = hardware.deviceType || 'Unknown';
-    const isWholeUnit = deviceType === 'Laptop' || deviceType === 'Mini PC';
-    if (isWholeUnit) return;
+    if (deviceType === 'Laptop' || deviceType === 'Mini PC') {
+      // iGPU TDP is inside CPU envelope; dGPU is not used for mining
+      gpuModels.length = 0;
+    }
     if (gpuModels.length === 0 && !cpuModel && !asicModel) {
       setHardwareRecognizedByNetwork(false);
       return;
@@ -5833,7 +5506,9 @@ export default function Miner({
       try {
         const res = await hw.invoke('wattcoin-asic-liveness-status');
         if (!cancelled && res && res.ok) setAsicLiveness(res.status || []);
-      } catch (_) {}
+      } catch (_) {
+        /* timeout — ignore */
+      }
     };
     poll();
     const timer = setInterval(poll, 30000);
@@ -6614,7 +6289,16 @@ export default function Miner({
           <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
             <b>Memory:</b> {hardware.memory || 'Unknown'}
           </div>
-          <div style={{ color: '#e8f5e8', fontSize: 15, marginBottom: 8 }}>
+          <div
+            style={{
+              color: '#e8f5e8',
+              fontSize: 15,
+              marginBottom: 8,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
             <b>Operating System:</b> {hardware.osName || 'Unknown'}
           </div>
           <div style={{ color: '#4ade80', fontSize: 13, marginTop: 8, wordBreak: 'break-all' }}>

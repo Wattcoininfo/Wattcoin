@@ -257,11 +257,11 @@ function getAsicPowerW(model) {
   const m = model;
 
   // ── Bitmain Antminer ────────────────────────────────────────────────────────
-  if (/Antminer.*S21\s*XP/i.test(m))         return 3800;
+  if (/Antminer.*S21\s*XP/i.test(m))         return 3650;
   if (/Antminer.*S21/i.test(m))               return 3500;
   if (/Antminer.*T21/i.test(m))               return 3610;
   if (/Antminer.*S19\s*XP/i.test(m))          return 3010;
-  if (/Antminer.*S19\s*Pro\+/i.test(m))       return 3300;
+  if (/Antminer.*S19\s*Pro\+/i.test(m))       return 5000;
   if (/Antminer.*S19\s*Pro/i.test(m))         return 3250;
   if (/Antminer.*S19j\s*Pro\+/i.test(m))      return 3220;
   if (/Antminer.*S19j\s*Pro/i.test(m))        return 3050;
@@ -279,10 +279,10 @@ function getAsicPowerW(model) {
   if (/Antminer.*S9/i.test(m))                return 1350;
 
   // ── MicroBT Whatsminer ─────────────────────────────────────────────────────
-  if (/Whatsminer.*M66/i.test(m))             return 2988;
+  if (/Whatsminer.*M66/i.test(m))             return 5500;
   if (/Whatsminer.*M60S/i.test(m))            return 3500;
   if (/Whatsminer.*M60/i.test(m))             return 3306;
-  if (/Whatsminer.*M56/i.test(m))             return 3400;
+  if (/Whatsminer.*M56/i.test(m))             return 5500;
   if (/Whatsminer.*M50S\+\+/i.test(m))        return 3470;
   if (/Whatsminer.*M50S/i.test(m))            return 3500;
   if (/Whatsminer.*M50/i.test(m))             return 3270;
@@ -291,14 +291,14 @@ function getAsicPowerW(model) {
   if (/Whatsminer.*M30S/i.test(m))            return 3260;
   if (/Whatsminer.*M30/i.test(m))             return 3260;
   if (/Whatsminer.*M32/i.test(m))             return 3200;
-  if (/Whatsminer.*M31S/i.test(m))            return 2700;
-  if (/Whatsminer.*M21S/i.test(m))            return 2700;
-  if (/Whatsminer.*M20S/i.test(m))            return 2800;
+  if (/Whatsminer.*M31S/i.test(m))            return 3360;
+  if (/Whatsminer.*M21S/i.test(m))            return 3360;
+  if (/Whatsminer.*M20S/i.test(m))            return 3400;
   if (/Whatsminer.*M20/i.test(m))             return 2800;
 
   // ── Canaan Avalon ──────────────────────────────────────────────────────────
   if (/Avalon.*A1466I/i.test(m))              return 3320;
-  if (/Avalon.*A1366I/i.test(m))              return 3250;
+  if (/Avalon.*A1366I/i.test(m))              return 3570;
   if (/Avalon.*A1266/i.test(m))               return 3420;
   if (/Avalon.*A1166\s*Pro/i.test(m))         return 3400;
   if (/Avalon.*A1166/i.test(m))               return 3250;
@@ -373,6 +373,13 @@ function getAsicHashrateTHs(model) {
 function getGpuTdpW(model) {
   if (!model) return 0;
   const m = model;
+  // ── NVIDIA RTX 50 series (Blackwell) ──────────────────────────────────────
+  if (/GeForce.*RTX 5090/i.test(m))                   return 575;
+  if (/GeForce.*RTX 5080/i.test(m))                   return 360;
+  if (/GeForce.*RTX 5070 Ti/i.test(m))                return 300;
+  if (/GeForce.*RTX 5070/i.test(m))                   return 250;
+  if (/GeForce.*RTX 5060 Ti/i.test(m))                return 180;
+  if (/GeForce.*RTX 5060/i.test(m))                   return 150;
   // ── NVIDIA RTX 40 series ─────────────────────────────────────────────────
   if (/GeForce.*RTX 4090/i.test(m))                   return 450;
   if (/GeForce.*RTX 4080 (SUPER|S)/i.test(m))         return 320;
@@ -405,9 +412,12 @@ function getGpuTdpW(model) {
   if (/GeForce.*GTX 1070/i.test(m))                   return 150;
   if (/GeForce.*GTX 1060/i.test(m))                   return 120;
   if (/GeForce.*GTX 1050 Ti/i.test(m))                return 75;
+  // ── AMD RX 9000 series (RDNA 4) ──────────────────────────────────────────
+  if (/Radeon.*RX 9070 XT/i.test(m))                  return 304;
+  if (/Radeon.*RX 9070/i.test(m))                     return 220;
   // ── AMD RX 7000 series ───────────────────────────────────────────────────
   if (/Radeon.*RX 7900 XTX/i.test(m))                 return 355;
-  if (/Radeon.*RX 7900 XT/i.test(m))                  return 300;
+  if (/Radeon.*RX 7900 XT/i.test(m))                  return 315;
   if (/Radeon.*RX 7900 GRE/i.test(m))                 return 260;
   if (/Radeon.*RX 7800 XT/i.test(m))                  return 263;
   if (/Radeon.*RX 7700 XT/i.test(m))                  return 245;
@@ -442,13 +452,15 @@ function getGpuTdpW(model) {
   if (/Radeon.*RX 470/i.test(m))                      return 120;
   if (/Radeon.*RX 460/i.test(m))                      return 75;
   // ── Intel Arc ────────────────────────────────────────────────────────────
-  if (/Intel.*Arc A770/i.test(m))                     return 225;
-  if (/Intel.*Arc A750/i.test(m))                     return 225;
-  if (/Intel.*Arc A580/i.test(m))                     return 175;
-  if (/Intel.*Arc A380/i.test(m))                     return 75;
+  if (/Intel.*Arc.*A770/i.test(m))                    return 225;
+  if (/Intel.*Arc.*A750/i.test(m))                    return 225;
+  if (/Intel.*Arc.*A580/i.test(m))                    return 175;
+  if (/Intel.*Arc.*A380/i.test(m))                    return 75;
+  if (/Intel.*Arc.*B580/i.test(m))                    return 190;
+  if (/Intel.*Arc.*B570/i.test(m))                    return 150;
   // ── Intel integrated (fallback — low TDP) ───────────────────────────────
   if (/Intel.*UHD Graphics/i.test(m))                 return 15;
-  if (/Intel.*Iris Xe/i.test(m))                      return 15;
+  if (/Intel.*Iris.*Xe/i.test(m))                     return 15;
   if (/Intel.*HD Graphics/i.test(m))                  return 10;
   // ── Microsoft Basic Render / WARP (no real GPU) ─────────────────────────
   if (/Microsoft Basic Render/i.test(m))              return 0;
@@ -457,4 +469,133 @@ function getGpuTdpW(model) {
   return 0;
 }
 
-module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW };
+// ── CPU TDP Lookup ───────────────────────────────────────────────────────────
+// Returns the rated TDP (W) for a known CPU model string, or 0 if unknown.
+// Covers mobile CPUs (suffix-based) and falls back to tier-based desktop estimates.
+function getCpuTdpW(cpuModel) {
+  if (!cpuModel) return 0;
+  // Normalize: strip parenthetical markers (like "(4 logical cores)")
+  // and speed suffixes (like "CPU @ 2.70GHz" or "@ 3.20GHz")
+  // Strip trailing parenthetical (e.g. "(4 logical cores)") but NOT (R) or (TM)
+  let m = cpuModel.replace(/\s*\([^)]+\)$/, '').replace(/(?: CPU)? @ [\d.]+GHz?$/i, '').trim();
+
+  // ── Unique / extreme TDP models ────────────────────────────────────────────
+  if (/i7-49[34]0MX/i.test(m)) return 57;  // Haswell Extreme Edition
+  if (/i7-39[24]0XM/i.test(m)) return 55;  // Ivy Bridge Extreme Edition
+  if (/i7-4712MQ|i7-4702MQ|i7-4702HQ/i.test(m)) return 37;
+  if (/i[357]-4[0-9]{3}M$/i.test(m)) return 37; // Haswell 37W M-series
+  if (/Ryzen 7 3750H|Ryzen 5 3550H/i.test(m)) return 35; // AMD Picasso 35W H
+  if (/i3-7100H|i3-6100H/i.test(m)) return 35; // low-end H-series 35W
+  if (/i7-11390H|i7-11370H|i5-11300H/i.test(m)) return 35; // Tiger Lake H35
+  if (/i7-3632QM|i7-3612QM/i.test(m)) return 35; // Ivy Bridge 35W quad
+  if (/i3-1115G4$/i.test(m)) return 15;     // Tiger Lake 15W model (others G7/G4 are 28W)
+  // AMD Ryzen 9 7945HX3D etc. — 55W, suffix HX3D not at end of model name
+  if (/HX3D$/i.test(m)) return 55;
+  // AMD Ryzen AI 300 (Strix Point) — 28W, suffix not at end
+  if (/Ryzen AI 9 HX 370/i.test(m)) return 28;
+  if (/Ryzen AI 9 365/i.test(m)) return 28;
+  if (/Ryzen AI 7 PRO 360/i.test(m)) return 28;
+
+  // ── Intel Y-series (very low TDP, 4.5-7W) ──────────────────────────────────
+  if (/m[357]-7Y3[0-2]|m5-6Y57|m7-6Y75|i[57]-7Y75|i5-7Y54/i.test(m)) return 4.5;
+  if (/i[57]-8500Y|i5-8200Y/i.test(m)) return 5;
+  if (/i[57]-10510Y|i5-10310Y/i.test(m)) return 7;
+  if (/Pentium.*4410Y/i.test(m)) return 6;
+
+  // ── Intel N-series (Alder Lake-N / Jasper Lake, 6-15W) ────────────────────
+  if (/N305$/i.test(m)) return 15;
+  if (/N300$/i.test(m)) return 7;
+  if (/N97$/i.test(m)) return 12;
+  if (/N95$/i.test(m)) return 15;
+  if (/N200$|N100$|N50$/i.test(m)) return 6;
+
+  // ── Intel J-series (Braswell / Apollo Lake, 6-10W) ─────────────────────────
+  if (/J4125|J4105|J4005|J3455|J3355/i.test(m)) return 10;
+  if (/J3160|J3060/i.test(m)) return 6;
+
+  // ── AMD A-series / E-series / C-series / Z-series ──────────────────────────
+  if (/A10-8700P|E2-7110/i.test(m)) return 12;
+  if (/Z-60/i.test(m)) return 5;
+  if (/Z-01/i.test(m)) return 6;
+  // Standard A-series (A4/A6/A8/A9/A10/A12) — 15W, caught here before /P$/ match
+  if (/\bA[4689]|A10|A12\b.*\d.*P$/i.test(m)) return 15; // AMD mobile A-series ending in P
+  if (/\bA[4689]|A10|A12\b/i.test(m) && !/K$/i.test(m)) return 15; // Non-K AMD A mobile
+  if (/\bE-240\b/i.test(m)) return 18; // AMD E-240
+  if (/\bE-350[D]?\b|\bE-450[D]?\b/i.test(m)) return 18; // AMD E-350/450
+  if (/\bE-300\b/i.test(m)) return 15; // AMD E-300 (Zacate, 2C)
+  if (/\bE2-\d{4}\b/i.test(m)) return 15; // AMD E2-series
+  if (/C-[34567]0/i.test(m)) return 9;  // AMD C-series
+
+  // ── Mobile / ULP suffix patterns (key for mobile CPU verification) ────────
+  // AMD Ryzen 5000/6000 HX — 45W (not 55W like Intel HX)
+  if (/Ryzen [0-9] [56][0-9]{3}HX$/i.test(m)) return 45;
+  // HX suffix (Intel 12th+ Gen HX, AMD 7000+ HX) — 55W
+  if (/HX$/i.test(m)) return 55;
+  // HK suffix (Intel) — 45W (distinct from HX)
+  if (/HK$/i.test(m)) return 45;
+  // AMD Ryzen 7000/8000 HS — 45W
+  if (/Ryzen [0-9] [78][0-9]{3}HS$/i.test(m)) return 45;
+  // AMD Ryzen 4000-6000 HS — 35W
+  if (/Ryzen [0-9] [456][0-9]{3}HS$/i.test(m)) return 35;
+  // Generic HS fallback
+  if (/HS$/i.test(m)) return 35;
+  // 4th/5th Gen (Haswell/Broadwell) HQ — 47W (distinct from 6th+ Gen 45W)
+  if (/i[357]-[45]\d{3}HQ$/i.test(m)) return 47;
+  // 4th/5th Gen i5 H (e.g. i5-4200H, i5-5350H) — 47W
+  if (/i5-[45]\d{3}H$/i.test(m)) return 47;
+  // Standard mobile (H / HQ / QM) — 45W
+  if (/H$|HQ$|QM$/i.test(m)) return 45;
+  // MQ (Haswell 4th Gen) — 47W
+  if (/MQ$/i.test(m)) return 47;
+  // Intel P-series (12th+ Gen, e.g. i7-1280P) — 28W
+  if (/i[357]-1[0-9]{2,4}P$/i.test(m)) return 28;
+  // U-series — 15W
+  if (/U$/i.test(m)) return 15;
+  // Old M-series (dual-core mobile) — 35W
+  if (/M$/i.test(m)) return 35;
+  // Y-series fallback — 9W
+  if (/Y$/i.test(m)) return 9;
+  // Tiger Lake 11th Gen G7/G4 — 28W (i3-1115G4 handled as exception above)
+  if (/i[357]-11[0-9]{2}G[74]$/i.test(m)) return 28;
+  // Older G-series (Ice Lake 10th Gen and earlier) — 15W
+  if (/G[147]$/i.test(m)) return 15;
+
+  // GE-suffix (AMD low-power desktop APU) — 35W, e.g. Ryzen 5 5600GE
+  if (/GE$/i.test(m)) return 35;
+  // AMD desktop APU (G/GT) — 65W, e.g. Ryzen 5 5600G/5600GT
+  if (/GT$/i.test(m)) return 65;
+  if (/G$/i.test(m)) return 65;
+  // T-suffix (Intel low-power desktop) — 35W, e.g. i5-12400T
+  if (/T$/i.test(m)) return 35;
+  // ── Intel N / J broad fallback ─────────────────────────────────────────────
+  if (/\bN\d{3,4}$/i.test(m)) return 8;
+  if (/\bJ\d{4}$/i.test(m)) return 10;
+
+  // ── Apple Silicon ──────────────────────────────────────────────────────────
+  if (/M[12] Ultra/i.test(m)) return 100;
+  if (/M[34] Ultra/i.test(m)) return 100;
+  if (/M4 Max/i.test(m)) return 50;
+  if (/M3 Max/i.test(m)) return 92;
+  if (/M[12] Max/i.test(m)) return 60;
+  if (/M4 Pro/i.test(m)) return 31;
+  if (/M3 Pro/i.test(m)) return 35;
+  if (/M2 Pro/i.test(m)) return 35;
+  if (/M1 Pro/i.test(m)) return 30;
+  if (/\bM4\b/i.test(m)) return 20;
+  if (/\bM3\b/i.test(m)) return 22;
+  if (/\bM2\b/i.test(m)) return 22;
+  if (/\bM1\b/i.test(m)) return 20;
+
+  // ── Desktop generational tier-based fallback ──────────────────────────────
+  if (/i9|Ryzen 9|Threadripper|Ultra 9[^A-Za-z]/.test(m)) return 125;
+  if (/i7|Ryzen 7|Ultra 7[^A-Za-z]/.test(m)) return 95;
+  if (/i5|Ryzen 5|Ultra 5[^A-Za-z]/.test(m)) return 75;
+  if (/i3|Ryzen 3/.test(m)) return 55;
+  if (/Celeron|Pentium|Atom|Athlon/.test(m)) return 35;
+  if (/FX-\d{4}|Phenom/.test(m)) return 125; // AMD FX / Phenom desktop
+  if (/Xeon|EPYC/.test(m)) return 180;
+
+  return 0; // unknown
+}
+
+module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW, getCpuTdpW };

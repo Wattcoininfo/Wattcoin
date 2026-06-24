@@ -37,9 +37,7 @@ function MiningLog({
     if (msg.includes('benchmark')) return true;
     if (msg.includes('telemetry trigger')) return true;
     if (msg.includes('laptop power') || msg.includes('laptop-power:')) return true;
-    if (msg.includes('online gpu tdp:')) return true;
-    if (msg.includes('online cpu tdp:')) return true;
-    if (msg.includes('online laptop power lookup:')) return true;
+
     return false;
   };
 

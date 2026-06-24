@@ -159,7 +159,7 @@ async function verifyLiveness(ip, port, stratumPort, stratumHandles) {
   };
 }
 
-async function verifyFirmware(_ip, _port, _checkModel, _declaredModel) {
+function verifyFirmware(_ip, _port, _checkModel, _declaredModel) {
   return { ok: true, identities: [], compileTimes: [], issues: [] };
 }
 

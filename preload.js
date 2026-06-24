@@ -139,7 +139,6 @@ try {
           'wattcoin-delete-address',
           'wattcoin-check-for-update',
           'wattcoin-install-update',
-          'wattcoin-fetch-url',
           'wattcoin-get-electricity-price',
           'wattcoin-explorer-get-blocks',
           'wattcoin-explorer-get-block',

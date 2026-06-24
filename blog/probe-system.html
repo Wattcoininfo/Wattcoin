@@ -448,7 +448,7 @@
           <li>
             The <strong>CPU model</strong> is read from <code>os.cpus()[0].model</code> — the operating system kernel,
             not the renderer, decides what CPU is installed. Any mismatch triggers a −20 trust penalty and caps declared
-            power to the real CPU's TDP via Brave lookup.
+            power to the real CPU's TDP.
           </li>
           <li>
             The <strong>GPU model</strong> is verified through two independent channels: the OS-level
@@ -572,9 +572,8 @@
         </p>
         <h4>Hardware misrepresentation</h4>
         <p>
-          OS-level CPU model (kernel), DXGI GPU model (native binary), device type cross-check, and Brave TDP lookup
-          together make it infeasible to claim a different chip than what is physically installed. A VM cannot mine at
-          all.
+          OS-level CPU model (kernel), DXGI GPU model (native binary), device type cross-check together make it
+          infeasible to claim a different chip than what is physically installed. A VM cannot mine at all.
         </p>
         <h4>Pre-computation</h4>
         <p>
@@ -613,7 +612,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.382 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.385 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

@@ -1021,28 +1021,7 @@ export default function AppTabs() {
                     ]);
                     return;
                   }
-                  try {
-                    localStorage.removeItem('wattcoin-online-tdp-v2');
-                    localStorage.removeItem('wattcoin-online-cpu-tdp-v2');
-                    localStorage.removeItem('wattcoin-online-laptop-power-v8');
-                  } catch (_) {
-                    /* istanbul ignore next */
-                  }
                   setHardwareLookupResetNonce((value) => value + 1);
-                  const nextAllowedMs =
-                    result && result.nextClearAllowedAtMs
-                      ? result.nextClearAllowedAtMs
-                      : Date.now() + 3 * 24 * 60 * 60 * 1000;
-                  setSearchCacheOnCooldown(true);
-                  setSearchCacheCooldownRemainingMs(nextAllowedMs - Date.now());
-                  setLog((prev) => [
-                    {
-                      time: new Date().toLocaleString('en-GB'),
-                      msg: 'TDP search cache cleared. Fresh hardware lookup data will be fetched on next benchmark. Next clear available in 3 days.',
-                      type: 'info',
-                    },
-                    ...prev,
-                  ]);
                 } catch (error) {
                   setLog((prev) => [
                     {
@@ -1078,13 +1057,6 @@ export default function AppTabs() {
                       ...prev,
                     ]);
                     return;
-                  }
-                  try {
-                    localStorage.removeItem('wattcoin-online-tdp-v2');
-                    localStorage.removeItem('wattcoin-online-cpu-tdp-v2');
-                    localStorage.removeItem('wattcoin-online-laptop-power-v8');
-                  } catch (_) {
-                    /* istanbul ignore next */
                   }
                   setHardwareLookupResetNonce((value) => value + 1);
                   // Activate cooldown in UI immediately after a successful reset.

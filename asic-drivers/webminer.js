@@ -107,7 +107,9 @@ async function detect(ip, port) {
                 driverName: name,
               };
             }
-          } catch {}
+          } catch {
+            /* json parse failed */
+          }
         }
       }
     }
@@ -246,7 +248,7 @@ async function verifyLiveness(ip, port, stratumPort, stratumHandles, driverConfi
   };
 }
 
-async function verifyFirmware(_ip, _port, _checkModel, _declaredModel, _driverConfig) {
+function verifyFirmware(_ip, _port, _checkModel, _declaredModel, _driverConfig) {
   return { ok: true, identities: [], compileTimes: [], issues: [] };
 }
 

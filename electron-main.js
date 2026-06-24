@@ -52,6 +52,7 @@ const {
   getAsicPowerW,
   getAsicHashrateTHs,
   getGpuTdpW,
+  getCpuTdpW,
 } = require('./hardware-tables.cjs');
 const {
   startStratumServer,
@@ -470,7 +471,7 @@ function saveHwAuthState() {
 // -- OS-level hardware identity (authoritative � renderer cannot influence) ----
 // These values are read once at startup from Node / Electron / systeminformation
 // APIs in the main process.  They are used to cross-check the renderer's hardware
-// declarations; any mismatch triggers a trust penalty and a Brave-sourced TDP cap.
+// declarations; any mismatch triggers a trust penalty.
 let osHardwareIdentity = null; // { cpuModel, gpuModels[], chassisType, deviceType, isVM, vmType }
 
 function isUnusableGpuIdentity(value) {
@@ -597,103 +598,6 @@ async function resolveOsHardwareIdentity() {
   return osHardwareIdentity;
 }
 
-// -- Wattage parsing (shared with Miner.jsx � authoritative copy) ------------
-function normalizeWattageText(text) {
-  return String(text || '')
-    .replace(/\$\$/g, ' ')
-    .replace(/\\[,;!:\s]*\\(?:text|mathrm)\{\s*([Ww])\s*\}/g, ' $1')
-    .replace(/\\(?:text|mathrm)\{\s*[Ww]\s*\}/g, 'W')
-    .replace(/\{\s*[Ww]\s*\}/g, 'W')
-    .replace(/\\[,;!:\s]*/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-function parseBestWattage(text) {
-  const normalized = normalizeWattageText(text);
-  const re = /\b(\d{1,4}(?:\.\d{1,2})?)\s*[Ww](?:atts?)?(?!\d)/g;
-  let best = null,
-    bestScore = -Infinity;
-  let m;
-  while ((m = re.exec(normalized)) !== null) {
-    const w = parseFloat(m[1]);
-    const ctx = normalized.substring(Math.max(0, m.index - 80), m.index + m[0].length + 80).toLowerCase();
-    let score = 0;
-    if (/\btdp\b/.test(ctx)) score += 3;
-    if (/consumption|under load|max.{0,10}power|full load|power draw|stress/i.test(ctx)) score += 2;
-    if (/rated|maximum|peak/i.test(ctx)) score += 1;
-    if (/adapter|charger|power supply|ac adapter|psu/i.test(ctx)) score -= 3;
-    if (/idle|sleep|standby/i.test(ctx)) score -= 2;
-    if (score > bestScore || (score === bestScore && best === null)) {
-      best = Math.round(w);
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-// -- Main-process TDP lookup (via server-side proxy) -------------------------
-// The Brave AI subscription key lives server-side only.  The app calls
-// wattcoin.ee/api/tdp-lookup which forwards to Brave and returns the raw
-// answer text.  parseBestWattage() still runs locally for extraction.
-const BRAVE_TDP_PROXY_URL = 'https://wattcoin.ee/api/tdp-lookup';
-const _mainTdpCache = new Map(); // model ? { tdpW, ts }
-const _MAIN_TDP_CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
-
-function fetchTdpFromBrave(modelString) {
-  const clean = modelString
-    .replace(/\(R\)|\(TM\)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!clean) return Promise.resolve(null);
-
-  // Check cache.
-  const cached = _mainTdpCache.get(clean);
-  if (cached && Date.now() - cached.ts < _MAIN_TDP_CACHE_TTL_MS) return Promise.resolve(cached.tdpW);
-
-  return new Promise((resolve) => {
-    try {
-      const proxyUrl = new URL(BRAVE_TDP_PROXY_URL);
-      proxyUrl.searchParams.set('gpu', clean);
-      const req = https.request(
-        proxyUrl,
-        {
-          method: 'GET',
-          timeout: 15000,
-          agent: false,
-          headers: {
-            'User-Agent': 'wattcoin-miner/1.0 (power-lookup)',
-            Accept: 'application/json',
-          },
-        },
-        (res) => {
-          const chunks = [];
-          res.on('data', (chunk) => chunks.push(chunk));
-          res.on('end', () => {
-            try {
-              const data = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-              const answer = data && data.ok && data.answer ? data.answer : null;
-              const tdpW = answer ? parseBestWattage(answer) : null;
-              if (tdpW !== null) _mainTdpCache.set(clean, { tdpW, ts: Date.now() });
-              resolve(tdpW);
-            } catch (_) {
-              resolve(null);
-            }
-          });
-          res.on('error', () => resolve(null));
-        },
-      );
-      req.on('error', () => resolve(null));
-      req.on('timeout', () => {
-        req.destroy();
-        resolve(null);
-      });
-      req.end();
-    } catch (_) {
-      resolve(null);
-    }
-  });
-}
-
 // -- ASIC liveness check: hash challenge via cgminer API ----------------------
 // Connects to the ASIC's local API (standard ports 4028-4030) and sends a
 async function verifyAsicLiveness(_modelName) {
@@ -743,7 +647,9 @@ async function verifyAsicLiveness(_modelName) {
     try {
       const result = await cgminerDriver.verifyLiveness('127.0.0.1', port, null, _stratumHandles);
       return { ...result, driverName: 'cgminer', driverConfig: null };
-    } catch (_) {}
+    } catch (_) {
+      /* port not responding */
+    }
   }
   return { ok: false, elapsedMs: 0, asicType: '', telemetry: null, driverName: 'cgminer', driverConfig: null };
 }
@@ -786,7 +692,7 @@ function hardwareModelsMatch(osModel, declaredModel) {
 // A patched firmware must consistently lie across all of: check, version, stats.
 // If any endpoint reports a different model identity, the firmware is modified.
 // Also checks compile time and firmware version for consistency.
-async function verifyAsicFirmware(ip, port, checkModel, _modelName, driverName, driverConfig) {
+function verifyAsicFirmware(ip, port, checkModel, _modelName, driverName, driverConfig) {
   const driver = asicDrivers.getDriver(driverName || 'cgminer');
   if (!driver) {
     return { ok: false, identities: [], compileTimes: [], issues: ['unknown driver'] };
@@ -2971,14 +2877,39 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
     const virtualWs = createRelayVirtualWs(workerId);
     _probePushConns.set(workerId, { ws: virtualWs, allowGpu, hasAsic });
     _workerIsMining.set(workerId, null);
-    // Fallback: if the tunneled worker never sends mining-status within
-    // 5s, treat as unknown (backward compat).
     const _pendingTimeout = setTimeout(() => {
       if (_workerIsMining.get(workerId) === null) {
         _workerIsMining.delete(workerId);
       }
     }, 5000);
     virtualWs._pendingMiningTimeout = _pendingTimeout;
+    virtualWs.on('message', (data) => {
+      try {
+        const msg = JSON.parse(String(data));
+        if (msg.type === 'busy' && msg.probeId) {
+          handleWorkerBusy(workerId, msg.probeId);
+        } else if (msg.type === 'worker-done') {
+          if (virtualWs._pendingMiningTimeout) {
+            clearTimeout(virtualWs._pendingMiningTimeout);
+            virtualWs._pendingMiningTimeout = null;
+          }
+          const conn = _probePushConns.get(workerId);
+          if (conn && conn.ws === virtualWs) {
+            _probePushConns.delete(workerId);
+          }
+          _workerIsMining.delete(workerId);
+          cancelPendingPeerProbesForWorker(workerId);
+        } else if (msg.type === 'probe-result') {
+          _handleWsProbeResult(workerId, msg, virtualWs).catch(() => {});
+        } else if (msg.type === 'mining-status') {
+          if (msg.data && typeof msg.data.mining === 'boolean') {
+            _workerIsMining.set(workerId, msg.data.mining);
+          }
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    });
     console.log(`[RelayWS] Worker ${workerId} connected via relay tunnel`);
     return;
   }
@@ -3525,86 +3456,6 @@ function fetchTextWithTimeout(url, timeoutMs = 5000) {
 }
 
 // IPC proxy � routes renderer fetch() calls through Node's https module.
-// Renderer-process fetch() uses Chromium's networking stack which enforces CORS.
-// TechPowerUp spec pages, NotebookCheck HTML, and Reddit JSON don't send
-// Access-Control-Allow-Origin headers, so every response body is blocked by CORS
-// before the renderer can read it.  This handler has no CORS restrictions.
-// Security: only the three whitelisted domains below are accepted; responses are
-// capped at 5 MB; only https is allowed.
-
-ipcMain.handle('wattcoin-fetch-url', (_event, payload) => {
-  const ALLOWED_HOSTNAMES = new Set(['api.search.brave.com']);
-  // Only these header names may be forwarded from the renderer to an external host.
-  // Prevents a compromised renderer from injecting Host, Authorization, Cookie, etc.
-  const ALLOWED_HEADER_NAMES = new Set(['accept', 'x-subscription-token', 'content-type']);
-  const rawUrl = String((payload && payload.url) || '');
-  const timeoutMs = Math.min(30_000, Math.max(1000, Number(payload && payload.timeoutMs) || 10_000));
-  const rawHeaders = payload && typeof payload.headers === 'object' ? payload.headers : {};
-  const customHeaders = {};
-  for (const [k, v] of Object.entries(rawHeaders)) {
-    if (ALLOWED_HEADER_NAMES.has(k.toLowerCase())) customHeaders[k] = String(v);
-  }
-  const method = payload && payload.method === 'POST' ? 'POST' : 'GET';
-  const rawBody = method === 'POST' && payload && typeof payload.body === 'string' ? payload.body : null;
-
-  let parsedUrl;
-  try {
-    parsedUrl = new URL(rawUrl);
-  } catch (_) {
-    return { ok: false, error: 'invalid url' };
-  }
-  if (parsedUrl.protocol !== 'https:') return { ok: false, error: 'only https allowed' };
-  if (!ALLOWED_HOSTNAMES.has(parsedUrl.hostname)) {
-    return { ok: false, error: `domain not allowed: ${parsedUrl.hostname}` };
-  }
-
-  return new Promise((resolve) => {
-    try {
-      const headers = {
-        Accept: 'application/json',
-        'User-Agent': 'wattcoin-miner/1.0 (power-lookup)',
-        ...customHeaders,
-      };
-      if (rawBody) headers['Content-Length'] = Buffer.byteLength(rawBody);
-      const reqOptions = {
-        method,
-        timeout: timeoutMs,
-        headers,
-      };
-      const req = https.request(rawUrl, reqOptions, (res) => {
-        const chunks = [];
-        let totalBytes = 0;
-        const MAX_BYTES = 5 * 1024 * 1024; // 5 MB cap
-        res.on('data', (chunk) => {
-          totalBytes += chunk.length;
-          if (totalBytes > MAX_BYTES) {
-            req.destroy(new Error('response too large'));
-            return;
-          }
-          chunks.push(chunk);
-        });
-        res.on('end', () => {
-          const status = Number(res.statusCode) || 0;
-          if (status < 200 || status >= 300) {
-            resolve({ ok: false, error: `HTTP ${status}` });
-            return;
-          }
-          resolve({ ok: true, text: Buffer.concat(chunks).toString('utf8') });
-        });
-      });
-      req.on('error', (e) => resolve({ ok: false, error: e && e.message ? e.message : 'request error' }));
-      req.on('timeout', () => {
-        req.destroy();
-        resolve({ ok: false, error: 'timeout' });
-      });
-      if (rawBody) req.write(rawBody);
-      req.end();
-    } catch (e) {
-      resolve({ ok: false, error: e && e.message ? e.message : 'unexpected error' });
-    }
-  });
-});
-
 function loadCachedRemoteProfiles() {
   const filePath = getAttestationProfileCacheFilePath();
   try {
@@ -5296,18 +5147,14 @@ ipcMain.handle('wattcoin-set-primary-address', async (_, targetAddress) => {
   }
 });
 
-ipcMain.handle('wattcoin-is-hardware-recognized', (_event, { deviceType, gpuModels, cpuModel, asicModel } = {}) => {
-  // Whole-unit devices (Laptop, Mini PC) use make+model power estimation, not component tables.
-  if (deviceType === 'Laptop' || deviceType === 'Mini PC') {
-    return { recognized: true, unrecognized: [] };
-  }
+ipcMain.handle('wattcoin-is-hardware-recognized', (_event, { gpuModels, cpuModel, asicModel } = {}) => {
   const unrecognized = [];
   if (Array.isArray(gpuModels)) {
     for (const m of gpuModels) {
       if (m && getGpuTdpW(m) === 0) unrecognized.push({ type: 'gpu', model: m });
     }
   }
-  if (cpuModel && getExpectedCpuSpeedOps(cpuModel) === 0) {
+  if (cpuModel && getExpectedCpuSpeedOps(cpuModel) === 0 && getCpuTdpW(cpuModel) === 0) {
     unrecognized.push({ type: 'cpu', model: cpuModel });
   }
   if (asicModel && getAsicPowerW(asicModel) === 0) {
@@ -5348,7 +5195,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     const _duty = typeof _hwState.avgCpuWorkerDuty === 'number' ? (_hwState.avgCpuWorkerDuty * 100).toFixed(1) : '?';
     const _bgOps = typeof _hwState.cpuLoadOpsPerSec === 'number' ? Math.round(_hwState.cpuLoadOpsPerSec / 1e6) : '?';
   } catch (_) {
-    // diagnostic logging � ignore failures
+    // diagnostic logging — ignore failures
   }
 
   // Pause the hardware load during the benchmark so the main thread is not
@@ -5617,7 +5464,7 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     // -- Hardware mismatch: trust penalty + authoritative TDP re-lookup -------
     // If the OS-level hardware identity doesn't match what the renderer declared,
     // apply a -20 trust penalty (once per mismatch detection) and fetch the real
-    // TDP from Brave Answers to clamp the declared power.
+    // TDP to clamp the declared power.
     if (anyHwMismatch && !isBaseline) {
       const penaltyBefore = hwAuthority.trustScore;
       hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 20);
@@ -5626,98 +5473,35 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           `${cpuModelMismatch ? ' [CPU]' : ''}${gpuModelMismatch ? ' [GPU]' : ''}${deviceTypeMismatch ? ' [DeviceType]' : ''}`,
       );
 
-      // Fetch real TDP for the OS-identified components via Brave and clamp.
-      // No tolerance margin: mismatch already proves dishonesty � no OC headroom.
-      try {
-        // CPU TDP clamp.
-        if (cpuModelMismatch && osCpuModel) {
-          const realCpuTdp = await fetchTdpFromBrave(osCpuModel);
-          if (realCpuTdp !== null) {
-            if (declaredUnitPowerW > realCpuTdp) {
-              console.warn(
-                `[HW-Verify] CPU TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realCpuTdp}W -> capped to ${realCpuTdp}W`,
-              );
-              declaredUnitPowerW = realCpuTdp;
-            }
-          } else {
-            console.warn(
-              `[HW-Verify] Brave TDP lookup failed for CPU "${osCpuModel}" -- using calibration-only fallback`,
-            );
-          }
+      // Laptop TDP clamp: if the device is really a laptop but declared as PC.
+      if (deviceTypeMismatch && /laptop/i.test(hwIdentity.deviceType)) {
+        if (declaredUnitPowerW > 35) {
+          console.warn(
+            `[HW-Verify] Laptop TDP clamp: declared=${declaredUnitPowerW}W -> capped to 35W (device is laptop)`,
+          );
+          declaredUnitPowerW = 35;
         }
+      }
 
-        // GPU TDP clamp (if GPU was misrepresented and we have an OS-level model).
-        if (gpuModelMismatch && hwIdentity.gpuModels.length > 0) {
-          const primaryGpu = hwIdentity.gpuModels[0];
-          const realGpuTdp = await fetchTdpFromBrave(primaryGpu);
-          if (realGpuTdp !== null) {
-            if (declaredUnitPowerW > realGpuTdp) {
-              console.warn(
-                `[HW-Verify] GPU TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realGpuTdp}W -> capped to ${realGpuTdp}W`,
-              );
-              declaredUnitPowerW = realGpuTdp;
-            }
-          } else {
+      // ASIC TDP lookup from local table.
+      if (_isAsicDevice) {
+        const declaredGpuModel = String((request && request.declaredGpuModel) || '');
+        if (declaredGpuModel) {
+          const tablePower = getAsicPowerW(declaredGpuModel);
+          if (tablePower > 0 && declaredUnitPowerW !== tablePower) {
             console.warn(
-              `[HW-Verify] Brave TDP lookup failed for GPU "${primaryGpu}" -- using calibration-only fallback`,
+              `[HW-Verify] ASIC TDP table: declared=${declaredUnitPowerW}W, table=${tablePower}W -> set to ${tablePower}W`,
             );
+            declaredUnitPowerW = tablePower;
           }
         }
-
-        // Laptop TDP clamp: if the device is really a laptop but declared as PC,
-        // fetch the real system TDP from Brave using the OS-reported CPU model.
-        // Falls back to the laptop profile maxCapW (130 W) only if Brave fails.
-        if (deviceTypeMismatch && /laptop/i.test(hwIdentity.deviceType)) {
-          let laptopCap = null;
-          if (osCpuModel) {
-            const laptopTdp = await fetchTdpFromBrave(osCpuModel);
-            if (laptopTdp !== null) laptopCap = laptopTdp;
-          }
-          if (laptopCap === null) laptopCap = 35; // conservative laptop fallback
-          if (declaredUnitPowerW > laptopCap) {
-            console.warn(
-              `[HW-Verify] Laptop TDP clamp: declared=${declaredUnitPowerW}W -> capped to ${laptopCap}W (device is laptop${laptopCap !== 130 ? ', Brave lookup' : ', fallback'})`,
-            );
-            declaredUnitPowerW = laptopCap;
-          }
-        }
-
-        // ASIC TDP lookup: if the renderer declared an ASIC model, look up its
-        // real power via Brave and clamp the declared value to the lookup result.
-        // Also fall back to the local ASIC power table if Brave is unavailable.
-        if (_isAsicDevice) {
-          const declaredGpuModel = String((request && request.declaredGpuModel) || '');
-          if (declaredGpuModel) {
-            const realAsicPower = await fetchTdpFromBrave(declaredGpuModel);
-            if (realAsicPower !== null) {
-              if (declaredUnitPowerW !== realAsicPower) {
-                console.warn(
-                  `[HW-Verify] ASIC TDP clamp: declared=${declaredUnitPowerW}W, real(Brave)=${realAsicPower}W -> set to ${realAsicPower}W`,
-                );
-                declaredUnitPowerW = realAsicPower;
-              }
-            } else {
-              // Brave lookup failed � fall back to local ASIC power table.
-              const tablePower = getAsicPowerW(declaredGpuModel);
-              if (tablePower > 0 && declaredUnitPowerW !== tablePower) {
-                console.warn(
-                  `[HW-Verify] ASIC TDP table fallback: declared=${declaredUnitPowerW}W, table=${tablePower}W -> set to ${tablePower}W`,
-                );
-                declaredUnitPowerW = tablePower;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`[HW-Verify] TDP re-lookup error: ${e && e.message}`);
       }
       saveHwAuthState();
     }
 
     // -- Unknown ASIC detection: reject mining if model has no known power --
-    // If the device claims ASIC but the model has no power data in any
-    // lookup source (Brave AI or local hardware table), the energy model
-    // cannot bound the miner's contribution � reject outright.
+    // If the device claims ASIC but the model has no power data in the local
+    // hardware table, the energy model cannot bound the miner's contribution.
     if (_isAsicDevice) {
       _declaredAsicModel = String((request && request.declaredGpuModel) || '');
       if (!_declaredAsicModel) {
@@ -5728,10 +5512,8 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
           message: 'ASIC declared but no model name provided. Please specify the ASIC miner model (e.g. Antminer S21).',
         };
       }
-      // Check both lookup sources (cache hit avoids re-query on mismatch path).
-      const bravePower = await fetchTdpFromBrave(_declaredAsicModel);
       const tablePower = getAsicPowerW(_declaredAsicModel);
-      if (bravePower === null && tablePower === 0) {
+      if (tablePower === 0) {
         console.warn(`[HW-Verify] Unknown ASIC model "${_declaredAsicModel}" � no power data available, rejecting`);
         return {
           ok: false,
@@ -5766,29 +5548,14 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
     let powerVsCpuOverride = false;
     if (_isAsicDevice && measuredCpu > 150_000_000) {
       const previousCap = declaredUnitPowerW;
-      let realDesktopPowerW = 0;
-      // Look up CPU TDP from the OS-detected model.
-      if (osCpuModel) {
-        const cpuTdp = await fetchTdpFromBrave(osCpuModel);
-        if (cpuTdp !== null) realDesktopPowerW += cpuTdp;
-      }
-      // Look up GPU TDP from OS-detected GPU models.
-      if (hwIdentity.gpuModels.length > 0) {
-        for (const gpuModel of hwIdentity.gpuModels) {
-          const gpuTdp = await fetchTdpFromBrave(gpuModel);
-          if (gpuTdp !== null) realDesktopPowerW += gpuTdp;
-        }
-      }
-      // If both lookups failed, estimate from CPU benchmark (� 1 W per 1M ops/sec sustained).
-      if (realDesktopPowerW === 0) {
-        realDesktopPowerW = Math.round(measuredCpu / 2_000_000);
-      }
+      // Estimate from CPU benchmark (~1 W per 2M ops/sec sustained).
+      const realDesktopPowerW = Math.round(measuredCpu / 2_000_000);
       // Clamp to a realistic desktop maximum as safety floor.
       declaredUnitPowerW = Math.min(Math.max(realDesktopPowerW, 65), 600);
       powerVsCpuOverride = true;
       console.warn(
         `[HW-Verify] Power/CPU override: declared ASIC with CPU=${(measuredCpu / 1e6).toFixed(0)}M ops/sec ` +
-          `> 150M � reclassified as non-ASIC, actual desktop power calculated as ${declaredUnitPowerW}W (Brave)${realDesktopPowerW === 0 ? ', fallback estimate' : ''} from ${previousCap}W declared`,
+          `> 150M � reclassified as non-ASIC, actual desktop power estimated as ${declaredUnitPowerW}W from ${previousCap}W declared`,
       );
     }
 
@@ -5846,31 +5613,22 @@ ipcMain.handle('wattcoin-run-backend-benchmark', async (_event, request) => {
         const reportedModel = (livenessResult.asicType || '').trim();
         if (reportedModel && _declaredAsicModel && !hardwareModelsMatch(reportedModel, _declaredAsicModel)) {
           asicModelMismatch = true;
-          // Look up the real model's TDP and clamp the ceiling.
-          const realTdp = await fetchTdpFromBrave(reportedModel);
-          if (realTdp !== null && declaredUnitPowerW > realTdp) {
+          // Look up the real model's TDP from the local table and clamp the ceiling.
+          const tableTdp = getAsicPowerW(reportedModel);
+          if (tableTdp > 0 && declaredUnitPowerW > tableTdp) {
             console.warn(
               `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
-                `API reports="${reportedModel}" � clamping TDP from ${declaredUnitPowerW}W to ${realTdp}W`,
+                `API reports="${reportedModel}" → clamping TDP from ${declaredUnitPowerW}W to ${tableTdp}W`,
             );
-            declaredUnitPowerW = realTdp;
+            declaredUnitPowerW = tableTdp;
           } else {
-            const tableTdp = getAsicPowerW(reportedModel);
-            if (tableTdp > 0 && declaredUnitPowerW > tableTdp) {
-              console.warn(
-                `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
-                  `API reports="${reportedModel}" � clamping TDP from ${declaredUnitPowerW}W to ${tableTdp}W (table)`,
-              );
-              declaredUnitPowerW = tableTdp;
-            } else {
-              // No TDP data for the real model � apply a conservative 20% penalty.
-              const penalty = Math.round(declaredUnitPowerW * 0.8);
-              console.warn(
-                `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
-                  `API reports="${reportedModel}" � no TDP data, applying 20% penalty: ${declaredUnitPowerW}W ? ${penalty}W`,
-              );
-              declaredUnitPowerW = penalty;
-            }
+            // No TDP data for the real model → apply a conservative 20% penalty.
+            const penalty = Math.round(declaredUnitPowerW * 0.8);
+            console.warn(
+              `[HW-Verify] ASIC model mismatch: declared="${_declaredAsicModel}", ` +
+                `API reports="${reportedModel}" → no TDP data, applying 20% penalty: ${declaredUnitPowerW}W → ${penalty}W`,
+            );
+            declaredUnitPowerW = penalty;
           }
         }
         // -- ASIC hashrate benchmark: query summary command and compare -----------
@@ -12747,7 +12505,7 @@ app.whenReady().then(() => {
   si.cpu()
     .then((cpu) => {
       try {
-        const logical = Math.max(1, (os.cpus() || []).length || 1);
+        const logical = Math.max(1, os.cpus().length || 1);
         let physical = Math.max(0, Number(cpu && cpu.physicalCores) || 0);
         // Some Windows/laptop environments occasionally report physicalCores=1
         // despite multiple logical cores. That under-provisions workers and can make

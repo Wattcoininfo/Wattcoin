@@ -1136,37 +1136,5 @@ if ($method === 'POST' && $path === '/staking/update-pool-balance') {
     jsonOut(['ok' => true]);
 }
 
-// ── GET /tdp-lookup — Brave AI TDP proxy (subscription key lives server-side) ─
-if ($method === 'GET' && $path === '/tdp-lookup') {
-    if (!checkRateLimit(getClientIp(), 'tdp-lookup', 10, 60)) {
-        jsonOut(['ok' => false, 'error' => 'Rate limit exceeded'], 429);
-    }
-    $gpu = isset($_GET['gpu']) ? trim((string)$_GET['gpu']) : '';
-    if ($gpu === '' || strlen($gpu) > 200) {
-        jsonOut(['ok' => false, 'error' => 'Invalid gpu parameter'], 400);
-    }
-    $braveKey = loadSecret('brave-api-key', base64_decode('QlNBUS1lMm11TjlOelJKdF91VDFlMEtZQ0lMMjdybA=='));
-    if ($braveKey === '') {
-        jsonOut(['ok' => false, 'answer' => null, 'error' => 'TDP lookup not configured'], 503);
-    }
-    $question = $gpu . ' tdp';
-    $reqBody  = json_encode(['stream' => false, 'messages' => [['role' => 'user', 'content' => $question]]]);
-    $ctx = stream_context_create(['http' => [
-        'method'        => 'POST',
-        'timeout'       => 12,
-        'header'        => "Content-Type: application/json\r\n"
-                         . "Accept: application/json\r\n"
-                         . "x-subscription-token: {$braveKey}\r\n"
-                         . "User-Agent: wattcoin-api/1.0\r\n"
-                         . 'Content-Length: ' . strlen($reqBody),
-        'content'       => $reqBody,
-        'ignore_errors' => true,
-    ]]);
-    $raw    = @file_get_contents('https://api.search.brave.com/res/v1/chat/completions', false, $ctx);
-    $data   = ($raw !== false) ? json_decode($raw, true) : null;
-    $answer = is_array($data) ? ($data['choices'][0]['message']['content'] ?? null) : null;
-    jsonOut(['ok' => true, 'answer' => $answer]);
-}
-
 // ── 404 fallback ──────────────────────────────────────────────────────────────
 jsonOut(['ok' => false, 'error' => 'Not found'], 404);

@@ -58,7 +58,6 @@ const ALLOWED_CHANNELS = new Set([
   'wattcoin-delete-address',
   'wattcoin-check-for-update',
   'wattcoin-install-update',
-  'wattcoin-fetch-url',
   'wattcoin-get-electricity-price',
   'wattcoin-explorer-get-blocks',
   'wattcoin-explorer-get-block',
@@ -138,11 +137,6 @@ describe('IPC allowlist — known production channels', () => {
     assert.ok(r.ok);
   });
 
-  it('allows wattcoin-fetch-url', async () => {
-    const r = await invoke('wattcoin-fetch-url');
-    assert.ok(r.ok);
-  });
-
   it('allows wattcoin-open-pay-page', async () => {
     const r = await invoke('wattcoin-open-pay-page');
     assert.ok(r.ok);
@@ -198,7 +192,7 @@ describe('IPC allowlist — exact match required (no substring)', () => {
 
 describe('IPC allowlist — count integrity (no accidental additions)', () => {
   it('has exactly 81 allowed channels', () => {
-    assert.strictEqual(ALLOWED_CHANNELS.size, 76);
+    assert.strictEqual(ALLOWED_CHANNELS.size, 75);
   });
 
   it('every channel starts with wattcoin-', () => {
