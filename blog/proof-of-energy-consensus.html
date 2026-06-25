@@ -82,6 +82,44 @@
                 "item": "https://wattcoin.ee/blog/proof-of-energy-consensus.html"
               }
             ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://wattcoin.ee/blog/proof-of-energy-consensus.html#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Proof-of-Energy?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Proof-of-Energy (PoE) is a consensus mechanism that replaces hash-based mining with verifiable energy expenditure. Miners earn rewards proportional to their estimated electricity consumption, not their hash rate. Every watt of power contributes equally — a CPU and an ASIC mining on PoE both earn the same estimated reward per kilowatt-hour, making hardware efficiency irrelevant for competition."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How does Proof-of-Energy work on Wattcoin?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "The Wattcoin Miner runs benchmark-verified tasks on your CPU, GPU, and memory while the protocol estimates energy consumption from known power draw and duty cycle. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets paid every block, no lottery, no pools."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Proof-of-Energy better than Proof-of-Work?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Proof-of-Energy eliminates the ASIC arms race. In PoW, the fastest hardware dominates and older gear becomes e-waste. In PoE, hardware speed determines how fast you mine but energy cost determines what you pay — all hardware earns the same estimated rate per kilowatt-hour. Old, power-hungry hardware that is obsolete on Bitcoin becomes valuable on Wattcoin."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I mine Wattcoin with a regular computer?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. Any CPU, GPU, or RAM works. A 10-year-old office PC, a gaming laptop, and a server rack all compete on equal terms per watt. Download the free miner app, install it, and click Start Mining — no configuration needed."
+                }
+              }
+            ]
           }
         ]
       }
@@ -483,6 +521,24 @@
           padding: 6px 8px;
         }
       }
+      .faq-item {
+        margin: 24px 0;
+        padding: 20px 24px;
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        border-radius: 10px;
+      }
+      .faq-item h3 {
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        color: #4ade80;
+        margin-bottom: 8px;
+      }
+      .faq-item p {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #cce5cc;
+      }
     </style>
   </head>
   <body>
@@ -608,6 +664,49 @@
             <a href="/wattcoin-whitepaper.html">Read the full Wattcoin whitepaper &rarr;</a> for the complete technical
             specification, including tokenomics, attack vectors, and verification algorithms.
           </p>
+
+          <h2 style="margin-top: 48px">Frequently Asked Questions</h2>
+
+          <div class="faq-item">
+            <h3>What is Proof-of-Energy?</h3>
+            <p>
+              Proof-of-Energy (PoE) is a consensus mechanism that replaces hash-based mining with verifiable energy
+              expenditure. Miners earn rewards proportional to their estimated electricity consumption, not their hash
+              rate. Every watt of power contributes equally — a CPU and an ASIC mining on PoE both earn the same
+              estimated reward per kilowatt-hour.
+            </p>
+          </div>
+
+          <div class="faq-item">
+            <h3>How does Proof-of-Energy work on Wattcoin?</h3>
+            <p>
+              The Wattcoin Miner runs benchmark-verified tasks on your CPU, GPU, and memory while the protocol estimates
+              energy consumption from known power draw and duty cycle. Each miner's contribution is measured in
+              watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets
+              paid every block, no lottery, no pools.
+            </p>
+          </div>
+
+          <div class="faq-item">
+            <h3>Is Proof-of-Energy better than Proof-of-Work?</h3>
+            <p>
+              Proof-of-Energy eliminates the ASIC arms race. In PoW, the fastest hardware dominates and older gear
+              becomes e-waste. In PoE, hardware speed determines how fast you mine but energy cost determines what you
+              pay — all hardware earns the same estimated rate per kilowatt-hour. Old, power-hungry hardware that is
+              obsolete on Bitcoin becomes valuable on Wattcoin.
+            </p>
+          </div>
+
+          <div class="faq-item">
+            <h3>Can I mine Wattcoin with a regular computer?</h3>
+            <p>
+              Yes. Any CPU, GPU, or RAM works. A 10-year-old office PC, a gaming laptop, and a server rack all compete
+              on equal terms per watt.
+              <a href="/wallet.html">Download the free miner app</a>, install it, and click Start Mining — no
+              configuration needed.
+            </p>
+          </div>
+
           <a href="/blog.html" class="back-link" style="display: inline-block; margin-top: 32px"
             >&larr; Back to all posts</a
           >
@@ -615,7 +714,7 @@
       </div>
     </div>
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.385 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.386 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

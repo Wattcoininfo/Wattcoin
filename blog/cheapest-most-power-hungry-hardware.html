@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cheapest vs Most Power-Hungry Mining Hardware — CPUs, GPUs, ASICs | Wattcoin Blog</title>
+    <meta
+      name="description"
+      content="The cheapest and most power-hungry hardware for Wattcoin Proof-of-Energy mining — from sub-$50 CPUs to 1000W+ GPUs and ASICs."
+    />
+    <link rel="canonical" href="https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html" />
+    <meta property="og:title" content="Cheapest vs Most Power-Hungry Mining Hardware — CPUs, GPUs, ASICs" />
+    <meta
+      property="og:description"
+      content="The cheapest and most power-hungry hardware for Wattcoin Proof-of-Energy mining — from sub-$50 CPUs to 1000W+ GPUs and ASICs."
+    />
+    <meta property="og:url" content="https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Wattcoin" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Wattcoin Foundation" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Cheapest vs Most Power-Hungry Mining Hardware — CPUs, GPUs, ASICs | Wattcoin Blog"
+    />
+    <meta
+      name="twitter:description"
+      content="The cheapest and most power-hungry hardware for Wattcoin Proof-of-Energy mining — from sub-$50 CPUs to 1000W+ GPUs and ASICs."
+    />
+    <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/assets/icons/icon-256.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html#article",
+            "headline": "Cheapest vs Most Power-Hungry Mining Hardware — CPUs, GPUs, ASICs",
+            "url": "https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html",
+            "datePublished": "2026-06-25",
+            "author": {
+              "@type": "Organization",
+              "name": "Wattcoin Foundation"
+            },
+            "publisher": {
+              "@id": "https://wattcoin.ee/#organization"
+            },
+            "description": "The cheapest and most power-hungry hardware for Wattcoin Proof-of-Energy mining — from sub-$50 CPUs to 1000W+ GPUs and ASICs.",
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html"
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://wattcoin.ee/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": "https://wattcoin.ee/blog.html"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Cheapest vs Most Power-Hungry Mining Hardware — CPUs, GPUs, ASICs",
+                "item": "https://wattcoin.ee/blog/cheapest-most-power-hungry-hardware.html"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: #060e06;
+        background-image:
+          linear-gradient(rgba(26, 58, 26, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(26, 58, 26, 0.12) 1px, transparent 1px);
+        background-size: 60px 60px;
+        color: #e8f5e8;
+        font-family: Georgia, serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: #4ade80;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: rgba(6, 14, 6, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #1a2a1a;
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        padding: 0 24px;
+      }
+      .nav-logo {
+        font-family: 'Playfair Display', serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: #e8f5e8;
+        text-decoration: none;
+      }
+      .nav-logo:hover {
+        text-decoration: none;
+      }
+      .nav-logo span {
+        color: #4ade80;
+      }
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #6b9a6b;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: #4ade80;
+      }
+      .nav-links a.nav-blog {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .nav-links a.nav-wallet {
+        color: #fbbf24;
+      }
+      .nav-links a.nav-wallet:hover {
+        color: #fde68a;
+      }
+
+      .blog-header {
+        padding: 120px 0 40px;
+        border-bottom: 1px solid #1a2a1a;
+      }
+      .blog-header h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(28px, 4.5vw, 42px);
+        font-weight: 900;
+        color: #e8f5e8;
+        letter-spacing: -0.03em;
+        margin-bottom: 12px;
+      }
+      .blog-header h1 span {
+        color: #4ade80;
+      }
+      .blog-header p {
+        font-size: 15px;
+        color: #6b9a6b;
+        font-family: Georgia, serif;
+      }
+      .blog-header .meta {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #3a5a3a;
+        margin-top: 10px;
+      }
+
+      article {
+        padding: 32px 0 48px;
+      }
+      article h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(22px, 3vw, 28px);
+        font-weight: 700;
+        color: #d7ffd9;
+        margin: 36px 0 14px;
+      }
+      article h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(18px, 2.2vw, 22px);
+        font-weight: 700;
+        color: #d7ffd9;
+        margin: 28px 0 10px;
+      }
+      article p {
+        font-size: 15.5px;
+        line-height: 1.7;
+        color: #cce5cc;
+        margin-bottom: 16px;
+      }
+      article ul,
+      article ol {
+        margin: 0 0 16px 24px;
+        font-size: 15.5px;
+        line-height: 1.7;
+        color: #cce5cc;
+      }
+      article li {
+        margin-bottom: 6px;
+      }
+      article strong {
+        color: #d7ffd9;
+      }
+      article em {
+        color: #9ac79f;
+      }
+      article .highlight-box {
+        background: #0d1a0d;
+        border-left: 3px solid #4ade80;
+        padding: 14px 18px;
+        margin: 20px 0;
+        border-radius: 0 8px 8px 0;
+      }
+      article .highlight-box strong {
+        color: #4ade80;
+      }
+      article .info-callout {
+        background: #0a140a;
+        border: 1px solid #1e3a1e;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin: 20px 0;
+        font-size: 14px;
+        color: #9ac79f;
+      }
+      article .info-callout strong {
+        color: #4ade80;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+      table th,
+      table td {
+        border: 1px solid #1e3a1e;
+        padding: 10px 14px;
+        text-align: left;
+      }
+      table th {
+        background: #0d1a0d;
+        color: #4ade80;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      table td {
+        color: #cce5cc;
+      }
+      table tr.wtc-row td {
+        background: #0a1a0a;
+      }
+
+      footer {
+        text-align: center;
+        padding: 32px 24px;
+        font-size: 11px;
+        color: #3a5a3a;
+        border-top: 1px solid #1a2a1a;
+      }
+      footer a {
+        color: #4a6a4a;
+      }
+      footer a:hover {
+        color: #4ade80;
+      }
+      .back-link {
+        font-family: 'DM Mono', monospace;
+        font-size: 12px;
+        color: #4ade80;
+      }
+      .back-link:hover {
+        color: #a7ffb0;
+      }
+      .hw-illustration {
+        text-align: center;
+        margin: 24px 0 16px;
+      }
+      .hw-illustration svg {
+        max-width: 100%;
+        height: auto;
+      }
+
+      @media (max-width: 600px) {
+        .blog-header {
+          padding: 100px 0 30px;
+        }
+        article {
+          padding: 24px 0 32px;
+        }
+        article p {
+          font-size: 15px;
+        }
+        table {
+          font-size: 12px;
+        }
+        table th,
+        table td {
+          padding: 6px 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="nav-logo">Watt<span>coin</span></a>
+      <ul class="nav-links">
+        <li><a href="/wattcoin-whitepaper.html" class="nav-whitepaper">Whitepaper</a></li>
+        <li><a href="/blog.html" class="nav-blog">Blog</a></li>
+        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
+      </ul>
+    </nav>
+
+    <div class="blog-header">
+      <div class="container">
+        <div class="hero-pill-row" style="margin-bottom: 14px">
+          <div
+            style="
+              display: inline-block;
+              font-family: 'DM Mono', monospace;
+              font-size: 10px;
+              letter-spacing: 0.1em;
+              color: #4ade80;
+              background: #0d1a0d;
+              border: 1px solid #1e3a1e;
+              padding: 4px 10px;
+              border-radius: 999px;
+            "
+          >
+            JUNE 25, 2026 &mdash; GUIDE
+          </div>
+        </div>
+        <h1>Cheapest vs Most Power-Hungry Mining Hardware &mdash; CPUs, GPUs, ASICs</h1>
+        <p>
+          A practical guide to the cheapest and most power-hungry hardware you can mine with on Wattcoin Proof-of-Energy
+          &mdash; from sub-$50 second-hand CPUs to 1000W+ flagship GPUs and industrial ASICs.
+        </p>
+        <div class="meta">by Wattcoin Foundation &middot; 6 min read</div>
+      </div>
+    </div>
+
+    <div class="container">
+      <article>
+        <p>
+          Proof-of-Energy is unique among consensus mechanisms because it rewards you for
+          <strong>how much power you draw</strong>, not how fast you can hash. This means almost anything with a power
+          cable can earn WTC &mdash; a 10-year-old office PC, a gaming rig, a server rack, or a warehouse of ASICs.
+        </p>
+
+        <p>
+          But which hardware gives you the most WTC per dollar spent? And which machines draw the most power (and
+          therefore earn the most) regardless of cost? This guide breaks down the cheapest and most power-hungry options
+          across CPUs, GPUs, and ASICs &mdash; so you can decide what makes sense for your setup.
+        </p>
+
+        <div class="highlight-box">
+          <strong>Key insight:</strong> On Wattcoin, power draw = earnings. A cheap CPU that draws 100W earns the same
+          as an expensive CPU that draws 100W. The only difference is your upfront hardware cost and your electricity
+          bill.
+        </div>
+
+        <div class="hw-illustration">
+          <svg width="600" height="260" viewBox="0 0 600 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="180" y="50" width="240" height="160" rx="12" fill="#0d1a0d" stroke="#1e3a1e" stroke-width="2" />
+            <rect x="210" y="80" width="180" height="100" rx="6" fill="#122612" stroke="#2d4a2d" stroke-width="1.5" />
+            <rect x="240" y="105" width="120" height="50" rx="4" fill="#1e3a1e" />
+            <text
+              x="300"
+              y="137"
+              text-anchor="middle"
+              fill="#4ade80"
+              font-family="DM Mono, monospace"
+              font-size="10"
+              letter-spacing="2"
+            >
+              CPU
+            </text>
+            <line x1="300" y1="80" x2="300" y2="50" stroke="#1e3a1e" stroke-width="2" />
+            <line x1="300" y1="180" x2="300" y2="210" stroke="#1e3a1e" stroke-width="2" />
+            <line x1="210" y1="130" x2="180" y2="130" stroke="#1e3a1e" stroke-width="2" />
+            <line x1="390" y1="130" x2="420" y2="130" stroke="#1e3a1e" stroke-width="2" />
+            <circle cx="300" cy="210" r="4" fill="#4ade80" opacity="0.5" />
+            <circle cx="300" cy="50" r="4" fill="#4ade80" opacity="0.5" />
+            <circle cx="180" cy="130" r="4" fill="#4ade80" opacity="0.5" />
+            <circle cx="420" cy="130" r="4" fill="#4ade80" opacity="0.5" />
+            <rect
+              x="130"
+              y="40"
+              width="340"
+              height="180"
+              rx="14"
+              stroke="#2d4a2d"
+              stroke-width="1"
+              fill="none"
+              stroke-dasharray="4 4"
+              opacity="0.3"
+            />
+            <text x="300" y="242" text-anchor="middle" fill="#3a5a3a" font-family="DM Mono, monospace" font-size="9">
+              ILLUSTRATION — CPU DIE
+            </text>
+          </svg>
+        </div>
+
+        <h2>CPUs &mdash; From Pennies to Kilowatts</h2>
+
+        <h3>Cheapest Options (under $50)</h3>
+
+        <p>
+          The second-hand server CPU market is overflowing with retired enterprise hardware that draws respectable power
+          and costs almost nothing. These chips were once used in data centers and are now available for pocket change:
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>CPU</th>
+              <th>Typical power</th>
+              <th>Used price</th>
+              <th>WTC earning potential</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Intel Xeon E5-2670 v2 (10-core)</td>
+              <td>~115W</td>
+              <td>$10-15</td>
+              <td>Medium</td>
+            </tr>
+            <tr>
+              <td>Intel Xeon E5-2680 v4 (14-core)</td>
+              <td>~120W</td>
+              <td>$15-25</td>
+              <td>Medium</td>
+            </tr>
+            <tr>
+              <td>AMD Ryzen 5 1600 (6-core)</td>
+              <td>~65W</td>
+              <td>$30-40</td>
+              <td>Medium-Low</td>
+            </tr>
+            <tr>
+              <td>Intel Xeon E5-2696 v3 (18-core)</td>
+              <td>~145W</td>
+              <td>$25-35</td>
+              <td>Medium-High</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>Dual Xeon E5-2670 setup (20 cores total)</td>
+              <td>~230W</td>
+              <td>$50-60 (board + 2 CPUs)</td>
+              <td>High</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          A dual-socket Xeon motherboard with two E5-2670 v2 CPUs can often be found for under $100 complete with RAM.
+          At ~230W draw, that's the best price-to-power ratio in the CPU world &mdash; earning the same WTC as a
+          brand-new $2,000 workstation CPU at the same power level.
+        </p>
+
+        <h3>Big iron — most power-hungry CPUs</h3>
+
+        <table>
+          <thead>
+            <tr>
+              <th>CPU</th>
+              <th>Max power</th>
+              <th>Price (new)</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AMD Threadripper 7995WX</td>
+              <td>~350W</td>
+              <td>$9,999+</td>
+              <td>96 cores, can exceed 400W with PBO</td>
+            </tr>
+            <tr>
+              <td>Intel Xeon Platinum 8592+</td>
+              <td>~385W</td>
+              <td>$12,000+</td>
+              <td>64-core Sapphire Rapids, 4S capable</td>
+            </tr>
+            <tr>
+              <td>Dual AMD EPYC 9654 (2x)</td>
+              <td>~720W</td>
+              <td>$25,000+</td>
+              <td>192 cores, dual-socket server</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>4x Xeon Platinum 8490H</td>
+              <td>~1,200W</td>
+              <td>$70,000+</td>
+              <td>4-socket monster, 240 cores</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          The highest-end server CPUs draw enormous power, but cost tens of thousands of dollars. On PoE, a $50
+          dual-Xeon workstation earns almost as much as a $12,000 single Xeon Platinum at the same power draw. For pure
+          earnings per dollar spent, the cheap used Xeon route wins every time.
+        </p>
+
+        <div class="hw-illustration">
+          <svg width="600" height="260" viewBox="0 0 600 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="100" y="60" width="320" height="130" rx="10" fill="#0d1a0d" stroke="#1e3a1e" stroke-width="2" />
+            <rect x="120" y="80" width="280" height="90" rx="6" fill="#122612" stroke="#2d4a2d" stroke-width="1.5" />
+            <circle cx="260" cy="125" r="30" fill="#1e3a1e" stroke="#3d6a3d" stroke-width="2" />
+            <circle cx="260" cy="125" r="16" fill="#2d4a2d" />
+            <circle cx="260" cy="125" r="6" fill="#4ade80" opacity="0.6" />
+            <rect x="200" y="95" width="120" height="8" rx="4" fill="#2d4a2d" />
+            <rect x="310" y="105" width="60" height="8" rx="4" fill="#2d4a2d" />
+            <rect x="310" y="120" width="60" height="8" rx="4" fill="#2d4a2d" />
+            <rect x="310" y="135" width="40" height="8" rx="4" fill="#2d4a2d" />
+            <rect x="420" y="85" width="80" height="24" rx="4" fill="#1e3a1e" stroke="#2d4a2d" stroke-width="1" />
+            <text
+              x="460"
+              y="100"
+              text-anchor="middle"
+              fill="#4ade80"
+              font-family="DM Mono, monospace"
+              font-size="8"
+              letter-spacing="1"
+            >
+              PCIe
+            </text>
+            <rect x="420" y="116" width="80" height="58" rx="4" fill="#1e3a1e" stroke="#2d4a2d" stroke-width="1" />
+            <text x="460" y="149" text-anchor="middle" fill="#6b9a6b" font-family="DM Mono, monospace" font-size="8">
+              VRAM
+            </text>
+            <rect x="100" y="175" width="80" height="15" rx="3" fill="#1e3a1e" />
+            <rect x="420" y="175" width="80" height="15" rx="3" fill="#1e3a1e" />
+            <rect x="100" y="60" width="320" height="10" rx="3" fill="#2d4a2d" />
+            <text x="260" y="248" text-anchor="middle" fill="#3a5a3a" font-family="DM Mono, monospace" font-size="9">
+              ILLUSTRATION — GPU DIE &amp; VRAM
+            </text>
+          </svg>
+        </div>
+
+        <h2>GPUs &mdash; The Power-Hungry Champions</h2>
+
+        <h3>Cheapest options (under $100)</h3>
+
+        <p>
+          The GPU mining crash of 2022-2023 flooded the second-hand market with capable cards at rock-bottom prices.
+          Many of these cards draw 100-200W and cost less than a dinner out:
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>GPU</th>
+              <th>Typical power</th>
+              <th>Used price</th>
+              <th>WTC earning potential</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>NVIDIA GTX 1060 6GB</td>
+              <td>~120W</td>
+              <td>$50-70</td>
+              <td>Medium</td>
+            </tr>
+            <tr>
+              <td>AMD RX 580 8GB</td>
+              <td>~185W</td>
+              <td>$50-80</td>
+              <td>Medium-High</td>
+            </tr>
+            <tr>
+              <td>NVIDIA GTX 1660 Super</td>
+              <td>~125W</td>
+              <td>$70-90</td>
+              <td>Medium</td>
+            </tr>
+            <tr>
+              <td>AMD R9 390</td>
+              <td>~275W</td>
+              <td>$40-60</td>
+              <td>High</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>AMD Vega 56</td>
+              <td>~210W</td>
+              <td>$60-90</td>
+              <td>High</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          The AMD RX 580 and R9 390 are standout choices &mdash; they draw significant power for very little upfront
+          cost. A $50 R9 390 drawing 275W earns more than a $300 RTX 3060 drawing 170W, purely because it pulls more
+          power.
+        </p>
+
+        <h3>Power-hungry beasts — most power-hungry GPUs</h3>
+
+        <table>
+          <thead>
+            <tr>
+              <th>GPU</th>
+              <th>Max power</th>
+              <th>Price (new)</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>NVIDIA RTX 4090</td>
+              <td>~450W</td>
+              <td>$1,600</td>
+              <td>Flagship, can hit 600W with OC</td>
+            </tr>
+            <tr>
+              <td>AMD Radeon RX 7900 XTX</td>
+              <td>~355W</td>
+              <td>$900</td>
+              <td>Competitor to 4090</td>
+            </tr>
+            <tr>
+              <td>NVIDIA RTX 6000 Ada</td>
+              <td>~300W</td>
+              <td>$6,800</td>
+              <td>Workstation card</td>
+            </tr>
+            <tr>
+              <td>AMD Radeon Pro W7900</td>
+              <td>~295W</td>
+              <td>$3,500</td>
+              <td>Workstation card</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>8x RTX 4090 rig</td>
+              <td>~3,600W</td>
+              <td>$15,000+</td>
+              <td>Full mining rig</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          New flagship GPUs are expensive but efficient. The RTX 4090 draws 450W but costs $1,600. Compare that to
+          buying five used RX 580s ($250 total) that draw 925W combined &mdash; the cheap cards earn more WTC for a
+          fraction of the cost, at the expense of higher electricity consumption. On PoE, the calculation is simple:
+          more watts = more earnings, regardless of how new or old the card is.
+        </p>
+
+        <div class="hw-illustration">
+          <svg width="600" height="260" viewBox="0 0 600 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="100" y="55" width="400" height="150" rx="10" fill="#0d1a0d" stroke="#1e3a1e" stroke-width="2" />
+            <rect x="120" y="75" width="360" height="110" rx="6" fill="#122612" stroke="#2d4a2d" stroke-width="1.5" />
+            <rect x="140" y="92" width="100" height="76" rx="6" fill="#1e3a1e" stroke="#3d6a3d" stroke-width="1.5" />
+            <text
+              x="190"
+              y="137"
+              text-anchor="middle"
+              fill="#4ade80"
+              font-family="DM Mono, monospace"
+              font-size="9"
+              letter-spacing="1"
+            >
+              HASH
+            </text>
+            <text x="190" y="150" text-anchor="middle" fill="#6b9a6b" font-family="DM Mono, monospace" font-size="8">
+              BOARD
+            </text>
+            <rect x="254" y="92" width="100" height="76" rx="6" fill="#1e3a1e" stroke="#3d6a3d" stroke-width="1.5" />
+            <text
+              x="304"
+              y="137"
+              text-anchor="middle"
+              fill="#4ade80"
+              font-family="DM Mono, monospace"
+              font-size="9"
+              letter-spacing="1"
+            >
+              HASH
+            </text>
+            <text x="304" y="150" text-anchor="middle" fill="#6b9a6b" font-family="DM Mono, monospace" font-size="8">
+              BOARD
+            </text>
+            <rect x="368" y="92" width="100" height="76" rx="6" fill="#1e3a1e" stroke="#3d6a3d" stroke-width="1.5" />
+            <text
+              x="418"
+              y="137"
+              text-anchor="middle"
+              fill="#4ade80"
+              font-family="DM Mono, monospace"
+              font-size="9"
+              letter-spacing="1"
+            >
+              HASH
+            </text>
+            <text x="418" y="150" text-anchor="middle" fill="#6b9a6b" font-family="DM Mono, monospace" font-size="8">
+              BOARD
+            </text>
+            <rect x="120" y="75" width="360" height="8" rx="2" fill="#2d4a2d" />
+            <rect x="120" y="177" width="80" height="8" rx="2" fill="#2d4a2d" />
+            <rect x="220" y="177" width="260" height="8" rx="2" fill="#2d4a2d" />
+            <rect x="100" y="55" width="400" height="14" rx="3" fill="#1e3a1e" />
+            <rect x="100" y="191" width="200" height="14" rx="3" fill="#1e3a1e" />
+            <rect x="320" y="191" width="180" height="14" rx="3" fill="#1e3a1e" />
+            <rect x="480" y="100" width="16" height="50" rx="2" fill="#2d4a2d" />
+            <rect x="100" y="100" width="16" height="50" rx="2" fill="#2d4a2d" />
+            <circle cx="300" cy="230" r="10" fill="#1e3a1e" stroke="#2d4a2d" stroke-width="2" />
+            <circle cx="300" cy="230" r="4" fill="#4ade80" opacity="0.5" />
+            <rect x="280" y="240" width="40" height="8" rx="3" fill="#1e3a1e" />
+            <line x1="300" y1="220" x2="300" y2="205" stroke="#2d4a2d" stroke-width="2" />
+            <line x1="300" y1="248" x2="300" y2="255" stroke="#2d4a2d" stroke-width="2" />
+            <text x="300" y="256" text-anchor="middle" fill="#3a5a3a" font-family="DM Mono, monospace" font-size="9">
+              ILLUSTRATION — ASIC MINER WITH FAN
+            </text>
+          </svg>
+        </div>
+
+        <h2>ASICs &mdash; Industrial Power Draw</h2>
+
+        <h3>Cheapest ASICs (under $200)</h3>
+
+        <p>
+          Old-generation ASICs that are unprofitable on SHA-256 PoW chains are dirt cheap on the second-hand market. On
+          PoE, their age doesn't matter &mdash; only their power draw:
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>ASIC</th>
+              <th>Power draw</th>
+              <th>Used price</th>
+              <th>WTC earning potential</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Antminer S9 (13.5 TH/s)</td>
+              <td>~1,350W</td>
+              <td>$50-100</td>
+              <td>Very High</td>
+            </tr>
+            <tr>
+              <td>Antminer T9+ (12.5 TH/s)</td>
+              <td>~1,450W</td>
+              <td>$40-80</td>
+              <td>Very High</td>
+            </tr>
+            <tr>
+              <td>Avalon 921 (22 TH/s)</td>
+              <td>~1,600W</td>
+              <td>$60-120</td>
+              <td>Very High</td>
+            </tr>
+            <tr>
+              <td>Whatsminer M3 (14 TH/s)</td>
+              <td>~1,500W</td>
+              <td>$50-100</td>
+              <td>Very High</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>Antminer S9i (14 TH/s)</td>
+              <td>~1,320W</td>
+              <td>$50-90</td>
+              <td>Very High</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          An Antminer S9 for $70 that draws 1,350W is arguably the single best value in all of crypto mining today
+          &mdash; on PoE. The same ASIC that is e-waste on Bitcoin because it can't compete with S21s is a top-tier
+          earner on Wattcoin, purely because of its massive power draw.
+        </p>
+
+        <div class="info-callout">
+          <strong>Important:</strong> ASICs require 220V wiring for most units and produce significant noise (75-85 dB).
+          Factor in the cost of a PSU (or use the built-in one if included) and ventilation before buying. A cheap ASIC
+          is only cheap if you can run it.
+        </div>
+
+        <h3>Industrial ASICs — most power-hungry</h3>
+
+        <table>
+          <thead>
+            <tr>
+              <th>ASIC</th>
+              <th>Power draw</th>
+              <th>Price (new)</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Antminer S21 XP</td>
+              <td>~3,800W</td>
+              <td>$5,000+</td>
+              <td>Latest-gen, 270 TH/s</td>
+            </tr>
+            <tr>
+              <td>Whatsminer M66S</td>
+              <td>~3,500W</td>
+              <td>$5,500+</td>
+              <td>Air-cooled, 298 TH/s</td>
+            </tr>
+            <tr>
+              <td>Antminer S21 Pro</td>
+              <td>~3,500W</td>
+              <td>$4,500+</td>
+              <td>234 TH/s</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>Container of 200 S21 XPs</td>
+              <td>~760,000W</td>
+              <td>$1,000,000+</td>
+              <td>Industrial mining farm</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          Modern ASICs are incredibly efficient (up to 15 J/TH) but cost thousands of dollars each. On PoE, a single S21
+          XP drawing 3,800W earns the same as 2.8 Antminer S9s that draw 3,780W combined &mdash; but the used S9s cost
+          $200 total while the S21 XP costs $5,000+. For pure WTC per dollar, the old S9 is the winner. For space
+          efficiency and manageability, the S21 XP wins.
+        </p>
+
+        <h2>The Verdict</h2>
+
+        <p>Wattcoin Proof-of-Energy fundamentally changes the economics of mining hardware. Here is the bottom line:</p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Strategy</th>
+              <th>Best hardware</th>
+              <th>Upfront cost</th>
+              <th>Monthly power cost (at $0.10/kWh)</th>
+              <th>Relative WTC earnings</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ultra-cheap entry</td>
+              <td>Used Xeon workstation</td>
+              <td>$50-100</td>
+              <td>~$17 (230W)</td>
+              <td>Medium</td>
+            </tr>
+            <tr>
+              <td>Best value</td>
+              <td>Used Antminer S9</td>
+              <td>$50-100</td>
+              <td>~$97 (1,350W)</td>
+              <td>Very High</td>
+            </tr>
+            <tr>
+              <td>Best value GPU</td>
+              <td>Used RX 580 / R9 390</td>
+              <td>$50-80</td>
+              <td>~$13-20 (185-275W)</td>
+              <td>Medium-High</td>
+            </tr>
+            <tr>
+              <td>Mid-range</td>
+              <td>3x Antminer S9</td>
+              <td>$150-250</td>
+              <td>~$291 (4,050W)</td>
+              <td>Very High</td>
+            </tr>
+            <tr>
+              <td>High-end GPU</td>
+              <td>RTX 4090</td>
+              <td>$1,600</td>
+              <td>~$32 (450W)</td>
+              <td>High</td>
+            </tr>
+            <tr class="wtc-row">
+              <td>Industrial</td>
+              <td>New-gen ASIC farm</td>
+              <td>$1M+</td>
+              <td>~$55,000 (760,000W)</td>
+              <td>Maximum</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>
+          <strong>The single best value in PoE mining today:</strong> A used Antminer S9 for $70-100. It draws 1,300W+
+          and costs less than a night out. Nothing else comes close in watts per dollar. For GPU miners, an old AMD R9
+          390 or RX 580 offers the best power-to-price ratio.
+        </p>
+
+        <div class="highlight-box">
+          <strong>The bottom line:</strong> On Proof-of-Energy, the cheapest hardware is often the best hardware. Old,
+          power-hungry, and obsolete on PoW chains becomes valuable and competitive on PoE. Before spending thousands on
+          new flagship hardware, check what used gear is available in your area &mdash; it might earn you the same WTC
+          for 10x less upfront cost.
+        </div>
+
+        <p>
+          Ready to start mining? <a href="/wallet.html">Download the Wattcoin Miner</a> and plug in whatever hardware
+          you already have. Your electricity bill is the only spec that matters.
+        </p>
+
+        <a href="/blog.html" class="back-link" style="display: inline-block; margin-top: 32px"
+          >&larr; Back to all posts</a
+        >
+      </article>
+    </div>
+    <footer>
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.386 &nbsp;&mdash;&nbsp;
+      <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
+      <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer">Github</a>
+      &nbsp;&mdash;&nbsp; JUNE 2026 <br /><span id="page-visit-count" style="font-size: 10px; color: #3a5a3a"></span>
+    </footer>
+    <script>
+      (function () {
+        'use strict';
+        var BASE = '/counter-api/?page=';
+        function fmt(n) {
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+          return n;
+        }
+        var counted = sessionStorage.getItem('wtc_pg_power_hw');
+        var method = counted ? 'GET' : 'POST';
+        if (!counted) sessionStorage.setItem('wtc_pg_power_hw', '1');
+        fetch(BASE + 'blog-cheapest-most-power-hungry-hardware', { method: method })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('page-visit-count');
+            if (el && d.ok) el.textContent = fmt(d.count);
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>
