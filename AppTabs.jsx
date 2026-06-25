@@ -4343,7 +4343,7 @@ function SaleView({
                 {orderStatus.wtcAmount?.toLocaleString()} WTC pending delivery
               </div>
               <div style={{ fontSize: 11, color: '#6b9b6b' }}>
-                Payment confirmed — WTC will be sent once 10,101 WTC is queued network-wide.
+                Payment confirmed — WTC will be sent once block is mined.
               </div>
               {(orderStatus.status === 'payment_submitted' ||
                 (optimisticPaid && orderStatus.status === 'pending_payment')) && (
@@ -4655,7 +4655,8 @@ function WalletTab({
       : createDefaultWalletReadiness();
   const [sentTxHistory, setSentTxHistory] = React.useState(() => loadPersistedSentTransactions());
   const [transactions, setTransactions] = React.useState([]);
-  const [transactionsBusy, setTransactionsBusy] = React.useState(false);
+  const initialTxLoadRef = React.useRef(false);
+  const [transactionsBusy, setTransactionsBusy] = React.useState(true);
   const [transactionsStatus, setTransactionsStatus] = React.useState('');
   const [withdrawAddress, setWithdrawAddress] = React.useState('');
   const [withdrawAmount, setWithdrawAmount] = React.useState('');
@@ -4793,6 +4794,7 @@ function WalletTab({
       setTransactionsStatus(`Failed to load transactions: ${e && e.message ? e.message : 'Unknown error'}`);
     }
     setTransactionsBusy(false);
+    initialTxLoadRef.current = true;
   }, [networkInfo.network, selectedWalletAddress, sentTxHistory]);
 
   React.useEffect(() => {
@@ -4882,8 +4884,7 @@ function WalletTab({
     };
   }, []);
 
-  // Load queued/pending sale orders for this address — also restores orderStatus on app restart
-  const orderStatusRestoredRef = React.useRef(false);
+  // Load queued/pending sale orders for this address.
   React.useEffect(() => {
     if (!selectedWalletAddress || !(window.wattcoinHardware && window.wattcoinHardware.invoke)) return;
     let cancelled = false;
@@ -4893,18 +4894,6 @@ function WalletTab({
         .then((res) => {
           if (cancelled || !res || !res.ok || !Array.isArray(res.orders)) return;
           setQueuedSaleOrders(res.orders);
-          // Restore orderStatus if it was lost (app restart / tab switch)
-          if (!orderStatusRestoredRef.current && res.orders.length > 0) {
-            orderStatusRestoredRef.current = true;
-            // Pick the most recent active order
-            const active = res.orders.slice().sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0))[0];
-            setOrderStatus((prev) => {
-              if (prev) return prev; // already set
-              return active;
-            });
-            setOrderId((prev) => prev || active.id);
-            startOrderPoll(active.id);
-          }
         })
         .catch(() => {});
     }
@@ -4914,7 +4903,7 @@ function WalletTab({
       cancelled = true;
       clearInterval(iv);
     };
-  }, [selectedWalletAddress, startOrderPoll]);
+  }, [selectedWalletAddress]);
 
   function handleWithdrawAddressChange(raw) {
     setWithdrawAddress(raw);
@@ -5707,6 +5696,13 @@ function WalletTab({
             >
               {transactionsStatus}
             </div>
+          )}
+
+          {transactions.length === 0 && transactionsBusy && (
+            <div style={{ color: '#6b9b6b', fontSize: 13 }}>Loading transactions...</div>
+          )}
+          {transactions.length === 0 && !transactionsBusy && initialTxLoadRef.current && (
+            <div style={{ color: '#6b9b6b', fontSize: 13 }}>No transactions yet.</div>
           )}
 
           <div style={{ display: 'grid', gap: 8 }}>

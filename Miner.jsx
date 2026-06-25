@@ -2283,7 +2283,7 @@ export default function Miner({
                   allowGpuWorkloads,
                   phaseCount: 4,
                   phaseDurationMs: extended ? 200 : 100,
-                  cpuSpeedRuns: reason === 'startup' || reason === 'slider-stop' ? 5 : 2,
+                  cpuSpeedRuns: reason === 'startup' || reason === 'slider-stop' ? 3 : 2,
                   memBytes: 128 * 1024 * 1024, // 128 MB — exceeds L3 cache on virtually all consumer
                   // CPUs (Intel max ~36 MB, standard AMD max ~64 MB),
                   // ensuring DRAM bandwidth is measured, not L3 cache.
@@ -3443,10 +3443,12 @@ export default function Miner({
     if (!(hardware && hardware.source)) return;
     if (isHardwareOnHold) return;
     if (benchmarkState.startupDone || benchmarkState.running) return;
+    if (clampedLoadPercent === 0) return;
     const timeoutId = setTimeout(() => {
       runBenchmark('startup');
     }, 4000);
     return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isHardwareOnHold,
     hardware,
@@ -3463,6 +3465,7 @@ export default function Miner({
     if (isHardwareOnHold) return;
     if (sliderAdjustNonce <= 0) return;
     if (sliderAdjustNonce <= lastHandledSliderAdjustNonceRef.current) return;
+    if (clampedLoadPercent === 0) return;
 
     lastHandledSliderAdjustNonceRef.current = sliderAdjustNonce;
 
@@ -3473,7 +3476,7 @@ export default function Miner({
     }, 1500);
 
     return () => clearTimeout(timeoutId);
-  }, [sliderAdjustNonce, isHardwareOnHold, hardware, runBenchmark]);
+  }, [sliderAdjustNonce, isHardwareOnHold, hardware, runBenchmark]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Runtime hardware probe polling ──────────────────────────────────────────
   // While mining is active, poll every 30 s for a hardware probe job.
@@ -5235,7 +5238,7 @@ export default function Miner({
       hardware.deviceType === 'Unknown' ||
       hardware.cpu === 'Unknown' ||
       (Array.isArray(hardware.gpus) && hardware.gpus.some((g) => g === 'Unknown' || !g)));
-  const startupBenchmarkPending = hardwareRecognitionFinished && !benchmarkState.startupDone;
+  const startupBenchmarkPending = hardwareRecognitionFinished && !benchmarkState.startupDone && clampedLoadPercent > 0;
   // Persist the card's rendered width once hardware is fully loaded so the next
   // launch pre-sizes the card and avoids a layout jump.
   React.useEffect(() => {
@@ -6453,7 +6456,9 @@ export default function Miner({
               {benchmarkState.running || startupBenchmarkPending
                 ? 'running...'
                 : benchmarkState.lastScore === null
-                  ? 'pending'
+                  ? clampedLoadPercent === 0
+                    ? 'Set hardware load'
+                    : 'pending'
                   : `${benchmarkState.lastScore}/100`}
             </div>
             {!benchmarkState.running &&
@@ -7303,7 +7308,8 @@ export default function Miner({
                   isHardwareOnHold ||
                   firewallBlocked ||
                   peerCount === null ||
-                  peerCount === 0
+                  peerCount === 0 ||
+                  clampedLoadPercent === 0
                 }
                 style={{
                   width: '100%',
@@ -7316,7 +7322,8 @@ export default function Miner({
                     isHardwareOnHold ||
                     firewallBlocked ||
                     peerCount === null ||
-                    peerCount === 0
+                    peerCount === 0 ||
+                    clampedLoadPercent === 0
                       ? '#7aa88a'
                       : showRebenchPrompt
                         ? '#ea580c'
@@ -7336,7 +7343,8 @@ export default function Miner({
                     isHardwareOnHold ||
                     firewallBlocked ||
                     peerCount === null ||
-                    peerCount === 0
+                    peerCount === 0 ||
+                    clampedLoadPercent === 0
                       ? 'not-allowed'
                       : 'pointer',
                 }}
@@ -7355,9 +7363,11 @@ export default function Miner({
                             ? 'No peers'
                             : showRebenchPrompt
                               ? 'Re-Benchmark'
-                              : hardwareRecognitionFinished
-                                ? 'Start mining'
-                                : 'Detecting hardware...'}
+                              : clampedLoadPercent === 0
+                                ? 'Set hardware load'
+                                : hardwareRecognitionFinished
+                                  ? 'Start mining'
+                                  : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>
