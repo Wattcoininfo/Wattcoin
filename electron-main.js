@@ -1033,6 +1033,10 @@ let reverseTunnelWss = null;
 const reverseTunnelSessions = new Map(); // tunnelId -> session
 const reverseTunnelSessionsByPeerIdentity = new Map(); // peerIdentity -> session
 const reverseTunnelPendingResponses = new Map(); // requestId -> { res, timer }
+const peerGossipTopology = new Map(); // peerIdentity -> { connectedIds: Set<string>, lastReceivedMs: number }
+const GOSSIP_MAX_CONNECTIONS_PER_PEER = 50; // no peer can claim more than this many connections
+const GOSSIP_STALE_MS = 5 * 60 * 1000; // forget gossip reports after 5 minutes
+const GOSSIP_BROADCAST_INTERVAL_MS = 60_000; // broadcast our topology every 60 s
 const relayWorkerConns = new Map(); // tunnelId -> Map<workerId, WebSocket>
 const reverseTunnelClientState = {
   socket: null,
@@ -8749,11 +8753,18 @@ ipcMain.handle('wattcoin-get-peer-topology', () => {
     const contributors = Object.entries(contributions).map(([address, wh]) => ({ address, wh: Number(wh) || 0 }));
     const peerSettings = getLedgerNetworkSettings();
     const localPeerUrls = getConfiguredAdvertisedPeerUrls(peerSettings);
+    const gossipEdges = [];
+    for (const [peerIdentity, info] of peerGossipTopology) {
+      for (const connectedId of info.connectedIds) {
+        gossipEdges.push({ source: peerIdentity, target: connectedId });
+      }
+    }
     return {
       ok: true,
       peers,
       attestations,
       tunnels,
+      gossipEdges,
       contributions,
       contributors,
       totalWh: (roundSnapshot && roundSnapshot.totalWh) || 0,
@@ -9295,6 +9306,76 @@ function isValidPeerIdentity(value) {
   if (isValidWtcAddress(normalized)) return true;
   return /^[a-f0-9]{64}$/i.test(normalized);
 }
+
+// ─── Peer gossip topology (connection reports from peers) ──────────────────
+
+function handleIncomingGossip(senderIdentity, body) {
+  if (!body || !body.sender || !Array.isArray(body.connectedPeers)) return;
+  const sender = String(body.sender).trim();
+  if (!isValidPeerIdentity(sender)) return;
+  if (isPeerIdentitySelfReference(sender, '')) return;
+  const connected = body.connectedPeers
+    .map((id) => String(id || '').trim())
+    .filter((id) => isValidPeerIdentity(id) && id !== sender)
+    .slice(0, GOSSIP_MAX_CONNECTIONS_PER_PEER);
+  const now = Date.now();
+  peerGossipTopology.set(sender, { connectedIds: new Set(connected), lastReceivedMs: now });
+  // Clean stale entries
+  for (const [id, info] of peerGossipTopology) {
+    if (now - info.lastReceivedMs > GOSSIP_STALE_MS) {
+      peerGossipTopology.delete(id);
+    }
+  }
+}
+
+async function broadcastOurTopology() {
+  const ourIdentity = getLocalPeerIdentity();
+  if (!ourIdentity) return;
+  const connectedPeers = [];
+  const seenIds = new Set();
+  for (const [url, info] of discoveredPeers) {
+    const reachable = peerReachabilityCache.get(url);
+    if (!reachable || !reachable.ok) continue;
+    const id = String(info.peerIdentity || '').trim();
+    if (!id || !isValidPeerIdentity(id) || id === ourIdentity || seenIds.has(id)) continue;
+    seenIds.add(id);
+    connectedPeers.push(id);
+  }
+  for (const [, session] of reverseTunnelSessions) {
+    if (!session || !session.peerIdentity || !session.socket || session.socket.readyState !== 1) continue;
+    const id = String(session.peerIdentity).trim();
+    if (!id || !isValidPeerIdentity(id) || id === ourIdentity || seenIds.has(id)) continue;
+    seenIds.add(id);
+    connectedPeers.push(id);
+  }
+  const payload = { sender: ourIdentity, connectedPeers, timestamp: Date.now() };
+  const sendPromises = [];
+  for (const [url, info] of discoveredPeers) {
+    const reachable = peerReachabilityCache.get(url);
+    if (!reachable || !reachable.ok) continue;
+    if (isPeerIdentitySelfReference(ourIdentity, url)) continue;
+    sendPromises.push(
+      requestPeerJson(url, 'POST', '/api/v1/peers/gossip', payload, {}, { trackReachability: false }).catch(() => {}),
+    );
+  }
+  await Promise.allSettled(sendPromises);
+}
+
+let peerGossipBroadcastTimer = null;
+
+function startGossipBroadcastLoop() {
+  if (peerGossipBroadcastTimer) return;
+  setTimeout(() => broadcastOurTopology().catch(() => {}), 30_000);
+  peerGossipBroadcastTimer = setInterval(() => broadcastOurTopology().catch(() => {}), GOSSIP_BROADCAST_INTERVAL_MS);
+}
+
+function stopGossipBroadcastLoop() {
+  if (!peerGossipBroadcastTimer) return;
+  clearInterval(peerGossipBroadcastTimer);
+  peerGossipBroadcastTimer = null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function verifyChainPeerCompatibility(req) {
   const expected = getPeerProtocolInfo();
@@ -11255,6 +11336,14 @@ function startLedgerNetworkServer() {
         return;
       }
 
+      // POST /api/v1/peers/gossip — receive peer topology gossip
+      if (req.method === 'POST' && reqUrl.pathname === '/api/v1/peers/gossip') {
+        const body = await readJsonBody(req);
+        handleIncomingGossip(getRequesterIdentity(req), body);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
       if (req.method === 'POST' && reqUrl.pathname === '/api/v1/chain/push') {
         if (!wtcNode) {
           sendJson(res, 503, { ok: false, reason: 'node not ready' });
@@ -12797,6 +12886,7 @@ app.whenReady().then(() => {
   // Start the WebSocket push-probe client after wallet address is available.
   _connectBgProbeWs();
   startWtcPeerSyncLoop();
+  startGossipBroadcastLoop();
   startWalletSyncStateLoop();
   startOpsMetricsLoop();
 
@@ -12877,6 +12967,7 @@ app.on('window-all-closed', () => {
   // Stop the node before quitting
   stopLedgerReconcileLoop();
   stopWtcPeerSyncLoop();
+  stopGossipBroadcastLoop();
   stopWalletSyncStateLoop();
   stopOpsMetricsLoop();
   stopLedgerNetworkServer();

@@ -1871,6 +1871,7 @@ function MapView({ selectedWalletAddress }) {
     peerCount: 0,
     attestCount: 0,
     tunnelCount: 0,
+    gossipCount: 0,
     roundId: 0,
     totalWh: 0,
     contributors: [],
@@ -1922,7 +1923,7 @@ function MapView({ selectedWalletAddress }) {
     const cx = w / 2;
     const cy = h / 2;
 
-    const { peers, attestations, tunnels, contributors, totalWh, localPeerUrls } = data;
+    const { peers, attestations, tunnels, gossipEdges, contributors, totalWh, localPeerUrls } = data;
     const localUrls = new Set((localPeerUrls || []).map((u) => u.replace(/\/$/, '')));
 
     const isFirstRun = !nodesDataRef.current;
@@ -1939,6 +1940,7 @@ function MapView({ selectedWalletAddress }) {
       peers.forEach((p) => {
         const id = p.peerIdentity || p.url;
         peerById[id] = p;
+        if (p.walletAddress) peerById[p.walletAddress] = p;
         const isOwn =
           localUrls.has(p.url.replace(/\/$/, '')) ||
           (p.peerIdentity && selectedWalletAddress && p.peerIdentity.includes(selectedWalletAddress.slice(6, 16)));
@@ -1991,6 +1993,17 @@ function MapView({ selectedWalletAddress }) {
         }
       });
 
+      if (gossipEdges) {
+        gossipEdges.forEach((g) => {
+          if (!peerById[g.source] || !peerById[g.target]) return;
+          const key = g.source + '~' + g.target;
+          if (!edgeSet.has(key)) {
+            edgeSet.add(key);
+            edgeList.push({ source: g.source, target: g.target, type: 'gossip' });
+          }
+        });
+      }
+
       peers.forEach((p) => {
         const id = p.peerIdentity || p.url;
         if (!peerById[id]) return;
@@ -2013,6 +2026,7 @@ function MapView({ selectedWalletAddress }) {
       peers.forEach((p) => {
         const id = p.peerIdentity || p.url;
         peerById[id] = p;
+        if (p.walletAddress) peerById[p.walletAddress] = p;
       });
 
       nodes.forEach((n) => {
@@ -2037,6 +2051,7 @@ function MapView({ selectedWalletAddress }) {
       peerCount: nodes.filter((n) => !n.isLocal).length,
       attestCount: edgeList.filter((e) => e.type === 'attest').length,
       tunnelCount: data.tunnels ? data.tunnels.length : 0,
+      gossipCount: gossipEdges ? gossipEdges.length : 0,
       roundId: data.roundId,
       totalWh: data.totalWh,
       contributors: data.contributors || [],
@@ -2150,6 +2165,15 @@ function MapView({ selectedWalletAddress }) {
           ctx.closePath();
           ctx.fillStyle = isHl ? 'rgba(251, 191, 36, 0.8)' : 'rgba(74, 222, 128, 0.35)';
           ctx.fill();
+        } else if (e.type === 'gossip') {
+          ctx.beginPath();
+          ctx.setLineDash([4, 4]);
+          ctx.moveTo(src.x, src.y);
+          ctx.lineTo(tgt.x, tgt.y);
+          ctx.strokeStyle = isHl ? 'rgba(34, 211, 238, 0.6)' : 'rgba(34, 211, 238, 0.2)';
+          ctx.lineWidth = isHl ? 2.5 : 1.5;
+          ctx.stroke();
+          ctx.setLineDash([]);
         } else {
           ctx.beginPath();
           ctx.moveTo(src.x, src.y);
@@ -2389,7 +2413,8 @@ function MapView({ selectedWalletAddress }) {
           }}
         >
           <div style={{ color: '#9ca3af' }}>
-            Peers: {stats.peerCount} &nbsp; Attest: {stats.attestCount} &nbsp; Tunnels: {stats.tunnelCount}
+            Peers: {stats.peerCount} &nbsp; Attest: {stats.attestCount} &nbsp; Tunnels: {stats.tunnelCount} &nbsp;
+            Gossip: {stats.gossipCount}
           </div>
           <div style={{ color: '#4ade80' }}>
             Round #{stats.roundId} &nbsp; {Math.round(stats.totalWh)} Wh total
