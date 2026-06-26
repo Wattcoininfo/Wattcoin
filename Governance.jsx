@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
 const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
@@ -408,7 +408,7 @@ export default function Governance({ selectedWalletAddress }) {
           background: '#0a140a',
         }}
       >
-        {['proposals', 'team', 'documentation'].map((tab) => (
+        {['proposals', 'team', 'documentation', 'map'].map((tab) => (
           <button
             key={tab}
             onClick={() => setGovSubTab(tab)}
@@ -430,169 +430,151 @@ export default function Governance({ selectedWalletAddress }) {
         ))}
       </div>
 
-      <div style={scrollStyle}>
-        <div style={contentInnerStyle}>
-          {govSubTab === 'proposals' && (
-            <>
-              {statusMsg && (
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: statusType === 'error' ? '#fca5a5' : '#86efac',
-                    marginBottom: 12,
-                    padding: '8px 12px',
-                    background: '#0d1a0d',
-                    borderRadius: 8,
-                    border: '1px solid #1e3a1e',
-                  }}
-                >
-                  {statusMsg}
-                </div>
-              )}
-
-              {showCreate && (
-                <div style={{ ...cardStyle, marginBottom: 18 }}>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80', marginBottom: 10 }}>
-                    Submit a Proposal
-                  </div>
-                  <input
-                    value={createTitle}
-                    onChange={(e) => setCreateTitle(e.target.value)}
-                    placeholder="Proposal title"
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      fontSize: 14,
-                      padding: '9px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #224022',
-                      background: '#060e06',
-                      color: '#d7ffd9',
-                      marginBottom: 8,
-                    }}
-                  />
-                  <textarea
-                    value={createDesc}
-                    onChange={(e) => setCreateDesc(e.target.value)}
-                    placeholder="Describe your proposal (optional)"
-                    rows={4}
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      fontSize: 13,
-                      padding: '9px 12px',
-                      borderRadius: 8,
-                      border: '1px solid #224022',
-                      background: '#060e06',
-                      color: '#d7ffd9',
-                      marginBottom: 10,
-                      resize: 'vertical',
-                      fontFamily: 'inherit',
-                    }}
-                  />
-                  <div style={{ display: 'flex', gap: 16, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <div style={{ fontSize: 12, color: '#7aaa7a' }}>Comment period:</div>
-                      <select
-                        value={createCommentPeriod}
-                        onChange={(e) => setCreateCommentPeriod(Number(e.target.value))}
-                        style={{
-                          fontSize: 13,
-                          padding: '6px 10px',
-                          borderRadius: 6,
-                          border: '1px solid #224022',
-                          background: '#060e06',
-                          color: '#d7ffd9',
-                        }}
-                      >
-                        {[1, 2, 3, 4].map((w) => (
-                          <option key={w} value={w}>
-                            {w} week{w > 1 ? 's' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <div style={{ fontSize: 12, color: '#7aaa7a' }}>Voting period:</div>
-                      <select
-                        value={createDuration}
-                        onChange={(e) => setCreateDuration(Number(e.target.value))}
-                        style={{
-                          fontSize: 13,
-                          padding: '6px 10px',
-                          borderRadius: 6,
-                          border: '1px solid #224022',
-                          background: '#060e06',
-                          color: '#d7ffd9',
-                        }}
-                      >
-                        {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
-                          <option key={w} value={w}>
-                            {w} week{w > 1 ? 's' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 11, color: '#5a8a5a', marginBottom: 10, lineHeight: 1.5 }}>
-                    Proposals that mention changing the 21M hard cap, energy law (20 kWh/coin floor), or genesis
-                    allocation will be automatically rejected.
-                  </div>
-
-                  {/* Governance treasury transfer toggle */}
+      {govSubTab === 'map' ? (
+        <MapView selectedWalletAddress={selectedWalletAddress} />
+      ) : (
+        <div style={scrollStyle}>
+          <div style={contentInnerStyle}>
+            {govSubTab === 'proposals' && (
+              <>
+                {statusMsg && (
                   <div
-                    onClick={() => setShowTransferForm(!showTransferForm)}
                     style={{
-                      fontSize: 12,
-                      color: '#38bdf8',
-                      cursor: 'pointer',
-                      marginBottom: showTransferForm ? 10 : 0,
-                      padding: '4px 0',
+                      fontSize: 13,
+                      color: statusType === 'error' ? '#fca5a5' : '#86efac',
+                      marginBottom: 12,
+                      padding: '8px 12px',
+                      background: '#0d1a0d',
+                      borderRadius: 8,
+                      border: '1px solid #1e3a1e',
                     }}
                   >
-                    {showTransferForm ? '− Hide treasury transfer' : '+ Add treasury transfer'}
+                    {statusMsg}
                   </div>
+                )}
 
-                  {showTransferForm && (
-                    <div
+                {showCreate && (
+                  <div style={{ ...cardStyle, marginBottom: 18 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80', marginBottom: 10 }}>
+                      Submit a Proposal
+                    </div>
+                    <input
+                      value={createTitle}
+                      onChange={(e) => setCreateTitle(e.target.value)}
+                      placeholder="Proposal title"
                       style={{
-                        background: '#0a1f2e',
-                        border: '1px solid #1e4a6e',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        fontSize: 14,
+                        padding: '9px 12px',
                         borderRadius: 8,
-                        padding: 12,
+                        border: '1px solid #224022',
+                        background: '#060e06',
+                        color: '#d7ffd9',
+                        marginBottom: 8,
+                      }}
+                    />
+                    <textarea
+                      value={createDesc}
+                      onChange={(e) => setCreateDesc(e.target.value)}
+                      placeholder="Describe your proposal (optional)"
+                      rows={4}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        fontSize: 13,
+                        padding: '9px 12px',
+                        borderRadius: 8,
+                        border: '1px solid #224022',
+                        background: '#060e06',
+                        color: '#d7ffd9',
                         marginBottom: 10,
+                        resize: 'vertical',
+                        fontFamily: 'inherit',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#7aaa7a' }}>Comment period:</div>
+                        <select
+                          value={createCommentPeriod}
+                          onChange={(e) => setCreateCommentPeriod(Number(e.target.value))}
+                          style={{
+                            fontSize: 13,
+                            padding: '6px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #224022',
+                            background: '#060e06',
+                            color: '#d7ffd9',
+                          }}
+                        >
+                          {[1, 2, 3, 4].map((w) => (
+                            <option key={w} value={w}>
+                              {w} week{w > 1 ? 's' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <div style={{ fontSize: 12, color: '#7aaa7a' }}>Voting period:</div>
+                        <select
+                          value={createDuration}
+                          onChange={(e) => setCreateDuration(Number(e.target.value))}
+                          style={{
+                            fontSize: 13,
+                            padding: '6px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #224022',
+                            background: '#060e06',
+                            color: '#d7ffd9',
+                          }}
+                        >
+                          {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((w) => (
+                            <option key={w} value={w}>
+                              {w} week{w > 1 ? 's' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#5a8a5a', marginBottom: 10, lineHeight: 1.5 }}>
+                      Proposals that mention changing the 21M hard cap, energy law (20 kWh/coin floor), or genesis
+                      allocation will be automatically rejected.
+                    </div>
+
+                    {/* Governance treasury transfer toggle */}
+                    <div
+                      onClick={() => setShowTransferForm(!showTransferForm)}
+                      style={{
+                        fontSize: 12,
+                        color: '#38bdf8',
+                        cursor: 'pointer',
+                        marginBottom: showTransferForm ? 10 : 0,
+                        padding: '4px 0',
                       }}
                     >
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 8 }}>
-                        Governance Treasury Transfer
-                      </div>
-                      <input
-                        value={transferTo}
-                        onChange={(e) => setTransferTo(e.target.value)}
-                        placeholder="Recipient address (wtc1...)"
+                      {showTransferForm ? '− Hide treasury transfer' : '+ Add treasury transfer'}
+                    </div>
+
+                    {showTransferForm && (
+                      <div
                         style={{
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          fontSize: 13,
-                          padding: '8px 10px',
-                          borderRadius: 6,
-                          border: '1px solid #224022',
-                          background: '#060e06',
-                          color: '#d7ffd9',
-                          marginBottom: 6,
-                          fontFamily: 'monospace',
+                          background: '#0a1f2e',
+                          border: '1px solid #1e4a6e',
+                          borderRadius: 8,
+                          padding: 12,
+                          marginBottom: 10,
                         }}
-                      />
-                      <div style={{ display: 'flex', gap: 8 }}>
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', marginBottom: 8 }}>
+                          Governance Treasury Transfer
+                        </div>
                         <input
-                          value={transferAmount}
-                          onChange={(e) => setTransferAmount(e.target.value)}
-                          placeholder="Amount (WTC)"
-                          type="number"
-                          min="0"
-                          step="0.01"
+                          value={transferTo}
+                          onChange={(e) => setTransferTo(e.target.value)}
+                          placeholder="Recipient address (wtc1...)"
                           style={{
-                            flex: 1,
+                            width: '100%',
                             boxSizing: 'border-box',
                             fontSize: 13,
                             padding: '8px 10px',
@@ -601,171 +583,94 @@ export default function Governance({ selectedWalletAddress }) {
                             background: '#060e06',
                             color: '#d7ffd9',
                             marginBottom: 6,
+                            fontFamily: 'monospace',
                           }}
                         />
-                      </div>
-                      <input
-                        value={transferPurpose}
-                        onChange={(e) => setTransferPurpose(e.target.value)}
-                        placeholder="Purpose (e.g. Security audit Q3 2026)"
-                        style={{
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          fontSize: 13,
-                          padding: '8px 10px',
-                          borderRadius: 6,
-                          border: '1px solid #224022',
-                          background: '#060e06',
-                          color: '#d7ffd9',
-                        }}
-                      />
-                      <label
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          fontSize: 12,
-                          color: '#abf0c2',
-                          marginTop: 8,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={useReserveOverride}
-                          onChange={(e) => setUseReserveOverride(e.target.checked)}
-                          style={{ accentColor: '#ef8c3c', cursor: 'pointer' }}
-                        />
-                        Allow treasury balance to fall below 10,000 WTC reserve
-                      </label>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleCreateProposal}
-                    style={{
-                      background: '#4ade80',
-                      color: '#001008',
-                      border: 'none',
-                      borderRadius: 8,
-                      padding: '8px 16px',
-                      fontWeight: 700,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Submit Proposal
-                  </button>
-                </div>
-              )}
-
-              <div style={sectionDividerStyle} />
-
-              {commentProposals.length > 0 && (
-                <>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', margin: '0 0 10px' }}>
-                    In Comment Period
-                  </div>
-                  {commentProposals.map((proposal) => (
-                    <div key={proposal.pipId} style={{ ...cardStyle, borderColor: '#3b82f6' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={cardTitleStyle}>{proposal.title}</div>
-                        <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
-                          {pipDisplayId(proposal.pipId)}
-                        </span>
-                      </div>
-                      {proposal.description && (
-                        <div
-                          style={{
-                            fontSize: 13,
-                            color: '#b7f5bc',
-                            marginBottom: 8,
-                            lineHeight: 1.5,
-                            whiteSpace: 'pre-wrap',
-                          }}
-                        >
-                          {proposal.description}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            value={transferAmount}
+                            onChange={(e) => setTransferAmount(e.target.value)}
+                            placeholder="Amount (WTC)"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            style={{
+                              flex: 1,
+                              boxSizing: 'border-box',
+                              fontSize: 13,
+                              padding: '8px 10px',
+                              borderRadius: 6,
+                              border: '1px solid #224022',
+                              background: '#060e06',
+                              color: '#d7ffd9',
+                              marginBottom: 6,
+                            }}
+                          />
                         </div>
-                      )}
-                      <div
-                        style={{ ...cardMetaStyle, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
-                      >
-                        <span>by {proposal.creator ? proposal.creator.slice(0, 12) + '...' : 'unknown'}</span>
-                        {proposal.creatorNftId && (
-                          <span style={badgeStyle(proposal.creatorTier)}>
-                            {proposal.creatorNftId.toUpperCase()} ·{' '}
-                            {proposal.creatorTier.charAt(0).toUpperCase() + proposal.creatorTier.slice(1)}
-                          </span>
-                        )}
-                        <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      {proposal.transferTo && proposal.transferAmount && (
-                        <div
+                        <input
+                          value={transferPurpose}
+                          onChange={(e) => setTransferPurpose(e.target.value)}
+                          placeholder="Purpose (e.g. Security audit Q3 2026)"
                           style={{
-                            fontSize: 12,
-                            color: '#60a5fa',
-                            background: '#1e3a8a22',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            fontSize: 13,
+                            padding: '8px 10px',
                             borderRadius: 6,
-                            padding: '6px 10px',
-                            marginBottom: 8,
+                            border: '1px solid #224022',
+                            background: '#060e06',
+                            color: '#d7ffd9',
+                          }}
+                        />
+                        <label
+                          style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 6,
-                            flexWrap: 'wrap',
+                            gap: 8,
+                            fontSize: 12,
+                            color: '#abf0c2',
+                            marginTop: 8,
+                            cursor: 'pointer',
                           }}
                         >
-                          <span>
-                            💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong>
-                          </span>
-                          <span style={{ color: '#93c5fd' }}>→</span>
-                          <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#93c5fd' }}>
-                            {proposal.transferTo.slice(0, 12)}...
-                          </span>
-                          {proposal.transferPurpose && (
-                            <span style={{ color: '#93c5fd' }}>· {proposal.transferPurpose}</span>
-                          )}
-                        </div>
-                      )}
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: '#60a5fa',
-                          background: '#1e3a8a22',
-                          borderRadius: 6,
-                          padding: '6px 10px',
-                          display: 'inline-block',
-                        }}
-                      >
-                        💬 Comment period
-                        {proposal.commentPeriodEndsAt ? ` — ${getRemainingTime(proposal.commentPeriodEndsAt)}` : ''}
-                        {proposal.commentPeriodWeeks
-                          ? ` (${proposal.commentPeriodWeeks} week${proposal.commentPeriodWeeks > 1 ? 's' : ''})`
-                          : ''}
-                        {proposal.votingDurationWeeks ? ` · Voting opens after` : ''}
+                          <input
+                            type="checkbox"
+                            checked={useReserveOverride}
+                            onChange={(e) => setUseReserveOverride(e.target.checked)}
+                            style={{ accentColor: '#ef8c3c', cursor: 'pointer' }}
+                          />
+                          Allow treasury balance to fall below 10,000 WTC reserve
+                        </label>
                       </div>
-                    </div>
-                  ))}
-                </>
-              )}
+                    )}
 
-              {activeProposals.length === 0 && commentProposals.length === 0 && (
-                <div style={{ fontSize: 14, color: '#7aaa7a', textAlign: 'center', marginTop: 40, marginBottom: 20 }}>
-                  No active proposals. Click &ldquo;New Proposal&rdquo; to create one.
-                </div>
-              )}
-
-              {activeProposals.length > 0 && (
-                <>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80', margin: '16px 0 10px' }}>
-                    Voting Open
+                    <button
+                      onClick={handleCreateProposal}
+                      style={{
+                        background: '#4ade80',
+                        color: '#001008',
+                        border: 'none',
+                        borderRadius: 8,
+                        padding: '8px 16px',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Submit Proposal
+                    </button>
                   </div>
-                  {activeProposals.map((proposal) => {
-                    const totalVotes = proposal.voteTallies.for + proposal.voteTallies.against;
-                    const forPct = totalVotes > 0 ? Math.round((proposal.voteTallies.for / totalVotes) * 100) : 0;
-                    const againstPct =
-                      totalVotes > 0 ? Math.round((proposal.voteTallies.against / totalVotes) * 100) : 0;
-                    return (
-                      <div key={proposal.pipId} style={cardStyle}>
+                )}
+
+                <div style={sectionDividerStyle} />
+
+                {commentProposals.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', margin: '0 0 10px' }}>
+                      In Comment Period
+                    </div>
+                    {commentProposals.map((proposal) => (
+                      <div key={proposal.pipId} style={{ ...cardStyle, borderColor: '#3b82f6' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={cardTitleStyle}>{proposal.title}</div>
                           <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
@@ -796,13 +701,7 @@ export default function Governance({ selectedWalletAddress }) {
                             </span>
                           )}
                           <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
-                          {proposal.votingEndsAt && (
-                            <span style={{ color: '#fbbf24', fontSize: 12 }}>
-                              &middot; {getRemainingTime(proposal.votingEndsAt)}
-                            </span>
-                          )}
                         </div>
-
                         {proposal.transferTo && proposal.transferAmount && (
                           <div
                             style={{
@@ -830,134 +729,245 @@ export default function Governance({ selectedWalletAddress }) {
                             )}
                           </div>
                         )}
-
-                        {totalVotes > 0 && (
-                          <div style={{ marginBottom: 10 }}>
-                            <div
-                              style={{
-                                height: 6,
-                                background: '#1e3a1e',
-                                borderRadius: 3,
-                                overflow: 'hidden',
-                                display: 'flex',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  width: `${forPct}%`,
-                                  background: '#4ade80',
-                                  transition: 'width 0.3s',
-                                }}
-                              />
-                              <div
-                                style={{
-                                  width: `${againstPct}%`,
-                                  background: '#ef4444',
-                                  transition: 'width 0.3s',
-                                }}
-                              />
-                            </div>
-                            <div
-                              style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                fontSize: 12,
-                                color: '#7aaa7a',
-                                marginTop: 4,
-                              }}
-                            >
-                              <span style={{ color: '#4ade80' }}>{proposal.voteTallies.for} for</span>
-                              <span style={{ color: '#ef4444' }}>{proposal.voteTallies.against} against</span>
-                            </div>
-                          </div>
-                        )}
-
-                        <VoteButtons
-                          proposal={proposal}
-                          selectedWalletAddress={selectedWalletAddress}
-                          onVote={handleVote}
-                        />
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: '#60a5fa',
+                            background: '#1e3a8a22',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            display: 'inline-block',
+                          }}
+                        >
+                          💬 Comment period
+                          {proposal.commentPeriodEndsAt ? ` — ${getRemainingTime(proposal.commentPeriodEndsAt)}` : ''}
+                          {proposal.commentPeriodWeeks
+                            ? ` (${proposal.commentPeriodWeeks} week${proposal.commentPeriodWeeks > 1 ? 's' : ''})`
+                            : ''}
+                          {proposal.votingDurationWeeks ? ` · Voting opens after` : ''}
+                        </div>
                       </div>
-                    );
-                  })}
-                </>
-              )}
+                    ))}
+                  </>
+                )}
 
-              {pastProposals.length > 0 && (
-                <>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#7aaa7a', margin: '20px 0 10px' }}>
-                    Past Proposals
+                {activeProposals.length === 0 && commentProposals.length === 0 && (
+                  <div style={{ fontSize: 14, color: '#7aaa7a', textAlign: 'center', marginTop: 40, marginBottom: 20 }}>
+                    No active proposals. Click &ldquo;New Proposal&rdquo; to create one.
                   </div>
-                  {pastProposals.map((proposal) => {
-                    const totalVotes = proposal.voteTallies.for + proposal.voteTallies.against;
-                    const forPct = totalVotes > 0 ? Math.round((proposal.voteTallies.for / totalVotes) * 100) : 0;
-                    const recorded = proposal.recordedAtHeight != null;
-                    return (
-                      <div key={proposal.pipId} style={{ ...cardStyle, opacity: 0.7 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={cardTitleStyle}>{proposal.title}</div>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                )}
+
+                {activeProposals.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80', margin: '16px 0 10px' }}>
+                      Voting Open
+                    </div>
+                    {activeProposals.map((proposal) => {
+                      const totalVotes = proposal.voteTallies.for + proposal.voteTallies.against;
+                      const forPct = totalVotes > 0 ? Math.round((proposal.voteTallies.for / totalVotes) * 100) : 0;
+                      const againstPct =
+                        totalVotes > 0 ? Math.round((proposal.voteTallies.against / totalVotes) * 100) : 0;
+                      return (
+                        <div key={proposal.pipId} style={cardStyle}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={cardTitleStyle}>{proposal.title}</div>
                             <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
                               {pipDisplayId(proposal.pipId)}
                             </span>
-                            <span
+                          </div>
+                          {proposal.description && (
+                            <div
                               style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: proposal.status === 'passed' ? '#4ade80' : '#ef4444',
-                                background: proposal.status === 'passed' ? '#4ade80' + '22' : '#ef4444' + '22',
-                                borderRadius: 6,
-                                padding: '2px 7px',
+                                fontSize: 13,
+                                color: '#b7f5bc',
+                                marginBottom: 8,
+                                lineHeight: 1.5,
+                                whiteSpace: 'pre-wrap',
                               }}
                             >
-                              {proposal.status === 'passed' ? 'Passed' : 'Rejected'}
-                            </span>
-                          </div>
-                        </div>
-                        {proposal.description && (
+                              {proposal.description}
+                            </div>
+                          )}
                           <div
                             style={{
-                              fontSize: 13,
-                              color: '#b7f5bc',
-                              marginBottom: 8,
-                              lineHeight: 1.5,
-                              whiteSpace: 'pre-wrap',
+                              ...cardMetaStyle,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              flexWrap: 'wrap',
                             }}
                           >
-                            {proposal.description}
+                            <span>by {proposal.creator ? proposal.creator.slice(0, 12) + '...' : 'unknown'}</span>
+                            {proposal.creatorNftId && (
+                              <span style={badgeStyle(proposal.creatorTier)}>
+                                {proposal.creatorNftId.toUpperCase()} ·{' '}
+                                {proposal.creatorTier.charAt(0).toUpperCase() + proposal.creatorTier.slice(1)}
+                              </span>
+                            )}
+                            <span>&middot; {new Date(proposal.createdAt).toLocaleDateString()}</span>
+                            {proposal.votingEndsAt && (
+                              <span style={{ color: '#fbbf24', fontSize: 12 }}>
+                                &middot; {getRemainingTime(proposal.votingEndsAt)}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {proposal.transferTo && proposal.transferAmount && (
-                          <div
-                            style={{
-                              fontSize: 12,
-                              color: '#93c5fd',
-                              marginBottom: 6,
-                            }}
-                          >
-                            💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong> →{' '}
-                            <span style={{ fontFamily: 'monospace' }}>{proposal.transferTo.slice(0, 12)}...</span>
-                            {proposal.transferPurpose && ` · ${proposal.transferPurpose}`}
-                          </div>
-                        )}
-                        <div style={{ fontSize: 12, color: '#6b8f6b' }}>
-                          {proposal.voteTallies.for} for &middot; {proposal.voteTallies.against} against
-                          {totalVotes > 0 && ` (${forPct}% in favor)`}
-                          {recorded && ` \u00b7 Recorded at height ${proposal.recordedAtHeight}`}
+
+                          {proposal.transferTo && proposal.transferAmount && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: '#60a5fa',
+                                background: '#1e3a8a22',
+                                borderRadius: 6,
+                                padding: '6px 10px',
+                                marginBottom: 8,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <span>
+                                💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong>
+                              </span>
+                              <span style={{ color: '#93c5fd' }}>→</span>
+                              <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#93c5fd' }}>
+                                {proposal.transferTo.slice(0, 12)}...
+                              </span>
+                              {proposal.transferPurpose && (
+                                <span style={{ color: '#93c5fd' }}>· {proposal.transferPurpose}</span>
+                              )}
+                            </div>
+                          )}
+
+                          {totalVotes > 0 && (
+                            <div style={{ marginBottom: 10 }}>
+                              <div
+                                style={{
+                                  height: 6,
+                                  background: '#1e3a1e',
+                                  borderRadius: 3,
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: `${forPct}%`,
+                                    background: '#4ade80',
+                                    transition: 'width 0.3s',
+                                  }}
+                                />
+                                <div
+                                  style={{
+                                    width: `${againstPct}%`,
+                                    background: '#ef4444',
+                                    transition: 'width 0.3s',
+                                  }}
+                                />
+                              </div>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  fontSize: 12,
+                                  color: '#7aaa7a',
+                                  marginTop: 4,
+                                }}
+                              >
+                                <span style={{ color: '#4ade80' }}>{proposal.voteTallies.for} for</span>
+                                <span style={{ color: '#ef4444' }}>{proposal.voteTallies.against} against</span>
+                              </div>
+                            </div>
+                          )}
+
+                          <VoteButtons
+                            proposal={proposal}
+                            selectedWalletAddress={selectedWalletAddress}
+                            onVote={handleVote}
+                          />
                         </div>
-                      </div>
-                    );
-                  })}
-                </>
-              )}
-            </>
-          )}
+                      );
+                    })}
+                  </>
+                )}
 
-          {govSubTab === 'team' && <TeamView selectedWalletAddress={selectedWalletAddress} nfts={nfts} />}
+                {pastProposals.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#7aaa7a', margin: '20px 0 10px' }}>
+                      Past Proposals
+                    </div>
+                    {pastProposals.map((proposal) => {
+                      const totalVotes = proposal.voteTallies.for + proposal.voteTallies.against;
+                      const forPct = totalVotes > 0 ? Math.round((proposal.voteTallies.for / totalVotes) * 100) : 0;
+                      const recorded = proposal.recordedAtHeight != null;
+                      return (
+                        <div key={proposal.pipId} style={{ ...cardStyle, opacity: 0.7 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={cardTitleStyle}>{proposal.title}</div>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span style={{ fontSize: 11, color: '#6b8f6b', fontFamily: 'monospace' }}>
+                                {pipDisplayId(proposal.pipId)}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: proposal.status === 'passed' ? '#4ade80' : '#ef4444',
+                                  background: proposal.status === 'passed' ? '#4ade80' + '22' : '#ef4444' + '22',
+                                  borderRadius: 6,
+                                  padding: '2px 7px',
+                                }}
+                              >
+                                {proposal.status === 'passed' ? 'Passed' : 'Rejected'}
+                              </span>
+                            </div>
+                          </div>
+                          {proposal.description && (
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: '#b7f5bc',
+                                marginBottom: 8,
+                                lineHeight: 1.5,
+                                whiteSpace: 'pre-wrap',
+                              }}
+                            >
+                              {proposal.description}
+                            </div>
+                          )}
+                          {proposal.transferTo && proposal.transferAmount && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: '#93c5fd',
+                                marginBottom: 6,
+                              }}
+                            >
+                              💠 Treasury transfer: <strong>{proposal.transferAmount.toLocaleString()} WTC</strong> →{' '}
+                              <span style={{ fontFamily: 'monospace' }}>{proposal.transferTo.slice(0, 12)}...</span>
+                              {proposal.transferPurpose && ` · ${proposal.transferPurpose}`}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 12, color: '#6b8f6b' }}>
+                            {proposal.voteTallies.for} for &middot; {proposal.voteTallies.against} against
+                            {totalVotes > 0 && ` (${forPct}% in favor)`}
+                            {recorded && ` \u00b7 Recorded at height ${proposal.recordedAtHeight}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </>
+            )}
 
-          {govSubTab === 'documentation' && <DocsView selectedWalletAddress={selectedWalletAddress} nfts={nfts} />}
+            {govSubTab === 'team' && <TeamView selectedWalletAddress={selectedWalletAddress} nfts={nfts} />}
+
+            {govSubTab === 'documentation' && <DocsView selectedWalletAddress={selectedWalletAddress} nfts={nfts} />}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -1841,6 +1851,624 @@ function VoteButtons({ proposal, selectedWalletAddress, onVote }) {
       >
         Vote Against
       </button>
+    </div>
+  );
+}
+
+function MapView({ selectedWalletAddress }) {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const hoveredRef = useRef(null);
+  const transformRef = useRef({ x: 0, y: 0, scale: 1 });
+  const nodesDataRef = useRef(null);
+  const edgeListRef = useRef([]);
+  const settledRef = useRef(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+  const [data, setData] = useState(null);
+  const [tooltip, setTooltip] = useState(null);
+  const [stats, setStats] = useState({
+    peerCount: 0,
+    attestCount: 0,
+    tunnelCount: 0,
+    roundId: 0,
+    totalWh: 0,
+    contributors: [],
+  });
+
+  useEffect(() => {
+    let mounted = true;
+    let interval;
+
+    async function fetchData() {
+      try {
+        const result = await window.wattcoinHardware.invoke('wattcoin-get-peer-topology');
+        if (!mounted) return;
+        if (result && result.ok) {
+          setData(result);
+          setLoaded(true);
+          setError(false);
+        } else {
+          setError(true);
+        }
+      } catch {
+        if (mounted) setError(true);
+      }
+    }
+
+    fetchData();
+    interval = setInterval(fetchData, 15000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!data || !data.peers || data.peers.length === 0) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    ctx.scale(dpr, dpr);
+    const w = rect.width;
+    const h = rect.height;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    const { peers, attestations, tunnels, contributors, totalWh, localPeerUrls } = data;
+    const localUrls = new Set((localPeerUrls || []).map((u) => u.replace(/\/$/, '')));
+
+    const isFirstRun = !nodesDataRef.current;
+    const transform = transformRef.current;
+    let nodes;
+    let edgeList;
+
+    if (isFirstRun) {
+      const peerById = {};
+      nodes = [];
+      const edgeSet = new Set();
+      edgeList = [];
+
+      peers.forEach((p) => {
+        const id = p.peerIdentity || p.url;
+        peerById[id] = p;
+        const isOwn =
+          localUrls.has(p.url.replace(/\/$/, '')) ||
+          (p.peerIdentity && selectedWalletAddress && p.peerIdentity.includes(selectedWalletAddress.slice(6, 16)));
+        if (isOwn) return;
+        const isOnline = p.reachable === true;
+        nodes.push({
+          id,
+          url: p.url,
+          peerIdentity: p.peerIdentity,
+          walletAddress: p.walletAddress || '',
+          reachable: p.reachable,
+          wh: 0,
+          lastSeenMs: p.lastSeenMs,
+          tipHeight: p.tipHeight,
+          isOnline,
+          x: isOnline ? Math.random() * w * 0.6 + w * 0.2 : cx + 3000 * (Math.random() - 0.5),
+          y: isOnline ? Math.random() * h * 0.6 + h * 0.2 : cy + 3000 * (Math.random() - 0.5),
+          vx: 0,
+          vy: 0,
+        });
+      });
+
+      const localWh =
+        selectedWalletAddress && contributors
+          ? contributors.find((c) => c.address === selectedWalletAddress)?.wh || 0
+          : 0;
+      nodes.push({
+        id: '__local__',
+        url: '(you)',
+        peerIdentity: '',
+        walletAddress: selectedWalletAddress || '',
+        reachable: true,
+        wh: localWh,
+        lastSeenMs: 0,
+        tipHeight: 0,
+        isOnline: true,
+        x: cx + (Math.random() - 0.5) * 40,
+        y: cy + (Math.random() - 0.5) * 40,
+        vx: 0,
+        vy: 0,
+        isLocal: true,
+      });
+
+      attestations.forEach((a) => {
+        if (!peerById[a.verifier] || !peerById[a.worker]) return;
+        const key = a.verifier + '>' + a.worker;
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key);
+          edgeList.push({ source: a.verifier, target: a.worker, type: 'attest' });
+        }
+      });
+
+      peers.forEach((p) => {
+        const id = p.peerIdentity || p.url;
+        if (!peerById[id]) return;
+        if (p.reachable !== true) return;
+        const isTunnel = tunnels.some((t) => t.peerIdentity === id);
+        const key = '__local__>' + id;
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key);
+          edgeList.push({ source: '__local__', target: id, type: isTunnel ? 'tunnel' : 'direct' });
+        }
+      });
+
+      nodesDataRef.current = nodes;
+      edgeListRef.current = edgeList;
+    } else {
+      nodes = nodesDataRef.current;
+      edgeList = edgeListRef.current;
+
+      const peerById = {};
+      peers.forEach((p) => {
+        const id = p.peerIdentity || p.url;
+        peerById[id] = p;
+      });
+
+      nodes.forEach((n) => {
+        const p = peerById[n.id];
+        if (p) {
+          n.reachable = p.reachable;
+          n.wh = 0;
+          n.lastSeenMs = p.lastSeenMs;
+          n.tipHeight = p.tipHeight;
+          n.walletAddress = p.walletAddress || '';
+          n.isOnline = p.reachable === true;
+        }
+        if (n.isLocal && selectedWalletAddress && contributors) {
+          const found = contributors.find((c) => c.address === selectedWalletAddress);
+          n.wh = found ? found.wh : 0;
+          n.walletAddress = selectedWalletAddress || '';
+        }
+      });
+    }
+
+    setStats({
+      peerCount: nodes.filter((n) => !n.isLocal).length,
+      attestCount: edgeList.filter((e) => e.type === 'attest').length,
+      tunnelCount: data.tunnels ? data.tunnels.length : 0,
+      roundId: data.roundId,
+      totalWh: data.totalWh,
+      contributors: data.contributors || [],
+    });
+
+    let animId;
+    let tick = 0;
+    const maxTicks = 400;
+
+    function simulate() {
+      tick++;
+      const alpha = Math.max(0.01, 1 - tick / maxTicks);
+      const repulsion = 12000 * alpha;
+      const attraction = 0.003 * alpha;
+      const centerForce = 0.015 * alpha;
+      const onlineNodes = nodes.filter((n) => n.isOnline);
+
+      for (const a of onlineNodes) {
+        for (const b of onlineNodes) {
+          if (a.id >= b.id) continue;
+          let dx = b.x - a.x;
+          let dy = b.y - a.y;
+          let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const force = repulsion / (dist * dist);
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          a.vx -= fx;
+          a.vy -= fy;
+          b.vx += fx;
+          b.vy += fy;
+        }
+
+        const cx2 = cx - a.x;
+        const cy2 = cy - a.y;
+        a.vx += cx2 * centerForce;
+        a.vy += cy2 * centerForce;
+      }
+
+      for (const e of edgeList) {
+        const src = nodes.find((n) => n.id === e.source);
+        const tgt = nodes.find((n) => n.id === e.target);
+        if (!src || !tgt) continue;
+        let dx = tgt.x - src.x;
+        let dy = tgt.y - src.y;
+        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const desired = e.type === 'attest' ? 130 : 180;
+        const f = (dist - desired) * attraction;
+        const fx = (dx / dist) * f;
+        const fy = (dy / dist) * f;
+        src.vx += fx;
+        src.vy += fy;
+        tgt.vx -= fx;
+        tgt.vy -= fy;
+      }
+
+      for (const n of nodes) {
+        if (n.isOnline) {
+          n.vx *= 0.85;
+          n.vy *= 0.85;
+          n.x += n.vx;
+          n.y += n.vy;
+          n.x = Math.max(40, Math.min(w - 40, n.x));
+          n.y = Math.max(40, Math.min(h - 40, n.y));
+        }
+      }
+
+      draw();
+      if (tick < maxTicks) {
+        animId = requestAnimationFrame(simulate);
+      } else {
+        settledRef.current = true;
+      }
+    }
+
+    function draw() {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w * dpr, h * dpr);
+
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.7);
+      grad.addColorStop(0, '#0a1a0a');
+      grad.addColorStop(1, '#060e06');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.setTransform(transform.scale * dpr, 0, 0, transform.scale * dpr, transform.x * dpr, transform.y * dpr);
+
+      const hoveredId = hoveredRef.current;
+
+      for (const e of edgeList) {
+        const src = nodes.find((n) => n.id === e.source);
+        const tgt = nodes.find((n) => n.id === e.target);
+        if (!src || !tgt) continue;
+        if (!src.isOnline && !tgt.isOnline) continue;
+        const isHl = hoveredId && (hoveredId === src.id || hoveredId === tgt.id);
+
+        if (e.type === 'attest') {
+          ctx.beginPath();
+          ctx.moveTo(src.x, src.y);
+          ctx.lineTo(tgt.x, tgt.y);
+          ctx.strokeStyle = isHl ? 'rgba(251, 191, 36, 0.7)' : 'rgba(74, 222, 128, 0.2)';
+          ctx.lineWidth = isHl ? 2.5 : 1.5;
+          ctx.stroke();
+
+          const angle = Math.atan2(tgt.y - src.y, tgt.x - src.x);
+          const ax = tgt.x - 14 * Math.cos(angle);
+          const ay = tgt.y - 14 * Math.sin(angle);
+          ctx.beginPath();
+          ctx.moveTo(tgt.x, tgt.y);
+          ctx.lineTo(ax - 7 * Math.cos(angle - Math.PI / 2), ay - 7 * Math.sin(angle - Math.PI / 2));
+          ctx.lineTo(ax + 7 * Math.cos(angle - Math.PI / 2), ay + 7 * Math.sin(angle - Math.PI / 2));
+          ctx.closePath();
+          ctx.fillStyle = isHl ? 'rgba(251, 191, 36, 0.8)' : 'rgba(74, 222, 128, 0.35)';
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(src.x, src.y);
+          ctx.lineTo(tgt.x, tgt.y);
+          ctx.strokeStyle = isHl ? 'rgba(251, 191, 36, 0.5)' : 'rgba(74, 222, 128, 0.15)';
+          ctx.lineWidth = isHl ? 2.5 : 1.5;
+          ctx.stroke();
+        }
+      }
+
+      for (const n of nodes) {
+        if (n.isLocal) {
+          ctx.beginPath();
+          const s = 12;
+          ctx.rect(n.x - s, n.y - s, s * 2, s * 2);
+          ctx.fillStyle = hoveredId === n.id ? '#fbbf24' : '#4ade80';
+          ctx.fill();
+          ctx.fillStyle = '#fbbf24';
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(selectedWalletAddress ? '..' + selectedWalletAddress.slice(-6) : 'YOU', n.x, n.y);
+          continue;
+        }
+
+        if (!n.isOnline && transform.scale >= 0.8) continue;
+
+        const r = Math.max(7, Math.min(24, 7 + Math.sqrt(n.wh / (totalWh || 1)) * 50));
+        const isHovered = hoveredId === n.id;
+
+        let color;
+        if (n.isOnline) color = '#4ade80';
+        else if (n.reachable === false) color = '#ef4444';
+        else color = '#6b7280';
+
+        if (isHovered) {
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, r + 5, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.1)';
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = isHovered ? '#fbbf24' : color;
+        ctx.globalAlpha = isHovered ? 1 : n.isOnline ? 0.8 : 0.4;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        if (isHovered) {
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        if (r > 11) {
+          ctx.fillStyle = '#fbbf24';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const label = n.walletAddress
+            ? '..' + n.walletAddress.slice(-6)
+            : n.wh > 0
+              ? Math.round(n.wh) + 'W'
+              : n.id.slice(0, 6);
+          ctx.fillText(label, n.x, n.y);
+        }
+      }
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function worldToScreen(wx, wy) {
+      return { x: wx * transform.scale + transform.x, y: wy * transform.scale + transform.y };
+    }
+
+    function screenToWorld(sx, sy) {
+      return { x: (sx - transform.x) / transform.scale, y: (sy - transform.y) / transform.scale };
+    }
+
+    function handleMouseMove(e) {
+      const rect2 = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect2.left;
+      const sy = e.clientY - rect2.top;
+      const world = screenToWorld(sx, sy);
+      let found = null;
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        if (!n.isOnline && transform.scale >= 0.8) continue;
+        const r2 = Math.max(7, Math.min(24, 7 + Math.sqrt(n.wh / (totalWh || 1)) * 50));
+        const dx = world.x - n.x;
+        const dy = world.y - n.y;
+        if (dx * dx + dy * dy <= (r2 + 5) * (r2 + 5)) {
+          found = n;
+          break;
+        }
+      }
+      const prevId = hoveredRef.current;
+      const newId = found ? found.id : null;
+      if (prevId !== newId) {
+        hoveredRef.current = newId;
+        if (settledRef.current) draw();
+      }
+      if (found) {
+        const myEdges = edgeList.filter((e) => e.source === found.id || e.target === found.id);
+        const connCount = myEdges.length;
+        const myContrib = contributors && contributors.find((c) => c.address === found.walletAddress);
+        const wh = myContrib ? myContrib.wh : 0;
+        setTooltip({
+          x: Math.min(sx + 14, rect2.width - 300),
+          y: Math.min(sy + 14, rect2.height - 220),
+          id: found.id,
+          url: found.url,
+          peerIdentity: found.peerIdentity,
+          walletAddress: found.walletAddress || '',
+          reachable: found.reachable,
+          wh,
+          lastSeenMs: found.lastSeenMs,
+          tipHeight: found.tipHeight,
+          connCount,
+        });
+      } else {
+        setTooltip(null);
+      }
+    }
+
+    let isDragging = false;
+    const dragStart = { x: 0, y: 0 };
+    const dragTransform = { x: 0, y: 0 };
+
+    function handleWheel(e) {
+      e.preventDefault();
+      const rect2 = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect2.left;
+      const my = e.clientY - rect2.top;
+      const world = screenToWorld(mx, my);
+      const factor = e.deltaY > 0 ? 0.88 : 1 / 0.88;
+      const newScale = Math.max(0.1, Math.min(10, transform.scale * factor));
+      transform.x = mx - world.x * newScale;
+      transform.y = my - world.y * newScale;
+      transform.scale = newScale;
+      draw();
+    }
+
+    function handleMouseDown(e) {
+      if (e.button !== 0) return;
+      isDragging = true;
+      dragStart.x = e.clientX;
+      dragStart.y = e.clientY;
+      dragTransform.x = transform.x;
+      dragTransform.y = transform.y;
+      canvas.style.cursor = 'grabbing';
+    }
+
+    function handleMouseMoveWrap(e) {
+      if (isDragging) {
+        transform.x = dragTransform.x + (e.clientX - dragStart.x);
+        transform.y = dragTransform.y + (e.clientY - dragStart.y);
+        draw();
+        return;
+      }
+      handleMouseMove(e);
+    }
+
+    function handleMouseUp() {
+      if (!isDragging) return;
+      isDragging = false;
+      canvas.style.cursor = 'pointer';
+    }
+
+    function handleMouseLeave() {
+      hoveredRef.current = null;
+      setTooltip(null);
+      if (settledRef.current) draw();
+      isDragging = false;
+      canvas.style.cursor = 'pointer';
+    }
+
+    canvas.onmousemove = handleMouseMoveWrap;
+    canvas.onmouseleave = handleMouseLeave;
+    canvas.onwheel = handleWheel;
+    canvas.onmousedown = handleMouseDown;
+    canvas.onmouseup = handleMouseUp;
+    canvas.style.cursor = 'pointer';
+
+    if (isFirstRun) {
+      animId = requestAnimationFrame(simulate);
+    } else {
+      draw();
+    }
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [data, selectedWalletAddress]);
+
+  if (!loaded) {
+    return <div style={{ padding: 20, color: '#6b7280' }}>Loading peer topology...</div>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: 20, color: '#ef4444' }}>Could not load peer data. Make sure the miner is running.</div>
+    );
+  }
+
+  if (!data || !data.peers || data.peers.length === 0) {
+    return (
+      <div style={{ padding: 20, color: '#6b7280' }}>No peers discovered yet. Start mining to see the network map.</div>
+    );
+  }
+
+  return (
+    <div ref={containerRef} style={{ display: 'flex', flex: 1, height: '100%', width: '100%', overflow: 'hidden' }}>
+      <div
+        style={{
+          width: 300,
+          flexShrink: 0,
+          padding: '10px 0 10px 10px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          overflowY: 'auto',
+        }}
+      >
+        <div
+          style={{
+            background: 'rgba(6, 14, 6, 0.9)',
+            border: '1px solid rgba(74, 222, 128, 0.25)',
+            borderRadius: 6,
+            padding: '10px 14px',
+            color: '#e8f5e8',
+            fontSize: 12,
+            fontFamily: 'monospace',
+            lineHeight: 1.8,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <div style={{ color: '#9ca3af' }}>
+            Peers: {stats.peerCount} &nbsp; Attest: {stats.attestCount} &nbsp; Tunnels: {stats.tunnelCount}
+          </div>
+          <div style={{ color: '#4ade80' }}>
+            Round #{stats.roundId} &nbsp; {Math.round(stats.totalWh)} Wh total
+          </div>
+          <div style={{ color: '#6b7280', fontSize: 11, lineHeight: 1.6 }}>
+            <span style={{ color: '#4ade80' }}>Green</span>=Online &nbsp;
+            <span style={{ color: '#ef4444' }}>Red</span>=Offline &nbsp;
+            <span style={{ color: '#6b7280' }}>Gray</span>=Unknown
+          </div>
+          <div style={{ color: '#9ca3af', fontSize: 11 }}>Scroll to zoom &nbsp; Drag to pan</div>
+        </div>
+        {stats.contributors.length > 0 && (
+          <div
+            style={{
+              background: 'rgba(6, 14, 6, 0.9)',
+              border: '1px solid rgba(74, 222, 128, 0.25)',
+              borderRadius: 6,
+              padding: '10px 14px',
+              color: '#e8f5e8',
+              fontSize: 12,
+              fontFamily: 'monospace',
+              lineHeight: 1.8,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <div style={{ color: '#fbbf24', marginBottom: 4 }}>Contributing Wallets</div>
+            {stats.contributors.map((c) => {
+              const shortAddr = c.address.length > 16 ? c.address.slice(0, 8) + '..' + c.address.slice(-4) : c.address;
+              return (
+                <div key={c.address} style={{ color: '#9ca3af' }}>
+                  {shortAddr} &nbsp; {Math.round(c.wh)} Wh
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%', borderRadius: 0 }} />
+        {tooltip && (
+          <div
+            style={{
+              position: 'absolute',
+              left: tooltip.x,
+              top: tooltip.y,
+              background: '#0f1a0f',
+              border: '1px solid rgba(74, 222, 128, 0.4)',
+              borderRadius: 6,
+              padding: '10px 14px',
+              color: '#e8f5e8',
+              fontSize: 12,
+              fontFamily: 'monospace',
+              pointerEvents: 'none',
+              zIndex: 10,
+              maxWidth: 300,
+              lineHeight: 1.6,
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 'bold', marginBottom: 4 }}>{tooltip.id}</div>
+            <div style={{ color: '#9ca3af', fontSize: 10, wordBreak: 'break-all', lineHeight: 1.3, marginBottom: 2 }}>
+              {tooltip.url}
+            </div>
+            {tooltip.peerIdentity && <div>Device: {tooltip.peerIdentity.slice(0, 20)}...</div>}
+            <div
+              style={{
+                color: tooltip.reachable === true ? '#4ade80' : tooltip.reachable === false ? '#ef4444' : '#6b7280',
+              }}
+            >
+              {tooltip.reachable === true ? 'Online' : tooltip.reachable === false ? 'Offline' : 'Unknown'}
+            </div>
+            <div>Wallet: {tooltip.walletAddress || 'Unknown'}</div>
+            <div>Contribution: {tooltip.wh > 0 ? Math.round(tooltip.wh) + ' Wh' : 'None this round'}</div>
+            {tooltip.tipHeight != null && <div>Chain tip: #{tooltip.tipHeight}</div>}
+            {tooltip.lastSeenMs > 0 && <div>Last seen: {new Date(tooltip.lastSeenMs).toLocaleTimeString()}</div>}
+            <div>Connections: {tooltip.connCount}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

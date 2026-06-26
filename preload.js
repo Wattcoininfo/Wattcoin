@@ -186,6 +186,7 @@ try {
           'wattcoin-asic-inject-custom-job',
           'wattcoin-asic-start-mining',
           'wattcoin-asic-stop-mining',
+          'wattcoin-get-peer-topology',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

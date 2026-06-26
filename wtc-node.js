@@ -878,6 +878,7 @@ class WtcNode {
       height: this._chain.getHeight(),
       tip,
       peerIdentity: this.getPeerIdentity(),
+      walletAddress: (this._wallet && this._wallet.primaryKey && this._wallet.primaryKey.address) || '',
       networkId: 'wtc-mainnet',
       protocolVersion: CHAIN_PROTOCOL_VERSION,
       minSupportedVersion: CHAIN_PROTOCOL_VERSION,

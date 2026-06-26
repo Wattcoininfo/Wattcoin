@@ -8698,6 +8698,73 @@ ipcMain.handle('wattcoin-get-peer-count', async () => {
   }
 });
 
+ipcMain.handle('wattcoin-get-peer-topology', () => {
+  try {
+    const peers = [];
+    const now = Date.now();
+    for (const [url, info] of discoveredPeers) {
+      const reachable = peerReachabilityCache.get(url);
+      const tip = peerChainTipCache.get(url);
+      const tipValue = tip && tip.value;
+      const walletFromTip = tipValue && tipValue.walletAddress ? String(tipValue.walletAddress).trim() : '';
+      const peerId = info.peerIdentity || '';
+      const walletAddress = walletFromTip || (peerId && isValidWtcAddress(peerId) ? peerId : '');
+      peers.push({
+        url,
+        lastSeenMs: info.lastSeenMs,
+        source: info.source || '',
+        sources: info.sources || [],
+        peerIdentity: peerId,
+        walletAddress,
+        reachable: reachable ? !!reachable.ok : null,
+        lastAttemptAtMs: reachable ? reachable.lastAttemptAtMs : 0,
+        lastSuccessAtMs: reachable ? reachable.lastSuccessAtMs : 0,
+        tipHeight: tipValue ? tipValue.height : null,
+        tipHash: tipValue ? tipValue.hash : null,
+      });
+    }
+    const attestations = [];
+    for (const [verifier, workers] of peerAttestationHistory) {
+      if (workers && typeof workers.forEach === 'function') {
+        workers.forEach((lastAttestedMs, workerId) => {
+          if (now - lastAttestedMs < PEER_ATTESTATION_RECIPROCITY_WINDOW_MS) {
+            attestations.push({ verifier, worker: workerId, lastAttestedMs });
+          }
+        });
+      }
+    }
+    const tunnels = [];
+    for (const [, session] of reverseTunnelSessions) {
+      if (session && session.peerIdentity && session.socket && session.socket.readyState === 1) {
+        tunnels.push({
+          peerIdentity: session.peerIdentity,
+          publicUrl: session.publicUrl || '',
+          connectedAtMs: session.connectedAtMs || 0,
+          lastSeenAtMs: session.lastSeenAtMs || 0,
+        });
+      }
+    }
+    const roundSnapshot = getSharedRoundSnapshot();
+    const contributions = (roundSnapshot && roundSnapshot.contributionsWh) || {};
+    const contributors = Object.entries(contributions).map(([address, wh]) => ({ address, wh: Number(wh) || 0 }));
+    const peerSettings = getLedgerNetworkSettings();
+    const localPeerUrls = getConfiguredAdvertisedPeerUrls(peerSettings);
+    return {
+      ok: true,
+      peers,
+      attestations,
+      tunnels,
+      contributions,
+      contributors,
+      totalWh: (roundSnapshot && roundSnapshot.totalWh) || 0,
+      roundId: (roundSnapshot && roundSnapshot.id) || 0,
+      localPeerUrls,
+    };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'failed to collect peer topology' };
+  }
+});
+
 ipcMain.handle('wattcoin-get-ops-metrics', async () => {
   try {
     const snapshot = opsState.latestSnapshot || (await collectOpsSnapshot());
