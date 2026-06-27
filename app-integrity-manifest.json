@@ -1,5 +1,5 @@
 {
-  "electron-main.js": "5ef1c820ed95c014c7e278a321e00c9c56061267dd5e503312db5eb7c3bba24a",
+  "electron-main.js": "841e8f41de1e17aeb3cb5e421f6bf32020a5380f5da8c6d86ceda41164bc69f8",
   "preload.js": "5205af4bd78e65ee1175103d42961ea96e39fc85f3b406454003de7dfba0a104",
   "backend-benchmark.js": "d65cf7277b5bf8332c613dcb017118fa669941722b2ae0d370906c76c376bda0",
   "hardware-load-controller.js": "2bb3b6d1ac992ad41d9170d18aaf5584334b9d5ec448982b729a0fe15c8ee5a5",
@@ -15,7 +15,7 @@
   "wtc-governance.js": "c1720ca1e3a2a6f3d8b8b7d20a7e8bcf484dae00db991bfca11e86774a58bdfd",
   "wtc-sale-queue.js": "5fbc497a24a83d804fc056a16340eece632db62ad88fbe711d9601c8d79540b3",
   "wtc-staking-queue.js": "9af1e230f56dedf9deb3685b7fde9adbae1b0720ca53b103e281e2d2ebb50e89",
-  "runtime-config.js": "1d5d62af322c1b64a5b34813415a5491bda476d7aac4ee4f6a60b8c7a27d0c28",
+  "runtime-config.js": "1d15ad5e61d3c08b6867a0e0be89813c4308705c711565b09bb3adfff09a8050",
   "asic-drivers/index.js": "9a9312085cc1dc965e135d48628ad95cdfd2b2b8e3c3459885e9d7de6e073892",
   "asic-drivers/cgminer.js": "65138992fe3bce24acb546af2647824d6d5291f278e231441d0c256de2330438",
   "asic-drivers/nmminer.js": "6d557469603d8b6f98b50b989e4b6a5c4c5f4cae3633dec4efffdb6bff75ebd6",

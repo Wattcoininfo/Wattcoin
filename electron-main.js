@@ -993,6 +993,7 @@ const REVERSE_TUNNEL_PING_INTERVAL_MS = 20_000;
 const REVERSE_TUNNEL_LIVE_THRESHOLD_MS = 90_000;
 const AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_MS = 4_000;
 const AUTO_PUBLIC_IP_REFRESH_INTERVAL_MS = 60_000;
+const SEED_REGISTRY_HEARTBEAT_INTERVAL_MS = 30 * 60_000;
 const REMOTE_SEED_MANIFEST_REFRESH_INTERVAL_MS = 5 * 60_000;
 const REMOTE_SEED_MANIFEST_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_REMOTE_SEED_MANIFEST_URLS = [];
@@ -1055,6 +1056,7 @@ let autoDetectedPublicPeerUrl = '';
 let autoDetectedPublicPeerUrlFromUpnp = false;
 let autoDetectedPublicPeerLookupPromise = null;
 let autoPublicPeerRefreshTimer = null;
+let seedRegistryHeartbeatTimer = null;
 // NAT / STUN detection state
 let stunNatInfo = null; // { natType, mappedIp, mappedPort, stunHost, detectedAtMs }
 let stunDetectionPromise = null;
@@ -1308,8 +1310,16 @@ async function refreshAutoPublicPeerUrl(settings = getLedgerNetworkSettings()) {
 }
 
 function sendSeedRegistryHeartbeat() {
-  const peerUrl = autoDetectedPublicPeerUrl || '';
-  if (!peerUrl) return;
+  const runtime = getRuntimeConfig();
+  if (!runtime.seedRegistryHeartbeatEnabled) return;
+  let peerUrl = autoDetectedPublicPeerUrl || '';
+  if (!peerUrl) {
+    const settings = getLedgerNetworkSettings();
+    if (settings.publicUrl) {
+      peerUrl = normalizePeerUrl(settings.publicUrl);
+    }
+    if (!peerUrl) return;
+  }
   const manifestUrls = _getRemoteSeedManifestUrls();
   for (const registryUrl of manifestUrls) {
     requestPeerJson(registryUrl, 'POST', '/', { url: peerUrl }, undefined, {
@@ -1335,6 +1345,26 @@ function stopAutoPublicPeerUrlRefresh() {
   if (!autoPublicPeerRefreshTimer) return;
   clearInterval(autoPublicPeerRefreshTimer);
   autoPublicPeerRefreshTimer = null;
+}
+
+function startSeedRegistryHeartbeat(settings = getLedgerNetworkSettings()) {
+  stopSeedRegistryHeartbeat();
+  const runtime = getRuntimeConfig();
+  if (!runtime.seedRegistryHeartbeatEnabled) return;
+  if (!settings || !settings.enabled) return;
+  sendSeedRegistryHeartbeat();
+  seedRegistryHeartbeatTimer = setInterval(() => {
+    sendSeedRegistryHeartbeat();
+  }, SEED_REGISTRY_HEARTBEAT_INTERVAL_MS);
+  console.log(
+    `[Wattcoin] Seed registry heartbeat started (every ${Math.round(SEED_REGISTRY_HEARTBEAT_INTERVAL_MS / 60000)} min)`,
+  );
+}
+
+function stopSeedRegistryHeartbeat() {
+  if (!seedRegistryHeartbeatTimer) return;
+  clearInterval(seedRegistryHeartbeatTimer);
+  seedRegistryHeartbeatTimer = null;
 }
 
 function buildPeerUrlFromSocket(remoteAddress, listenPort, protocol = 'http:') {
@@ -11519,6 +11549,7 @@ function startLedgerNetworkServer() {
     startPeerDiscovery(effectiveSettings.listenPort, getPrimaryAdvertisedPeerUrl(effectiveSettings));
     startAutoPublicPeerUrlRefresh(effectiveSettings);
     startRemoteSeedPeerRefresh(effectiveSettings);
+    startSeedRegistryHeartbeat(effectiveSettings);
     ensureManagedReverseTunnelClient(effectiveSettings);
     attemptHolePunchToSeedPeers(effectiveSettings);
   });
@@ -11528,6 +11559,7 @@ function stopLedgerNetworkServer() {
   stopGovernanceSync();
   stopRemoteSeedPeerRefresh();
   stopAutoPublicPeerUrlRefresh();
+  stopSeedRegistryHeartbeat();
   stopPeerDiscovery();
   stopManagedReverseTunnelClient();
   stopReverseTunnelCoordinator();

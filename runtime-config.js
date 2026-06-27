@@ -180,6 +180,10 @@ function getRuntimeConfig() {
   const ledgerSeedManifestUrls = parseSeedNodes(
     process.env.WATTCOIN_LEDGER_SEED_MANIFEST_URLS || fileConfig.ledgerSeedManifestUrls || [],
   );
+  const seedRegistryHeartbeatEnabled = parseBoolean(
+    process.env.WATTCOIN_SEED_REGISTRY_HEARTBEAT_ENABLED,
+    parseBoolean(fileConfig.seedRegistryHeartbeatEnabled, true),
+  );
   const ledgerNetworkRequestTimeoutMs = Math.max(
     1000,
     parseNumber(
@@ -219,6 +223,7 @@ function getRuntimeConfig() {
     ledgerNetworkTunnelPublicUrl,
     ledgerNetworkAdvertiseUrls,
     ledgerSeedManifestUrls,
+    seedRegistryHeartbeatEnabled,
     ledgerNetworkRequestTimeoutMs,
   };
 }

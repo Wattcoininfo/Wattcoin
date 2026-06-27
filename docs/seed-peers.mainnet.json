@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-08T00:00:00.000Z",
+  "updatedAt": "2026-06-27T00:00:00.000Z",
   "requiredMinSeedPeers": 1,
   "requiredMinProviders": 1,
   "requiredMinNetworkSegments": 1,
@@ -11,7 +11,7 @@
       "provider": "seed-host-85-253-248-60",
       "region": "eu",
       "label": "Seed host 85.253.248.60",
-      "notes": "Primary mainnet bootstrap seed is the public host at 85.253.248.60:39310. IP updated 2026-06-08."
+      "notes": "Primary mainnet bootstrap seed at 85.253.248.60:39310. Seed registry heartbeat enabled — auto-registers on IP change."
     }
   ]
 }
