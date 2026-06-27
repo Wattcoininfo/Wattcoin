@@ -2246,10 +2246,6 @@ function MapView({ selectedWalletAddress }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
-    function worldToScreen(wx, wy) {
-      return { x: wx * transform.scale + transform.x, y: wy * transform.scale + transform.y };
-    }
-
     function screenToWorld(sx, sy) {
       return { x: (sx - transform.x) / transform.scale, y: (sy - transform.y) / transform.scale };
     }

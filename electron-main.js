@@ -6192,7 +6192,9 @@ ipcMain.handle('wattcoin-asic-scan', async () => {
           driverConfig,
         });
       }
-    } catch (_) {}
+    } catch (_) {
+      /* ignore */
+    }
   }
   const CONCURRENCY = 20;
   for (let i = 0; i < allIps.length; i += CONCURRENCY) {
@@ -6208,7 +6210,7 @@ ipcMain.handle('wattcoin-asic-wait-fresh-shares', async (_event, count = 3) => {
   return { ok: true, ...result };
 });
 
-ipcMain.handle('wattcoin-asic-inject-custom-job', async (_event, prevHashHex) => {
+ipcMain.handle('wattcoin-asic-inject-custom-job', (_event, prevHashHex) => {
   const results = [];
   for (const entry of _asicConfig) {
     const jobId = injectCustomJob(entry.stratumPort, prevHashHex);
@@ -6731,7 +6733,9 @@ function _startBgProbeWs(peerUrl) {
       // skip sending probes when we are idle.
       try {
         ws.send(JSON.stringify({ type: 'mining-status', data: { mining: _localMiningStatus } }));
-      } catch (_) {}
+      } catch (_) {
+        /* ignore */
+      }
       try {
         if (ws._socket) ws._socket.setKeepAlive(true, 15000);
       } catch (_) {
@@ -6909,7 +6913,9 @@ ipcMain.handle('wattcoin-mining-status', (_event, { mining }) => {
     if (conn.ws && conn.ws.readyState === WebSocket.OPEN) {
       try {
         conn.ws.send(JSON.stringify({ type: 'mining-status', data: { mining: _localMiningStatus } }));
-      } catch (_) {}
+      } catch (_) {
+        /* ignore */
+      }
     }
   }
   return { ok: true };
@@ -9380,7 +9386,7 @@ async function broadcastOurTopology() {
   }
   const payload = { sender: ourIdentity, connectedPeers, timestamp: Date.now() };
   const sendPromises = [];
-  for (const [url, info] of discoveredPeers) {
+  for (const [url] of discoveredPeers) {
     const reachable = peerReachabilityCache.get(url);
     if (!reachable || !reachable.ok) continue;
     if (isPeerIdentitySelfReference(ourIdentity, url)) continue;
@@ -11138,7 +11144,9 @@ function startLedgerNetworkServer() {
                     try {
                       result.socket.end();
                       result.socket.destroy();
-                    } catch (_) {}
+                    } catch (_) {
+                      /* ignore */
+                    }
                   }
                 })
                 .catch(() => {});
@@ -12362,7 +12370,9 @@ function attemptHolePunchToSeedPeers(settings = getLedgerNetworkSettings()) {
         try {
           result.socket.end();
           result.socket.destroy();
-        } catch (_) {}
+        } catch (_) {
+          /* ignore */
+        }
       }
     })
     .catch(() => {});
@@ -12412,7 +12422,9 @@ function tryHolePunchToPeers(peerUrls, settings = getLedgerNetworkSettings()) {
           try {
             result.socket.end();
             result.socket.destroy();
-          } catch (_) {}
+          } catch (_) {
+            /* ignore */
+          }
         }
       })
       .catch(() => {});

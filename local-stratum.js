@@ -94,7 +94,9 @@ class StratumSession {
       if (!m) continue;
       try {
         this._handle(JSON.parse(m));
-      } catch (_) {}
+      } catch (_) {
+        /* ignore */
+      }
     }
   }
 
@@ -270,7 +272,9 @@ function stopStratumServer(port) {
   if (!server) return;
   try {
     server.close();
-  } catch (_) {}
+  } catch (_) {
+    /* ignore */
+  }
   SERVERS.delete(port);
   SERVER_STATS.delete(port);
   SHARE_BUFFERS.delete(port);

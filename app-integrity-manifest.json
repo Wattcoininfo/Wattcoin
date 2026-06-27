@@ -1,10 +1,10 @@
 {
-  "electron-main.js": "841e8f41de1e17aeb3cb5e421f6bf32020a5380f5da8c6d86ceda41164bc69f8",
+  "electron-main.js": "41579cab0b7f895846b5b15c2ba5a23e96b777554ce8b565e6cec5c72748b846",
   "preload.js": "5205af4bd78e65ee1175103d42961ea96e39fc85f3b406454003de7dfba0a104",
   "backend-benchmark.js": "d65cf7277b5bf8332c613dcb017118fa669941722b2ae0d370906c76c376bda0",
   "hardware-load-controller.js": "2bb3b6d1ac992ad41d9170d18aaf5584334b9d5ec448982b729a0fe15c8ee5a5",
   "gpu-load-controller.js": "64d79a1160d89092381ffda77bfc41d90e4637518637426eea86679e75ca7a83",
-  "local-stratum.js": "80b8310dcbb16373b29c0229df21837f4626f6371fdecb2ed9e36c219f3cbc0a",
+  "local-stratum.js": "39925b02f2493435182815aefb2c26f99d80ddddd0d6635b0ba05c9a529f4279",
   "cpu-load-worker.js": "f4d8829518ac4ffc31b9b95386a3d9c5db16c1c9519209275e683e68886cfe56",
   "ddr-load-worker.js": "cdc43afa5df21c2bc58e3078fa5c061cba0194c067b335c979955cb88cb4f656",
   "probe-attestation.js": "b293116ba459eef43204ebb8b8b87b64004cc6b7036bca3e7d4fd957fe4839ee",
