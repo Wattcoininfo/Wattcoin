@@ -874,6 +874,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  APP_INTEGRITY_FILES,
   assertMainProcessRuntimeFilesPackaged,
   bumpPatchVersion,
   syncWhitepaperVersionLabels,
