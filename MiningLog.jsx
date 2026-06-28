@@ -160,9 +160,21 @@ function MiningLog({
           fontSize: 13,
         }}
       >
-        {/* Row 1: time + load % on the right */}
+        {/* Row 1: time + trust delta + load % on the right */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 5 }}>
           <span style={{ fontSize: 11, color: '#6b7280' }}>{entry.time}</span>
+          {entry.trustDelta != null && entry.trustDelta !== 0 && (
+            <span
+              style={{
+                color: entry.trustDelta > 0 ? '#4ade80' : '#f87171',
+                fontSize: 11,
+                fontWeight: 700,
+                marginLeft: 6,
+              }}
+            >
+              Trust {entry.trustDelta > 0 ? `+${entry.trustDelta}` : entry.trustDelta}
+            </span>
+          )}
           {typeof entry.loadPercent === 'number' && (
             <span style={{ color: '#5b8d5b', fontSize: 11, marginLeft: 'auto' }}>load {entry.loadPercent}%</span>
           )}
@@ -233,17 +245,6 @@ function MiningLog({
           {/* Chain index */}
           {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (
             <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
-          )}
-          {entry.trustDelta != null && entry.trustDelta !== 0 && (
-            <span
-              style={{
-                color: entry.trustDelta > 0 ? '#4ade80' : '#f87171',
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            >
-              Trust {entry.trustDelta > 0 ? `+${entry.trustDelta}` : entry.trustDelta}
-            </span>
           )}
           {probeId && <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>}
           {entry.type === 'gpu' && typeof entry.pixelHash === 'string' && entry.pixelHash && (

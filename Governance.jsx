@@ -2191,11 +2191,6 @@ function MapView({ selectedWalletAddress }) {
           ctx.rect(n.x - s, n.y - s, s * 2, s * 2);
           ctx.fillStyle = hoveredId === n.id ? '#fbbf24' : '#4ade80';
           ctx.fill();
-          ctx.fillStyle = '#fbbf24';
-          ctx.font = 'bold 10px monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(selectedWalletAddress ? '..' + selectedWalletAddress.slice(-6) : 'YOU', n.x, n.y);
           continue;
         }
 
