@@ -3643,6 +3643,8 @@ export default function Miner({
           return;
         }
 
+        if (disposed) return;
+
         const submitPayload = {
           source,
           result: {
@@ -6306,20 +6308,6 @@ export default function Miner({
           </div>
           <div style={{ color: '#4ade80', fontSize: 13, marginTop: 8, wordBreak: 'break-all' }}>
             <b>Hardware info:</b> {hardware.source || 'Unknown'}
-          </div>
-          <div
-            style={{
-              color: powerSourceAccent,
-              fontSize: 13,
-              marginTop: 4,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              width: '100%',
-            }}
-            title={powerSourceLabel}
-          >
-            <b>Power estimate:</b> {powerSourceLabel}
           </div>
           <div
             style={{

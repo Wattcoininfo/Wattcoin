@@ -7183,6 +7183,16 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
   if (source === 'peer' && settings.enabled && settings.mode === 'peer') {
     const peerUrl = result._peerUrl ? String(result._peerUrl) : null;
     if (peerUrl) {
+      // If mining was stopped while this probe was being computed, discard the
+      // result — submitting it would either fail or create a stale probe entry
+      // in the log with an error like "unknown or expired probe id".
+      if (!_localMiningStatus) {
+        _probeInProgress = false;
+        _probeInProgressId = '';
+        _probeInProgressEpoch = -1;
+        _clearProbeTimeoutTimer();
+        return { ok: false, transient: false, issues: ['mining stopped while probe was in flight'] };
+      }
       // If the WS connection dropped and reconnected since we dequeued this
       // probe, the coordinator canceled all our pending probes.  Skip submission
       // even if the same peerUrl is now connected again — the probe ID was

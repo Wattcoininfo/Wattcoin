@@ -1,5 +1,5 @@
 {
-  "electron-main.js": "41579cab0b7f895846b5b15c2ba5a23e96b777554ce8b565e6cec5c72748b846",
+  "electron-main.js": "a45ebf1776dc8c018a975fe2f93e3221d9cf35b72f2ce7d927443cd086a7e540",
   "preload.js": "5205af4bd78e65ee1175103d42961ea96e39fc85f3b406454003de7dfba0a104",
   "backend-benchmark.js": "d65cf7277b5bf8332c613dcb017118fa669941722b2ae0d370906c76c376bda0",
   "hardware-load-controller.js": "2bb3b6d1ac992ad41d9170d18aaf5584334b9d5ec448982b729a0fe15c8ee5a5",

@@ -675,7 +675,6 @@ export default function AppTabs() {
           .invoke('wattcoin-ledger-add-contribution', selectedWalletAddress || '', energyDeltaWh)
           .then((res) => {
             if (res && res.ok) {
-              setEnergy((ePrev) => ePrev + energyDeltaWh);
               setMiningWarning(null);
             } else if (res && res.code) {
               const warnings = {
@@ -700,8 +699,23 @@ export default function AppTabs() {
           });
       }
     }, tickSeconds * 1000);
+    // Poll the actual ledger value every 500ms so the Energy Used card shows
+    // the authoritative (clamped) contribution in real time, not an optimistic sum.
+    const ledgerPollId = setInterval(() => {
+      if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+        window.wattcoinHardware
+          .invoke('wattcoin-ledger-get-balances', selectedWalletAddress || '')
+          .then((bal) => {
+            if (bal && typeof bal.currentRoundContributionWh === 'number') {
+              setEnergy(bal.currentRoundContributionWh);
+            }
+          })
+          .catch(() => {});
+      }
+    }, 500);
     return () => {
       clearInterval(miningRef.current);
+      clearInterval(ledgerPollId);
       // Sync the Energy Used card to the ledger's confirmed value on stop.
       if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
         window.wattcoinHardware
