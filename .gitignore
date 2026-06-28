@@ -114,3 +114,6 @@ status.out
 status_final.out
 status_utf8.out
 
+
+# Project-specific agent instructions
+AGENTS.md
