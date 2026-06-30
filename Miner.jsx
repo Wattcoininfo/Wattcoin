@@ -3611,6 +3611,32 @@ export default function Miner({
             if (!gpuResult || !gpuResult.pixelHash) return;
             probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult.pixelHash, gpuCount: 1 };
           }
+        } else if (probe.type === 'gpu-pow') {
+          // GPU PoW probe: use native binary to search for a nonce where hash < difficulty.
+          // Each device gets its own seed partition so all GPUs independently prove work.
+          if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
+            const powResult = await window.wattcoinHardware
+              .invoke('wattcoin-gpu-pow-probe', {
+                seed: probe.params.seed,
+                difficulty: probe.params.difficulty,
+              })
+              .catch(() => null);
+            if (powResult && powResult.ok && Array.isArray(powResult.devices) && powResult.devices.length > 0) {
+              const allValid = powResult.devices.every((d) => d.nonce != null);
+              if (allValid) {
+                probeResult = {
+                  id: probe.id,
+                  type: 'gpu-pow',
+                  devices: powResult.devices,
+                  gpuCount: powResult.gpuCount || powResult.devices.length,
+                  gpuPoWMs: Math.max(...powResult.devices.map((d) => d.elapsedMs || 0)),
+                  proof: '0x' + Number(powResult.devices[0].nonce).toString(16),
+                };
+              }
+            }
+          }
+          // If native binary unavailable, silently skip the probe
+          if (!probeResult) return;
         } else if (probe.type === 'asic') {
           // ASIC probe: inject liveness challenge (if present), then wait for
           // fresh X11 shares.  The challenge PrevHash prevents pre-mined shares.
@@ -3746,7 +3772,16 @@ export default function Miner({
                   rttMs: typeof verdict.rttMs === 'number' ? Math.round(verdict.rttMs) : null,
                   computeTimeMs: typeof verdict.computeTimeMs === 'number' ? Math.round(verdict.computeTimeMs) : null,
                   pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
-                  proof: typeof probeResult.proof === 'string' ? probeResult.proof : '',
+                  nonce:
+                    Array.isArray(probeResult.devices) && probeResult.devices.length > 0
+                      ? Number(probeResult.devices[0].nonce)
+                      : null,
+                  proof:
+                    typeof probeResult.proof === 'string'
+                      ? probeResult.proof
+                      : Array.isArray(probeResult.devices) && probeResult.devices.length > 0
+                        ? '0x' + Number(probeResult.devices[0].nonce).toString(16)
+                        : '',
                   verifierAddress:
                     verdict.receipt && typeof verdict.receipt.verifierAddress === 'string'
                       ? verdict.receipt.verifierAddress

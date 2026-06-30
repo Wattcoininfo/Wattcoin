@@ -70,6 +70,7 @@ static int      (*g_init)(int adapterIdx, GpuInfo *info);
 static void     (*g_shutdown)(void);
 static void     (*g_dispatch_load)(uint32_t w, uint32_t h, uint32_t iters, double param);
 static uint32_t (*g_dispatch_proof)(uint32_t seed, uint32_t w, uint32_t h, uint32_t iters, double *elapsedMs);
+static int (*g_dispatch_pow)(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs);
 static GpuInfo   g_info;
 static int       g_gpuReady; // set after select_gpu() succeeds
 
@@ -317,6 +318,94 @@ static void shutdown_d3d11(void) {
     if (g_dev11)    { g_dev11->Release(); g_dev11 = NULL; }
 }
 
+// ── PoW HLSL compute shader (embdedded string) ──────────────────────────
+static const char *g_pow_hlsl =
+    "RWStructuredBuffer<uint> output : register(u0);\n"
+    "cbuffer cb : register(b0) { uint seed; uint difficulty; uint startNonce; uint _pad; };\n"
+    "[numthreads(16,16,1)]\n"
+    "void CSMain(uint3 id : SV_DispatchThreadID) {\n"
+    "  uint gid = id.x + id.y * 16;\n"
+    "  uint nonce = startNonce + gid;\n"
+    "  uint s = seed ^ (nonce * 1000003) ^ ((nonce >> 16) * 7919); s |= 1;\n"
+    "  uint h = 5381;\n"
+    "  for (uint p = 0; p < 256; p += 4) {\n"
+    "    uint row = p / 32; uint col = p % 32;\n"
+    "    uint x = (col * 1000003) ^ (row * 7919) ^ s; x |= 1;\n"
+    "    for (uint i = 0; i < 50000; i++) { x ^= x << 13; x ^= x >> 17; x ^= x << 5; }\n"
+    "    h = ((h << 5) + h + ((x >> 24) & 255));\n"
+    "    h = ((h << 5) + h + ((x >> 16) & 255));\n"
+    "    h = ((h << 5) + h + ((x >> 8) & 255));\n"
+    "    h = ((h << 5) + h + (x & 255));\n"
+    "  }\n"
+    "  output[gid] = (h & 0xFFFF) < difficulty ? nonce : 0xFFFFFFFF;\n"
+    "}";
+
+// D3D11 PoW dispatch — searches up to 65536 nonces (256 groups × 256 threads)
+static int dispatch_pow_d3d11(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs) {
+    if (!g_dev11) return 0;
+    // Compile pow shader on first call
+    static ID3D11ComputeShader *g_powCS11 = NULL;
+    if (!g_powCS11) {
+        ID3DBlob *b = compile_cs11(g_pow_hlsl, "CSMain");
+        if (!b) return 0;
+        g_dev11->CreateComputeShader(b->GetBufferPointer(), b->GetBufferSize(), NULL, &g_powCS11);
+        b->Release();
+    }
+    if (!g_powCS11) return 0;
+
+    double t0 = now_ms();
+    ID3D11UnorderedAccessView *nullUAV = NULL;
+    g_ctx11->CSSetUnorderedAccessViews(0, 1, &nullUAV, NULL);
+
+    // Clear output buffer
+    D3D11_MAPPED_SUBRESOURCE m;
+    if (SUCCEEDED(g_ctx11->Map(g_cb11, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
+        memset(m.pData, 0, 64);
+        g_ctx11->Unmap(g_cb11, 0);
+    }
+    ID3D11UnorderedAccessView *uav = g_proofUAV11;
+    g_ctx11->CSSetShader(g_powCS11, NULL, 0);
+
+    uint32_t maxNonces = 65536;
+    uint32_t foundNonce = 0xFFFFFFFF;
+
+    for (uint32_t batchStart = startNonce; batchStart < startNonce + maxNonces; batchStart += 256) {
+        // Write constants: seed, difficulty, startNonce for this batch
+        D3D11_MAPPED_SUBRESOURCE cm;
+        if (SUCCEEDED(g_ctx11->Map(g_cb11, 0, D3D11_MAP_WRITE_DISCARD, 0, &cm))) {
+            ((uint32_t*)cm.pData)[0] = seed;
+            ((uint32_t*)cm.pData)[1] = difficulty;
+            ((uint32_t*)cm.pData)[2] = batchStart;
+            ((uint32_t*)cm.pData)[3] = 0;
+            g_ctx11->Unmap(g_cb11, 0);
+        }
+        g_ctx11->CSSetConstantBuffers(0, 1, &g_cb11);
+        g_ctx11->CSSetUnorderedAccessViews(0, 1, &uav, NULL);
+        g_ctx11->Dispatch(1, 1, 1); // single group with 256 threads
+
+        // Copy and scan for results
+        g_ctx11->CopyResource(g_staging11, g_proofBuf11);
+        if (SUCCEEDED(g_ctx11->Map(g_staging11, 0, D3D11_MAP_READ, 0, &cm))) {
+            const uint32_t *p = (const uint32_t*)cm.pData;
+            for (int i = 0; i < 256; i++) {
+                if (p[i] != 0xFFFFFFFF) {
+                    foundNonce = p[i];
+                    *outNonce = foundNonce;
+                    *outHash = 1; // verified by coordinator using computeGpuProbeExpectedHash
+                    if (elapsedMs) *elapsedMs = now_ms() - t0;
+                    g_ctx11->Unmap(g_staging11, 0);
+                    return 1;
+                }
+            }
+            g_ctx11->Unmap(g_staging11, 0);
+        }
+    }
+
+    *outNonce = 0;
+    if (elapsedMs) *elapsedMs = now_ms() - t0;
+    return -1; // not found in range
+}
+
 // ── D3D10 Backend ─────────────────────────────────────────────────────────
 static ID3D10Device *g_dev10 = NULL;
 
@@ -405,6 +494,7 @@ static int init_d3d10(int adapterIdx, GpuInfo *info) {
 
 static void dispatch_load_d3d10(uint32_t w, uint32_t h, uint32_t iters, double param) { }
 static uint32_t dispatch_proof_d3d10(uint32_t seed, uint32_t w, uint32_t h, uint32_t iters, double *elapsedMs) { return 0; }
+static int dispatch_pow_d3d10(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs) { return 0; }
 static void shutdown_d3d10(void) { if (g_dev10) { g_dev10->Release(); g_dev10 = NULL; } }
 
 // ── D3D9 Backend (pixel shader load, no compute shaders) ──────────────────
@@ -497,6 +587,8 @@ static int init_d3d9(int adapterIdx, GpuInfo *info) {
     strcpy_s(info->backendStr, sizeof(info->backendStr), "D3D9");
     return 1;
 }
+
+static int dispatch_pow_d3d9(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs) { return 0; }
 
 static void dispatch_load_d3d9(uint32_t w, uint32_t h, uint32_t iters, double param) {
     if (!g_dev9 || !g_loadPS9) return;
@@ -782,6 +874,73 @@ static uint32_t dispatch_proof_d3d12(uint32_t seed, uint32_t w, uint32_t h, uint
     return hash;
 }
 
+// D3D12 PoW dispatch — searches up to 65536 nonces
+static int dispatch_pow_d3d12(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs) {
+    if (!g_dev12) return 0;
+    // Compile pow shader on first call using embedded string
+    static ID3D12PipelineState *g_powPSO12 = NULL;
+    if (!g_powPSO12) {
+        ID3DBlob *b = compile_cs12(g_pow_hlsl, "CSMain");
+        if (!b) return 0;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC psod = {};
+        psod.pRootSignature = g_rootSig12;
+        psod.CS.pShaderBytecode = b->GetBufferPointer();
+        psod.CS.BytecodeLength = b->GetBufferSize();
+        g_dev12->CreateComputePipelineState(&psod, IID_ID3D12PipelineState, (void**)&g_powPSO12);
+        b->Release();
+    }
+
+    double t0 = now_ms();
+    g_cmdAlloc12->Reset();
+    g_cmdList12->Reset(g_cmdAlloc12, NULL);
+
+    uint32_t maxNonces = 65536;
+    uint32_t foundNonce = 0xFFFFFFFF;
+
+    for (uint32_t batchStart = startNonce; batchStart < startNonce + maxNonces; batchStart += 256) {
+        g_cmdList12->SetPipelineState(g_powPSO12);
+        g_cmdList12->SetComputeRootSignature(g_rootSig12);
+        struct { uint32_t seed, diff, start, pad; } cb = { seed, difficulty, batchStart, 0 };
+        g_cmdList12->SetComputeRoot32BitConstants(0, 4, &cb, 0);
+        g_cmdList12->SetComputeRootUnorderedAccessView(1, g_proofBuf12->GetGPUVirtualAddress());
+        g_cmdList12->Dispatch(1, 1, 1);
+
+        D3D12_RESOURCE_BARRIER barrier = { D3D12_RESOURCE_BARRIER_TYPE_TRANSITION };
+        barrier.Transition.pResource = g_proofBuf12;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        g_cmdList12->ResourceBarrier(1, &barrier);
+        g_cmdList12->CopyResource(g_readback12, g_proofBuf12);
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        g_cmdList12->ResourceBarrier(1, &barrier);
+
+        if (!gpu12_execute()) { if (elapsedMs) *elapsedMs = now_ms() - t0; return 0; }
+
+        D3D12_RANGE range = { 0, 256 * 4 };
+        void *mapped = NULL;
+        if (SUCCEEDED(g_readback12->Map(0, &range, &mapped))) {
+            const uint32_t *p = (const uint32_t*)mapped;
+            for (int i = 0; i < 256; i++) {
+                if (p[i] != 0xFFFFFFFF) {
+                    foundNonce = p[i];
+                    *outNonce = foundNonce;
+                    *outHash = 1;
+                    if (elapsedMs) *elapsedMs = now_ms() - t0;
+                    g_readback12->Unmap(0, NULL);
+                    return 1;
+                }
+            }
+            g_readback12->Unmap(0, NULL);
+        }
+    }
+
+    *outNonce = 0;
+    if (elapsedMs) *elapsedMs = now_ms() - t0;
+    return -1;
+}
+
 static void shutdown_d3d12(void) {
     if (g_fenceEvent12) { CloseHandle(g_fenceEvent12); g_fenceEvent12 = NULL; }
     if (g_fence12) { g_fence12->Release(); g_fence12 = NULL; }
@@ -926,10 +1085,10 @@ static int select_gpu(void) {
             if (ret == 1) {
                 g_info = cand;
                 switch (g_info.type) {
-                    case BACKEND_D3D12: g_init = init_d3d12; g_shutdown = shutdown_d3d12; g_dispatch_load = dispatch_load_d3d12; g_dispatch_proof = dispatch_proof_d3d12; break;
-                    case BACKEND_D3D11: g_init = init_d3d11; g_shutdown = shutdown_d3d11; g_dispatch_load = dispatch_load_d3d11; g_dispatch_proof = dispatch_proof_d3d11; break;
-                    case BACKEND_D3D10: g_init = init_d3d10; g_shutdown = shutdown_d3d10; g_dispatch_load = dispatch_load_d3d10; g_dispatch_proof = dispatch_proof_d3d10; break;
-                    case BACKEND_D3D9:  g_init = init_d3d9;  g_shutdown = shutdown_d3d9;  g_dispatch_load = dispatch_load_d3d9;  g_dispatch_proof = dispatch_proof_d3d9;  break;
+                    case BACKEND_D3D12: g_init = init_d3d12; g_shutdown = shutdown_d3d12; g_dispatch_load = dispatch_load_d3d12; g_dispatch_proof = dispatch_proof_d3d12; g_dispatch_pow = dispatch_pow_d3d12; break;
+                    case BACKEND_D3D11: g_init = init_d3d11; g_shutdown = shutdown_d3d11; g_dispatch_load = dispatch_load_d3d11; g_dispatch_proof = dispatch_proof_d3d11; g_dispatch_pow = dispatch_pow_d3d11; break;
+                    case BACKEND_D3D10: g_init = init_d3d10; g_shutdown = shutdown_d3d10; g_dispatch_load = dispatch_load_d3d10; g_dispatch_proof = dispatch_proof_d3d10; g_dispatch_pow = dispatch_pow_d3d10; break;
+                    case BACKEND_D3D9:  g_init = init_d3d9;  g_shutdown = shutdown_d3d9;  g_dispatch_load = dispatch_load_d3d9;  g_dispatch_proof = dispatch_proof_d3d9;  g_dispatch_pow = dispatch_pow_d3d9;  break;
                     default: break;
                 }
                 return 1;
@@ -980,6 +1139,24 @@ static void handle_cmd(const char *line) {
         double score = (frames * opsPerFrame) / elapsed;
         json_out("{\"t\":\"bench\",\"frames\":%d,\"elapsedMs\":%.1f,\"score\":%.0f,\"opsPerMs\":%.0f}",
                  frames, elapsed, score, score);
+    } else if (strstr(line, "\"pow\"")) {
+        uint32_t seed = 0, difficulty = 65535;
+        const char *p = strstr(line, "\"seed\"");
+        if (p) { p = strchr(p, ':'); if (p) seed = (uint32_t)atol(p + 1); }
+        p = strstr(line, "\"difficulty\"");
+        if (p) { p = strchr(p, ':'); if (p) difficulty = (uint32_t)atoi(p + 1); }
+        if (difficulty < 1) difficulty = 1;
+        if (difficulty > 65535) difficulty = 65535;
+        uint32_t startNonce = (uint32_t)(now_ms() * 1000); // random start
+        uint32_t outNonce = 0, outHash = 0;
+        double ms;
+        int found = g_dispatch_pow(seed, difficulty, startNonce, &outNonce, &outHash, &ms);
+        if (found == 1) {
+            json_out("{\"t\":\"pow\",\"nonce\":%lu,\"hash\":%lu,\"ms\":%.1f}",
+                     (unsigned long)outNonce, (unsigned long)outHash, ms);
+        } else {
+            json_out("{\"t\":\"error\",\"msg\":\"pow not found in search range\"}");
+        }
     } else if (strstr(line, "\"info\"")) {
         json_out("{\"t\":\"info\",\"backend\":\"%s\",\"adapter\":\"%s\",\"discrete\":%d,\"vramMb\":%llu,\"vendorId\":%u,\"deviceId\":%u}",
                  g_info.backendStr, g_info.adapterName, g_info.isDiscrete,
@@ -1051,10 +1228,10 @@ int main(int argc, char *argv[]) {
         }
         g_info = cand;
         switch (g_info.type) {
-            case BACKEND_D3D12: g_init = init_d3d12; g_shutdown = shutdown_d3d12; g_dispatch_load = dispatch_load_d3d12; g_dispatch_proof = dispatch_proof_d3d12; break;
-            case BACKEND_D3D11: g_init = init_d3d11; g_shutdown = shutdown_d3d11; g_dispatch_load = dispatch_load_d3d11; g_dispatch_proof = dispatch_proof_d3d11; break;
-            case BACKEND_D3D10: g_init = init_d3d10; g_shutdown = shutdown_d3d10; g_dispatch_load = dispatch_load_d3d10; g_dispatch_proof = dispatch_proof_d3d10; break;
-            case BACKEND_D3D9:  g_init = init_d3d9;  g_shutdown = shutdown_d3d9;  g_dispatch_load = dispatch_load_d3d9;  g_dispatch_proof = dispatch_proof_d3d9;  break;
+            case BACKEND_D3D12: g_init = init_d3d12; g_shutdown = shutdown_d3d12; g_dispatch_load = dispatch_load_d3d12; g_dispatch_proof = dispatch_proof_d3d12; g_dispatch_pow = dispatch_pow_d3d12; break;
+            case BACKEND_D3D11: g_init = init_d3d11; g_shutdown = shutdown_d3d11; g_dispatch_load = dispatch_load_d3d11; g_dispatch_proof = dispatch_proof_d3d11; g_dispatch_pow = dispatch_pow_d3d11; break;
+            case BACKEND_D3D10: g_init = init_d3d10; g_shutdown = shutdown_d3d10; g_dispatch_load = dispatch_load_d3d10; g_dispatch_proof = dispatch_proof_d3d10; g_dispatch_pow = dispatch_pow_d3d10; break;
+            case BACKEND_D3D9:  g_init = init_d3d9;  g_shutdown = shutdown_d3d9;  g_dispatch_load = dispatch_load_d3d9;  g_dispatch_proof = dispatch_proof_d3d9;  g_dispatch_pow = dispatch_pow_d3d9;  break;
             default: break;
         }
     } else {

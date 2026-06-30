@@ -407,6 +407,36 @@ async function stopGpuLoad() {
   }
 }
 
+async function runGpuPowProbe(seed, difficulty) {
+  const count = Math.max(1, gpuStates.size || 1);
+  if (!(await ensureGpu(count))) return null;
+
+  const results = [];
+  for (const deviceIndex of gpuStates.keys()) {
+    try {
+      // Partition nonce space per device by deriving a unique seed for each.
+      const deviceSeed = (seed ^ (deviceIndex * 7919)) >>> 0;
+      const res = await sendCommand(deviceIndex, { pow: true, seed: deviceSeed, difficulty });
+      if (res && res.t === 'pow') {
+        results.push({
+          deviceIndex,
+          nonce: Number(res.nonce),
+          elapsedMs: res.ms,
+        });
+      } else if (res && res.t === 'error') {
+        results.push({ deviceIndex, nonce: null, elapsedMs: 0, error: res.msg || 'pow failed' });
+      } else {
+        results.push({ deviceIndex, nonce: null, elapsedMs: 0, error: 'pow response missing' });
+      }
+    } catch (err) {
+      results.push({ deviceIndex, nonce: null, elapsedMs: 0, error: err.message });
+    }
+  }
+
+  if (results.length === 0) return null;
+  return results;
+}
+
 async function runGpuProof(seed, size, iters) {
   const count = Math.max(1, gpuStates.size || 1);
   if (!(await ensureGpu(count))) return null;
@@ -584,9 +614,11 @@ module.exports = {
   stopGpuHardwareLoad,
   shutdownGpu,
   runGpuProof,
+  runGpuPowProbe,
   runGpuBenchmark,
   startGpuLoad,
   setGpuLoad,
   stopGpuLoad,
   clampPercent,
+  findGpuBinary,
 };

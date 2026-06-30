@@ -76,7 +76,9 @@ const {
   stopGpuHardwareLoad,
   shutdownGpu,
   runGpuProof,
+  runGpuPowProbe,
   runGpuBenchmark,
+  findGpuBinary,
 } = require('./gpu-load-controller');
 const si = require('systeminformation');
 const { createRoundLedger } = require('./round-ledger');
@@ -2421,6 +2423,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
         const workerId = String(reqUrl.searchParams.get('workerId') || 'unknown');
         const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
         const hasAsic = reqUrl.searchParams.get('hasAsic') === 'true';
+        const gpuPowCapable = reqUrl.searchParams.get('gpuPowCapable') === 'true';
         if (!_probePushWss) {
           _probePushWss = new WebSocketServer({ noServer: true });
         }
@@ -2435,7 +2438,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
             }
           }
           const hadWorkers = _probePushConns.size > 0;
-          _probePushConns.set(workerId, { ws, allowGpu, hasAsic });
+          _probePushConns.set(workerId, { ws, allowGpu, hasAsic, gpuPowCapable });
           // Mark worker as pending � don't issue probes until we know its
           // mining status. A 5s safety timeout falls back to unknown
           // (probe) for workers that never send mining-status (old clients).
@@ -6539,6 +6542,7 @@ let _probeConnIdSeq = 0; // monotonic connection ID sequence
 let _connectingProbeWs = false; // concurrency guard for _connectBgProbeWs
 const _PROBE_CONN_TARGET = 3; // maintain 3 simultaneous WS connections to distinct coordinators
 let _allowGpuWorkloads = false; // updated by renderer via IPC
+let _gpuPowCapable = false; // set when native GPU binary is detected
 const _BG_WS_RECONNECT_MAX_MS = 60_000;
 
 function _clearProbeTimeoutTimer() {
@@ -6697,6 +6701,7 @@ function _scheduleProbeConnReplacement() {
 function _startBgProbeWs(peerUrl) {
   // Avoid duplicates: reject if already connected or pending (not yet opened).
   if (_probeConns.some((c) => c.peerUrl === peerUrl)) return;
+  _gpuPowCapable = _allowGpuWorkloads && !!findGpuBinary();
   if (_pendingConns.has(peerUrl)) return;
   const connId = ++_probeConnIdSeq;
   const wsUrl = peerUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/api/v1/probe/push';
@@ -6709,7 +6714,9 @@ function _startBgProbeWs(peerUrl) {
         '&allowGpu=' +
         (_allowGpuWorkloads ? 'true' : 'false') +
         '&hasAsic=' +
-        (_asicConfig.length > 0 ? 'true' : 'false'),
+        (_asicConfig.length > 0 ? 'true' : 'false') +
+        '&gpuPowCapable=' +
+        (_gpuPowCapable ? 'true' : 'false'),
     );
     // Track as pending BEFORE the WS opens so the slot is reserved immediately.
     _pendingConns.set(peerUrl, { ws, connId });
@@ -7064,7 +7071,7 @@ function _runProbePush() {
       const _miningStatus = _workerIsMining.get(wid);
       if (_miningStatus !== true) continue;
       try {
-        const probe = issuePeerProbe(wid, conn.allowGpu, conn.hasAsic);
+        const probe = issuePeerProbe(wid, conn.allowGpu, conn.hasAsic, conn.gpuPowCapable);
         if (probe === null) {
           // Worker quarantined — close the WS and remove from push list.
           _probePushConns.delete(wid);
@@ -8968,6 +8975,28 @@ ipcMain.handle('wattcoin-gpu-proof', async (_event, payload = {}) => {
     return { ok: true, devices, seed };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'GPU proof exception' };
+  }
+});
+
+ipcMain.handle('wattcoin-gpu-pow-probe', async (_event, payload = {}) => {
+  try {
+    const seed = Number(payload && payload.seed) | 0 || 1;
+    const difficulty = Math.max(1, Math.min(65535, Number(payload && payload.difficulty) || 32768));
+    const results = await runGpuPowProbe(seed, difficulty);
+    if (!results || results.length === 0) {
+      return { ok: false, error: 'GPU PoW probe failed' };
+    }
+    const allOk = results.every((r) => r.nonce != null);
+    if (!allOk) {
+      const errors = results
+        .filter((r) => r.error)
+        .map((r) => `device ${r.deviceIndex}: ${r.error}`)
+        .join('; ');
+      return { ok: false, error: errors || 'GPU PoW probe failed on one or more devices' };
+    }
+    return { ok: true, devices: results, gpuCount: results.length };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'GPU PoW probe exception' };
   }
 });
 
