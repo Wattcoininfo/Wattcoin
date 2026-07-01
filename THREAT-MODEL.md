@@ -2,12 +2,12 @@
 
 ## Trust Boundaries
 
-| Boundary | Enforced by | What it protects |
-|----------|------------|-----------------|
-| **Renderer ↔ Main Process** | `ipcMain.handle` (Node) | Renderer cannot bypass main-process hardware detection, wallet cache, or contribution clamping |
-| **Main Process ↔ Native Binary** | `gpu-miner.exe` (C++), DXGI | GPU adapter/VRAM is read from DXGI, not renderer; native binary cannot be forged from JS |
-| **Main Process ↔ Peers** | `/api/v1/*` HTTP routes | Peer contributions require wallet signatures; probe receipts signed by coordinator's secp256k1 key |
-| **Proposer ↔ Validators** | `wtc-consensus.js` (BFT) | Every peer independently validates blocks; 2/3 quorum required |
+| Boundary                         | Enforced by                 | What it protects                                                                                   |
+| -------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Renderer ↔ Main Process**      | `ipcMain.handle` (Node)     | Renderer cannot bypass main-process hardware detection, wallet cache, or contribution clamping     |
+| **Main Process ↔ Native Binary** | `gpu-miner.exe` (C++), DXGI | GPU adapter/VRAM is read from DXGI, not renderer; native binary cannot be forged from JS           |
+| **Main Process ↔ Peers**         | `/api/v1/*` HTTP routes     | Peer contributions require wallet signatures; probe receipts signed by coordinator's secp256k1 key |
+| **Proposer ↔ Validators**        | `wtc-consensus.js` (BFT)    | Every peer independently validates blocks; 2/3 quorum required                                     |
 
 ## Assets
 
@@ -45,16 +45,31 @@ Cannot be bypassed by any client, even modified:
 - **CPU/Memory/GPU proof**: Independently re-verified by every validating peer.
 - **BFT quorum**: 2/3 of network weight required to commit a block.
 
+## Built-in Shared API Keys (Intentional Design)
+
+The source ships with a bundled shared API key for external services where the app would be non-functional without one. This is **not a secret** — it is a public, rate-limited, read-only key.
+
+### Etherscan API Key
+
+- **Key value**: `HHV1CUFUIEH1F32V9DBSX2Q3AUJFDCARSZ` (base64-encoded at rest)
+- **Location**: `wtc-sale-queue.js:61`, `sale-api/index.php:62`
+- **Scope**: Read-only queries to Etherscan API — fetches USDC transfer confirmations for the WTC sale
+- **Rate limit**: ~5 calls/sec (free-tier public key)
+- **Why bundled**: The sale-queue watcher must work out-of-the-box for anyone running the app. Without a key, the sale feature is completely non-functional.
+- **Override**: Two mechanisms exist — `~/.secrets/etherscan-api-key` file (highest priority) or `ETHERSCAN_API_KEY` environment variable. Production deployments MUST set a dedicated key via one of these paths; the bundled key is rate-limited and shared across all default instances.
+- **Risk if abused**: Etherscan can rate-limit or revoke the key. This only affects users relying on the default bundled key — any production deployment already overrides it. Even if revoked, no funds or private data are exposed (read-only, public data only).
+- **Audit rationale**: This is architecturally equivalent to shipping a public demo API key — it's a convenience default, not a credential. Documentation here makes the design intent explicit.
+
 ## Attack Vectors & Mitigations
 
-| Attack | Mitigation | Layer |
-|--------|-----------|-------|
-| Fake high TDP (5000W) | GPU TDP from native DXGI; CPU capped at 300W; benchmark calibration factor | Server |
-| Inject large deltaWh | `maxDeltaWh` clamp; rate limit 1200/min | Server |
-| Credit energy to wrong wallet | `walletAddressCache` override | Server |
-| Forge probe receipt | secp256k1 signature; verified at block validation | Consensus |
-| Skip proof of work | Coordinators send seed, verify hash; peers re-verify | Consensus |
-| Create coins from nothing | Fixed reward schedule; 21M cap; peer validation | Consensus |
-| Mine in VM | VM detection (advisory); probe timing reveals low perf | Server / Advisory |
-| Run modified client | Integrity manifest + ED25519 signature (advisory); server-side clamps work regardless | Advisory / Server |
-| 51% attack / collusion | BFT 2/3 quorum; economic game theory | Consensus |
+| Attack                        | Mitigation                                                                            | Layer             |
+| ----------------------------- | ------------------------------------------------------------------------------------- | ----------------- |
+| Fake high TDP (5000W)         | GPU TDP from native DXGI; CPU capped at 300W; benchmark calibration factor            | Server            |
+| Inject large deltaWh          | `maxDeltaWh` clamp; rate limit 1200/min                                               | Server            |
+| Credit energy to wrong wallet | `walletAddressCache` override                                                         | Server            |
+| Forge probe receipt           | secp256k1 signature; verified at block validation                                     | Consensus         |
+| Skip proof of work            | Coordinators send seed, verify hash; peers re-verify                                  | Consensus         |
+| Create coins from nothing     | Fixed reward schedule; 21M cap; peer validation                                       | Consensus         |
+| Mine in VM                    | VM detection (advisory); probe timing reveals low perf                                | Server / Advisory |
+| Run modified client           | Integrity manifest + ED25519 signature (advisory); server-side clamps work regardless | Advisory / Server |
+| 51% attack / collusion        | BFT 2/3 quorum; economic game theory                                                  | Consensus         |
