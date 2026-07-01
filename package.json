@@ -1,11 +1,14 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.397",
+  "version": "1.0.398",
   "description": "Wattcoin Miner — energy-backed cryptocurrency miner",
   "author": "Wattcoin",
   "license": "MIT",
   "private": true,
   "main": "electron-main.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

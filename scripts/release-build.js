@@ -653,8 +653,7 @@ function autoConfigureDevSigning(root) {
     optionalString('WIN_CSC_LINK')
   ) return;
 
-  const certPfx        = path.join(root, 'certs', 'sign.pfx');
-  const certPassFile   = path.join(root, 'certs', '.password');
+  const certPfx = path.join(root, 'certs', 'sign.pfx');
   if (!fs.existsSync(certPfx)) return;
 
   process.env.WATTCOIN_WINDOWS_CERT_FILE       = certPfx;
@@ -662,9 +661,8 @@ function autoConfigureDevSigning(root) {
   process.env.WATTCOIN_ENABLE_WINDOWS_SIGNING  = '1';
 
   if (!optionalString('WATTCOIN_WINDOWS_CERT_PASSWORD', 'WIN_CSC_KEY_PASSWORD')) {
-    if (fs.existsSync(certPassFile)) {
-      process.env.WATTCOIN_WINDOWS_CERT_PASSWORD = fs.readFileSync(certPassFile, 'utf8').trim();
-    }
+    console.error('[release-build] WATTCOIN_WINDOWS_CERT_PASSWORD (or WIN_CSC_KEY_PASSWORD) env var must be set for signing.');
+    process.exit(1);
   }
 
   console.log('[release-build] Dev signing certificate detected: certs/sign.pfx — signing enabled.');

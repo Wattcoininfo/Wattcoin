@@ -56,7 +56,9 @@ certs/
 .env
 .env.*
 *.local
-monitoring/.env.example
+
+# Track the example template so it's available to all developers
+!monitoring/.env.example
 monitoring/nodes.json
 monitoring/keys/
 monitoring/data/

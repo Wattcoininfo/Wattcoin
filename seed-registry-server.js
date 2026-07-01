@@ -73,7 +73,7 @@ function handleGet(res) {
   const urls = valid.map((p) => ({ url: p.url }));
   res.writeHead(200, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://wattcoin.ee',
     'Cache-Control': 'no-cache',
   });
   res.end(JSON.stringify({ seedPeers: urls, updatedAt: new Date().toISOString() }) + '\n');
@@ -95,7 +95,10 @@ function handlePost(req, res) {
       }
       const ok = addPeer(rawUrl);
       const count = readPeers().length;
-      res.writeHead(ok ? 200 : 400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.writeHead(ok ? 200 : 400, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': 'https://wattcoin.ee',
+      });
       res.end(JSON.stringify({ ok, peerCount: count }) + '\n');
     } catch (e) {
       res.writeHead(400);
@@ -106,7 +109,7 @@ function handlePost(req, res) {
 
 function handleOptions(res) {
   res.writeHead(204, {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': 'https://wattcoin.ee',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });

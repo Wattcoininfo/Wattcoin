@@ -8370,7 +8370,7 @@ ipcMain.handle('wattcoin-team-add', (_event, address, member) => {
       if (existingAny) return { ok: false, error: 'You have already added a team member with one of your NFTs' };
     }
     const entry = {
-      id: `tm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `tm-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
       nftId,
       name: member.name.trim(),
       role: (member.role || '').trim(),
@@ -8455,7 +8455,7 @@ ipcMain.handle('wattcoin-docs-upload', (_event, address, doc) => {
     if (!doc || !doc.content || !doc.content.trim()) return { ok: false, error: 'Content is required' };
     const docs = readDocsData();
     const entry = {
-      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `doc-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
       title: doc.title.trim(),
       content: doc.content.trim(),
       category: (doc.category || '').trim(),

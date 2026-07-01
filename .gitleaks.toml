@@ -1,0 +1,13 @@
+title = "Wattcoin Gitleaks config"
+
+[allowlist]
+description = "Known false positives for Wattcoin codebase"
+paths = [
+  "node_modules/",
+  "releases/",
+  "dist/",
+  "native-gpu/build/",
+  "certs/",
+  "coverage/",
+  ".git/",
+]
