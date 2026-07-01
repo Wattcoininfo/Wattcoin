@@ -661,6 +661,16 @@ function autoConfigureDevSigning(root) {
   process.env.WATTCOIN_ENABLE_WINDOWS_SIGNING  = '1';
 
   if (!optionalString('WATTCOIN_WINDOWS_CERT_PASSWORD', 'WIN_CSC_KEY_PASSWORD')) {
+    const certPassFile = path.join(root, 'certs', '.password');
+    if (fs.existsSync(certPassFile)) {
+      const filePass = fs.readFileSync(certPassFile, 'utf8').trim();
+      if (filePass) {
+        process.env.WATTCOIN_WINDOWS_CERT_PASSWORD = filePass;
+      }
+    }
+  }
+
+  if (!optionalString('WATTCOIN_WINDOWS_CERT_PASSWORD', 'WIN_CSC_KEY_PASSWORD')) {
     console.error('[release-build] WATTCOIN_WINDOWS_CERT_PASSWORD (or WIN_CSC_KEY_PASSWORD) env var must be set for signing.');
     process.exit(1);
   }

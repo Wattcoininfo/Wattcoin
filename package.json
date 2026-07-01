@@ -1,6 +1,6 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.398",
+  "version": "1.0.400",
   "description": "Wattcoin Miner — energy-backed cryptocurrency miner",
   "author": "Wattcoin",
   "license": "MIT",
@@ -61,10 +61,10 @@
     "deploy:files": "npm run sitemap && node scripts/deploy-files.js"
   },
   "dependencies": {
+    "@silentbot1/nat-api": "^0.4.9",
     "electron-updater": "^6.8.3",
     "elliptic": "^6.6.1",
     "mqtt": "^5.15.1",
-    "nat-upnp": "^1.1.1",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "ssh2": "^1.17.0",

@@ -1,43 +1,30 @@
-const { client: createUpnpClient } = require('nat-upnp');
-let upnpClient = null;
-let activeMapping = null; // { publicIp, publicPort, privatePort, ttl, description }
+const { default: NatAPI } = require('@silentbot1/nat-api');
+let client = null;
 
-const UPNP_TIMEOUT_MS = 10000;
-const UPNP_TTL = 0; // 0 = permanent (until removed or router restart)
 const UPNP_DESCRIPTION = 'Wattcoin Miner P2P';
 
 async function setupUpnpPortMapping(listenPort, listenHost) {
   removeUpnpPortMapping();
   try {
-    upnpClient = createUpnpClient({ timeout: UPNP_TIMEOUT_MS });
-    const publicIp = await new Promise((resolve, reject) => {
-      upnpClient.externalIp((err, ip) => {
-        if (err) reject(err);
-        else resolve(ip);
-      });
-    });
+    client = new NatAPI({ enableUPNP: true, enablePMP: false, autoUpdate: true });
+    const publicIp = await client.externalIp();
     if (!publicIp) {
       console.log('[UPnP] No public IP returned from gateway; skipping port mapping.');
+      removeUpnpPortMapping();
       return null;
     }
     const privateHost = getLanAddress(listenHost);
-    await new Promise((resolve, reject) => {
-      upnpClient.portMapping(
-        {
-          public: listenPort,
-          private: listenPort,
-          local: privateHost,
-          ttl: UPNP_TTL,
-          description: UPNP_DESCRIPTION,
-          protocol: 'TCP',
-        },
-        (err) => {
-          if (err) reject(err);
-          else resolve();
-        },
-      );
+    const mapped = await client.map({
+      publicPort: listenPort,
+      privatePort: listenPort,
+      protocol: 'TCP',
+      description: UPNP_DESCRIPTION,
     });
-    activeMapping = { publicIp, publicPort: listenPort, privatePort: listenPort, privateHost };
+    if (!mapped) {
+      console.log('[UPnP] Port mapping failed on router; skipping.');
+      removeUpnpPortMapping();
+      return null;
+    }
     console.log(
       `[UPnP] Port ${listenPort} forwarded to ${privateHost}:${listenPort} — public: ${publicIp}:${listenPort}`,
     );
@@ -50,25 +37,10 @@ async function setupUpnpPortMapping(listenPort, listenHost) {
 }
 
 function removeUpnpPortMapping() {
-  if (!upnpClient || !activeMapping) return;
-  try {
-    upnpClient.portUnmapping(
-      {
-        public: activeMapping.publicPort,
-        protocol: 'TCP',
-      },
-      () => {},
-    );
-  } catch (_) {
-    /* ignore close error */
-  }
-  try {
-    upnpClient.close();
-  } catch (_) {
-    /* ignore close error */
-  }
-  upnpClient = null;
-  activeMapping = null;
+  if (!client) return;
+  const c = client;
+  client = null;
+  c.destroy().catch(() => {});
 }
 
 function getLanAddress(listenHost) {

@@ -11,11 +11,8 @@ try {
 const report = JSON.parse(stdout);
 
 const advisories = Object.values(report.vulnerabilities || {});
-// nat-upnp@1.1.1 pulls in request -> form-data (critical), ip (high).
-// These are transitive through deprecated request and don't affect our usage.
 const allowed = [
   'elliptic', 'tmp', 'vite', 'vitest', '@vitest/coverage-v8',
-  'form-data', 'ip', 'xml2js', 'nat-upnp', 'request',
   'esbuild', // transitive through vite/vitest, no breaking-change fix path
   'undici',  // transitive through Node.js internals, elevated by GHSA and pending patched release
 ];
