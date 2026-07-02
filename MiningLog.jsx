@@ -175,9 +175,16 @@ function MiningLog({
               Trust {entry.trustDelta > 0 ? `+${entry.trustDelta}` : entry.trustDelta}
             </span>
           )}
-          {typeof entry.loadPercent === 'number' && (
-            <span style={{ color: '#5b8d5b', fontSize: 11, marginLeft: 'auto' }}>load {entry.loadPercent}%</span>
-          )}
+          {(typeof entry.version === 'string' && entry.version) || typeof entry.loadPercent === 'number' ? (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {typeof entry.version === 'string' && entry.version && (
+                <span style={{ color: '#6b7280', fontSize: 11 }}>{entry.version}</span>
+              )}
+              {typeof entry.loadPercent === 'number' && (
+                <span style={{ color: '#5b8d5b', fontSize: 11 }}>load {entry.loadPercent}%</span>
+              )}
+            </div>
+          ) : null}
         </div>
         {/* Row 2: badges */}
         <div

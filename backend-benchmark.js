@@ -1536,6 +1536,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     proof: probe.type !== 'gpu' ? String(result.proof || '') : '',
     issues,
     loadPercent: result.loadPercent,
+    version: result.version,
   });
   if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
 
@@ -1550,6 +1551,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     receipt,
     probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined,
     loadPercent: result.loadPercent,
+    version: result.version,
   };
 }
 

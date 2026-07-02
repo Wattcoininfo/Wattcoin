@@ -7110,6 +7110,7 @@ async function _handleWsProbeResult(workerId, msg, ws) {
       devices: Array.isArray(msg.devices) ? msg.devices : [],
       probeWallClockMs: typeof msg.probeWallClockMs === 'number' ? msg.probeWallClockMs : undefined,
       loadPercent: typeof msg.loadPercent === 'number' ? msg.loadPercent : undefined,
+      version: msg.version || '',
     };
     const hardwareSpec = msg.hardwareSpec || null;
     const probeRoundId = getCurrentNetworkRoundId();
@@ -7230,6 +7231,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           probeWallClockMs: typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : null,
           hardwareSpec: hardwareSpec,
           loadPercent: hwAuthority.currentLoadPercent,
+          version: getAppDisplayVersion(),
         };
         let verdict;
         // Try WebSocket submission first � avoids AV/firewall issues with HTTP POST
@@ -7285,6 +7287,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
             trustScoreAfter: hwAuthority.trustScore,
           });
         } else {
+          const trustScoreBefore = hwAuthority.trustScore;
           hwAuthority.consecutiveCleanProbes = 0;
           // Determine penalty severity based on the coordinator's verdict issues.
           const issues = Array.isArray(verdict && verdict.issues) ? verdict.issues : [];
@@ -7318,7 +7321,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           }
           saveHwAuthState();
           verdict = Object.assign({}, verdict, {
-            trustScoreBefore: hwAuthority.trustScore,
+            trustScoreBefore,
             trustScoreAfter: hwAuthority.trustScore,
           });
         }
@@ -10871,6 +10874,7 @@ function startLedgerNetworkServer() {
           devices: body && Array.isArray(body.devices) ? body.devices : [],
           probeWallClockMs: body && typeof body.probeWallClockMs === 'number' ? body.probeWallClockMs : undefined,
           loadPercent: body && typeof body.loadPercent === 'number' ? body.loadPercent : undefined,
+          version: body && typeof body.version === 'string' ? body.version : '',
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
         const probeRoundId = getCurrentNetworkRoundId();

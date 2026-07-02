@@ -3797,6 +3797,13 @@ export default function Miner({
                         ? verdict.receipt.chainIndex
                         : null,
                   issues: Array.isArray(verdict.issues) ? verdict.issues : [],
+                  version:
+                    typeof verdict.version === 'string'
+                      ? verdict.version
+                      : (typeof window !== 'undefined' &&
+                          window.wattcoinHardware &&
+                          window.wattcoinHardware.appVersion) ||
+                        null,
                   loadPercent: typeof verdict.loadPercent === 'number' ? verdict.loadPercent : null,
                   trustDelta:
                     typeof verdict.trustScoreAfter === 'number' && typeof verdict.trustScoreBefore === 'number'
@@ -3883,6 +3890,7 @@ export default function Miner({
           computeTimeMs: typeof h.computeTimeMs === 'number' ? Math.round(h.computeTimeMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
           issues: Array.isArray(h.issues) ? h.issues : [],
+          version: typeof h.version === 'string' ? h.version : null,
           loadPercent: typeof h.loadPercent === 'number' ? h.loadPercent : null,
         }));
         const attestEntries = attestHistory.map((h) => ({
@@ -3902,6 +3910,7 @@ export default function Miner({
           pixelHash: typeof h.pixelHash === 'string' ? h.pixelHash : '',
           proof: typeof h.proof === 'string' ? h.proof : '',
           issues: Array.isArray(h.issues) ? h.issues : [],
+          version: typeof h.version === 'string' ? h.version : null,
           loadPercent: typeof h.loadPercent === 'number' ? h.loadPercent : null,
         }));
 
