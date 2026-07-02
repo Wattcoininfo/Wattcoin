@@ -3608,8 +3608,11 @@ export default function Miner({
             const gpuResult = allowGpuWorkloads
               ? await runGpuProbe(probe.params.seed, probe.params.size, probe.params.shaderIterations)
               : null;
-            if (!gpuResult || !gpuResult.pixelHash) return;
-            probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult.pixelHash, gpuCount: 1 };
+            if (!gpuResult || !gpuResult.pixelHash) {
+              probeResult = { id: probe.id, type: 'skip' };
+            } else {
+              probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult.pixelHash, gpuCount: 1 };
+            }
           }
         } else if (probe.type === 'gpu-pow') {
           // GPU PoW probe: use native binary to search for a nonce where hash < difficulty.
@@ -3621,18 +3624,19 @@ export default function Miner({
                 difficulty: probe.params.difficulty,
               })
               .catch(() => null);
-            if (powResult && powResult.ok && Array.isArray(powResult.devices) && powResult.devices.length > 0) {
-              const allValid = powResult.devices.every((d) => d.nonce != null);
-              if (allValid) {
-                probeResult = {
-                  id: probe.id,
-                  type: 'gpu-pow',
-                  devices: powResult.devices,
-                  gpuCount: powResult.gpuCount || powResult.devices.length,
-                  gpuPoWMs: Math.max(...powResult.devices.map((d) => d.elapsedMs || 0)),
-                  proof: '0x' + Number(powResult.devices[0].nonce).toString(16),
-                };
-              }
+            if (powResult && Array.isArray(powResult.devices) && powResult.devices.length > 0) {
+              // Forward all device results to the coordinator for validation,
+              // even if some devices returned null nonces.  The coordinator
+              // reports individual device failures in the verdict issues.
+              const firstValid = powResult.devices.find((d) => d.nonce != null);
+              probeResult = {
+                id: probe.id,
+                type: 'gpu-pow',
+                devices: powResult.devices,
+                gpuCount: powResult.gpuCount || powResult.devices.length,
+                gpuPoWMs: Math.max(...powResult.devices.map((d) => d.elapsedMs || 0)),
+                proof: firstValid ? '0x' + Number(firstValid.nonce).toString(16) : '0x0',
+              };
             }
           }
           // If native binary unavailable, silently skip the probe
@@ -3666,7 +3670,7 @@ export default function Miner({
         }
 
         if (!probeResult) {
-          return;
+          probeResult = { id: probe.id, type: 'skip' };
         }
 
         if (disposed) return;

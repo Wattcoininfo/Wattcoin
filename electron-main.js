@@ -7107,6 +7107,7 @@ async function _handleWsProbeResult(workerId, msg, ws) {
       id: msg.probeId || '',
       proof: msg.proof || '',
       pixelHash: msg.pixelHash || '',
+      devices: Array.isArray(msg.devices) ? msg.devices : [],
       probeWallClockMs: typeof msg.probeWallClockMs === 'number' ? msg.probeWallClockMs : undefined,
       loadPercent: typeof msg.loadPercent === 'number' ? msg.loadPercent : undefined,
     };
@@ -7187,6 +7188,16 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
   const result = payload && payload.result ? payload.result : {};
   const hardwareSpec = payload && typeof payload.hardwareSpec === 'object' ? payload.hardwareSpec : null;
 
+  // Handle skipped probes (e.g. GPU probe failed to execute): clear in-flight
+  // state so the renderer can receive the next probe without waiting 100s.
+  if (result && result.type === 'skip') {
+    _probeInProgress = false;
+    _probeInProgressId = '';
+    _probeInProgressEpoch = -1;
+    _clearProbeTimeoutTimer();
+    return { ok: false, issues: ['probe skipped'] };
+  }
+
   if (source === 'peer' && settings.enabled && settings.mode === 'peer') {
     const peerUrl = result._peerUrl ? String(result._peerUrl) : null;
     if (peerUrl) {
@@ -7215,6 +7226,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           probeId: result.id || '',
           proof: result.proof || '',
           pixelHash: result.pixelHash || '',
+          devices: Array.isArray(result.devices) ? result.devices : [],
           probeWallClockMs: typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : null,
           hardwareSpec: hardwareSpec,
           loadPercent: hwAuthority.currentLoadPercent,
@@ -8986,14 +8998,8 @@ ipcMain.handle('wattcoin-gpu-pow-probe', async (_event, payload = {}) => {
     if (!results || results.length === 0) {
       return { ok: false, error: 'GPU PoW probe failed' };
     }
-    const allOk = results.every((r) => r.nonce != null);
-    if (!allOk) {
-      const errors = results
-        .filter((r) => r.error)
-        .map((r) => `device ${r.deviceIndex}: ${r.error}`)
-        .join('; ');
-      return { ok: false, error: errors || 'GPU PoW probe failed on one or more devices' };
-    }
+    // Return all device results — even devices with null nonces — so the
+    // renderer can forward them to the coordinator for validation.
     return { ok: true, devices: results, gpuCount: results.length };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'GPU PoW probe exception' };
@@ -10862,6 +10868,7 @@ function startLedgerNetworkServer() {
           id: body && body.probeId ? String(body.probeId) : '',
           proof: body && body.proof ? String(body.proof) : '',
           pixelHash: body && body.pixelHash ? String(body.pixelHash) : '',
+          devices: body && Array.isArray(body.devices) ? body.devices : [],
           probeWallClockMs: body && typeof body.probeWallClockMs === 'number' ? body.probeWallClockMs : undefined,
           loadPercent: body && typeof body.loadPercent === 'number' ? body.loadPercent : undefined,
         };
