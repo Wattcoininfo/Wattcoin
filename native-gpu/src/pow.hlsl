@@ -18,10 +18,10 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
 
     // Compute the xor-shift proof hash (matches computeGpuProbeExpectedHash in JS)
     uint h = 5381;
-    for (uint p = 0; p < 256; p += 4) {
+    for (uint p = 0; p < 1024; p += 4) {
         uint row = p / 32;
         uint col = p % 32;
-        uint x = (col * 1000003) ^ (row * 7919) ^ s;
+        int x = (int)((col * 1000003) ^ (row * 7919) ^ s);
         x |= 1;
         for (uint i = 0; i < 50000; i++) {
             x ^= x << 13;

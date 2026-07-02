@@ -2432,14 +2432,18 @@ function MapView({ selectedWalletAddress }) {
             }}
           >
             <div style={{ color: '#fbbf24', marginBottom: 4 }}>Contributing Wallets</div>
-            {stats.contributors.map((c) => {
-              const shortAddr = c.address.length > 16 ? c.address.slice(0, 8) + '..' + c.address.slice(-4) : c.address;
-              return (
-                <div key={c.address} style={{ color: '#9ca3af' }}>
-                  {shortAddr} &nbsp; {Math.round(c.wh)} Wh
-                </div>
-              );
-            })}
+            {stats.contributors
+              .slice()
+              .sort((a, b) => b.wh - a.wh)
+              .map((c) => {
+                const shortAddr =
+                  c.address.length > 16 ? c.address.slice(0, 8) + '..' + c.address.slice(-4) : c.address;
+                return (
+                  <div key={c.address} style={{ color: '#9ca3af' }}>
+                    {shortAddr} &nbsp; {Math.round(c.wh)} Wh
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>
