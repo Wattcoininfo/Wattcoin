@@ -18,6 +18,7 @@ resources/
 *.dll
 *.pdb
 *.obj
+*.res
 *.o
 *.so
 *.dylib
