@@ -1,6 +1,19 @@
-const path = require('path');
 const { spawn } = require('child_process');
-function debugLog(..._args) {}
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
+const DEBUG_LOG = path.join(os.tmpdir(), 'wattcoin-gpu-debug.log');
+function debugLog(...args) {
+  try {
+    fs.appendFileSync(
+      DEBUG_LOG,
+      new Date().toISOString() +
+        ' ' +
+        args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') +
+        '\n',
+    );
+  } catch (_) {}
+}
 
 // Per-GPU process states
 const gpuStates = new Map(); // deviceIndex -> { process, info, telemetry, pendingResolve, pendingTimeout, rawBuf }

@@ -9,7 +9,7 @@ cbuffer constants : register(b0) {
 
 [numthreads(16, 16, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
-    uint globalId = id.x + id.y * 16;
+    uint gid = id.x + id.y * 256; // 256 = 16 groups × 16 threads (Dispatch(16,16,1))
     uint nonce = startNonce + globalId;
 
     // Derive a unique seed from the base seed and nonce

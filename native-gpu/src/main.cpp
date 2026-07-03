@@ -64,6 +64,7 @@ typedef struct {
 // ── Global state ──────────────────────────────────────────────────────────
 static HANDLE         g_stdin;
 static HANDLE         g_stdout;
+static HANDLE         g_logFile = INVALID_HANDLE_VALUE;
 static int            g_running;
 static double         g_loadFrac;    // 0.0 – 1.0
 static double         g_measDuty;
@@ -1373,6 +1374,15 @@ int main(int argc, char *argv[]) {
 
     timeBeginPeriod(1);
 
+    // Open trace log file for per-iteration I/O delay (prevents 100% GPU ramp)
+    {
+        char tempPath[MAX_PATH + 32];
+        if (GetTempPathA(MAX_PATH, tempPath)) {
+            strcat(tempPath, "gpu-miner-trace.log");
+            g_logFile = CreateFileA(tempPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        }
+    }
+
     int tick = 0;
     double burnSum = 0, cycleSum = 0;
     int frameCount = 0;
@@ -1414,6 +1424,14 @@ int main(int argc, char *argv[]) {
                 Sleep((DWORD)(idleMs + 0.5));
             } else {
                 Sleep(0);
+            }
+
+            // Trace log write (per-iteration I/O delay)
+            if (g_logFile != INVALID_HANDLE_VALUE) {
+                snprintf(buf, sizeof(buf), "[gpu] main_loop tick duty=%.4f t=%.0f\n", g_measDuty, now_ms());
+                DWORD w;
+                WriteFile(g_logFile, buf, (DWORD)strlen(buf), &w, NULL);
+                FlushFileBuffers(g_logFile);
             }
         } else {
             g_measDuty = 0;

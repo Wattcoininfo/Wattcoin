@@ -5775,15 +5775,6 @@ export default function Miner({
       }
       return;
     }
-    // When discrete GPUs are present, the native GPU miner (gpu-miner.exe) handles
-    // the load via D3D11.  Skip the WebGL load loop to avoid double-loading the GPU.
-    if (Array.isArray(hardware.gpus) && hardware.gpus.length > 0) {
-      if (gpuLoadRafRef.current) {
-        clearTimeout(gpuLoadRafRef.current);
-        gpuLoadRafRef.current = null;
-      }
-      return;
-    }
     // Intentionally NOT gated on isActive -- GPU mining continues when other app tabs are open.
     // Peer-down stops GPU load too so the hardware is not wasted while waiting.
     const gpuLoadActive = (mining && !peerDownRef.current) || benchmarkState.running;
