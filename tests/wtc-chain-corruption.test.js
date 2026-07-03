@@ -147,10 +147,12 @@ function testCorruptSecondBlockPreservesGenesis() {
   const c1 = seedGenesisChain(dir);
 
   // Build and append a valid block 1.
+  // Ensure timestamp > genesis timestamp (both default to Date.now()).
   const block1 = c1.buildBlock({
     proposer: 'wtc1q-test-proposer',
     energyWh: 10_000,
     proofCommitment: 'test-commit-1',
+    timestamp: Date.now() + 1,
   });
   c1.append(block1);
   assert.strictEqual(c1.getHeight(), 1);

@@ -12,7 +12,9 @@ function debugLog(...args) {
         args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') +
         '\n',
     );
-  } catch (_) {}
+  } catch (_) {
+    /* ignore file-log failures on worker machines */
+  }
 }
 
 // Per-GPU process states

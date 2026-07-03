@@ -387,6 +387,7 @@ class Chain {
     proposer,
     energyWh,
     proofCommitment,
+    timestamp,
     peerProbeVerified = false,
     probeReceipt = null,
     probesAnswered = 0,
@@ -410,7 +411,7 @@ class Chain {
     const block = {
       height,
       prevHash,
-      timestamp: Date.now(),
+      timestamp: timestamp != null ? timestamp : Date.now(),
       proposer,
       energyWh: energyWh || 0,
       proofCommitment: proofCommitment || '',
