@@ -187,6 +187,13 @@ try {
           'wattcoin-asic-start-mining',
           'wattcoin-asic-stop-mining',
           'wattcoin-get-peer-topology',
+          'wattcoin-gpu-pow-probe',
+          'wattcoin-gpu-proof',
+          'wattcoin-gpu-info',
+          'wattcoin-stop-gpu-load',
+          'wattcoin-set-gpu-load',
+          'wattcoin-asic-liveness-status',
+          'wattcoin-sale-get-purchase-total',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

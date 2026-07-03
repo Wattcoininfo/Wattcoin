@@ -456,6 +456,15 @@ class Chain {
     if (tip && block.prevHash !== tip.hash) {
       throw new Error(`append: prevHash mismatch at height ${block.height}`);
     }
+    if (typeof block.timestamp !== 'number') {
+      throw new Error(`append: missing timestamp at height ${block.height}`);
+    }
+    if (tip && block.timestamp <= tip.timestamp) {
+      throw new Error(`append: timestamp not greater than parent at height ${block.height}`);
+    }
+    if (block.timestamp > Date.now() + 7200000) {
+      throw new Error(`append: timestamp too far in the future at height ${block.height}`);
+    }
     const expectedHash = computeBlockHash(block);
     if (block.hash !== expectedHash) {
       throw new Error(`append: block hash mismatch at height ${block.height}`);
@@ -489,6 +498,9 @@ class Chain {
       const expectedPrev = i === 0 ? '0'.repeat(64) : blocks[i - 1].hash;
       if (b.prevHash !== expectedPrev) return { ok: false, reason: `prevHash mismatch at height ${i}` };
       if (b.hash !== computeBlockHash(b)) return { ok: false, reason: `hash mismatch at height ${i}` };
+      if (typeof b.timestamp !== 'number') return { ok: false, reason: `missing timestamp at height ${i}` };
+      if (i > 0 && b.timestamp <= blocks[i - 1].timestamp)
+        return { ok: false, reason: `timestamp not greater than parent at height ${i}` };
       if (i > 0) {
         const attestationCheck = validateBlockProbeAttestation(b, {
           expectedWorkerId: b.proposer,

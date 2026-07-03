@@ -396,6 +396,10 @@ class Consensus {
     const tip = this._chain.getTip();
     if (tip && block.prevHash !== tip.hash) return 'prevHash mismatch';
 
+    if (typeof block.timestamp !== 'number') return 'missing timestamp';
+    if (tip && block.timestamp <= tip.timestamp) return 'block timestamp must be greater than parent timestamp';
+    if (block.timestamp > Date.now() + 7200000) return 'block timestamp too far in the future';
+
     const expectedReward = this._chain.rewardForHeight(block.height);
     if (Math.abs(block.rewardTotal - expectedReward) > 0.001) {
       return `reward mismatch: expected ${expectedReward}, got ${block.rewardTotal}`;
