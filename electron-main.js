@@ -7288,35 +7288,50 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           });
         } else {
           const trustScoreBefore = hwAuthority.trustScore;
-          hwAuthority.consecutiveCleanProbes = 0;
-          // Determine penalty severity based on the coordinator's verdict issues.
           const issues = Array.isArray(verdict && verdict.issues) ? verdict.issues : [];
-          let penalty = -1; // default: -1 for timing / unknown / generic
           if (
-            issues.some(
+            issues.length > 0 &&
+            issues.every(
               (i) =>
-                i.includes('proof hash mismatch') ||
-                i.includes('pixel hash mismatch') ||
-                i.includes('no pixel hash returned'),
+                i.includes('unknown or expired probe id') ||
+                i.includes('no pending probe') ||
+                i.includes('mining stopped'),
             )
           ) {
-            penalty = -3; // proof mismatch — likely cheating, severe penalty
-          }
-          hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore + penalty);
-          // Record fail in sliding window.
-          const window = hwAuthority.probeResultWindow;
-          window.push(false);
-          if (window.length > _PROBE_TRUST_WINDOW) window.shift();
-          // If the window is full and fail ratio exceeds threshold, apply additional -1.
-          if (window.length >= _PROBE_TRUST_WINDOW) {
-            const fails = window.filter((r) => !r).length;
-            if (fails / window.length >= _PROBE_FAIL_RATIO_THRESHOLD) {
-              hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
-              console.warn(
-                `[PeerProbe] Fail ratio ${fails}/${window.length} exceeds ${(_PROBE_FAIL_RATIO_THRESHOLD * 100).toFixed(0)}% — additional trust penalty`,
-              );
-              // Reset window to avoid compounding every submission.
-              hwAuthority.probeResultWindow = [];
+            console.warn(
+              `[PeerProbe] Probe ${result.id} discarded (mining stopped or expired, no trust impact):`,
+              issues.join('; '),
+            );
+          } else {
+            hwAuthority.consecutiveCleanProbes = 0;
+            // Determine penalty severity based on the coordinator's verdict issues.
+            let penalty = -1; // default: -1 for timing / unknown / generic
+            if (
+              issues.some(
+                (i) =>
+                  i.includes('proof hash mismatch') ||
+                  i.includes('pixel hash mismatch') ||
+                  i.includes('no pixel hash returned'),
+              )
+            ) {
+              penalty = -3; // proof mismatch — likely cheating, severe penalty
+            }
+            hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore + penalty);
+            // Record fail in sliding window.
+            const window = hwAuthority.probeResultWindow;
+            window.push(false);
+            if (window.length > _PROBE_TRUST_WINDOW) window.shift();
+            // If the window is full and fail ratio exceeds threshold, apply additional -1.
+            if (window.length >= _PROBE_TRUST_WINDOW) {
+              const fails = window.filter((r) => !r).length;
+              if (fails / window.length >= _PROBE_FAIL_RATIO_THRESHOLD) {
+                hwAuthority.trustScore = Math.max(0, hwAuthority.trustScore - 1);
+                console.warn(
+                  `[PeerProbe] Fail ratio ${fails}/${window.length} exceeds ${(_PROBE_FAIL_RATIO_THRESHOLD * 100).toFixed(0)}% — additional trust penalty`,
+                );
+                // Reset window to avoid compounding every submission.
+                hwAuthority.probeResultWindow = [];
+              }
             }
           }
           saveHwAuthState();
@@ -8928,6 +8943,7 @@ ipcMain.handle('wattcoin-set-gpu-load', async (_event, payload) => {
     percent = Number(payload);
     gpuCount = 1;
   }
+  console.warn(`[GpuLoad/IPC] wattcoin-set-gpu-load called: percent=${percent} gpuCount=${gpuCount}`);
   if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
     return { ok: false, error: 'percent must be a finite number between 0 and 100' };
   }
@@ -8937,6 +8953,7 @@ ipcMain.handle('wattcoin-set-gpu-load', async (_event, payload) => {
   try {
     const appliedPercent = typeof setGpuLoadPercentFn === 'function' ? await setGpuLoadPercentFn(percent, gpuCount) : 0;
     hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : percent;
+    console.warn(`[GpuLoad/IPC] wattcoin-set-gpu-load result: appliedPercent=${appliedPercent}`);
     return { ok: true, appliedPercent, ...getGpuLoadState() };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to set GPU load' };
@@ -8944,6 +8961,7 @@ ipcMain.handle('wattcoin-set-gpu-load', async (_event, payload) => {
 });
 
 ipcMain.handle('wattcoin-stop-gpu-load', () => {
+  console.warn(`[GpuLoad/IPC] wattcoin-stop-gpu-load called`);
   try {
     stopGpuHardwareLoad();
     hwAuthority.currentLoadPercent = 0;
@@ -12675,7 +12693,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
   });
-  // Uncomment to debug: win.webContents.openDevTools();
+  // Pass --debug on the command line to open DevTools automatically.
+  if (process.argv.includes('--debug')) {
+    win.webContents.openDevTools();
+  }
   // Keep the versioned title even after the page's <title> tag loads.
   win.on('page-title-updated', (event) => {
     event.preventDefault();

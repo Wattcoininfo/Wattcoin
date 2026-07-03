@@ -1,5 +1,6 @@
-const { spawn } = require('child_process');
 const path = require('path');
+const { spawn } = require('child_process');
+function debugLog(..._args) {}
 
 // Per-GPU process states
 const gpuStates = new Map(); // deviceIndex -> { process, info, telemetry, pendingResolve, pendingTimeout, rawBuf }
@@ -86,6 +87,7 @@ function spawnGpuProcess(deviceIndex, adapterIndex) {
     },
     pendingResolve: null,
     pendingTimeout: null,
+    cmdQueue: null,
     rawBuf: Buffer.alloc(0),
   };
 
@@ -182,7 +184,6 @@ function handleMessage(state, msg) {
       state.telemetry.ts = Date.now();
       if (state.pendingResolve) {
         state.pendingResolve(msg);
-        state.pendingResolve = null;
       }
       mergeTelemetry();
       break;
@@ -197,7 +198,15 @@ function handleMessage(state, msg) {
     case 'proof':
       if (state.pendingResolve) {
         state.pendingResolve(msg);
-        state.pendingResolve = null;
+      }
+      break;
+
+    case 'pow':
+      debugLog(`[GpuLoad:${deviceIndex}] received pow response nonce=${msg.nonce} ms=${msg.ms}`);
+      if (state.pendingResolve) {
+        state.pendingResolve(msg);
+      } else {
+        debugLog(`[GpuLoad:${deviceIndex}] pow response with no pendingResolve!`);
       }
       break;
 
@@ -206,7 +215,6 @@ function handleMessage(state, msg) {
       state.telemetry.frames = msg.frames || 0;
       if (state.pendingResolve) {
         state.pendingResolve(msg);
-        state.pendingResolve = null;
       }
       mergeTelemetry();
       break;
@@ -214,7 +222,6 @@ function handleMessage(state, msg) {
     case 'info':
       if (state.pendingResolve) {
         state.pendingResolve(msg);
-        state.pendingResolve = null;
       }
       break;
 
@@ -223,7 +230,6 @@ function handleMessage(state, msg) {
       console.warn(`[GpuLoad:${deviceIndex}] binary error: ${state.telemetry.error}`);
       if (state.pendingResolve) {
         state.pendingResolve(msg);
-        state.pendingResolve = null;
       }
       mergeTelemetry();
       break;
@@ -290,21 +296,42 @@ function sendCommand(deviceIndex, cmd) {
     if (!state || !state.process || !state.process.stdin.writable) {
       return reject(new Error(`GPU process ${deviceIndex} not running`));
     }
-    state.pendingResolve = (msg) => {
-      if (state.pendingTimeout) {
-        clearTimeout(state.pendingTimeout);
-        state.pendingTimeout = null;
-      }
-      state.pendingResolve = null;
-      resolve(msg);
-    };
-    state.pendingTimeout = setTimeout(() => {
-      state.pendingResolve = null;
-      reject(new Error(`GPU command timeout on device ${deviceIndex}`));
-    }, 30000);
-    const payload = JSON.stringify(cmd) + '\n';
-    state.process.stdin.write(payload, 'utf8');
+
+    // Queue this command if another is already in-flight.
+    if (state.pendingResolve) {
+      if (!state.cmdQueue) state.cmdQueue = [];
+      state.cmdQueue.push({ cmd, resolve, reject });
+      return;
+    }
+
+    sendQueuedOrDirect(state, deviceIndex, cmd, resolve, reject);
   });
+}
+
+function sendQueuedOrDirect(state, deviceIndex, cmd, resolve, reject) {
+  const cmdStr = JSON.stringify(cmd);
+  debugLog(`[GpuLoad] sendCommand device=${deviceIndex} cmd=${cmdStr}`);
+  state.pendingResolve = (msg) => {
+    clearTimeout(state.pendingTimeout);
+    state.pendingTimeout = null;
+    state.pendingResolve = null;
+    debugLog(`[GpuLoad] sendCommand device=${deviceIndex} resolved with t=${msg.t}`);
+    resolve(msg);
+
+    // Dispatch next queued command, if any.
+    if (state.cmdQueue && state.cmdQueue.length > 0) {
+      const next = state.cmdQueue.shift();
+      sendQueuedOrDirect(state, deviceIndex, next.cmd, next.resolve, next.reject);
+    }
+  };
+  state.pendingTimeout = setTimeout(() => {
+    debugLog(`[GpuLoad] TIMEOUT on device ${deviceIndex} after 30s for command ${JSON.stringify(cmd)}`);
+    state.pendingResolve = null;
+    state.cmdQueue = null;
+    reject(new Error(`GPU command timeout on device ${deviceIndex}`));
+  }, 30000);
+  const payload = JSON.stringify(cmd) + '\n';
+  state.process.stdin.write(payload, 'utf8');
 }
 
 function broadcastCommand(cmd) {
@@ -329,14 +356,18 @@ async function ensureGpu(numGpus) {
     // All requested GPUs already running
     for (const state of gpuStates.values()) {
       if (state.info) continue;
-      // Wait for ready
+      debugLog(`[GpuLoad] ensureGpu waiting for device info (up to 30s)...`);
       const deadline = Date.now() + 30000;
       while (!state.info && Date.now() < deadline) {
         if (!state.process) break;
         await new Promise((r) => setTimeout(r, 10));
       }
-      if (!state.info) return false;
+      if (!state.info) {
+        debugLog(`[GpuLoad] ensureGpu: device info not ready after 30s`);
+        return false;
+      }
     }
+    debugLog(`[GpuLoad] ensureGpu: all devices responsive`);
     return true;
   }
 
@@ -429,6 +460,7 @@ async function runGpuPowProbe(seed, difficulty) {
         results.push({ deviceIndex, nonce: null, elapsedMs: 0, error: 'pow response missing' });
       }
     } catch (err) {
+      debugLog(`[GpuLoad] runGpuPowProbe device ${deviceIndex} error: ${err.message}`);
       results.push({ deviceIndex, nonce: null, elapsedMs: 0, error: err.message });
     }
   }
@@ -537,10 +569,12 @@ function startRampUp(targetLoad) {
 
     if (nextPercent !== currentPercent) {
       currentPercent = nextPercent;
+      debugLog(`[GpuLoad] ramp-up: setting load to ${nextPercent} (target=${targetLoad})`);
       await setGpuLoad(nextPercent).catch(() => {});
     }
 
     if (rampFactor >= 1) {
+      debugLog(`[GpuLoad] ramp-up: complete at ${currentPercent}`);
       stopRampUp();
     }
   }, 50);
@@ -556,11 +590,15 @@ function stopRampUp() {
 
 async function setGpuLoadPercent(percent, ...args) {
   const next = clampPercent(percent);
+  debugLog(
+    `[GpuLoad] setGpuLoadPercent called percent=${percent} next=${next} currentPercent=${currentPercent} targetPercent=${targetPercent} rampUpTimer=${!!rampUpTimer}`,
+  );
 
   // Support both setGpuLoadPercent(percent, gpuCount) and setGpuLoadPercent(percent)
   const numGpus = args.length > 0 ? Math.max(1, Number(args[0]) || 1) : Math.max(1, gpuStates.size || 1);
 
   if (next <= 0) {
+    debugLog(`[GpuLoad] setGpuLoadPercent -> stop (next<=0)`);
     stopRampUp();
     await stopGpuLoad();
     currentPercent = 0;
@@ -569,15 +607,18 @@ async function setGpuLoadPercent(percent, ...args) {
   }
 
   if (!(await ensureGpu(numGpus))) {
+    debugLog(`[GpuLoad] setGpuLoadPercent -> ensureGpu failed`);
     gpuTelemetry.error = 'GPU binary unavailable';
     return 0;
   }
 
+  debugLog(`[GpuLoad] setGpuLoadPercent -> startRampUp(${next}) from currentPercent=${currentPercent}`);
   startRampUp(next);
   return next;
 }
 
 function stopGpuHardwareLoad() {
+  debugLog(`[GpuLoad] stopGpuHardwareLoad called`);
   stopRampUp();
   currentPercent = 0;
   targetPercent = 0;

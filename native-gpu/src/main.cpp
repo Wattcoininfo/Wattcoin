@@ -9,6 +9,8 @@
 #include <io.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <mmsystem.h>
+#pragma comment(lib, "winmm.lib")
 
 // ── DXGI adapter enumeration (shared across D3D10/11/12) ──────────────────
 #include <dxgi1_6.h>
@@ -16,6 +18,7 @@
 
 // ── D3D11 ─────────────────────────────────────────────────────────────────
 #include <d3d11.h>
+#include <d3d11_1.h>
 #include <d3dcompiler.h>
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -34,7 +37,7 @@
 #include "gen/shaders_d3d9.c"   // D3D9 pixel shaders
 
 // ── Constants ─────────────────────────────────────────────────────────────
-#define TIMER_FLOOR_MS 4.0
+#define TIMER_FLOOR_MS 1.0
 #define MAX_ADAPTERS 32
 // ── Types ─────────────────────────────────────────────────────────────────
 typedef enum {
@@ -73,6 +76,16 @@ static uint32_t (*g_dispatch_proof)(uint32_t seed, uint32_t w, uint32_t h, uint3
 static int (*g_dispatch_pow)(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs);
 static GpuInfo   g_info;
 static int       g_gpuReady; // set after select_gpu() succeeds
+
+static void debug_out(const char *msg) {
+    HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD w;
+    WriteFile(h, msg, (DWORD)strlen(msg), &w, NULL);
+}
+
+static void ods_out(const char *msg) {
+    OutputDebugStringA(msg);
+}
 
 static double now_ms(void) {
     LARGE_INTEGER f, c;
@@ -147,6 +160,7 @@ static int try_init_timeout(int (*fn)(int, GpuInfo*), int adapterIdx, GpuInfo *o
 // ── D3D11 Backend ─────────────────────────────────────────────────────────
 static ID3D11Device            *g_dev11       = NULL;
 static ID3D11DeviceContext     *g_ctx11       = NULL;
+static ID3D11DeviceContext1    *g_ctx11_1     = NULL;
 static ID3D11ComputeShader     *g_loadCS11    = NULL;
 static ID3D11ComputeShader     *g_proofCS11   = NULL;
 static ID3D11Buffer            *g_cb11        = NULL;
@@ -156,6 +170,10 @@ static ID3D11Buffer            *g_proofBuf11  = NULL;
 static ID3D11UnorderedAccessView *g_proofUAV11= NULL;
 static ID3D11Buffer            *g_staging11   = NULL;
 static ID3D11Query             *g_fence11     = NULL;
+static ID3D11ComputeShader     *g_powCS11     = NULL;
+static ID3D11Buffer            *g_powOutBuf11  = NULL;
+static ID3D11UnorderedAccessView *g_powOutUAV11 = NULL;
+static ID3D11Buffer            *g_powStaging11  = NULL;
 
 static ID3DBlob *compile_cs11(const char *src, const char *entry) {
     ID3DBlob *code = NULL, *err = NULL;
@@ -176,6 +194,39 @@ static ID3DBlob *compile_cs11(const char *src, const char *entry) {
     return code;
 }
 
+// ── PoW HLSL compute shader (embedded string) ──────────────────────────
+// NOTE: iterations reduced to 10 for testing; real value is 50000
+static const char *g_pow_hlsl =
+    "RWStructuredBuffer<uint> output : register(u0);\n"
+    "cbuffer cb : register(b0) { uint seed; uint difficulty; uint startNonce; uint _pad; };\n"
+    "[numthreads(16,16,1)]\n"
+    "void CSMain(uint3 id : SV_DispatchThreadID) {\n"
+    "  uint gid = id.x + id.y * 256;\n"
+    "  uint nonce = startNonce + gid;\n"
+    "  uint s = seed ^ (nonce * 1000003u) ^ ((nonce >> 16) * 7919u);\n"
+    "  s |= 1;\n"
+    "  uint h = 5381;\n"
+    "  for (uint p = 0; p < 1024; p += 4) {\n"
+    "    uint row = p / 32;\n"
+    "    uint col = p % 32;\n"
+    "    int x = (int)((col * 1000003) ^ (row * 7919) ^ s);\n"
+    "    x |= 1;\n"
+    "    for (uint i = 0; i < 50000; i++) {\n"
+    "      x ^= x << 13;\n"
+    "      x ^= x >> 17;\n"
+    "      x ^= x << 5;\n"
+    "    }\n"
+    "    h = ((h << 5) + h + ((x >> 24) & 255));\n"
+    "    h = ((h << 5) + h + ((x >> 16) & 255));\n"
+    "    h = ((h << 5) + h + ((x >> 8) & 255));\n"
+    "    h = ((h << 5) + h + (x & 255));\n"
+    "  }\n"
+    "  if ((h & 0xFFFF) < difficulty)\n"
+    "    output[gid] = nonce;\n"
+    "  else\n"
+    "    output[gid] = 0xFFFFFFFF;\n"
+    "}";
+
 static int init_d3d11(int adapterIdx, GpuInfo *info) {
     IDXGIFactory1 *factory = NULL;
     HRESULT hr = CreateDXGIFactory1(IID_IDXGIFactory1, (void**)&factory);
@@ -195,6 +246,9 @@ static int init_d3d11(int adapterIdx, GpuInfo *info) {
     hr = D3D11CreateDevice(adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, flags,
                            levels, 2, D3D11_SDK_VERSION, &g_dev11, &selected, &g_ctx11);
     if (FAILED(hr)) { adapter->Release(); return 0; }
+
+    // Query for D3D11.1 context for non-blocking Map (D3D11_MAP_FLAG_DO_NOT_WAIT)
+    g_ctx11->QueryInterface(IID_ID3D11DeviceContext1, (void**)&g_ctx11_1);
 
     ID3DBlob *b = compile_cs11(g_compute_hlsl, "CSMain");
     if (!b) { adapter->Release(); return 0; }
@@ -226,6 +280,24 @@ static int init_d3d11(int adapterIdx, GpuInfo *info) {
     D3D11_BUFFER_DESC sbd = { 1024 * 1024 * 4, D3D11_USAGE_STAGING, 0, D3D11_CPU_ACCESS_READ, 0, 0 };
     g_dev11->CreateBuffer(&sbd, NULL, &g_staging11);
 
+    // PoW compute shader (may fail on old hardware, non-fatal)
+    ID3DBlob *powBlob = compile_cs11(g_pow_hlsl, "CSMain");
+    if (powBlob) {
+        g_dev11->CreateComputeShader(powBlob->GetBufferPointer(), powBlob->GetBufferSize(), NULL, &g_powCS11);
+        powBlob->Release();
+    }
+
+    // PoW output buffer: 65536 elements x 4 bytes = 256 KB
+    D3D11_BUFFER_DESC powbd = { 65536 * 4, D3D11_USAGE_DEFAULT, D3D11_BIND_UNORDERED_ACCESS, 0, 0, 0 };
+    if (FAILED(g_dev11->CreateBuffer(&powbd, NULL, &g_powOutBuf11))) { fprintf(stderr, "D3D11: failed to create pow output buffer\n"); fflush(stderr); }
+    D3D11_UNORDERED_ACCESS_VIEW_DESC powuv = { DXGI_FORMAT_R32_UINT, D3D11_UAV_DIMENSION_BUFFER };
+    powuv.Buffer.NumElements = 65536;
+    if (FAILED(g_dev11->CreateUnorderedAccessView(g_powOutBuf11, &powuv, &g_powOutUAV11))) { fprintf(stderr, "D3D11: failed to create pow UAV\n"); fflush(stderr); }
+
+    // PoW staging readback buffer
+    D3D11_BUFFER_DESC psbd = { 65536 * 4, D3D11_USAGE_STAGING, 0, D3D11_CPU_ACCESS_READ, 0, 0 };
+    if (FAILED(g_dev11->CreateBuffer(&psbd, NULL, &g_powStaging11))) { fprintf(stderr, "D3D11: failed to create pow staging buffer\n"); fflush(stderr); }
+
     // Fence query for GPU sync
     D3D11_QUERY_DESC qd = { D3D11_QUERY_EVENT, 0 };
     g_dev11->CreateQuery(&qd, &g_fence11);
@@ -246,13 +318,20 @@ static int init_d3d11(int adapterIdx, GpuInfo *info) {
 
 static void dispatch_load_d3d11(uint32_t w, uint32_t h, uint32_t iters, double param) {
     if (!g_dev11) return;
+    double t0 = now_ms();
+    char buf[128]; snprintf(buf, sizeof(buf), "[gpu] dispatch_load_d3d11 enter w=%u h=%u iters=%u param=%.4f t=%.0f\n", w, h, iters, param, t0); ods_out(buf);
     D3D11_MAPPED_SUBRESOURCE m;
-    if (SUCCEEDED(g_ctx11->Map(g_cb11, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
+    HRESULT mapHr = g_ctx11->Map(g_cb11, 0, D3D11_MAP_WRITE_DISCARD, 0, &m);
+    if (SUCCEEDED(mapHr)) {
         ((float*)m.pData)[0] = (float)param;
         ((uint32_t*)m.pData)[1] = w ? w : 2048;
         ((uint32_t*)m.pData)[2] = h ? h : 2048;
         ((uint32_t*)m.pData)[3] = iters ? iters : 256;
+        snprintf(buf, sizeof(buf), "[gpu] dispatch_load_d3d11 cb_written p=%.4f w=%u h=%u iters=%u t=%.0f\n",
+                 (float)param, w ? w : 2048, h ? h : 2048, iters ? iters : 256, now_ms()); ods_out(buf);
         g_ctx11->Unmap(g_cb11, 0);
+    } else {
+        snprintf(buf, sizeof(buf), "[gpu] dispatch_load_d3d11 MAP FAILED hr=0x%lx t=%.0f\n", (long)mapHr, now_ms()); ods_out(buf);
     }
     g_ctx11->CSSetConstantBuffers(0, 1, &g_cb11);
     g_ctx11->CSSetShader(g_loadCS11, NULL, 0);
@@ -263,8 +342,15 @@ static void dispatch_load_d3d11(uint32_t w, uint32_t h, uint32_t iters, double p
     // GPU sync — ensures work completes before Sleep()
     if (g_fence11) {
         g_ctx11->End(g_fence11);
-        while (g_ctx11->GetData(g_fence11, NULL, 0, 0) == S_FALSE) Sleep(0);
+        g_ctx11->Flush();
+        double deadline = now_ms() + 3000;
+        while (g_ctx11->GetData(g_fence11, NULL, 0, 0) == S_FALSE) {
+            if (now_ms() > deadline) break;
+            Sleep(0);
+        }
     }
+    double dt = now_ms() - t0;
+    snprintf(buf, sizeof(buf), "[gpu] dispatch_load_d3d11 exit dt=%.2fms t=%.0f\n", dt, now_ms()); ods_out(buf);
 }
 
 static uint32_t dispatch_proof_d3d11(uint32_t seed, uint32_t w, uint32_t h, uint32_t iters, double *elapsedMs) {
@@ -305,6 +391,7 @@ static uint32_t dispatch_proof_d3d11(uint32_t seed, uint32_t w, uint32_t h, uint
 }
 
 static void shutdown_d3d11(void) {
+    if (g_ctx11_1)  { g_ctx11_1->Release(); g_ctx11_1 = NULL; }
     if (g_fence11)  { g_fence11->Release(); g_fence11 = NULL; }
     if (g_staging11){ g_staging11->Release(); g_staging11 = NULL; }
     if (g_proofUAV11){g_proofUAV11->Release(); g_proofUAV11 = NULL; }
@@ -314,96 +401,128 @@ static void shutdown_d3d11(void) {
     if (g_cb11)     { g_cb11->Release(); g_cb11 = NULL; }
     if (g_proofCS11){ g_proofCS11->Release(); g_proofCS11 = NULL; }
     if (g_loadCS11) { g_loadCS11->Release(); g_loadCS11 = NULL; }
+    if (g_powCS11)  { g_powCS11->Release(); g_powCS11 = NULL; }
+    if (g_powOutUAV11) { g_powOutUAV11->Release(); g_powOutUAV11 = NULL; }
+    if (g_powOutBuf11) { g_powOutBuf11->Release(); g_powOutBuf11 = NULL; }
+    if (g_powStaging11) { g_powStaging11->Release(); g_powStaging11 = NULL; }
     if (g_ctx11)    { g_ctx11->Release(); g_ctx11 = NULL; }
     if (g_dev11)    { g_dev11->Release(); g_dev11 = NULL; }
 }
 
-// ── PoW HLSL compute shader (embdedded string) ──────────────────────────
-static const char *g_pow_hlsl =
-    "RWStructuredBuffer<uint> output : register(u0);\n"
-    "cbuffer cb : register(b0) { uint seed; uint difficulty; uint startNonce; uint _pad; };\n"
-    "[numthreads(16,16,1)]\n"
-    "void CSMain(uint3 id : SV_DispatchThreadID) {\n"
-    "  uint gid = id.x + id.y * 16;\n"
-    "  uint nonce = startNonce + gid;\n"
-    "  uint s = seed ^ (nonce * 1000003) ^ ((nonce >> 16) * 7919); s |= 1;\n"
-    "  uint h = 5381;\n"
-"  for (uint p = 0; p < 1024; p += 4) {\n"
-"    uint row = p / 32; uint col = p % 32;\n"
-"    int x = (int)((col * 1000003) ^ (row * 7919) ^ s); x |= 1;\n"
-    "    for (uint i = 0; i < 50000; i++) { x ^= x << 13; x ^= x >> 17; x ^= x << 5; }\n"
-    "    h = ((h << 5) + h + ((x >> 24) & 255));\n"
-    "    h = ((h << 5) + h + ((x >> 16) & 255));\n"
-    "    h = ((h << 5) + h + ((x >> 8) & 255));\n"
-    "    h = ((h << 5) + h + (x & 255));\n"
-    "  }\n"
-    "  output[gid] = (h & 0xFFFF) < difficulty ? nonce : 0xFFFFFFFF;\n"
-    "}";
+// Non-blocking staged readback with timeout.
+// Returns 1 on success (cm populated), 0 on timeout, -1 on error.
+static int map_staging_timeout(D3D11_MAPPED_SUBRESOURCE *cm, double deadline) {
+    g_ctx11->Flush();
 
-// D3D11 PoW dispatch — searches up to 65536 nonces (256 groups × 256 threads)
-static int dispatch_pow_d3d11(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs) {
-    if (!g_dev11) return 0;
-    // Compile pow shader on first call
-    static ID3D11ComputeShader *g_powCS11 = NULL;
-    if (!g_powCS11) {
-        ID3DBlob *b = compile_cs11(g_pow_hlsl, "CSMain");
-        if (!b) return 0;
-        g_dev11->CreateComputeShader(b->GetBufferPointer(), b->GetBufferSize(), NULL, &g_powCS11);
-        b->Release();
+    // Path A: D3D11.1 non-blocking Map (Windows 8+) — truly non-blocking, no fence needed
+    if (g_ctx11_1) {
+        OutputDebugStringA("[gpu] Path A\n");
+        int polls = 0;
+        while (1) {
+            HRESULT hr = g_ctx11_1->Map(g_staging11, 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, cm);
+            if (SUCCEEDED(hr)) { return 1; }
+            if (hr != DXGI_ERROR_WAS_STILL_DRAWING) { return -1; }
+            if (now_ms() > deadline) { return 0; }
+            polls++;
+            Sleep(0);
+        }
     }
-    if (!g_powCS11) return 0;
 
+    // Path B: D3D11.0 fence-query polling
+    if (g_fence11) {
+        OutputDebugStringA("[gpu] Path B\n");
+        g_ctx11->End(g_fence11);
+        g_ctx11->Flush();
+        while (g_ctx11->GetData(g_fence11, NULL, 0, 0) == S_FALSE) {
+            if (now_ms() > deadline) return 0;
+            Sleep(0);
+        }
+    }
+
+    // Path C: fallback — blocking Map (may hang, but nothing else we can do)
+    OutputDebugStringA("[gpu] Path C\n");
+    return SUCCEEDED(g_ctx11->Map(g_staging11, 0, D3D11_MAP_READ, 0, cm)) ? 1 : -1;
+}
+
+// D3D11 PoW dispatch — searches 65536 nonces (16×16 groups × 256 threads)
+static int dispatch_pow_d3d11(uint32_t seed, uint32_t difficulty, uint32_t startNonce, uint32_t *outNonce, uint32_t *outHash, double *elapsedMs) {
     double t0 = now_ms();
+    char buf[128]; snprintf(buf, sizeof(buf), "[gpu] dispatch_pow_d3d11 enter seed=%u diff=%u startNonce=%u t=%.0f\n", seed, difficulty, startNonce, t0); ods_out(buf);
+    if (!g_dev11 || !g_powCS11) {
+        if (elapsedMs) *elapsedMs = now_ms() - t0; return -1;
+    }
+
     ID3D11UnorderedAccessView *nullUAV = NULL;
     g_ctx11->CSSetUnorderedAccessViews(0, 1, &nullUAV, NULL);
 
-    // Clear output buffer
     D3D11_MAPPED_SUBRESOURCE m;
     if (SUCCEEDED(g_ctx11->Map(g_cb11, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
         memset(m.pData, 0, 64);
+        ((uint32_t*)m.pData)[0] = seed;
+        ((uint32_t*)m.pData)[1] = difficulty;
+        ((uint32_t*)m.pData)[2] = startNonce;
         g_ctx11->Unmap(g_cb11, 0);
     }
-    ID3D11UnorderedAccessView *uav = g_proofUAV11;
+
+    g_ctx11->CSSetConstantBuffers(0, 1, &g_cb11);
     g_ctx11->CSSetShader(g_powCS11, NULL, 0);
+    ID3D11UnorderedAccessView *uav = g_powOutUAV11;
+    g_ctx11->CSSetUnorderedAccessViews(0, 1, &uav, NULL);
+    g_ctx11->Dispatch(16, 16, 1);
+    g_ctx11->CopyResource(g_powStaging11, g_powOutBuf11);
 
-    uint32_t maxNonces = 65536;
-    uint32_t foundNonce = 0xFFFFFFFF;
-
-    for (uint32_t batchStart = startNonce; batchStart < startNonce + maxNonces; batchStart += 256) {
-        // Write constants: seed, difficulty, startNonce for this batch
-        D3D11_MAPPED_SUBRESOURCE cm;
-        if (SUCCEEDED(g_ctx11->Map(g_cb11, 0, D3D11_MAP_WRITE_DISCARD, 0, &cm))) {
-            ((uint32_t*)cm.pData)[0] = seed;
-            ((uint32_t*)cm.pData)[1] = difficulty;
-            ((uint32_t*)cm.pData)[2] = batchStart;
-            ((uint32_t*)cm.pData)[3] = 0;
-            g_ctx11->Unmap(g_cb11, 0);
+    if (g_fence11) {
+        g_ctx11->End(g_fence11);
+        g_ctx11->Flush();
+        double deadline = now_ms() + 3000;
+        while (g_ctx11->GetData(g_fence11, NULL, 0, 0) == S_FALSE) {
+            if (now_ms() > deadline) break;
+            Sleep(0);
         }
-        g_ctx11->CSSetConstantBuffers(0, 1, &g_cb11);
-        g_ctx11->CSSetUnorderedAccessViews(0, 1, &uav, NULL);
-        g_ctx11->Dispatch(1, 1, 1); // single group with 256 threads
+    }
 
-        // Copy and scan for results
-        g_ctx11->CopyResource(g_staging11, g_proofBuf11);
-        if (SUCCEEDED(g_ctx11->Map(g_staging11, 0, D3D11_MAP_READ, 0, &cm))) {
-            const uint32_t *p = (const uint32_t*)cm.pData;
-            for (int i = 0; i < 256; i++) {
-                if (p[i] != 0xFFFFFFFF) {
-                    foundNonce = p[i];
-                    *outNonce = foundNonce;
-                    *outHash = 1; // verified by coordinator using computeGpuProbeExpectedHash
-                    if (elapsedMs) *elapsedMs = now_ms() - t0;
-                    g_ctx11->Unmap(g_staging11, 0);
-                    return 1;
-                }
+    // Non-blocking readback with 2s timeout via D3D11.1, fall back to blocking Map
+    D3D11_MAPPED_SUBRESOURCE r;
+    HRESULT hr;
+    if (g_ctx11_1) {
+        double deadline = now_ms() + 2000;
+        while (1) {
+            hr = g_ctx11_1->Map(g_powStaging11, 0, D3D11_MAP_READ, D3D11_MAP_FLAG_DO_NOT_WAIT, &r);
+            if (SUCCEEDED(hr)) break;
+            if (hr != DXGI_ERROR_WAS_STILL_DRAWING) break;
+            if (now_ms() > deadline) { hr = g_ctx11->Map(g_powStaging11, 0, D3D11_MAP_READ, 0, &r); break; }
+            Sleep(0);
+        }
+    } else {
+        hr = g_ctx11->Map(g_powStaging11, 0, D3D11_MAP_READ, 0, &r);
+    }
+    if (SUCCEEDED(hr)) {
+        const uint32_t *p = (const uint32_t*)r.pData;
+        uint32_t foundNonce = 0;
+        int found = 0;
+        for (uint32_t i = 0; i < 65536; i++) {
+            uint32_t n = p[i];
+            if (n != 0xFFFFFFFF) {
+                foundNonce = n;
+                found = 1;
+                break;
             }
-            g_ctx11->Unmap(g_staging11, 0);
+        }
+        g_ctx11->Unmap(g_powStaging11, 0);
+        if (found) {
+            *outNonce = foundNonce;
+            *outHash = 42;
+            if (elapsedMs) *elapsedMs = now_ms() - t0;
+            snprintf(buf, sizeof(buf), "[gpu] dispatch_pow_d3d11 found nonce=%u dt=%.2fms t=%.0f\n", foundNonce, now_ms() - t0, now_ms()); ods_out(buf);
+            return 1;
         }
     }
 
     *outNonce = 0;
+    *outHash = 0;
     if (elapsedMs) *elapsedMs = now_ms() - t0;
-    return -1; // not found in range
+    snprintf(buf, sizeof(buf), "[gpu] dispatch_pow_d3d11 exit (not found) dt=%.2fms hr=%ld t=%.0f\n", now_ms() - t0, (long)hr, now_ms()); ods_out(buf);
+    return SUCCEEDED(hr) ? 0 : -1;
 }
 
 // ── D3D10 Backend ─────────────────────────────────────────────────────────
@@ -891,6 +1010,7 @@ static int dispatch_pow_d3d12(uint32_t seed, uint32_t difficulty, uint32_t start
     }
 
     double t0 = now_ms();
+    double deadline = t0 + 8000.0;
     g_cmdAlloc12->Reset();
     g_cmdList12->Reset(g_cmdAlloc12, NULL);
 
@@ -898,6 +1018,9 @@ static int dispatch_pow_d3d12(uint32_t seed, uint32_t difficulty, uint32_t start
     uint32_t foundNonce = 0xFFFFFFFF;
 
     for (uint32_t batchStart = startNonce; batchStart < startNonce + maxNonces; batchStart += 256) {
+        if (now_ms() > deadline) {
+            break;
+        }
         g_cmdList12->SetPipelineState(g_powPSO12);
         g_cmdList12->SetComputeRootSignature(g_rootSig12);
         struct { uint32_t seed, diff, start, pad; } cb = { seed, difficulty, batchStart, 0 };
@@ -1107,7 +1230,7 @@ static void handle_cmd(const char *line) {
         const char *p = strstr(line, "\"loadPercent\"");
         if (p) { p = strchr(p, ':'); if (p) pct = atof(p + 1); }
         g_loadFrac = (pct < 0 ? 0 : (pct > 100 ? 100 : pct)) / 100.0;
-        if (strstr(line, "\"start\"")) g_running = 1;
+        g_running = 1;
         json_out("{\"t\":\"ok\",\"loadPct\":%d}", (int)(g_loadFrac * 100));
     } else if (strstr(line, "\"stop\"")) {
         g_running = 0;
@@ -1147,7 +1270,7 @@ static void handle_cmd(const char *line) {
         if (p) { p = strchr(p, ':'); if (p) difficulty = (uint32_t)atoi(p + 1); }
         if (difficulty < 1) difficulty = 1;
         if (difficulty > 65535) difficulty = 65535;
-        uint32_t startNonce = (uint32_t)(now_ms() * 1000); // random start
+        uint32_t startNonce = (uint32_t)(now_ms() * 1000);
         uint32_t outNonce = 0, outHash = 0;
         double ms;
         int found = g_dispatch_pow(seed, difficulty, startNonce, &outNonce, &outHash, &ms);
@@ -1248,15 +1371,32 @@ int main(int argc, char *argv[]) {
              (unsigned long long)(g_info.dedicatedBytes / (1024 * 1024)),
              g_info.vendorId, g_info.deviceId);
 
+    timeBeginPeriod(1);
+
     int tick = 0;
     double burnSum = 0, cycleSum = 0;
     int frameCount = 0;
+    double lastDispatchTime = now_ms();
 
     while (1) {
-        pump_stdin();
+        char buf[256];
+        {
+            double t = now_ms();
+            pump_stdin();
+            double dt = now_ms() - t;
+            if (dt > 0.5) {
+                snprintf(buf, sizeof(buf), "[gpu] main_loop pump_stdin took %.2fms t=%.0f\n", dt, now_ms()); ods_out(buf);
+            }
+        }
 
         if (g_running && g_loadFrac > 0.001) {
             double t0 = now_ms();
+            double gapMs = t0 - lastDispatchTime;
+            if (gapMs > 1000.0) {
+                snprintf(buf, sizeof(buf), "[gpu] main_loop GAP %.0fms since last dispatch loadFrac=%.3f duty=%.4f t=%.0f\n", gapMs, g_loadFrac, g_measDuty, t0); ods_out(buf);
+            }
+            lastDispatchTime = t0;
+            snprintf(buf, sizeof(buf), "[gpu] main_loop dispatch_load_enter frac=%.3f t=%.0f\n", g_loadFrac, t0); ods_out(buf);
             g_dispatch_load(2048, 2048, 256, t0 * 0.001);
             double burnMs = now_ms() - t0;
             if (burnMs < 0.2) burnMs = 0.2;
@@ -1269,12 +1409,17 @@ int main(int argc, char *argv[]) {
             frameCount++;
             g_measDuty = cycleSum > 0 ? burnSum / cycleSum : 0;
 
-            if (idleMs >= TIMER_FLOOR_MS)
+            if (idleMs >= TIMER_FLOOR_MS) {
+                snprintf(buf, sizeof(buf), "[gpu] main_loop idleSleep %.2fms burnMs=%.2f t=%.0f\n", idleMs, burnMs, now_ms()); ods_out(buf);
                 Sleep((DWORD)(idleMs + 0.5));
-            else
+            } else {
                 Sleep(0);
+            }
         } else {
             g_measDuty = 0;
+            if (g_running && g_loadFrac <= 0.001) {
+                snprintf(buf, sizeof(buf), "[gpu] main_loop stopped frac=%.3f t=%.0f\n", g_loadFrac, now_ms()); ods_out(buf);
+            }
             Sleep(50);
         }
 
