@@ -522,7 +522,7 @@
             power is decomposed into CPU + GPU + memory components, each ASIC is treated as one unit. You declare the
             ASIC model during benchmark (e.g. Antminer S21) and its rated power is looked up from the hardware table —
             up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
-            <strong>Unknown models are rejected</strong> — only models present in the hardware table are accepted. The
+            <strong>Only verified ASIC models</strong> listed in the supported hardware database can be used. The
             protocol estimates energy contribution as follows:
           </p>
 
@@ -538,8 +538,8 @@
           <p>
             An Antminer S21 draws <strong>3500 W</strong> — roughly <strong>8x the power</strong> of a high-end GPU rig,
             earning rewards proportionally faster. The key difference from PoW: hash rate does not determine rewards.
-            However, the ASIC must compute real X11 hashes and submit valid stratum shares to prove liveness — hash
-            capability is verified, it just does not affect the reward calculation.
+            However, the ASIC must compute real X11 hashes and submit valid stratum shares to prove liveness as part of
+            the attestation process.
           </p>
 
           <h3>ASIC Advantage Reversed</h3>

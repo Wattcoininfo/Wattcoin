@@ -569,7 +569,7 @@
 
       /* -- Latest -- */
       .latest-list {
-        max-width: 600px;
+        max-width: 860px;
         margin: 0 auto;
       }
       .latest-item {
@@ -923,6 +923,22 @@
           <h2>Latest</h2>
         </div>
         <div class="latest-list">
+          <div class="latest-item">
+            <div class="latest-date">JUL 2026</div>
+            <div class="latest-text">
+              <strong>v1.0.429 released</strong> — GPU-POW probe fixes for multi-device setups, GPU load control timer
+              precision fix, UPnP library replacement and block timestamp validation.
+              <a href="/wattcoin-whitepaper.html#download">Download</a>
+            </div>
+          </div>
+          <div class="latest-item">
+            <div class="latest-date">JUL 2026</div>
+            <div class="latest-text">
+              <strong>Wattcoin Architecture Overview published</strong> — How the P2P network, mining rounds, BFT
+              consensus, and settlement fit together — a complete guide to how the Wattcoin network works.
+              <a href="/blog/architecture-overview.html">Read more</a>
+            </div>
+          </div>
           <div class="latest-item">
             <div class="latest-date">JUN 2026</div>
             <div class="latest-text">
@@ -1373,12 +1389,14 @@
       (function () {
         var btn = document.getElementById('latest-toggle');
         var list = document.querySelector('.latest-list');
+        var section = document.getElementById('latest');
         if (btn && list) {
           btn.addEventListener('click', function () {
             if (list.classList.toggle('latest-show-all')) {
               btn.textContent = 'Show less';
             } else {
               btn.textContent = 'Show all';
+              if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           });
         }

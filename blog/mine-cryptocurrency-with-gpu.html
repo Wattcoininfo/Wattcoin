@@ -631,8 +631,7 @@
             <li>
               <strong>Set Load and Start</strong><br />
               Choose a GPU load percentage. 50–70% is recommended if you also use your display. The app caps load at
-              ~85% maximum. Start lower (~20%) and increase gradually so the algorithm calibrates properly. Click
-              <strong>Start Mining</strong>.
+              ~85% maximum. Click <strong>Start Mining</strong>.
             </li>
             <li>
               <strong>Earn Every Block</strong><br />
@@ -674,15 +673,17 @@
           <ul>
             <li>
               <strong>Watch your thermals.</strong> GPU shading loads generate heat. Keep junction temperatures below
-              95&deg;C. The miner throttles automatically if limits are exceeded.
+              95&deg;C.
             </li>
             <li>
               <strong>Multi-GPU scaling.</strong> Every additional GPU adds its energy contribution. A 4x RTX 4090 rig
               at ~85% load contributes ~1530W — the highest possible energy share outside of server deployments.
             </li>
             <li>
-              <strong>Ramp up gradually.</strong> Start at ~20% load for the first hour so the algorithm calibrates to
-              your specific GPU, then increase in 10% steps every 30 minutes up to your target load.
+              <strong>GPU Proof-of-Work probes.</strong> The miner periodically runs a hashcash-style PoW challenge on
+              your GPU — a DirectX compute shader searches for a nonce where the XOR-shift hash meets a difficulty
+              target. This verifies the GPU is genuinely computing and prevents cheating. Each GPU in a multi-card rig
+              searches a unique nonce space, and the coordinator verifies results without needing a GPU itself.
             </li>
             <li>
               <strong>Hybrid mining.</strong> Run GPU compute shaders alongside CPU hashing and memory walks for maximum

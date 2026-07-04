@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wattcoin Architecture Overview — How the Network Works | Wattcoin Blog</title>
+    <meta
+      name="description"
+      content="A complete architectural overview of the Wattcoin network — peer discovery, round lifecycle, BFT consensus, settlement, and how every component fits together."
+    />
+    <link rel="canonical" href="https://wattcoin.ee/blog/architecture-overview.html" />
+    <meta property="og:title" content="Wattcoin Architecture Overview — How the Network Works | Wattcoin Blog" />
+    <meta
+      property="og:description"
+      content="A complete architectural overview of the Wattcoin network — peer discovery, round lifecycle, BFT consensus, settlement, and how every component fits together."
+    />
+    <meta property="og:url" content="https://wattcoin.ee/blog/architecture-overview.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Wattcoin" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Wattcoin Foundation" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Wattcoin Architecture Overview — How the Network Works | Wattcoin Blog" />
+    <meta
+      name="twitter:description"
+      content="A complete architectural overview of the Wattcoin network — peer discovery, round lifecycle, BFT consensus, settlement, and how every component fits together."
+    />
+    <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/assets/icons/icon-256.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://wattcoin.ee/blog/architecture-overview.html#article",
+            "headline": "Wattcoin Architecture Overview — How the Network Works",
+            "url": "https://wattcoin.ee/blog/architecture-overview.html",
+            "datePublished": "2026-07-04",
+            "author": {
+              "@type": "Organization",
+              "name": "Wattcoin Foundation"
+            },
+            "publisher": {
+              "@id": "https://wattcoin.ee/#organization"
+            },
+            "description": "A complete architectural overview of the Wattcoin network — peer discovery, round lifecycle, BFT consensus, settlement, and how every component fits together.",
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://wattcoin.ee/blog/architecture-overview.html"
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://wattcoin.ee/blog/architecture-overview.html#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://wattcoin.ee/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": "https://wattcoin.ee/blog.html"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Wattcoin Architecture Overview — How the Network Works",
+                "item": "https://wattcoin.ee/blog/architecture-overview.html"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: #060e06;
+        background-image:
+          linear-gradient(rgba(26, 58, 26, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(26, 58, 26, 0.12) 1px, transparent 1px);
+        background-size: 60px 60px;
+        color: #e8f5e8;
+        font-family: Georgia, serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: #4ade80;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: rgba(6, 14, 6, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #1a2a1a;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        padding: 0 24px;
+      }
+      .nav-logo {
+        font-family: 'Playfair Display', serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: #e8f5e8;
+        text-decoration: none;
+      }
+      .nav-logo:hover {
+        text-decoration: none;
+      }
+      .nav-logo span {
+        color: #4ade80;
+      }
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #6b9a6b;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: #4ade80;
+      }
+      .nav-links a.nav-blog {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .nav-links a.nav-wallet {
+        color: #fbbf24;
+      }
+      .nav-links a.nav-wallet:hover {
+        color: #fde68a;
+      }
+
+      @media (max-width: 860px) {
+        nav {
+          height: auto;
+          min-height: 56px;
+          padding: 10px 16px;
+          flex-wrap: wrap;
+          gap: 8px 0;
+        }
+        .nav-links {
+          width: 100%;
+          gap: 6px 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+      }
+
+      .blog-header {
+        padding: 120px 0 40px;
+        border-bottom: 1px solid #1a2a1a;
+      }
+      .hero-pill-row {
+        margin-bottom: 14px;
+      }
+      .hero-pill {
+        display: inline-block;
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        letter-spacing: 0.1em;
+        color: #4ade80;
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        padding: 4px 10px;
+        border-radius: 999px;
+      }
+      .blog-header h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(28px, 4.5vw, 42px);
+        font-weight: 900;
+        color: #ffffff;
+        letter-spacing: -0.03em;
+        margin-bottom: 12px;
+      }
+
+      .blog-header p {
+        font-size: 15px;
+        color: #e8f5e8;
+        font-family: Georgia, serif;
+        line-height: 1.6;
+      }
+
+      .blog-post {
+        padding: 40px 0;
+      }
+      .blog-post h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(22px, 3vw, 30px);
+        font-weight: 900;
+        color: #e8f5e8;
+        margin-bottom: 18px;
+        letter-spacing: -0.02em;
+      }
+      .blog-post h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 19px;
+        font-weight: 700;
+        color: #d7ffd9;
+        margin: 26px 0 10px;
+      }
+      .blog-post h4 {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        color: #4ade80;
+        letter-spacing: 0.06em;
+        margin: 18px 0 6px;
+        text-transform: uppercase;
+      }
+      .blog-post p {
+        font-size: 16px;
+        color: #9ac79f;
+        line-height: 1.85;
+        margin-bottom: 16px;
+      }
+      .blog-post p strong {
+        color: #e8f5e8;
+      }
+      .blog-post ul,
+      .blog-post ol {
+        font-size: 15px;
+        color: #9ac79f;
+        line-height: 1.8;
+        margin: 0 0 16px 24px;
+      }
+      .blog-post li {
+        margin-bottom: 6px;
+      }
+      .blog-post li strong {
+        color: #e8f5e8;
+      }
+      .blog-post .meta {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link {
+        display: inline-block;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link:hover {
+        color: #4ade80;
+      }
+
+      .blog-post .viz-box {
+        background: #0a1a0a;
+        border: 1px solid #1a2a1a;
+        border-radius: 8px;
+        padding: 20px 24px;
+        margin: 24px 0;
+        overflow-x: auto;
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .blog-post .info-callout {
+        background: #0a1a0a;
+        border-left: 3px solid #4ade80;
+        border-radius: 4px;
+        padding: 16px 20px;
+        margin: 24px 0;
+        font-size: 14px;
+        color: #c8dcc8;
+        line-height: 1.7;
+      }
+      .blog-post .info-callout strong {
+        color: #e8f5e8;
+      }
+
+      .blog-post code {
+        background: #0a1a0a;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        color: #4ade80;
+      }
+
+      footer {
+        text-align: center;
+        padding: 40px 24px;
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #3a5a3a;
+        border-top: 1px solid #1a2a1a;
+        line-height: 2;
+      }
+      footer a {
+        color: #3a5a3a;
+      }
+      footer a:hover {
+        color: #4ade80;
+      }
+
+      @media (max-width: 600px) {
+        .blog-header {
+          padding: 120px 0 30px;
+        }
+        .blog-post {
+          padding: 30px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="nav-logo">Watt<span>coin</span></a>
+      <ul class="nav-links">
+        <li><a href="/" class="nav-home">Home</a></li>
+        <li><a href="/blog.html" class="nav-blog">Blog</a></li>
+        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
+        <li><a href="/wattcoin-whitepaper.html">Whitepaper</a></li>
+        <li><a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+      </ul>
+    </nav>
+
+    <div class="blog-header">
+      <div class="container">
+        <div class="hero-pill-row">
+          <span class="hero-pill">Protocol</span>
+        </div>
+        <h1>Wattcoin Architecture Overview</h1>
+        <p>How the P2P network, mining rounds, BFT consensus, and settlement fit together.</p>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="blog-post">
+        <a href="/blog.html" class="back-link">&larr; Back to Blog</a>
+        <div class="meta">July 4, 2026 &nbsp;&middot;&nbsp; 12 min read &nbsp;&middot;&nbsp; Protocol</div>
+        <p>
+          Wattcoin is a fully decentralized Proof-of-Energy cryptocurrency. Every miner runs a full node — there are no
+          mining pools, no central coordinators, and no single point of control. Each node is simultaneously a miner, a
+          peer, and a validator. This article walks through the architecture at every layer.
+        </p>
+
+        <h2>System Overview</h2>
+        <p>
+          Every Wattcoin node runs as a desktop application that is also a full network participant. Each node handles
+          three things at once: mining hardware control, blockchain validation, and peer-to-peer networking. There are
+          no separate server or coordinator machines — every miner is an equal part of the network.
+        </p>
+
+        <div class="viz-box">
+          <div style="color: #4ade80; font-weight: 500; margin-bottom: 8px">┌─ Desktop App</div>
+          <div style="margin-left: 16px">
+            <div>│</div>
+            <div>├─ User Interface — Mining dashboard, wallet, staking, governance</div>
+            <div>│</div>
+            <div>├─ Mining Engine</div>
+            <div>│&nbsp;&nbsp; ├─ CPU miner — Integer hashing tasks</div>
+            <div>│&nbsp;&nbsp; ├─ GPU miner — DirectX compute shaders</div>
+            <div>│&nbsp;&nbsp; ├─ Memory miner — RAM bandwidth tasks</div>
+            <div>│&nbsp;&nbsp; └─ ASIC integration — Stratum protocol</div>
+            <div>│</div>
+            <div>├─ Blockchain Node</div>
+            <div>
+              │&nbsp;&nbsp; ├─ Consensus engine — Block proposal
+              <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> voting
+            </div>
+            <div>
+              │&nbsp;&nbsp; ├─ Round ledger — Contribution tracking
+              <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> settlement
+            </div>
+            <div>│&nbsp;&nbsp; └─ Transaction mempool</div>
+            <div>│</div>
+            <div>├─ Peer Network</div>
+            <div>│&nbsp;&nbsp; ├─ HTTP API — Peer communication</div>
+            <div>
+              │&nbsp;&nbsp; ├─ WebSocket — Real-time probes
+              <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> tunnels
+            </div>
+            <div>│&nbsp;&nbsp; └─ Peer discovery — Seed nodes, LAN, gossip</div>
+            <div>│</div>
+            <div>
+              ├─ Probe Engine — Hardware verification
+              <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> trust scoring
+            </div>
+            <div>│</div>
+            <div>└─ Seed Registry (wattcoin.ee) — Bootstrap peer list</div>
+          </div>
+        </div>
+
+        <h2>Peer Discovery</h2>
+        <p>
+          When a node starts for the first time, it has no knowledge of the network. Peer discovery proceeds through
+          several layers, each acting as a fallback for the previous:
+        </p>
+
+        <h3>1. Seed peer manifest</h3>
+        <p>
+          The node fetches a list of well-known public peers from wattcoin.ee. This manifest is cached locally and
+          refreshed periodically to ensure the node always has a valid entry point into the network.
+        </p>
+
+        <h3>2. Seed registry</h3>
+        <p>
+          In addition to the static manifest, a dynamic registry returns peers that have recently registered themselves.
+          Nodes that choose to act as seed nodes send periodic heartbeats to keep their address available for new
+          connections.
+        </p>
+
+        <h3>3. LAN subnet discovery</h3>
+        <p>
+          On local networks, nodes broadcast UDP discovery messages. Peers on the same subnet are discovered directly
+          and assigned a higher preference score for routing decisions. This is especially useful in data centers or
+          home labs running multiple mining nodes.
+        </p>
+
+        <h3>4. Peer gossip</h3>
+        <p>
+          Once connected to at least one peer, the node receives peer URLs from that peer's active connection pool. This
+          gossip mechanism propagates peer information across the network without needing any central directory.
+        </p>
+
+        <p>
+          Each peer connection is scored by preference: local network peers are preferred over public ones, and direct
+          connections are preferred over relayed ones. The node automatically avoids connecting to itself and backs off
+          from peers that fail repeatedly.
+        </p>
+
+        <h2>Network Communication</h2>
+        <p>
+          All peer-to-peer communication happens over HTTP and WebSocket. Nodes exchange mining contributions, block
+          proposals, votes, and probe challenges through a simple request-response API. Real-time communication uses
+          WebSocket connections for efficient probe exchanges.
+        </p>
+        <p>
+          Nodes behind a firewall or NAT cannot receive incoming connections directly. When such a node connects to a
+          publicly reachable peer, it establishes a reverse tunnel — the public peer routes incoming requests through
+          this tunnel so that every node can participate regardless of its network setup.
+        </p>
+
+        <h2>Mining Rounds</h2>
+        <p>
+          Mining in Wattcoin is organized into rounds. Each round corresponds to one block being found and settled. The
+          round lifecycle has four phases:
+        </p>
+
+        <h3>Phase 1: Round start</h3>
+        <p>
+          When a round begins, the round ledger creates a fresh state with a new round number, an empty contribution
+          tracker, and a start timestamp. Each round has a unique, incrementing identifier.
+        </p>
+
+        <h3>Phase 2: Energy contribution</h3>
+        <p>
+          While the round is active, every miner continuously contributes energy by running computational workloads on
+          their CPU, GPU, and memory. Energy is calculated as:
+        </p>
+
+        <div class="viz-box">
+          <div style="color: #4ade80">Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</div>
+        </div>
+
+        <p>
+          The miner periodically submits the accumulated energy as a signed contribution to the round ledger. The ledger
+          tracks each address's total contribution for the duration of the round. These contributions are stored by
+          peers and can be recovered if the miner reinstalls.
+        </p>
+
+        <h3>Phase 3: Peer probe verification</h3>
+        <p>
+          Throughout the round, peer coordinators issue computational probes to verify that each miner is running real
+          hardware at the declared load. Five probe types are used:
+        </p>
+        <ul>
+          <li><strong>CPU probe</strong> — Verifies the CPU is computing at the expected speed.</li>
+          <li><strong>Memory probe</strong> — Measures memory bandwidth to confirm the declared RAM is active.</li>
+          <li><strong>GPU probe</strong> — Verifies the GPU is running real compute workloads.</li>
+          <li>
+            <strong>GPU PoW probe</strong> — A proof-of-work challenge that confirms the GPU is genuinely hashing.
+          </li>
+          <li><strong>ASIC probe</strong> — Verifies the ASIC is alive and producing real hashes.</li>
+        </ul>
+        <p>
+          Each miner accumulates a trust score based on probe results. The trust score scales the effective contribution
+          between 20% and 100% of the calibrated power. Hardware identity is cross-checked through multiple independent
+          channels (OS API, native binary, device type).
+        </p>
+
+        <h3>Phase 4: Settlement</h3>
+        <p>
+          A round settles when a miner accumulates enough energy and proposes a block. Settlement is the process of
+          finalizing the round's contributions, distributing proportional rewards, and advancing to the next round.
+        </p>
+
+        <div class="viz-box">
+          <div style="color: #4ade80; margin-bottom: 8px">Settlement flow:</div>
+          <div>1. All energy contributions for the round are snapshotted</div>
+          <div>2. Each miner's share of the block reward is calculated proportionally</div>
+          <div>3. Rewards are credited to each wallet as pending balance</div>
+          <div>4. The completed round is recorded in the ledger history</div>
+          <div>5. A new round begins with empty contributions</div>
+          <div>6. The settlement is shared with all connected peers</div>
+        </div>
+
+        <p>
+          Settlement includes several integrity checks. A forged contribution cannot be injected because each
+          contribution is signed by the miner's wallet key and verified at settlement time. If a miner's hardware
+          identity changed during the round, their contribution is forfeited. Multiple verifier attestations are
+          required before a settlement is accepted.
+        </p>
+
+        <h2>BFT Consensus</h2>
+        <p>
+          The WTC blockchain uses a Byzantine Fault Tolerant consensus protocol for block production. Unlike
+          Proof-of-Work where blocks are found by hash lottery, Wattcoin blocks are proposed by the miner who reaches
+          the energy threshold and then validated by peers through a three-phase protocol:
+        </p>
+
+        <h3>Propose</h3>
+        <p>
+          When a miner has accumulated enough energy, they construct a block containing the settlement data, probe
+          results, and any pending transactions. The block is signed with the miner's wallet key and broadcast to all
+          connected peers.
+        </p>
+
+        <h3>Vote</h3>
+        <p>
+          Each peer that receives a proposal validates it and returns a signed vote. The proposer waits for votes from
+          the network within a short timeout period.
+        </p>
+
+        <h3>Commit</h3>
+        <p>
+          Once enough votes are collected, the block is finalized. The required number of votes depends on how many
+          peers are known — a solo miner can finalize immediately, while nodes with many peers need a supermajority. If
+          the vote timeout expires without enough votes, the block is still committed with whatever was collected,
+          because energy proofs cannot be faked and a partial vote carries no extra weight.
+        </p>
+
+        <h2>The Round Ledger</h2>
+        <p>The round ledger is the system of record for all mining activity. It keeps track of:</p>
+        <ul>
+          <li><strong>Current round</strong> — Round number, start time, and live contributions per wallet.</li>
+          <li><strong>Round history</strong> — Completed rounds with settlement records and reward distribution.</li>
+          <li><strong>Wallet balances</strong> — Pending and matured WTC earned through mining.</li>
+          <li>
+            <strong>Maturity</strong> — Rewards mature after a certain number of blocks to allow chain reorganizations.
+          </li>
+        </ul>
+
+        <p>
+          The ledger is stored locally as a signed file, ensuring that any tampering is detected. The file format is
+          crash-safe — a power loss during a write will not corrupt previously saved data.
+        </p>
+
+        <h3>Reward calculation</h3>
+        <p>
+          Block rewards follow the tier-based schedule defined in the tokenomics. Each tier contains 1,000,000 WTC, and
+          the reward per block halves every tier:
+        </p>
+
+        <div class="viz-box">
+          <div style="color: #4ade80">reward(tier) = 1000 / 2<sup>tier</sup></div>
+          <div style="color: #5a8a5a; margin-top: 8px">
+            Tier 0: Premine (1M WTC)<br />
+            Tier 1: 500 WTC/block &nbsp;&middot;&nbsp; Tier 2: 250 WTC/block &nbsp;&middot;&nbsp; Tier 3: 125
+            WTC/block<br />
+            Tier 20: ~0.00095 WTC/block
+          </div>
+        </div>
+
+        <p>
+          Within each block, the reward is split proportionally among all addresses that contributed energy during the
+          round. There is no winner-take-all — every miner gets paid every block based on their share of the total
+          verified energy.
+        </p>
+
+        <h2>Hardware Attestation</h2>
+        <p>Each miner's hardware is identified through multiple independent channels to prevent misrepresentation:</p>
+        <ul>
+          <li><strong>CPU model</strong> — Read from the operating system.</li>
+          <li><strong>GPU model</strong> — Read from the graphics driver and cross-checked against the OS report.</li>
+          <li><strong>Device type</strong> — Desktop vs. laptop is verified; mismatches are flagged.</li>
+          <li><strong>ASIC model</strong> — Declared during setup and verified against the supported hardware list.</li>
+        </ul>
+
+        <p>
+          A benchmark measures the actual performance of each component. A calibration factor is computed by comparing
+          benchmark results against reference values, ensuring that each miner is credited fairly for their hardware's
+          actual capability.
+        </p>
+
+        <h2>Trust Scoring</h2>
+        <p>
+          Every miner accumulates a trust score that determines what fraction of their calibrated power is credited. The
+          score is adjusted after each peer probe:
+        </p>
+        <ul>
+          <li><strong>+1</strong> per 25 verified probes</li>
+          <li><strong>−1</strong> per failed probe (timing or result mismatch)</li>
+          <li><strong>−3</strong> per proof mismatch</li>
+          <li><strong>−20</strong> for a hardware identity mismatch</li>
+        </ul>
+        <p>
+          At trust score 0, the miner contributes at 20% of their calibrated power. At trust score 100, they contribute
+          at 100%. The sliding window ensures that even a trusted miner is regularly re-verified — probes are issued
+          continuously throughout every round.
+        </p>
+
+        <h2>Contribution Recovery</h2>
+        <p>
+          If a miner reinstalls the application mid-round, contributions are not lost. After connecting to peers, the
+          node requests the latest round state from them. Peers store each other's contribution data, and the most
+          recent verified entry is used to restore the miner's position. Mining does not begin until at least one peer
+          is online.
+        </p>
+
+        <h2>
+          Network Health <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> Monitoring
+        </h2>
+        <p>The network includes several monitoring mechanisms to keep everything running smoothly:</p>
+        <ul>
+          <li><strong>Peer discovery tracking</strong> — Logs where each peer connection came from and its status.</li>
+          <li><strong>Outlier detection</strong> — Unusual power-to-performance ratios are flagged for review.</li>
+          <li>
+            <strong>Health checks</strong> — Probe success rates, connection stability, and hardware load are
+            continuously monitored.
+          </li>
+          <li>
+            <strong>Optional dashboards</strong> — Node operators can enable monitoring dashboards for deeper insight.
+          </li>
+        </ul>
+
+        <h2>Summary</h2>
+        <p>
+          The Wattcoin architecture is built around a simple premise: every node is equal. There are no special
+          coordinator nodes, no mining pools, and no privileged validators. The peer-to-peer HTTP network, the round
+          ledger with proportional reward distribution, the BFT consensus protocol, and the multi-layer probe
+          attestation system together create a decentralized energy-backed cryptocurrency where the only competitive
+          variable is the cost of electricity.
+        </p>
+
+        <div class="info-callout">
+          <strong>Further reading:</strong>
+          <a href="/blog/proof-of-energy-consensus.html">Proof-of-Energy Consensus</a> &middot;
+          <a href="/blog/probe-system.html">Peer Probe System</a> &middot;
+          <a href="/blog/tokenomics-deep-dive.html">Tokenomics Deep Dive</a> &middot;
+          <a href="/wattcoin-whitepaper.html">Whitepaper</a>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.429 &nbsp;&mdash;&nbsp;
+      <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
+      <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer">Github</a>
+      &nbsp;&mdash;&nbsp; JULY 2026 <br /><span id="page-visit-count" style="font-size: 10px; color: #3a5a3a"></span>
+    </footer>
+    <script>
+      (function () {
+        'use strict';
+        var BASE = '/counter-api/?page=';
+        function fmt(n) {
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+          return n;
+        }
+        var counted = sessionStorage.getItem('wtc_pg_arch');
+        var method = counted ? 'GET' : 'POST';
+        if (!counted) sessionStorage.setItem('wtc_pg_arch', '1');
+        fetch(BASE + 'blog-architecture-overview', { method: method })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('page-visit-count');
+            if (el && d.ok) el.textContent = fmt(d.count);
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>
