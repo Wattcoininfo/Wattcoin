@@ -16,12 +16,13 @@ Wattcoin's Proof-of-Energy (PoE) consensus replaces wasteful hash-based mining w
 
 ## Features
 
-- **Proof-of-Energy Mining** — Mine WTC by contributing verifiable CPU/GPU energy
+- **Proof-of-Energy Mining** — Mine WTC by contributing verifiable CPU/GPU energy with hardware probe attestation
 - **Built-in Wallet** — Native WTC address support with encrypted key storage
 - **Staking** — Stake WTC to earn staking rewards
+- **Governance** — On-chain proposal and voting (PIPs) with stake-weighted votes
 - **Vortex NFT Collection** — 60 NFT collection with profit-sharing mechanics
 - **Built-in Sale Queue** — Buy WTC directly from the sale contract
-- **Peer-to-Peer Network** — Decentralized consensus via BFT voting
+- **Peer-to-Peer Network** — Decentralized consensus via BFT voting with transaction mempool
 - **Auto-Update** — Automatic installer updates via `electron-updater`
 - **Monitoring Stack** — Prometheus/Grafana monitoring for node operators
 
@@ -37,14 +38,16 @@ Wattcoin's Proof-of-Energy (PoE) consensus replaces wasteful hash-based mining w
 
 ## Installation
 
-Download the latest installer from [wattcoin.ee](https://wattcoin.ee) and run `Wattcoin Miner Setup X.X.X.exe`.
-
-The installer will:
+**Windows** — Download the latest installer from [wattcoin.ee](https://wattcoin.ee) and run `Wattcoin Miner Setup X.X.X.exe`. The installer will:
 
 1. Install the application to your chosen directory
 2. Add a Windows Firewall rule for peer-to-peer communication (port 39310)
 3. Create Start Menu and Desktop shortcuts
 4. Launch the miner on completion
+
+**Linux** — Download the `.AppImage` or `.deb` from [wattcoin.ee](https://wattcoin.ee). Make the AppImage executable (`chmod +x`) and run it, or install the `.deb` with `dpkg -i`.
+
+**macOS** — Download the `.dmg` from [wattcoin.ee](https://wattcoin.ee), mount it, and drag Wattcoin Miner to Applications. The app is unsigned by default — right-click → Open on first launch.
 
 ---
 
@@ -260,7 +263,7 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │  │  └─────────────────────────────────────────────────────┘    │  │
 │  │           ↕                                                   │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
-│  │  │  Native GPU Miner (gpu-miner.exe)                        │  │  │
+│  │  │  Native GPU Miner (gpu-miner.exe, Windows)                │  │  │
 │  │  │  gpu-load-controller.js → DirectX compute/pixel shaders │  │  │
 │  │  └─────────────────────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────────────────┘  │
@@ -287,7 +290,7 @@ See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability re
 - **CSP:** Strict Content-Security-Policy in production (no external resources)
 - **Electron Fuses:** ASAR integrity validation, cookie encryption, disabled Node CLI inspect
 - **Integrity Manifest:** SHA-256 hashes of all main-process JS files verified at runtime
-- **Binary Signing:** All bundled executables and DLLs are Authenticode-signed (dev cert supported)
+- **Binary Signing:** All bundled Windows executables and DLLs are Authenticode-signed (dev cert supported)
 
 ---
 
