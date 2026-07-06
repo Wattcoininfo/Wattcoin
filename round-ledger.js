@@ -17,7 +17,7 @@ function getDefaultState() {
       startedAtMs: Date.now(),
       contributionsWh: {},
       contributionUpdatedAtMs: {},
-      probeChainIndex: {},
+      probeChainSegments: {},
       peerProbesAnswered: {},
       peerProbesFailed: {},
       contributionMessage: {},
@@ -26,6 +26,14 @@ function getDefaultState() {
     rounds: [],
     balancesByAddress: {},
   };
+}
+
+function getTotalProbeCount(segments) {
+  return (segments || []).reduce((sum, seg) => sum + (seg.endIndex - seg.startIndex + 1), 0);
+}
+
+function getMaxChainIndex(segments) {
+  return (segments || []).reduce((max, seg) => Math.max(max, seg.endIndex), 0);
 }
 
 function rewardForRoundIndex(roundIndex) {
@@ -50,6 +58,7 @@ function createRoundLedger(options = {}) {
   const filePath = path.join(baseDir, LEDGER_FILE_NAME);
   const tempFilePath = `${filePath}.tmp`;
   let state = getDefaultState();
+  let _tampered = false;
 
   function computeLedgerSig(obj) {
     const secret = typeof signingSecret === 'function' ? signingSecret() : signingSecret;
@@ -59,6 +68,29 @@ function createRoundLedger(options = {}) {
 
   function ensureDir() {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  }
+
+  function tryLoadBackup() {
+    const backupPath = filePath + '.bak';
+    if (!fs.existsSync(backupPath)) return null;
+    try {
+      const raw = fs.readFileSync(backupPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      const { _sig, ...data } = parsed;
+      const resolvedSecret = typeof signingSecret === 'function' ? signingSecret() : signingSecret;
+      if (resolvedSecret) {
+        const expected = computeLedgerSig(data);
+        const a = Buffer.from(String(_sig || ''), 'utf8');
+        const b = Buffer.from(String(expected), 'utf8');
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+          return null;
+        }
+      }
+      return data;
+    } catch (_) {
+      return null;
+    }
   }
 
   function load() {
@@ -79,16 +111,56 @@ function createRoundLedger(options = {}) {
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return;
       const { _sig, ...data } = parsed;
-      if (_sig) {
-        const resolvedSecret = typeof signingSecret === 'function' ? signingSecret() : signingSecret;
-        if (resolvedSecret) {
-          const expected = computeLedgerSig(data);
-          const a = Buffer.from(String(_sig), 'utf8');
-          const b = Buffer.from(String(expected), 'utf8');
-          if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-            console.warn('[RoundLedger] Signing secret changed - re-signing on next save.');
-          }
+      const resolvedSecret = typeof signingSecret === 'function' ? signingSecret() : signingSecret;
+      let sigValid = !resolvedSecret; // no secret → can't check, accept
+      if (resolvedSecret && _sig) {
+        const expected = computeLedgerSig(data);
+        const a = Buffer.from(String(_sig), 'utf8');
+        const b = Buffer.from(String(expected), 'utf8');
+        sigValid = a.length === b.length && crypto.timingSafeEqual(a, b);
+      }
+      if (!sigValid) {
+        _tampered = true;
+        console.warn('[RoundLedger] HMAC mismatch - attempting recovery from backup.');
+        const backupData = tryLoadBackup();
+        if (backupData && backupData.currentRound && typeof backupData.currentRound === 'object') {
+          state = {
+            ...getDefaultState(),
+            rounds: Array.isArray(backupData.rounds)
+              ? backupData.rounds
+              : Array.isArray(data.rounds)
+                ? data.rounds
+                : [],
+            balancesByAddress:
+              backupData.balancesByAddress && typeof backupData.balancesByAddress === 'object'
+                ? { ...backupData.balancesByAddress }
+                : data.balancesByAddress && typeof data.balancesByAddress === 'object'
+                  ? { ...data.balancesByAddress }
+                  : {},
+            nextRoundId: Math.max(1, Number(data.nextRoundId) || 1),
+            currentRound: {
+              ...backupData.currentRound,
+              peerProbesAnswered: {},
+              peerProbesFailed: {},
+              probeChainSegments: {},
+              contributionMessage: {},
+              contributionSignature: {},
+            },
+          };
+          save();
+          return;
         }
+        console.warn('[RoundLedger] No valid backup - resetting current round data.');
+        state = {
+          ...getDefaultState(),
+          nextRoundId: Math.max(1, Number(data.nextRoundId) || 1),
+        };
+        if (data.currentRound && typeof data.currentRound === 'object' && Number(data.currentRound.id) > 0) {
+          state.currentRound.id = Number(data.currentRound.id);
+        }
+        state.currentRound.startedAtMs = Date.now();
+        save();
+        return;
       }
       state = {
         ...getDefaultState(),
@@ -99,7 +171,7 @@ function createRoundLedger(options = {}) {
           id: state.nextRoundId || 1,
           startedAtMs: Date.now(),
           contributionsWh: {},
-          probeChainIndex: {},
+          probeChainSegments: {},
         };
       }
       if (!state.currentRound.contributionsWh || typeof state.currentRound.contributionsWh !== 'object') {
@@ -111,8 +183,20 @@ function createRoundLedger(options = {}) {
       ) {
         state.currentRound.contributionUpdatedAtMs = {};
       }
-      if (!state.currentRound.probeChainIndex || typeof state.currentRound.probeChainIndex !== 'object') {
-        state.currentRound.probeChainIndex = {};
+      if (state.currentRound.probeChainIndex && typeof state.currentRound.probeChainIndex === 'object') {
+        // Migrate v1 -> v2: probeChainIndex (address -> number) to probeChainSegments (address -> array)
+        if (!state.currentRound.probeChainSegments || typeof state.currentRound.probeChainSegments !== 'object') {
+          state.currentRound.probeChainSegments = {};
+        }
+        for (const [addr, idx] of Object.entries(state.currentRound.probeChainIndex)) {
+          if (idx > 0 && !state.currentRound.probeChainSegments[addr]) {
+            state.currentRound.probeChainSegments[addr] = [{ startIndex: 1, endIndex: idx }];
+          }
+        }
+        delete state.currentRound.probeChainIndex;
+      }
+      if (!state.currentRound.probeChainSegments || typeof state.currentRound.probeChainSegments !== 'object') {
+        state.currentRound.probeChainSegments = {};
       }
       if (!state.currentRound.contributionMessage || typeof state.currentRound.contributionMessage !== 'object') {
         state.currentRound.contributionMessage = {};
@@ -131,6 +215,17 @@ function createRoundLedger(options = {}) {
         state.balancesByAddress = {};
       }
     } catch (_) {
+      console.warn('[RoundLedger] Parse error - attempting recovery from backup.');
+      const backupData = tryLoadBackup();
+      if (backupData) {
+        state = {
+          ...getDefaultState(),
+          ...backupData,
+        };
+        save();
+        return;
+      }
+      console.warn('[RoundLedger] No valid backup - resetting to default.');
       state = getDefaultState();
       save();
     }
@@ -141,6 +236,15 @@ function createRoundLedger(options = {}) {
     const sig = computeLedgerSig(state);
     const toWrite = sig ? { ...state, _sig: sig } : state;
     const serialized = JSON.stringify(toWrite, null, 2);
+    const backupPath = filePath + '.bak';
+    // Backup the current file before overwriting.
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.copyFileSync(filePath, backupPath);
+      } catch (_) {
+        // Best effort; continue even if backup fails.
+      }
+    }
     const fd = fs.openSync(tempFilePath, 'w');
     try {
       fs.writeSync(fd, serialized, null, 'utf8');
@@ -178,6 +282,49 @@ function createRoundLedger(options = {}) {
     return state.balancesByAddress[key];
   }
 
+  function recordProbeChainSegment(address, chainIndex) {
+    const key = normalizeAddress(address);
+    if (!key || chainIndex <= 0) return;
+    if (!state.currentRound.probeChainSegments[key]) {
+      state.currentRound.probeChainSegments[key] = [];
+    }
+    const segments = state.currentRound.probeChainSegments[key];
+    const last = segments.length > 0 ? segments[segments.length - 1] : null;
+    if (last && chainIndex > last.endIndex) {
+      last.endIndex = chainIndex;
+    } else if (last && chainIndex <= last.endIndex) {
+      // Same or lower chainIndex after a higher one - restart detected, start new segment
+      segments.push({ startIndex: 1, endIndex: chainIndex });
+    } else if (!last) {
+      segments.push({ startIndex: 1, endIndex: chainIndex });
+    }
+  }
+
+  function setProbeChainSegments(address, segments) {
+    const key = normalizeAddress(address);
+    if (!key) return;
+    if (!Array.isArray(segments) || segments.length === 0) return;
+    const valid = segments.filter(
+      (s) =>
+        s &&
+        Number.isFinite(s.startIndex) &&
+        Number.isFinite(s.endIndex) &&
+        s.startIndex >= 1 &&
+        s.endIndex >= s.startIndex,
+    );
+    if (valid.length === 0) return;
+    state.currentRound.probeChainSegments[key] = valid;
+  }
+
+  function getProbeChainData(address) {
+    const key = normalizeAddress(address);
+    if (!key) return { totalProbes: 0, maxChainIndex: 0, segmentCount: 0 };
+    const segments = state.currentRound.probeChainSegments[key] || [];
+    const totalProbes = getTotalProbeCount(segments);
+    const maxChainIndex = getMaxChainIndex(segments);
+    return { totalProbes, maxChainIndex, segmentCount: segments.length };
+  }
+
   function addContribution(address, deltaWh, chainIndex = -1) {
     const key = normalizeAddress(address);
     const delta = Math.max(0, Number(deltaWh) || 0);
@@ -188,9 +335,7 @@ function createRoundLedger(options = {}) {
     const prev = Math.max(0, Number(state.currentRound.contributionsWh[key]) || 0);
     state.currentRound.contributionsWh[key] = Number((prev + delta).toFixed(8));
     state.currentRound.contributionUpdatedAtMs[key] = Date.now();
-    if (chainIndex > 0) {
-      state.currentRound.probeChainIndex[key] = chainIndex;
-    }
+    recordProbeChainSegment(key, chainIndex);
     save();
     return {
       ok: true,
@@ -276,7 +421,7 @@ function createRoundLedger(options = {}) {
       if (Object.prototype.hasOwnProperty.call(state.currentRound.contributionsWh, key)) {
         delete state.currentRound.contributionsWh[key];
         delete state.currentRound.contributionUpdatedAtMs[key];
-        delete state.currentRound.probeChainIndex[key];
+        delete state.currentRound.probeChainSegments[key];
         delete state.currentRound.peerProbesAnswered[key];
         delete state.currentRound.peerProbesFailed[key];
         delete state.currentRound.contributionMessage[key];
@@ -294,19 +439,19 @@ function createRoundLedger(options = {}) {
 
     state.currentRound.contributionsWh[key] = Number(nextTotal.toFixed(8));
     state.currentRound.contributionUpdatedAtMs[key] = normalizedUpdatedAtMs > 0 ? normalizedUpdatedAtMs : Date.now();
-    if (rawChainIndex > 0) {
-      state.currentRound.probeChainIndex[key] = rawChainIndex;
-    }
+    recordProbeChainSegment(key, rawChainIndex);
     if (message) state.currentRound.contributionMessage[key] = String(message);
     if (signature) state.currentRound.contributionSignature[key] = String(signature);
     save();
+    const segments = state.currentRound.probeChainSegments[key] || [];
+    const segMaxIdx = getMaxChainIndex(segments);
     return {
       ok: true,
       acceptedWh: state.currentRound.contributionsWh[key],
       address: key,
       roundId: state.currentRound.id,
       addressRoundWh: state.currentRound.contributionsWh[key],
-      probeChainIndex: state.currentRound.probeChainIndex[key],
+      probeChainIndex: segMaxIdx,
     };
   }
 
@@ -320,6 +465,7 @@ function createRoundLedger(options = {}) {
       contributionUpdatedAtMs: { ...(state.currentRound.contributionUpdatedAtMs || {}) },
       contributionMessage: { ...(state.currentRound.contributionMessage || {}) },
       contributionSignature: { ...(state.currentRound.contributionSignature || {}) },
+      probeChainSegments: { ...(state.currentRound.probeChainSegments || {}) },
       peerProbesAnswered: { ...(state.currentRound.peerProbesAnswered || {}) },
       peerProbesFailed: { ...(state.currentRound.peerProbesFailed || {}) },
       totalWh: Number(totalWh.toFixed(8)),
@@ -343,7 +489,7 @@ function createRoundLedger(options = {}) {
       id: nextRoundId,
       startedAtMs: Number(startedAtMs) || Date.now(),
       contributionsWh: {},
-      probeChainIndex: {},
+      probeChainSegments: {},
       peerProbesAnswered: {},
       peerProbesFailed: {},
       contributionMessage: {},
@@ -443,7 +589,7 @@ function createRoundLedger(options = {}) {
       totalWh: Number(totalWh.toFixed(8)),
       sharesByAddress,
       contributionsWh: Object.fromEntries(contributionEntries),
-      probeChainIndex: { ...(state.currentRound.probeChainIndex || {}) },
+      probeChainSegments: { ...(state.currentRound.probeChainSegments || {}) },
       peerProbesAnswered: { ...(state.currentRound.peerProbesAnswered || {}) },
       peerProbesFailed: { ...(state.currentRound.peerProbesFailed || {}) },
       blockHash,
@@ -461,7 +607,7 @@ function createRoundLedger(options = {}) {
       id: state.nextRoundId,
       startedAtMs: Date.now(),
       contributionsWh: {},
-      probeChainIndex: {},
+      probeChainSegments: {},
       peerProbesAnswered: {},
       peerProbesFailed: {},
     };
@@ -483,6 +629,7 @@ function createRoundLedger(options = {}) {
       contributionUpdatedAtMs: { ...(state.currentRound.contributionUpdatedAtMs || {}) },
       contributionMessage: { ...(state.currentRound.contributionMessage || {}) },
       contributionSignature: { ...(state.currentRound.contributionSignature || {}) },
+      probeChainSegments: { ...(state.currentRound.probeChainSegments || {}) },
       peerProbesAnswered: { ...(state.currentRound.peerProbesAnswered || {}) },
       peerProbesFailed: { ...(state.currentRound.peerProbesFailed || {}) },
     };
@@ -518,42 +665,20 @@ function createRoundLedger(options = {}) {
   }
 
   // Tier 4: forfeit an address's contribution for the current round.n  // Called when a device-fingerprint-change issue is detected at settle time.
-  function forfeitContribution(address) {
-    const key = normalizeAddress(address);
-    if (!key) return { ok: true, forfeited: 0 };
-    const forfeited = Math.max(0, Number(state.currentRound.contributionsWh[key]) || 0);
-    if (forfeited > 0) {
-      delete state.currentRound.contributionsWh[key];
-      delete state.currentRound.peerProbesAnswered[key];
-      delete state.currentRound.peerProbesFailed[key];
-      save();
-    }
-    return { ok: true, forfeited, address: key };
-  }
-
-  // Tier 4c: reduce an address's contribution by a fraction (0–1).
-  // Used when a miner has no peer-verified probe for the round (standalone mode).
-  // Fraction 0.5 = 50% penalty, preserving 50% of contributions.
-  function partialForfeit(address, fraction) {
-    const key = normalizeAddress(address);
-    if (!key) return { ok: true, forfeited: 0 };
-    const current = Math.max(0, Number(state.currentRound.contributionsWh[key]) || 0);
-    const f = Math.min(1, Math.max(0, Number(fraction) || 0.5));
-    const forfeited = Number((current * f).toFixed(8));
-    if (forfeited > 0) {
-      state.currentRound.contributionsWh[key] = Number((current - forfeited).toFixed(8));
-      save();
-    }
-    return { ok: true, forfeited, remaining: state.currentRound.contributionsWh[key] || 0, address: key };
-  }
-
   function getCurrentRoundStartMs() {
     return Number(state.currentRound && state.currentRound.startedAtMs) || 0;
   }
 
-  load();
+  function isTampered() {
+    return _tampered;
+  }
+
+  function clearTamperedFlag() {
+    _tampered = false;
+  }
 
   return {
+    load,
     addContribution,
     setRoundContribution,
     beginRound,
@@ -564,12 +689,14 @@ function createRoundLedger(options = {}) {
     getRoundContributionUpdatedAt,
     getCurrentRoundSnapshot,
     getMaturityDepth: () => MATURITY_DEPTH,
-    forfeitContribution,
-    partialForfeit,
     recordPeerProbe,
     recordPeerProbeFailed,
     getCurrentRoundStartMs,
     archiveCurrentRound,
+    getProbeChainData,
+    setProbeChainSegments,
+    isTampered,
+    clearTamperedFlag,
   };
 }
 

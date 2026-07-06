@@ -64,11 +64,12 @@ const simpleHash = (value) => {
   return (h >>> 0).toString(16).padStart(8, '0');
 };
 
-const fmtEnergy = (wh, decimals = 2) => {
-  if (wh >= 1e12) return (wh / 1e12).toFixed(decimals) + ' TWh';
-  if (wh >= 1e9) return (wh / 1e9).toFixed(decimals) + ' GWh';
-  if (wh >= 1e6) return (wh / 1e6).toFixed(decimals) + ' MWh';
-  if (wh >= 1e3) return (wh / 1e3).toFixed(decimals) + ' kWh';
+const fmtEnergy = (wh, decimals = 2, kwhDecimals) => {
+  const kd = kwhDecimals !== undefined ? kwhDecimals : decimals;
+  if (wh >= 1e12) return (wh / 1e12).toFixed(kd) + ' TWh';
+  if (wh >= 1e9) return (wh / 1e9).toFixed(kd) + ' GWh';
+  if (wh >= 1e6) return (wh / 1e6).toFixed(kd) + ' MWh';
+  if (wh >= 1e3) return (wh / 1e3).toFixed(kd) + ' kWh';
   return wh.toFixed(decimals) + ' Wh';
 };
 
@@ -3272,59 +3273,61 @@ export default function Miner({
   }, [loadPercent]);
 
   React.useEffect(() => {
-    let cancelled = false;
+    const debounceTimer = setTimeout(() => {
+      let cancelled = false;
 
-    async function syncHardwareLoadTarget() {
-      if (!(window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad)) return;
-      // Don't override the load that runBenchmark applied for a baseline measurement.
-      if (benchmarkInFlightRef.current) return;
-      const clamped = Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0));
-      // Cap physical OS load at the trust ceiling so the machine doesn't do work that won't be credited.
-      const trustF = Math.min(1.0, 0.2 + (trustScoreRef.current / 100) * 0.8);
-      const trustCappedLoad = Math.min(clamped, Math.round(trustF * 100));
-      // Detect number of GPUs from hardware detection
-      const gpuCount = Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0;
-      try {
-        if (isHardwareOnHold) {
-          if (window.wattcoinHardware.stopHardwareLoad) {
+      async function syncHardwareLoadTarget() {
+        if (!(window.wattcoinHardware && window.wattcoinHardware.setHardwareLoad)) return;
+        // Don't override the load that runBenchmark applied for a baseline measurement.
+        if (benchmarkInFlightRef.current) return;
+        const clamped = Math.min(MAX_HARDWARE_LOAD_PERCENT, Math.max(0, Number(loadPercent) || 0));
+        // Cap physical OS load at the trust ceiling so the machine doesn't do work that won't be credited.
+        const trustF = Math.min(1.0, 0.2 + (trustScoreRef.current / 100) * 0.8);
+        const trustCappedLoad = Math.min(clamped, Math.round(trustF * 100));
+        // Detect number of GPUs from hardware detection
+        const gpuCount = Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0;
+        try {
+          if (isHardwareOnHold) {
+            if (window.wattcoinHardware.stopHardwareLoad) {
+              await window.wattcoinHardware.stopHardwareLoad();
+            } else {
+              await window.wattcoinHardware.setHardwareLoad(0);
+            }
+            if (gpuCount > 0 && window.wattcoinHardware.invoke) {
+              await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+            }
+          } else if (mining) {
+            await window.wattcoinHardware.setHardwareLoad(trustCappedLoad);
+            if (gpuCount > 0 && allowGpuWorkloads && window.wattcoinHardware.invoke) {
+              await window.wattcoinHardware
+                .invoke('wattcoin-set-gpu-load', {
+                  percent: trustCappedLoad,
+                  gpuCount,
+                })
+                .catch(() => {});
+            }
+          } else if (window.wattcoinHardware.stopHardwareLoad) {
             await window.wattcoinHardware.stopHardwareLoad();
+            if (gpuCount > 0 && window.wattcoinHardware.invoke) {
+              await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+            }
           } else {
             await window.wattcoinHardware.setHardwareLoad(0);
+            if (gpuCount > 0 && window.wattcoinHardware.invoke) {
+              await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+            }
           }
-          if (gpuCount > 0 && window.wattcoinHardware.invoke) {
-            await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
+        } catch (_) {
+          if (!cancelled) {
+            // Ignore backend load-control errors to keep UI responsive.
           }
-        } else if (mining) {
-          await window.wattcoinHardware.setHardwareLoad(trustCappedLoad);
-          if (gpuCount > 0 && allowGpuWorkloads && window.wattcoinHardware.invoke) {
-            await window.wattcoinHardware
-              .invoke('wattcoin-set-gpu-load', {
-                percent: trustCappedLoad,
-                gpuCount,
-              })
-              .catch(() => {});
-          }
-        } else if (window.wattcoinHardware.stopHardwareLoad) {
-          await window.wattcoinHardware.stopHardwareLoad();
-          if (gpuCount > 0 && window.wattcoinHardware.invoke) {
-            await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
-          }
-        } else {
-          await window.wattcoinHardware.setHardwareLoad(0);
-          if (gpuCount > 0 && window.wattcoinHardware.invoke) {
-            await window.wattcoinHardware.invoke('wattcoin-stop-gpu-load').catch(() => {});
-          }
-        }
-      } catch (_) {
-        if (!cancelled) {
-          // Ignore backend load-control errors to keep UI responsive.
         }
       }
-    }
 
-    syncHardwareLoadTarget();
+      syncHardwareLoadTarget();
+    }, 1500);
     return () => {
-      cancelled = true;
+      clearTimeout(debounceTimer);
     };
   }, [allowGpuWorkloads, hardware, isHardwareOnHold, loadPercent, mining]);
 
@@ -6280,7 +6283,7 @@ export default function Miner({
             flex: '0 0 auto',
             width: savedHwCardWidth ? `${savedHwCardWidth}px` : 'max-content',
             minWidth: `${HARDWARE_COLUMN_WIDTH_PX}px`,
-            maxWidth: '380px',
+            maxWidth: '420px',
             boxSizing: 'border-box',
             background: '#0d1a0d',
             border: '1px solid #1e3a1e',
@@ -7042,7 +7045,6 @@ export default function Miner({
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'space-between',
                 }}
               >
                 <div
@@ -7092,13 +7094,10 @@ export default function Miner({
                     {fmtNum(totalPowerUsedW, 2)} W
                   </div>
                 </div>
-                <div style={{ marginTop: 10, borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
+                <div style={{ marginTop: 'auto', borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
                   <div
                     style={{ fontSize: 12, color: '#a7ffb0', marginTop: 4 }}
                   >{`Base power ${fmtNum(basePowerW, 1)} W -> active mining power ${fmtNum(powerW, 1)} W`}</div>
-                  <div
-                    style={{ fontSize: 11, color: powerSourceAccent, marginTop: 4 }}
-                  >{`Source: ${powerSourceLabel}`}</div>
                 </div>
               </div>
             </div>
@@ -7146,7 +7145,7 @@ export default function Miner({
                     lineHeight: 1.1,
                   }}
                 >
-                  {fmtEnergy(energy, 2)}
+                  {fmtEnergy(energy, 2, 4)}
                 </div>
                 <div style={{ fontSize: 11, color: '#4a6a4a', marginTop: 5 }}>
                   {energy >= 1e3
@@ -7226,7 +7225,13 @@ export default function Miner({
                   style={{ width: '100%', accentColor: '#4ade80', cursor: 'pointer' }}
                 />
                 <div
-                  style={{ fontSize: 11, color: '#4a6a4a', marginTop: 6 }}
+                  style={{
+                    fontSize: 11,
+                    color: '#4a6a4a',
+                    marginTop: 'auto',
+                    borderTop: '1px solid #1e3a1e',
+                    paddingTop: 8,
+                  }}
                 >{`Applies ${effectiveLoadPercent}% of hardware power. Trust cap: ${Math.round(trustFactor * 100)}%.`}</div>
                 <div
                   style={{ fontSize: 11, color: '#4a6a4a', marginTop: 3 }}
@@ -7281,9 +7286,6 @@ export default function Miner({
                   <div
                     style={{ fontSize: 12, color: '#a7ffb0', marginTop: 6 }}
                   >{`Matured: ${fmtNum(displayMatured, 2)} WTC | Unmatured: ${fmtNum(displayUnmatured, 2)} WTC`}</div>
-                  <div
-                    style={{ fontSize: 12, color: '#4a6a4a', marginTop: 4 }}
-                  >{`App energy estimate: ${fmtNum(appEstimatedCoins, 2)} WTC`}</div>
                   <div
                     style={{ fontSize: 12, color: '#a7ffb0', marginTop: 4 }}
                   >{`Estimated mining rate: ${coinsRateLabel}`}</div>
