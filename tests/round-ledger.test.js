@@ -35,9 +35,15 @@ function run() {
     assert.strictEqual(ledger.getRoundContribution(address), 12.5);
 
     const newer = ledger.setRoundContribution(address, 4.25, 1_100);
-    assert.strictEqual(newer.ok, true);
-    assert.strictEqual(newer.addressRoundWh, 4.25);
-    assert.strictEqual(ledger.getRoundContribution(address), 4.25);
+    assert.strictEqual(newer.ok, false);
+    assert.strictEqual(newer.code, 'REDUCTION_NOT_ALLOWED');
+    assert.strictEqual(ledger.getRoundContribution(address), 12.5);
+
+    // Signed reductions are also rejected (use forfeit path instead)
+    const signed = ledger.setRoundContribution(address, 6.0, 1_200, 0, 'msg', 'sig');
+    assert.strictEqual(signed.ok, false);
+    assert.strictEqual(signed.code, 'REDUCTION_NOT_ALLOWED');
+    assert.strictEqual(ledger.getRoundContribution(address), 12.5);
 
     console.log('round ledger tests passed');
   } finally {

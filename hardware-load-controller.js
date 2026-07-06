@@ -316,10 +316,25 @@ function applyOsCpuFeedback(osUtilPct, targetPct) {
   setCpuTarget(correctedTarget);
 }
 
+function getMeasuredCpuDuty() {
+  const nowMs = Date.now();
+  const staleAfterMs = 2500;
+  let totalDuty = 0;
+  let count = 0;
+  for (const t of cpuWorkerTelemetry.values()) {
+    if (!t || nowMs - (t.ts || 0) > staleAfterMs) continue;
+    totalDuty += Math.max(0, Math.min(1, Number(t.duty) || 0));
+    count += 1;
+  }
+  if (count === 0) return -1;
+  return totalDuty / count;
+}
+
 module.exports = {
   setHardwareLoadPercent,
   stopHardwareLoad,
   getHardwareLoadState,
   configurePhysicalCores,
   applyOsCpuFeedback,
+  getMeasuredCpuDuty,
 };

@@ -27,6 +27,9 @@ const RAMP_UP_DURATION_MS = 3000;
 
 const GPU_BINARY_NAME = 'gpu-miner.exe';
 
+// Track recent GPU-PoW activity to account for probe time in GPU duty.
+let lastPowActivity = { ts: 0, elapsedMs: 0, devices: 0 };
+
 // Aggregated telemetry (merged from per-GPU processes)
 let gpuTelemetry = {
   backend: '',
@@ -41,6 +44,8 @@ let gpuTelemetry = {
   frames: 0,
   benchScore: 0,
   error: null,
+  lastPowTs: 0,
+  lastPowElapsedMs: 0,
 };
 
 function findGpuBinary() {
@@ -218,11 +223,15 @@ function handleMessage(state, msg) {
 
     case 'pow':
       debugLog(`[GpuLoad:${deviceIndex}] received pow response nonce=${msg.nonce} ms=${msg.ms}`);
+      lastPowActivity = { ts: Date.now(), elapsedMs: Math.max(0, Number(msg.ms) || 0), devices: gpuStates.size };
+      state.telemetry.lastPowTs = lastPowActivity.ts;
+      state.telemetry.lastPowElapsedMs = lastPowActivity.elapsedMs;
       if (state.pendingResolve) {
         state.pendingResolve(msg);
       } else {
         debugLog(`[GpuLoad:${deviceIndex}] pow response with no pendingResolve!`);
       }
+      mergeTelemetry();
       break;
 
     case 'bench':
@@ -298,6 +307,8 @@ function mergeTelemetry() {
     benchScore: totalBenchScore,
     error: firstError,
     gpuCount: gpuStates.size,
+    lastPowTs: lastPowActivity.ts,
+    lastPowElapsedMs: lastPowActivity.elapsedMs,
   };
 }
 
