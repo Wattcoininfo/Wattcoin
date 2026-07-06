@@ -35,8 +35,8 @@ const {
   submitPeerProbeResult,
   updateWorkerRtt,
   getPeerProbeHistory: _getPeerProbeHistory,
-  verifyCpuSpeedProof,
-  verifyMemProof,
+  verifyCpuSpeedProof: _verifyCpuSpeedProof,
+  verifyMemProof: _verifyMemProof,
   computeGpuProbeExpectedHash,
   setCoordinatorIdentityKey,
   PROBE_INTERVAL_MS,
@@ -7417,7 +7417,9 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
           if (walletAddressCache.address) {
             try {
               roundLedger.recordPeerProbe(walletAddressCache.address);
-            } catch (_) {}
+            } catch (_) {
+              /* peer-probe counter is best-effort */
+            }
           }
           const trustScoreBefore = hwAuthority.trustScore;
           hwAuthority.consecutiveCleanProbes += 1;
@@ -7457,7 +7459,9 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
             if (walletAddressCache.address) {
               try {
                 roundLedger.recordPeerProbeFailed(walletAddressCache.address);
-              } catch (_) {}
+              } catch (_) {
+                /* peer-probe counter is best-effort */
+              }
             }
             // Determine penalty severity based on the coordinator's verdict issues.
             let penalty = -1; // default: -1 for timing / unknown / generic
@@ -10053,7 +10057,6 @@ async function pullContributionsFromPeers() {
     let bestVerifiedTime = 0;
     let bestMessage = '';
     let bestSignature = '';
-    let bestChainIndex = -1;
 
     // Pass 1: accept values with a valid cryptographic signature
     // (prevents third-party inflation - a peer cannot forge another wallet's signature)
@@ -10078,7 +10081,6 @@ async function pullContributionsFromPeers() {
               bestVerifiedTime = updatedAtMs;
               bestMessage = String(message);
               bestSignature = String(signature);
-              bestChainIndex = chainIdx;
             }
           }
           // Invalid signature ? skip (peer tampered with stored value)
@@ -10089,22 +10091,7 @@ async function pullContributionsFromPeers() {
     }
 
     if (bestVerifiedTime > 0) {
-      roundLedger.setRoundContribution(
-        address,
-        bestVerifiedWh,
-        bestVerifiedTime,
-        bestChainIndex,
-        bestMessage,
-        bestSignature,
-      );
-      // Restore probe chain segments from the best snapshot
-      for (const snap of snapshots) {
-        const segs = snap.probeChainSegments && snap.probeChainSegments[address];
-        if (Array.isArray(segs) && segs.length > 0) {
-          roundLedger.setProbeChainSegments(address, segs);
-          break;
-        }
-      }
+      roundLedger.setRoundContribution(address, bestVerifiedWh, bestVerifiedTime, bestMessage, bestSignature);
       if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
       continue;
     }
@@ -10240,8 +10227,7 @@ function _flushPendingContribution(chainIndex) {
     const addr = walletAddressCache.address;
     if (!addr) return;
     alignRoundLedgerToChain();
-    const cidx = Number.isFinite(chainIndex) && chainIndex > 0 ? Math.floor(chainIndex) : 0;
-    const added = roundLedger.addContribution(addr, wh, cidx);
+    const added = roundLedger.addContribution(addr, wh);
     if (added && added.ok && added.acceptedWh > 0) {
       if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
       const snap = roundLedger.getCurrentRoundSnapshot();
@@ -11442,7 +11428,7 @@ function startLedgerNetworkServer() {
           }
         }
 
-        const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs, chainIndex, message, signature);
+        const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs, message, signature);
         if (!applied || applied.ok === false) {
           sendJson(res, 409, {
             ok: false,
@@ -11938,10 +11924,6 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   const _remainingThisSecond = Math.max(0, _maxWhPerSecond - _contributionPerSecond);
   const _cappedDeltaWh = Math.min(clampedDeltaWh, _remainingThisSecond);
   if (_cappedDeltaWh < clampedDeltaWh) {
-    console.warn(
-      `[Ledger] per-second energy cap: ${clampedDeltaWh.toFixed(6)} -> ${_cappedDeltaWh.toFixed(6)} Wh` +
-        ` for ${verifiedAddress} (secondStart=${_contributionSecondStart})`,
-    );
     clampedDeltaWh = _cappedDeltaWh;
   }
   _contributionPerSecond += clampedDeltaWh;
@@ -11949,10 +11931,6 @@ ipcMain.handle('wattcoin-ledger-add-contribution', async (_, address, deltaWh) =
   // 0.5 s of max power: twice the normal 0.25 s tick interval as jitter headroom.
   const maxDeltaWh = ((pcCalibratedPowerW * loadFactor + (hwAuthority.asicPowerW || 0)) * tf * 0.5) / 3600;
   if (clampedDeltaWh > maxDeltaWh) {
-    console.warn(
-      `[Ledger] deltaWh clamped ${clampedDeltaWh.toFixed(6)} -> ${maxDeltaWh.toFixed(6)} Wh` +
-        ` for ${verifiedAddress} (calibratedUnitPowerW=${hwAuthority.calibratedUnitPowerW} W, asicPowerW=${hwAuthority.asicPowerW || 0} W, trust=${hwAuthority.trustScore}, load=${(loadFactor * 100).toFixed(0)}%)`,
-    );
     clampedDeltaWh = maxDeltaWh;
   }
 

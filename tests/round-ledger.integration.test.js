@@ -18,136 +18,6 @@ function almostEqual(a, b, epsilon = 1e-8) {
   return Math.abs(Number(a) - Number(b)) <= epsilon;
 }
 
-function testProbeChainSegmentsBasic() {
-  const dir = mkTempDir();
-  try {
-    const ledger = createRoundLedger({ baseDir: dir });
-    const addr = 'addrSegTest';
-
-    // Single continuous chain
-    ledger.addContribution(addr, 10, 50);
-    let data = ledger.getProbeChainData(addr);
-    assert.strictEqual(data.totalProbes, 50);
-    assert.strictEqual(data.maxChainIndex, 50);
-    assert.strictEqual(data.segmentCount, 1);
-
-    // Extend the chain
-    ledger.addContribution(addr, 5, 75);
-    data = ledger.getProbeChainData(addr);
-    assert.strictEqual(data.totalProbes, 75);
-    assert.strictEqual(data.maxChainIndex, 75);
-    assert.strictEqual(data.segmentCount, 1);
-
-    // Restart: chainIndex resets, starts a new segment
-    ledger.addContribution(addr, 3, 20);
-    data = ledger.getProbeChainData(addr);
-    assert.strictEqual(data.totalProbes, 95); // 75 + 20
-    assert.strictEqual(data.maxChainIndex, 75); // highest single segment end
-    assert.strictEqual(data.segmentCount, 2);
-  } finally {
-    cleanup(dir);
-  }
-}
-
-function testProbeChainSegmentsMultipleRestarts() {
-  const dir = mkTempDir();
-  try {
-    const ledger = createRoundLedger({ baseDir: dir });
-    const addr = 'addrMultiRestart';
-
-    // Three restarts within one round
-    ledger.addContribution(addr, 10, 100); // segment 1: 1-100
-    ledger.addContribution(addr, 5, 40); // segment 2: 1-40 (restart)
-    ledger.addContribution(addr, 8, 60); // segment 2: extend to 1-60
-    ledger.addContribution(addr, 2, 10); // segment 3: 1-10 (restart)
-
-    const data = ledger.getProbeChainData(addr);
-    assert.strictEqual(data.totalProbes, 100 + 60 + 10); // 170
-    assert.strictEqual(data.maxChainIndex, 100);
-    assert.strictEqual(data.segmentCount, 3);
-  } finally {
-    cleanup(dir);
-  }
-}
-
-function testProbeChainSegmentsInSnapshot() {
-  const dir = mkTempDir();
-  try {
-    const ledger = createRoundLedger({ baseDir: dir });
-    const addr = 'addrSnapTest';
-
-    ledger.addContribution(addr, 10, 100);
-    ledger.addContribution(addr, 3, 25);
-
-    const snap = ledger.getCurrentRoundSnapshot();
-    assert.ok(snap.probeChainSegments);
-    const segs = snap.probeChainSegments[addr];
-    assert.ok(Array.isArray(segs));
-    assert.strictEqual(segs.length, 2);
-    assert.strictEqual(segs[0].startIndex, 1);
-    assert.strictEqual(segs[0].endIndex, 100);
-    assert.strictEqual(segs[1].startIndex, 1);
-    assert.strictEqual(segs[1].endIndex, 25);
-  } finally {
-    cleanup(dir);
-  }
-}
-
-function testProbeChainSegmentsMigratedFromV1() {
-  const dir = mkTempDir();
-  try {
-    const ledgerPath = path.join(dir, LEDGER_FILE_NAME);
-    const oldState = {
-      version: 1,
-      nextRoundId: 5,
-      currentRound: {
-        id: 5,
-        startedAtMs: Date.now(),
-        contributionsWh: { addrOld: 42 },
-        probeChainIndex: { addrOld: 88 },
-      },
-      rounds: [],
-      balancesByAddress: {},
-    };
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(ledgerPath, JSON.stringify(oldState, null, 2), 'utf8');
-
-    const migrated = createRoundLedger({ baseDir: dir });
-    const data = migrated.getProbeChainData('addrOld');
-    assert.strictEqual(data.totalProbes, 88);
-    assert.strictEqual(data.maxChainIndex, 88);
-    assert.strictEqual(data.segmentCount, 1);
-  } finally {
-    cleanup(dir);
-  }
-}
-
-function testProbeChainSegmentsInSettledRound() {
-  const dir = mkTempDir();
-  try {
-    const ledger = createRoundLedger({ baseDir: dir });
-    const addr = 'addrSettleSeg';
-
-    ledger.addContribution(addr, 100, 150);
-    ledger.addContribution(addr, 30, 40);
-
-    const round = ledger.settleCurrentRound({
-      blockHash: 'seg-block',
-      minedAddress: addr,
-      blockHeight: 30,
-    });
-
-    assert.ok(round.probeChainSegments);
-    const segs = round.probeChainSegments[addr];
-    assert.ok(Array.isArray(segs));
-    assert.strictEqual(segs.length, 2);
-    assert.strictEqual(segs[0].endIndex, 150);
-    assert.strictEqual(segs[1].endIndex, 40);
-  } finally {
-    cleanup(dir);
-  }
-}
-
 function testProportionalSplitAndMaturity() {
   const dir = mkTempDir();
   try {
@@ -247,6 +117,7 @@ function testTempFileRecoveryOnLoad() {
     if (fs.existsSync(ledgerPath)) fs.rmSync(ledgerPath, { force: true });
 
     const recovered = createRoundLedger({ baseDir: dir });
+    recovered.load();
     const snapshot = recovered.getAddressSnapshot('addrR');
 
     assert.strictEqual(fs.existsSync(ledgerPath), true);
@@ -260,11 +131,6 @@ function testTempFileRecoveryOnLoad() {
 }
 
 function run() {
-  testProbeChainSegmentsBasic();
-  testProbeChainSegmentsMultipleRestarts();
-  testProbeChainSegmentsInSnapshot();
-  testProbeChainSegmentsMigratedFromV1();
-  testProbeChainSegmentsInSettledRound();
   testProportionalSplitAndMaturity();
   testSettleIdempotencyByBlockHash();
   testTempFileRecoveryOnLoad();

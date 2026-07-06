@@ -5201,8 +5201,8 @@ export default function Miner({
   const _normalizedConfidenceTier = 'estimated';
   const _normalizedSourceName = 'local hardware profile model';
 
-  const powerSourceAccent = '#4a7a4a';
-  const powerSourceLabel =
+  const _powerSourceAccent = '#4a7a4a';
+  const _powerSourceLabel =
     Number(benchPower) > 0 && basePowerW === Number(benchPower)
       ? 'benchmark fallback estimate'
       : 'hardware profile estimate';
