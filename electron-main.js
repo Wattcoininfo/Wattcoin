@@ -1242,7 +1242,9 @@ function isPrivateIpv4(host) {
 
 function isPrivateIpv6(host) {
   const normalized = normalizeIpLiteral(host).toLowerCase();
-  if (net.isIP(normalized) !== 6) return false;
+  const family = net.isIP(normalized);
+  if (family === 4) return isPrivateIpv4(normalized);
+  if (family !== 6) return false;
   return (
     normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:')
   );

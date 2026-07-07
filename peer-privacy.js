@@ -32,6 +32,8 @@ function isPrivateIpv6(hostname) {
     normalized.startsWith('feb')
   )
     return true;
+  const ipv4Mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (ipv4Mapped) return isPrivateIpv4(ipv4Mapped[1]);
   return false;
 }
 
@@ -70,7 +72,9 @@ function filterAdvertisedPeerUrls(peerUrls) {
 function resolvePeerPrivacySecret(persistedSecret, deviceId = '') {
   const normalizedSecret = String(persistedSecret || '').trim();
   if (normalizedSecret) return normalizedSecret;
-  return String(deviceId || '').trim();
+  const fallback = String(deviceId || '').trim();
+  if (!fallback) return '';
+  return crypto.createHash('sha256').update(fallback, 'utf8').digest('hex');
 }
 
 function createPeerAlias(hostname, secret) {
