@@ -1727,9 +1727,10 @@ class WtcNode {
   /** Compute the highest-tier voting power for an address from the NFT store. */
   _getVotingPower(voter) {
     const nfts = this._nfts.getNftsForAddress(voter);
-    if (!nfts || nfts.length === 0) return { hasNft: false, bestTier: 'bronze', bestPower: 1 };
+    if (!nfts || nfts.length === 0) return { hasNft: false, bestTier: 'bronze', bestPower: 1, bestNftId: null };
     let bestTier = 'bronze';
     let bestPower = 1;
+    let bestNftId = null;
     const TIER_RANK = { gold: 3, silver: 2, bronze: 1 };
     const VOTE_WEIGHTS = { gold: 5, silver: 3, bronze: 1 };
     for (const nft of nfts) {
@@ -1738,9 +1739,10 @@ class WtcNode {
       if (rank > (TIER_RANK[bestTier] || 0)) {
         bestTier = tier;
         bestPower = VOTE_WEIGHTS[tier] || 1;
+        bestNftId = nft.nftId;
       }
     }
-    return { hasNft: true, bestTier, bestPower };
+    return { hasNft: true, bestTier, bestPower, bestNftId };
   }
 
   addGovernanceVote(pipId, { voter, power: _power, nftTier: _nftTier, vote, signature, timestamp: voteTimestamp }) {
@@ -1757,6 +1759,7 @@ class WtcNode {
       voter,
       power: bestPower,
       nftTier: bestTier,
+      nftId: vp.bestNftId,
       vote,
       signature,
       timestamp: voteTimestamp,

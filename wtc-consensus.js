@@ -582,6 +582,16 @@ class Consensus {
         if (tx.chainId) {
           sigFields.chainId = tx.chainId;
         }
+        // Governance result transactions include type + governanceData with
+        // sorted keys, matching how wtc-node.js signs them.
+        if (tx.type === 'governance_result') {
+          sigFields.type = tx.type;
+          if (tx.governanceData) sigFields.governanceData = tx.governanceData;
+          const sortedKeys = Object.keys(sigFields).sort();
+          const sigInput = JSON.stringify(sigFields, sortedKeys);
+          if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) return `tx ${i} signature mismatch`;
+          continue;
+        }
         // Governance wallet transfers include governanceTransferRef in the
         // signed data so the authorization (passed proposal) cannot be stripped.
         if (tx.governanceTransferRef) {

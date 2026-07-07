@@ -408,6 +408,13 @@ class GovernanceStore {
       return { ok: false, error: 'Missing required proposal fields' };
     }
 
+    if (this._nftStore) {
+      const creatorNfts = this._nftStore.getNftsForAddress(creator);
+      if (!creatorNfts || creatorNfts.length === 0) {
+        return { ok: false, error: 'Only Vortex NFT holders can create proposals.' };
+      }
+    }
+
     const principleCheck = this.validateProposalContent(title, description);
     if (!principleCheck.ok) {
       // If useReserveOverride is set, the treasury minimum reserve principle
@@ -454,6 +461,7 @@ class GovernanceStore {
       status: STATUS_COMMENT,
       votes: {},
       voteTallies: { for: 0, against: 0 },
+      votedNftIds: {},
       commentPeriodWeeks: cWeeks,
       commentPeriodEndsAt: createdAt + commentPeriodMs,
       votingDurationWeeks: vWeeks,
@@ -585,7 +593,7 @@ class GovernanceStore {
    * Record a vote received locally or from a peer.
    * Allows vote changes (previous power is subtracted, new power added).
    */
-  addVote(pipId, { voter, power, nftTier, vote, signature, timestamp: voteTimestamp }) {
+  addVote(pipId, { voter, power, nftTier, nftId, vote, signature, timestamp: voteTimestamp }) {
     const p = this._proposals[pipId];
     if (!p) return { ok: false, error: 'Proposal not found' };
     if (p.status === STATUS_COMMENT) return { ok: false, error: 'Proposal is in comment period — voting not yet open' };
@@ -593,22 +601,47 @@ class GovernanceStore {
     if (!voter || !vote || !power) return { ok: false, error: 'Missing vote fields' };
     if (vote !== 'for' && vote !== 'against') return { ok: false, error: 'Invalid vote value' };
 
+    // NFT-based vote enforcement
+    if (nftId) {
+      if (p.votedNftIds && p.votedNftIds[nftId]) {
+        return { ok: false, error: 'This NFT has already voted on this proposal.' };
+      }
+      if (this._nftStore) {
+        const nfts = this._nftStore.getNftsForAddress(voter);
+        if (!nfts || !nfts.some((n) => n.nftId === nftId)) {
+          return { ok: false, error: 'Voter does not own the claimed NFT.' };
+        }
+      }
+    } else if (this._nftStore) {
+      const nfts = this._nftStore.getNftsForAddress(voter);
+      if (!nfts || nfts.length === 0) {
+        return { ok: false, error: 'Only Vortex NFT holders can vote.' };
+      }
+    }
+
+    if (!p.votedNftIds) p.votedNftIds = {};
+
     const existing = p.votes[voter];
     const prevVote = existing ? existing.vote : null;
     const prevPower = existing ? existing.power : 0;
 
     if (existing) {
       p.voteTallies[prevVote] -= prevPower;
+      if (existing.nftId && p.votedNftIds) {
+        delete p.votedNftIds[existing.nftId];
+      }
     }
 
     p.votes[voter] = {
       voter,
       power,
       nftTier,
+      nftId: nftId || '',
       vote,
       timestamp: voteTimestamp || Date.now(),
       signature: signature || '',
     };
+    if (nftId) p.votedNftIds[nftId] = true;
     p.voteTallies[vote] += power;
 
     this._save();

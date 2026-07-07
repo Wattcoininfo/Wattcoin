@@ -58,6 +58,46 @@ class Mempool {
       return { ok: false, code: 'DUPLICATE', message: `tx ${tx.id.slice(0, 12)} already in pool` };
     }
 
+    // ── Governance result transactions bypass amount/fee validation ──────
+    if (tx.type === 'governance_result') {
+      if (!tx.from || typeof tx.from !== 'string') {
+        return { ok: false, code: 'MISSING_FROM', message: 'from address required' };
+      }
+      if (!tx.to || typeof tx.to !== 'string') {
+        return { ok: false, code: 'MISSING_TO', message: 'to address required' };
+      }
+      if (!tx.governanceData || !tx.governanceData.pipId || !tx.governanceData.outcome) {
+        return { ok: false, code: 'MISSING_GOV_DATA', message: 'governanceData with pipId and outcome required' };
+      }
+      if (!tx.sig || typeof tx.sig !== 'object') {
+        return { ok: false, code: 'MISSING_SIG', message: 'signature required' };
+      }
+      const sigFields = {
+        id: tx.id,
+        type: tx.type,
+        from: tx.from,
+        to: tx.to,
+        amount: tx.amount,
+        fee: tx.fee,
+        nonce: tx.nonce,
+        chainId: tx.chainId || 'wtc-mainnet',
+        governanceData: tx.governanceData,
+      };
+      const sortedKeys = Object.keys(sigFields).sort();
+      const sigInput = JSON.stringify(sigFields, sortedKeys);
+      if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) {
+        return { ok: false, code: 'INVALID_SIG', message: 'signature verification failed' };
+      }
+      if (typeof tx.nonce !== 'number' || !Number.isInteger(tx.nonce) || tx.nonce < 0) {
+        return { ok: false, code: 'INVALID_NONCE', message: 'nonce must be a non-negative integer' };
+      }
+      if (this._txs.size >= MEMPOOL_MAX_SIZE) {
+        return { ok: false, code: 'POOL_FULL', message: 'mempool is full' };
+      }
+      this._txs.set(tx.id, { ...tx, addedAt: Date.now() });
+      return { ok: true };
+    }
+
     // ── NFT transactions bypass coin amount/fee validation ────────────────
     if (tx.type === 'nft_mint' || tx.type === 'nft_transfer') {
       if (this._nftCount() >= MEMPOOL_NFT_MAX_SLOTS) {

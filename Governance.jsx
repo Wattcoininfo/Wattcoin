@@ -377,25 +377,6 @@ export default function Governance({ selectedWalletAddress }) {
               )}
             </div>
           </div>
-          <button
-            onClick={() => {
-              setShowCreate(!showCreate);
-              setStatusMsg('');
-            }}
-            style={{
-              background: showCreate ? '#1e3a1e' : '#4ade80',
-              color: showCreate ? '#9ac79f' : '#001008',
-              border: 'none',
-              borderRadius: 8,
-              padding: '9px 16px',
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: 'pointer',
-              transition: 'background 0.2s',
-            }}
-          >
-            {showCreate ? 'Cancel' : 'New Proposal'}
-          </button>
         </div>
       </div>
 
@@ -437,6 +418,29 @@ export default function Governance({ selectedWalletAddress }) {
           <div style={contentInnerStyle}>
             {govSubTab === 'proposals' && (
               <>
+                <div
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#4ade80' }}>Proposals ({proposals.length})</div>
+                  <button
+                    onClick={() => {
+                      setShowCreate(!showCreate);
+                      setStatusMsg('');
+                    }}
+                    style={{
+                      background: showCreate ? '#1e3a1e' : '#4ade80',
+                      color: showCreate ? '#9ac79f' : '#001008',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '7px 14px',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {showCreate ? 'Cancel' : 'New Proposal'}
+                  </button>
+                </div>
                 {statusMsg && (
                   <div
                     style={{

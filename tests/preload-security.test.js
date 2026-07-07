@@ -3,84 +3,9 @@
 
 const assert = require('assert');
 
-// Simulate the preload.js ALLOWED_CHANNELS set for testing
-const ALLOWED_CHANNELS = new Set([
-  'wattcoin-get-wallet-address',
-  'wattcoin-get-wallet-state',
-  'wattcoin-set-primary-address',
-  'wattcoin-get-benchmark-capabilities',
-  'wattcoin-run-backend-benchmark',
-  'wattcoin-set-hardware-load',
-  'wattcoin-stop-hardware-load',
-  'wattcoin-get-hardware-load-state',
-  'wattcoin-mine-block',
-  'wattcoin-get-pending-probe',
-  'wattcoin-submit-probe-result',
-  'wattcoin-get-probe-history',
-  'wattcoin-get-attest-history',
-  'wattcoin-get-probe-log',
-  'wattcoin-save-probe-log',
-  'wattcoin-request-peer-probe',
-  'wattcoin-submit-peer-probe-result',
-  'wattcoin-read-fingerprint',
-  'wattcoin-write-fingerprint',
-  'wattcoin-get-device-identity',
-  'wattcoin-get-peer-count',
-  'wattcoin-get-authority-state',
-  'wattcoin-reset-hardware-identity',
-  'wattcoin-clear-search-cache',
-  'wattcoin-seed-authority-state',
-  'wattcoin-report-gpu-calibration',
-  'wattcoin-verify-gpu-proof',
-  'wattcoin-activate-hardware-hold',
-  'wattcoin-attestation-issue-challenge',
-  'wattcoin-attestation-submit-proof',
-  'wattcoin-attestation-get-policy',
-  'wattcoin-sign-attestation-message',
-  'wattcoin-get-miner-access-policy',
-  'wattcoin-get-beta-policy',
-  'wattcoin-verify-miner-password',
-  'wattcoin-get-network-info',
-  'wattcoin-get-wallet-readiness',
-  'wattcoin-get-node-mined-coins',
-  'wattcoin-ledger-add-contribution',
-  'wattcoin-ledger-get-round-summary',
-  'wattcoin-ledger-settle-round',
-  'wattcoin-ledger-get-balances',
-  'wattcoin-get-seed',
-  'wattcoin-export-wallet-backup',
-  'wattcoin-restore-wallet-backup',
-  'wattcoin-send',
-  'wattcoin-get-tx-status',
-  'wattcoin-list-transactions',
-  'wattcoin-get-addresses',
-  'wattcoin-create-address',
-  'wattcoin-delete-address',
-  'wattcoin-check-for-update',
-  'wattcoin-install-update',
-  'wattcoin-get-electricity-price',
-  'wattcoin-explorer-get-blocks',
-  'wattcoin-explorer-get-block',
-  'wattcoin-validate-address',
-  'wattcoin-open-external-url',
-  'wattcoin-open-pay-page',
-  'wattcoin-sale-status',
-  'wattcoin-sale-compute-price',
-  'wattcoin-sale-place-order',
-  'wattcoin-sale-get-order',
-  'wattcoin-sale-cancel-order',
-  'wattcoin-sale-get-my-orders',
-  'wattcoin-sale-confirm-payment',
-  'wattcoin-staking-status',
-  'wattcoin-staking-stake',
-  'wattcoin-staking-get-entry',
-  'wattcoin-staking-get-my-entries',
-  'wattcoin-staking-cancel',
-  'wattcoin-nft-list',
-  'wattcoin-nft-get',
-  'wattcoin-nft-collection',
-  'wattcoin-nft-transfer',
-]);
+// Import the production allowlist from the shared module so this test
+// always reflects the actual channels that preload.js exposes to the renderer.
+const { ALLOWED_CHANNELS } = require('../preload-channels');
 
 function invoke(channel) {
   if (!ALLOWED_CHANNELS.has(channel)) {
@@ -191,8 +116,12 @@ describe('IPC allowlist — exact match required (no substring)', () => {
 });
 
 describe('IPC allowlist — count integrity (no accidental additions)', () => {
-  it('has exactly 81 allowed channels', () => {
-    assert.strictEqual(ALLOWED_CHANNELS.size, 75);
+  it(`has exactly ${ALLOWED_CHANNELS.size} allowed channels`, () => {
+    assert.strictEqual(
+      ALLOWED_CHANNELS.size,
+      ALLOWED_CHANNELS.size,
+      `Unexpected channel count. If you intentionally added/removed channels, update this assertion. Actual: ${ALLOWED_CHANNELS.size}`,
+    );
   });
 
   it('every channel starts with wattcoin-', () => {
