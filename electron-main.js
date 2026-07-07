@@ -7356,7 +7356,7 @@ ipcMain.handle('wattcoin-submit-peer-probe-result', async (_event, payload = {})
       }
       try {
         console.warn(
-          `[PeerProbe] submit body probeWallClockMs=${result.probeWallClockMs} id=${result.id} N=${result._probeIterations || '?'} intDateMs=${result._intDateMs || '?'} warmupTotal=${result._warmupTotalMs || '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
+          `[PeerProbe] submit body probeWallClockMs=${typeof result.probeWallClockMs === 'number' ? Math.round(result.probeWallClockMs) : '?'} id=${result.id} N=${result._probeIterations || '?'} intDateMs=${typeof result._intDateMs === 'number' ? Math.round(result._intDateMs) : '?'} warmupTotal=${typeof result._warmupTotalMs === 'number' ? Math.round(result._warmupTotalMs) : '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
         );
         const body = {
           probeId: result.id || '',
@@ -10960,7 +10960,7 @@ function startLedgerNetworkServer() {
         }
         const body = await readJsonBody(req);
         console.warn(
-          `[PeerProbe/Crd] submit body probeWallClockMs=${body && body.probeWallClockMs} (typeof=${typeof (body && body.probeWallClockMs)})`,
+          `[PeerProbe/Crd] submit body probeWallClockMs=${body && typeof body.probeWallClockMs === 'number' ? Math.round(body.probeWallClockMs) : '?'} (typeof=${typeof (body && body.probeWallClockMs)})`,
         );
         const probeResult = {
           id: body && body.probeId ? String(body.probeId) : '',

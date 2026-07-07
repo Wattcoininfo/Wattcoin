@@ -17,8 +17,6 @@ function getDefaultState() {
       startedAtMs: Date.now(),
       contributionsWh: {},
       contributionUpdatedAtMs: {},
-      peerProbesAnswered: {},
-      peerProbesFailed: {},
       contributionMessage: {},
       contributionSignature: {},
     },
@@ -131,8 +129,6 @@ function createRoundLedger(options = {}) {
             nextRoundId: Math.max(1, Number(data.nextRoundId) || 1),
             currentRound: {
               ...backupData.currentRound,
-              peerProbesAnswered: {},
-              peerProbesFailed: {},
               contributionMessage: {},
               contributionSignature: {},
             },
@@ -156,6 +152,9 @@ function createRoundLedger(options = {}) {
         ...getDefaultState(),
         ...data,
       };
+      delete state.currentRound.probeChainSegments;
+      delete state.currentRound.peerProbesAnswered;
+      delete state.currentRound.peerProbesFailed;
       if (!state.currentRound || typeof state.currentRound !== 'object') {
         state.currentRound = {
           id: state.nextRoundId || 1,
@@ -178,15 +177,21 @@ function createRoundLedger(options = {}) {
       if (!state.currentRound.contributionSignature || typeof state.currentRound.contributionSignature !== 'object') {
         state.currentRound.contributionSignature = {};
       }
-      if (!state.currentRound.peerProbesAnswered || typeof state.currentRound.peerProbesAnswered !== 'object') {
-        state.currentRound.peerProbesAnswered = {};
-      }
-      if (!state.currentRound.peerProbesFailed || typeof state.currentRound.peerProbesFailed !== 'object') {
-        state.currentRound.peerProbesFailed = {};
-      }
       if (!Array.isArray(state.rounds)) state.rounds = [];
+      for (const r of state.rounds) {
+        if (r && typeof r === 'object') {
+          delete r.peerProbesAnswered;
+          delete r.peerProbesFailed;
+          delete r.probeChainSegments;
+        }
+      }
       if (!state.balancesByAddress || typeof state.balancesByAddress !== 'object') {
         state.balancesByAddress = {};
+      }
+      for (const b of Object.values(state.balancesByAddress)) {
+        if (b && typeof b === 'object') {
+          delete b.totalCredited;
+        }
       }
     } catch (_) {
       console.warn('[RoundLedger] Parse error - attempting recovery from backup.');
@@ -250,7 +255,6 @@ function createRoundLedger(options = {}) {
       state.balancesByAddress[key] = {
         pending: 0,
         matured: 0,
-        totalCredited: 0,
       };
     }
     return state.balancesByAddress[key];
@@ -276,22 +280,12 @@ function createRoundLedger(options = {}) {
     };
   }
 
-  function recordPeerProbe(address) {
-    const key = normalizeAddress(address);
-    if (!key) return { ok: false };
-    state.currentRound.peerProbesAnswered[key] =
-      Math.max(0, Math.floor(Number(state.currentRound.peerProbesAnswered[key]) || 0)) + 1;
-    save();
-    return { ok: true, total: state.currentRound.peerProbesAnswered[key], address: key };
+  function recordPeerProbe(_address) {
+    return { ok: true, total: 0 };
   }
 
-  function recordPeerProbeFailed(address) {
-    const key = normalizeAddress(address);
-    if (!key) return { ok: false };
-    state.currentRound.peerProbesFailed[key] =
-      Math.max(0, Math.floor(Number(state.currentRound.peerProbesFailed[key]) || 0)) + 1;
-    save();
-    return { ok: true, total: state.currentRound.peerProbesFailed[key], address: key };
+  function recordPeerProbeFailed(_address) {
+    return { ok: true, total: 0 };
   }
 
   function setRoundContribution(address, totalWh, updatedAtMs = Date.now(), message = '', signature = '') {
@@ -342,8 +336,6 @@ function createRoundLedger(options = {}) {
       if (Object.prototype.hasOwnProperty.call(state.currentRound.contributionsWh, key)) {
         delete state.currentRound.contributionsWh[key];
         delete state.currentRound.contributionUpdatedAtMs[key];
-        delete state.currentRound.peerProbesAnswered[key];
-        delete state.currentRound.peerProbesFailed[key];
         delete state.currentRound.contributionMessage[key];
         delete state.currentRound.contributionSignature[key];
         save();
@@ -381,8 +373,6 @@ function createRoundLedger(options = {}) {
       contributionUpdatedAtMs: { ...(state.currentRound.contributionUpdatedAtMs || {}) },
       contributionMessage: { ...(state.currentRound.contributionMessage || {}) },
       contributionSignature: { ...(state.currentRound.contributionSignature || {}) },
-      peerProbesAnswered: { ...(state.currentRound.peerProbesAnswered || {}) },
-      peerProbesFailed: { ...(state.currentRound.peerProbesFailed || {}) },
       totalWh: Number(totalWh.toFixed(8)),
     };
   }
@@ -404,8 +394,6 @@ function createRoundLedger(options = {}) {
       id: nextRoundId,
       startedAtMs: Number(startedAtMs) || Date.now(),
       contributionsWh: {},
-      peerProbesAnswered: {},
-      peerProbesFailed: {},
       contributionMessage: {},
       contributionSignature: {},
     };
@@ -494,7 +482,6 @@ function createRoundLedger(options = {}) {
       const balance = ensureBalance(address);
       if (!balance) continue;
       balance.pending = Number(((Number(balance.pending) || 0) + amount).toFixed(8));
-      balance.totalCredited = Number(((Number(balance.totalCredited) || 0) + amount).toFixed(8));
     }
 
     const roundRecord = {
@@ -503,8 +490,6 @@ function createRoundLedger(options = {}) {
       totalWh: Number(totalWh.toFixed(8)),
       sharesByAddress,
       contributionsWh: Object.fromEntries(contributionEntries),
-      peerProbesAnswered: { ...(state.currentRound.peerProbesAnswered || {}) },
-      peerProbesFailed: { ...(state.currentRound.peerProbesFailed || {}) },
       blockHash,
       blockHeight,
       minedAddress,
@@ -520,8 +505,6 @@ function createRoundLedger(options = {}) {
       id: state.nextRoundId,
       startedAtMs: Date.now(),
       contributionsWh: {},
-      peerProbesAnswered: {},
-      peerProbesFailed: {},
     };
 
     save();
@@ -541,8 +524,6 @@ function createRoundLedger(options = {}) {
       contributionUpdatedAtMs: { ...(state.currentRound.contributionUpdatedAtMs || {}) },
       contributionMessage: { ...(state.currentRound.contributionMessage || {}) },
       contributionSignature: { ...(state.currentRound.contributionSignature || {}) },
-      peerProbesAnswered: { ...(state.currentRound.peerProbesAnswered || {}) },
-      peerProbesFailed: { ...(state.currentRound.peerProbesFailed || {}) },
     };
     state.rounds.push(archiveRecord);
     save();

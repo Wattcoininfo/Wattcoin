@@ -788,6 +788,8 @@ async function main() {
     deployOnly: false,
   }));
   packageJson.version = nextVersion;
+  const origDescription = packageJson.description;
+  packageJson.description = `${origDescription} v${nextVersion}`;
   fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
 
   console.log(`Version bumped: ${previousVersion} -> ${nextVersion}`);
@@ -845,6 +847,9 @@ async function main() {
     verifyAndArchiveInstaller(root, nextVersion);
     verifyReleaseMetadata(root, nextVersion);
 
+    packageJson.description = origDescription;
+    fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+
     buildSucceeded = true; // mark before deploy so abort during SFTP doesn't revert version
 
     if (!skipDeploy) {
@@ -867,6 +872,10 @@ async function main() {
       console.log('[release-build] --local: skipping deploy and remote verification.');
     }
   } finally {
+    if (packageJson && origDescription) {
+      packageJson.description = origDescription;
+      fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8');
+    }
     restoreHardeningBackups(hardeningBackups);
     if (!buildSucceeded) {
       restoreFileContents(mutableReleaseBackups);

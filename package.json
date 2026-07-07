@@ -1,7 +1,7 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.435",
-  "description": "Wattcoin Miner — energy-backed cryptocurrency miner",
+  "version": "1.0.440",
+  "description": "Wattcoin Miner",
   "author": "Wattcoin",
   "license": "MIT",
   "private": true,

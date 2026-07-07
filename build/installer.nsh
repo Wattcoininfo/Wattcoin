@@ -5,9 +5,14 @@
 ; as the app version string (e.g. "1.0.53").
 !macro customHeader
   !pragma warning disable 6029
-  Name "${PRODUCT_NAME} v${VERSION}"
+  Name "${PRODUCT_NAME} v${VERSION} Setup"
+  Caption "${PRODUCT_NAME} v${VERSION} Setup"
   !pragma warning enable 6029
   BrandingText "${PRODUCT_NAME} v${VERSION}"
+  !pragma warning disable 9100
+  VIAddVersionKey "FileDescription" "${PRODUCT_NAME} v${VERSION} Setup"
+  VIAddVersionKey "FileVersion" "${VERSION}.0"
+  !pragma warning enable 9100
 !macroend
 
 !macro customFinishPage

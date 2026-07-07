@@ -718,6 +718,24 @@ class GovernanceStore {
       }
 
       if (p.status === STATUS_COMMENT || p.status === STATUS_ACTIVE) {
+        if (Object.keys(p.votes).length > 0) {
+          const threshold = this._getPassThreshold();
+          const localFor = p.voteTallies.for || 0;
+          const blockFor = (voteTallies && voteTallies.for) || 0;
+          if (outcome === 'passed' && localFor < threshold) {
+            console.warn(
+              `[GovernanceStore] Block records ${pipId} as 'passed' at height ${block.height} ` +
+                `(for=${blockFor}), but local tally is for=${localFor} < threshold=${threshold}. ` +
+                `Verify this proposal's gossip coverage — result may be forged.`,
+            );
+          } else if (outcome === 'rejected' && localFor >= threshold) {
+            console.warn(
+              `[GovernanceStore] Block records ${pipId} as 'rejected' at height ${block.height} ` +
+                `(for=${blockFor}), but local tally is for=${localFor} >= threshold=${threshold}. ` +
+                `This block may have been reorged or the governance_result is forged.`,
+            );
+          }
+        }
         p.status = outcome === 'passed' ? STATUS_PASSED : STATUS_REJECTED;
         p.recordedAtHeight = block.height;
         p.recordedAtHash = block.hash;
@@ -773,11 +791,23 @@ class GovernanceStore {
 
   /**
    * Validate a governance_result transaction for mempool inclusion.
+   * Verifies:
+   *  - The proposal exists and is active.
+   *  - The signer (tx.from) has a vote on this proposal.
+   *  - For a 'passed' outcome, the signer must have voted 'for'.
+   *  - Cryptographic signature over the tx payload.
    */
   validateTx(tx) {
     if (!tx || tx.type !== 'governance_result') return false;
     if (!tx.from || !tx.to || !tx.sig) return false;
     if (!tx.governanceData || !tx.governanceData.pipId || !tx.governanceData.outcome) return false;
+
+    const p = this._proposals[tx.governanceData.pipId];
+    if (!p || p.status !== STATUS_ACTIVE) return false;
+
+    const vote = p.votes[tx.from];
+    if (!vote) return false;
+    if (tx.governanceData.outcome === 'passed' && vote.vote !== 'for') return false;
 
     const sigFields = {
       id: tx.id,

@@ -418,8 +418,37 @@ async function run() {
   await test('GovernanceStore.validateTx accepts correctly-signed governance_result', () => {
     const dir = tmpDir();
     try {
-      const store = makeStore(dir);
       const kp = generateKeypair();
+      const store = makeStore(
+        dir,
+        makeNftStoreMock({
+          [kp.address]: [{ nftId: 'vhpn-vt-1', metadata: { tier: 'gold', shares: 50 } }],
+        }),
+      );
+      const now = Date.now();
+      silenceLogs(() => {
+        store.addProposal({
+          pipId: 'pip-validate',
+          title: 'Validate',
+          description: '',
+          creator: kp.address,
+          createdAt: now - 86400000,
+          creatorNftId: 'vhpn-vt-1',
+          creatorTier: 'gold',
+        });
+      });
+      store._proposals['pip-validate'].status = 'active';
+      silenceLogs(() => {
+        store.addVote('pip-validate', {
+          voter: kp.address,
+          power: 5,
+          nftTier: 'gold',
+          nftId: 'vhpn-vt-1',
+          vote: 'for',
+          signature: 'test-sig',
+          timestamp: now + 1000,
+        });
+      });
       const tx = makeGovernanceResultTx({
         pipId: 'pip-validate',
         outcome: 'passed',
