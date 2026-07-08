@@ -35,7 +35,7 @@ function createMockDeps(overrides = {}) {
       getBalance: () => ({ confirmed: 100, unmatured: 0 }),
       getMinedStats: () => ({ totalWTC: 100, totalBlocks: 10, maturedBlocks: 5 }),
       getHeight: () => 1000,
-      syncWithPeers: async () => ({
+      syncWithPeers: () => ({
         ok: true,
         synced: true,
         fromHeight: 900,
@@ -52,7 +52,7 @@ function createMockDeps(overrides = {}) {
     getActivePeers: () => ['http://peer:3933'],
     getCurrentBlockHeight: () => 1000,
     getCurrentNetworkRoundId: () => 42,
-    requestPeerJson: async () => null,
+    requestPeerJson: () => null,
     normalizePeerUrl: (url) => url,
     getLocalProbeChain: () => ({ chainIndex: 5 }),
     rewardForHeight: () => 50,
@@ -72,9 +72,9 @@ function createMockDeps(overrides = {}) {
     MIN_PROBE_VERIFIERS: 1,
     REVERSE_TUNNEL_LIVE_THRESHOLD_MS: 30000,
     ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS: 100,
-    pullContributionsFromPeers: async () => null,
-    getLocalLedgerBalances: async () => ({ ok: true, addressRoundWh: 0 }),
-    settleLocalLedgerRound: async () => ({ ok: true }),
+    pullContributionsFromPeers: () => null,
+    getLocalLedgerBalances: () => ({ ok: true, addressRoundWh: 0 }),
+    settleLocalLedgerRound: () => ({ ok: true }),
     ...overrides,
   };
 }
@@ -258,13 +258,11 @@ async function run() {
 
   // -- getLocalLedgerBalances --------------------------------------------------
   await test('getLocalLedgerBalances returns OK with address', async () => {
-    let called = false;
     const rc = createRoundContributions(
       createMockDeps({
         roundLedger: {
           ...createMockDeps().roundLedger,
-          getRoundContribution: (addr) => {
-            called = true;
+          getRoundContribution: (_addr) => {
             return 50;
           },
         },
@@ -291,7 +289,7 @@ async function run() {
   await test('settleLocalLedgerRound with zero blockHeight falls through to settleCurrentRound', async () => {
     const rc = createRoundContributions(
       createMockDeps({
-        getCurrentBlockHeight: async () => 500,
+        getCurrentBlockHeight: () => 500,
       }),
     );
     const result = await rc.settleLocalLedgerRound({ blockHash: 'abc', minedAddress: 'addr1' });

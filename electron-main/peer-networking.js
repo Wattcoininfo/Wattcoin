@@ -1,7 +1,5 @@
 'use strict';
 
-const path = require('path');
-const fs = require('fs');
 const { normalizePeerUrl, isDeprecatedPeerUrl } = require('./main-utils');
 const peerUtils = require('./peer-utils');
 
@@ -47,7 +45,6 @@ function createPeerNetworking(ctx) {
     getRuntimeConfig,
     getLedgerNetworkSettings,
     getActivePeers,
-    getPeerDirectoryTargets,
     getLocalPeerHosts,
     getLocalPeerIdentity,
     getTrustedRequesterPeerIdentity,

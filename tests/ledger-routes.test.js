@@ -24,7 +24,7 @@ async function run() {
     assert.strictEqual(typeof createLedgerRequestHandler, 'function');
   });
 
-  await test('createLedgerRequestHandler returns an async function', async () => {
+  await test('createLedgerRequestHandler returns an async function', () => {
     const dummyFn = () => {};
     const handler = createLedgerRequestHandler({
       getRequesterIdentity: dummyFn,

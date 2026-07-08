@@ -21,7 +21,7 @@ function buildMinimalCtx(overrides = {}) {
     }),
     getConfiguredAdvertisedPeerUrls: () => [],
     roundLedger: { syncMaturity: () => {} },
-    getCurrentBlockHeight: async () => 100,
+    getCurrentBlockHeight: () => 100,
     LEDGER_RECONCILE_INTERVAL_MS: 60000,
     loadCachedRemoteSeedPeers: () => [],
     ...overrides,

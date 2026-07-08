@@ -65,13 +65,14 @@ function buildMinimalCtx(overrides = {}) {
     getLocalPeerHosts: () => new Set(['127.0.0.1', '::1', '192.168.1.100']),
     getLocalPeerIdentity: () => 'local-peer-id',
     getTrustedRequesterPeerIdentity: () => '',
-    requestPeerJson: async () => ({ ok: true }),
+    requestPeerJson: () => ({ ok: true }),
     isSelfPeerUrlCandidate: () => false,
     filterAdvertisedPeerUrls: (candidates) => candidates.filter(Boolean),
     sortPeerUrlsByPreference: (peers) => peers,
     normalizeIpLiteral: (ip) => ip,
     isPublicPeerHost: () => true,
     formatPeerHostForUrl: (ip) => ip,
+    getWtcNode: () => ({}),
     isPeerUrlBanned: () => false,
     isReverseTunnelPeerUrl: () => false,
     buildPeerUrlFromSocket: (addr, port) => `http://${addr}:${port}`,
@@ -87,8 +88,8 @@ function buildMinimalCtx(overrides = {}) {
       getRemoteSeedManifestUrls: () => [],
       loadCachedRemoteSeedPeers: () => [],
       saveCachedRemoteSeedPeers: noop,
-      fetchRemoteSeedManifest: async () => null,
-      refreshRemoteSeedPeers: async () => [],
+      fetchRemoteSeedManifest: () => null,
+      refreshRemoteSeedPeers: () => Promise.resolve([]),
     },
     obfuscatePublicPeerUrl: (url) => url,
     wtcNode: { getHeight: () => 100 },
@@ -263,7 +264,7 @@ describe('peer-networking', function () {
     });
 
     it('returns ok=true for reachable peer', async function () {
-      ctx.requestPeerJson = async () => ({ ok: true, height: 100 });
+      ctx.requestPeerJson = () => ({ ok: true, height: 100 });
       const pn2 = createPeerNetworking(ctx);
       const result = await pn2.verifyReachablePeerCandidate('http://reachable:39310');
       expect(result.ok).to.equal(true);

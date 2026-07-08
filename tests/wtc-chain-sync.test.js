@@ -20,7 +20,7 @@ async function test(name, fn) {
 function createMockDeps(overrides = {}) {
   return {
     getWtcNode: () => ({
-      syncWithPeers: async () => ({
+      syncWithPeers: () => ({
         ok: true,
         synced: true,
         fromHeight: 900,
@@ -29,7 +29,7 @@ function createMockDeps(overrides = {}) {
         imported: 100,
       }),
       getHeight: () => 1000,
-      handleGetBlocks: (from, count) => ({ blocks: [{ height: from }] }),
+      handleGetBlocks: (from, _count) => ({ blocks: [{ height: from }] }),
       getPrimaryAddress: () => 'addr',
       getBalance: () => ({ confirmed: 100, unmatured: 0 }),
       getMinedStats: () => ({ totalWTC: 100, totalBlocks: 10, maturedBlocks: 5 }),
@@ -42,7 +42,7 @@ function createMockDeps(overrides = {}) {
       configuredPeers: [],
     }),
     getPeerDirectoryTargets: () => [],
-    requestPeerJson: async () => null,
+    requestPeerJson: () => null,
     normalizePeerUrl: (url) => (url && url.startsWith('http') ? url : null),
     isSelfPeerUrl: () => false,
     isPeerUrlBanned: () => false,
@@ -51,7 +51,7 @@ function createMockDeps(overrides = {}) {
     peerUtils: { pickPeerExchangeTargets: () => [] },
     stunNatInfoRef: { current: null },
     allocatePunchPort: () => 50000,
-    requestPunch: () => ({ execute: async () => null }),
+    requestPunch: () => ({ execute: () => null }),
     filterExternalPeerUrls: (urls) => urls,
     getConfiguredAdvertisedPeerUrls: () => [],
     getLocalPeerHosts: () => new Set(['127.0.0.1', '::1']),
@@ -111,7 +111,7 @@ async function run() {
     const sync = createWtcChainSync(
       createMockDeps({
         getWtcNode: () => ({
-          syncWithPeers: async () => ({ ok: false, reason: 'peer unreachable' }),
+          syncWithPeers: () => ({ ok: false, reason: 'peer unreachable' }),
         }),
       }),
     );
@@ -124,7 +124,7 @@ async function run() {
     const sync = createWtcChainSync(
       createMockDeps({
         getWtcNode: () => ({
-          syncWithPeers: async () => {
+          syncWithPeers: () => {
             throw new Error('network error');
           },
         }),
@@ -277,7 +277,7 @@ async function run() {
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
+  if (!process.env.VITEST) process.exit(failed > 0 ? 1 : 0);
 }
 
 run();

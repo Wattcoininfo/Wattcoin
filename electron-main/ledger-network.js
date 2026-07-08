@@ -17,7 +17,6 @@ function createLedgerNetwork(ctx) {
     roundLedger,
     getCurrentBlockHeight,
     LEDGER_RECONCILE_INTERVAL_MS,
-    loadCachedRemoteSeedPeers,
   } = ctx;
 
   let ledgerReconcileTimer = null;

@@ -26,7 +26,9 @@ function getLocalPeerHosts() {
         }
       }
     }
-  } catch (_) {}
+  } catch (_) {
+    /* intentional */
+  }
   return hosts;
 }
 
@@ -44,7 +46,9 @@ function getLocalPeerIpv4InterfaceEntries() {
         });
       }
     }
-  } catch (_) {}
+  } catch (_) {
+    /* intentional */
+  }
   return entries;
 }
 

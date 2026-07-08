@@ -15,7 +15,7 @@ const https = require('https');
 const net = require('net');
 const dgram = require('dgram');
 const { EventEmitter } = require('events');
-const { WebSocketServer, WebSocket } = require('ws');
+const { WebSocket } = require('ws');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -40,7 +40,6 @@ const {
   computeGpuProbeExpectedHash,
   setCoordinatorIdentityKey,
   PROBE_INTERVAL_MS,
-  PROBE_CPU_ITERS,
   getLocalProbeChain,
   setAsicHardwareSpec,
   cancelPendingPeerProbesForWorker,
@@ -83,7 +82,7 @@ const {
 } = require('./gpu-load-controller');
 const si = require('systeminformation');
 const { createRoundLedger } = require('./round-ledger');
-const { buildOpsHealthResponse, checkLedgerNetworkAuth } = require('./ops-health');
+const { buildOpsHealthResponse } = require('./ops-health');
 const { createRemoteSeedManifestManager } = require('./remote-seed-manifest');
 const { maybeRegisterReachableRequester: maybeRegisterReachableRequesterHelper } = require('./requester-registration');
 const peerUtils = require('./electron-main/peer-utils');
@@ -98,15 +97,13 @@ const { createRoundContributions } = require('./electron-main/round-contribution
 const { createWtcChainSync } = require('./electron-main/wtc-chain-sync');
 const { createPeerDiscovery } = require('./electron-main/peer-discovery');
 const { registerLedgerIpcHandlers, _nodeHasGovernanceNfts } = require('./electron-main/ledger-ipc');
-const { registerWalletIpcHandlers } = require('./electron-main/wallet-ipc');
+
+const { createReverseTunnel } = require('./electron-main/reverse-tunnel');
 const {
   normalizePeerUrl,
   isDeprecatedPeerUrl,
   normalizeIpLiteral,
-  isPrivateIpv4,
-  isPrivateIpv6,
   isPublicPeerHost,
-  isLoopbackPeerHost,
   formatPeerHostForUrl,
   isUnusableGpuIdentity,
   normalizeGpuFingerprintValue,
@@ -115,13 +112,8 @@ const {
   getPersonalReference,
   isPowerCpuOutlier,
   secureStringEquals,
-  formatBackupTimestampForFilename,
-  encryptBackupPayload,
-  decryptBackupPayload,
   isReverseTunnelPeerUrl,
   extractTunnelIdFromUrl,
-  validatePassphrase,
-  normalizeWalletError,
   sha256Hex,
   median,
   pruneOldTimestamps,
@@ -131,15 +123,12 @@ const {
   shouldEscalateRateLimitToIdentityFailure,
   normalizeMinerIdentity,
   normalizeHardwareDescriptor,
-  sanitizeForwardedTunnelHeaders,
   getPeerNetworkSegment,
   defaultAttestationState,
   verifyPolicyFeedEnvelope,
-  computeMinedCoinsFromHeight,
   _computeMaturedMinedCoinsFromHeight,
   _computeWattcoinFromMinedBlocks,
   sendJson,
-  readJsonBody,
   getHostLanIp,
   computeNextReattestDueAt,
   verifyManifestSignature,
@@ -151,7 +140,7 @@ const {
   getLocalPeerIpv4InterfaceEntries,
   getLocalPeerIpv4Interfaces,
 } = require('./electron-main/peer-utils');
-const { BACKUP_FILE_EXTENSION, BACKUP_FORMAT_VERSION, parseBackupContainer } = require('./electron-main/backup');
+
 const { getDataDir, getActiveNetwork } = require('./electron-main/env');
 function refreshCoordinatorIdentityKey() {
   try {
@@ -186,7 +175,7 @@ const { registerWalletBackupIpcHandlers } = require('./electron-main/wallet-back
 const { getRuntimeConfig } = require('./runtime-config');
 const { autoUpdater } = require('electron-updater');
 const { createWtcNode } = require('./wtc-node');
-const { countLiveReverseTunnelPeers, summarizeDisplayedPeerCounts } = require('./peer-count-observability');
+const { summarizeDisplayedPeerCounts } = require('./peer-count-observability');
 const { buildPeerDiscoverySnapshot } = require('./peer-discovery-observability');
 const { filterAdvertisedPeerUrls, obfuscatePeerUrl, resolvePeerPrivacySecret } = require('./peer-privacy');
 const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./peer-self-filter');
@@ -215,7 +204,7 @@ const {
 } = require('./probe-attestation');
 const saleQueue = require('./wtc-sale-queue');
 const stakingQueue = require('./wtc-staking-queue');
-const { isValidAddress: isValidWtcAddress, verifyWalletMessagePureJS } = require('./wtc-address');
+const { isValidAddress: isValidWtcAddress } = require('./wtc-address');
 const { rewardForHeight } = require('./wtc-chain');
 
 const ABUSE_LOG_FILE_NAME = 'abuse-events.jsonl';
@@ -254,7 +243,6 @@ const endpointRateState = new Map();
 // Active locks are written to disk so a restart cannot circumvent a punishment
 // window.  Only the lock expiry timestamps are persisted (not hit counts) since
 // those would be stale after a restart anyway.
-const RATE_LOCK_FILE_NAME = 'rate-locks.json';
 function loadRateLocks() {
   persistence.loadRateLocks(endpointRateState);
 }
@@ -673,10 +661,6 @@ function verifyAsicFirmware(ip, port, checkModel, _modelName, driverName, driver
 // wallet address.  Once HISTORY_ENROLL_COUNT samples are collected, the personal
 // mean replaces the generic hardware-table reference for calibration, giving each
 // machine tighter and more accurate per-session tolerances.
-const HW_FINGERPRINT_FILE_NAME = 'hw-fingerprint.json';
-const BENCHMARK_HISTORY_FILE_NAME = 'benchmark-history.json';
-const HISTORY_ENROLL_COUNT = 8; // samples before personal mean starts blending in
-const HISTORY_MAX_SAMPLES = 20; // rolling window size
 
 function loadHwFingerprint() {
   try {
@@ -830,8 +814,9 @@ const roundLedger = createRoundLedger({
     }
   },
 });
-const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
+
 let ledgerNetworkServer = null;
+const ledgerNetworkServerRef = { current: null };
 let wtcNode = null; // WTC native chain node (initialized in app.whenReady)
 let mineBlockBusy = false; // prevents concurrent mineBlock calls (IPC + flush loop)
 let bundledSeedPeersCache = null;
@@ -844,18 +829,14 @@ let remoteSeedPeerRefreshTimer = null;
 // to avoid triggering AV behaviour detection.
 // Legacy `ledgerPeers` entries are treated as bootstrap seed peers, not as
 // a separate static active-peer bucket.
-const PEER_DISCOVERY_PORT = 39311;
-const PEER_DISCOVERY_MCAST = '239.0.52.67'; // administratively-scoped multicast, LAN-only
-const PEER_BEACON_INTERVAL_MS = 120_000; // 2 min - low-rate discovery
+
 const PEER_STALE_THRESHOLD_MS = 15 * 60_000; // 15 min without beacon -> evict
 const PEER_REACHABILITY_RETRY_MS = 3 * 60_000; // 3 min - WAN peers need longer backoff before re-probe
 const PEER_REACHABILITY_SUCCESS_TTL_MS = 10 * 60_000;
 const PEER_REACHABILITY_TIMEOUT_MS = 20_000; // WAN: allow for TCP handshake + high latency
 const PEER_CHAIN_TIP_TIMEOUT_MS = 25_000; // WAN: allow for TCP handshake + high latency
 const PEER_CHAIN_TIP_CACHE_MS = 3_000;
-const PEER_LOCAL_SUBNET_DISCOVERY_TIMEOUT_MS = 1_200;
-const PEER_LOCAL_SUBNET_DISCOVERY_CONCURRENCY = 24;
-const PEER_LOCAL_SUBNET_DISCOVERY_MIN_INTERVAL_MS = 60_000;
+
 const REVERSE_TUNNEL_CONNECT_TIMEOUT_MS = 30_000;
 const REVERSE_TUNNEL_REQUEST_TIMEOUT_MS = 20_000;
 const REVERSE_TUNNEL_MAX_PENDING = 64;
@@ -871,7 +852,6 @@ const REMOTE_SEED_MANIFEST_REFRESH_INTERVAL_MS = 5 * 60_000;
 const REMOTE_SEED_MANIFEST_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_REMOTE_SEED_MANIFEST_URLS = [];
 const AUTO_PUBLIC_IP_SERVICES = ['https://api.ipify.org', 'https://ifconfig.me/ip', 'https://ident.me'];
-const DISCOVERED_SEED_PEER_CACHE_FILE_NAME = 'discovered-seed-peer-cache.json';
 
 const discoveredPeers = new Map(); // url -> { lastSeenMs, source, sources, peerIdentity?, seenThisSession?, restoredFromCache? }
 const peerReachabilityCache = new Map(); // url -> { lastAttemptAtMs, lastSuccessAtMs, ok }
@@ -890,7 +870,6 @@ const PEER_COUNT_PROBE_TIMEOUT_MS = 25_000; // WAN-aware timeout for peer-count 
 const PEER_HEALTHY_GRACE_PERIOD_MS = 120_000; // 2 min - don't drop a peer on a single timeout; require sustained failure
 const PEER_ATTESTATION_SELECTION_TIMEOUT_MS = 25_000; // attestation peer must be online now (increased for WAN stability)
 const PEER_ATTESTATION_SELECTION_CONCURRENCY = 5;
-let reverseTunnelWss = null;
 const reverseTunnelSessions = new Map(); // tunnelId -> session
 const reverseTunnelSessionsByPeerIdentity = new Map(); // peerIdentity -> session
 const reverseTunnelPendingResponses = new Map(); // requestId -> { res, timer }
@@ -931,12 +910,7 @@ let stunNatInfo = null; // { natType, mappedIp, mappedPort, stunHost, detectedAt
 let stunDetectionPromise = null;
 let usedPunchPorts = new Set();
 let peerPunchAttemptTimestamps = new Map(); // normalizedUrl -> lastAttemptAtMs
-const PEER_PUNCH_RETRY_INTERVAL_MS = 120_000; // 2 min between punch attempts per peer
-const PEER_PUNCH_PER_CYCLE_MAX = 3;
 // Gossip state
-const PEER_GOSSIP_FANOUT = 4;
-const PEER_GOSSIP_TTL = 2;
-const PEER_GOSSIP_SEEN_TTL_MS = 300_000; // 5 min before re-gossip allowed
 const peerGossipSeen = new Map(); // `peerUrl:gossipId` -> detectedAtMs
 // blockHash - { minedAddress, totalWh, rewardCoins, settledAtMs, sig, fromPeer }
 const witnessedSettlements = new Map();
@@ -1114,6 +1088,76 @@ const wtcChainSync = createWtcChainSync({
   WTC_PEER_SYNC_DEBOUNCE_MS,
 });
 
+// -- WebSocket push-probe coordinator -------------------------------------------
+// Pushes probes to connected workers at unpredictable intervals so the
+// renderer cannot predict or control probe timing.
+const _probePushConns = new Map(); // workerId -> { ws, allowGpu }
+let _probePushWss = null;
+const _probePushWssRef = { current: null };
+let _probePushTimer = null;
+const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
+
+// Tracks whether this node's own renderer is actively mining (worker side).
+// Forwarded to coordinators so they only send probes when useful.
+let _localMiningStatus = false;
+
+// On the coordinator side: tracks which connected workers have reported
+// they are actively mining. Workers that explicitly signal non-mining
+// (idle) are skipped in _runProbePush to avoid sending probes that
+// would time out. Workers that haven't reported a status default to
+// unknown (undefined), which preserves backward compatibility - they
+// continue to receive probes. New connections start as null (pending)
+// and are skipped until the first mining-status message or a 5s timeout.
+const _workerIsMining = new Map(); // workerId ? boolean | null | undefined
+
+const reverseTunnel = createReverseTunnel({
+  reverseTunnelSessions,
+  reverseTunnelSessionsByPeerIdentity,
+  reverseTunnelPendingResponses,
+  reverseTunnelClientState,
+  relayWorkerConns,
+  probePushConns: _probePushConns,
+  workerIsMining: _workerIsMining,
+  cancelPendingPeerProbesForWorker,
+  handleWorkerBusy,
+  handleWsProbeResult: _handleWsProbeResult,
+  getConfiguredAdvertisedPeerUrls,
+  isPublicPeerHost,
+  normalizePeerUrl,
+  getPeerDirectoryTargets,
+  getLedgerNetworkSettings,
+  sendJson,
+  forgetDiscoveredPeer,
+  rememberDiscoveredPeer,
+  scheduleWtcPeerSync,
+  forgetDiscoveredPeersByIdentity,
+  refreshPeerDirectory,
+  writeStartupTrace,
+  obfuscatePublicPeerUrl,
+  isSelfPeerUrl,
+  isLocallyServedReverseTunnelPeerUrl,
+  buildPeerAnnouncementHeaders,
+  getPeerProtocolInfo,
+  getLocalPeerHosts,
+  verifyChainPeerCompatibility,
+  getLocalPeerIdentity,
+  peerUtils,
+  updateWorkerRtt,
+  forgetPeerUrlState,
+  crypto,
+  ledgerNetworkServerRef,
+  probePushWssRef: _probePushWssRef,
+  clearProbePushTimer: _clearProbePushTimer,
+  runProbePush: _runProbePush,
+  REVERSE_TUNNEL_CONNECT_TIMEOUT_MS,
+  REVERSE_TUNNEL_REQUEST_TIMEOUT_MS,
+  REVERSE_TUNNEL_MAX_PENDING,
+  REVERSE_TUNNEL_RECONNECT_BASE_MS,
+  REVERSE_TUNNEL_RECONNECT_MAX_MS,
+  REVERSE_TUNNEL_PING_INTERVAL_MS,
+  REVERSE_TUNNEL_LIVE_THRESHOLD_MS,
+});
+
 const peerNetworking = createPeerNetworking({
   discoveredPeers,
   peerReachabilityCache,
@@ -1221,11 +1265,7 @@ function stopRemoteSeedPeerRefresh() {
   return peerNetworking.stopRemoteSeedPeerRefresh();
 }
 
-function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force = false } = {}) {
-  return peerNetworking.detectAutoPublicPeerUrl(settings, { force });
-}
-
-async function refreshAutoPublicPeerUrl(settings = getLedgerNetworkSettings()) {
+function refreshAutoPublicPeerUrl(settings = getLedgerNetworkSettings()) {
   return peerNetworking.refreshAutoPublicPeerUrl(settings);
 }
 
@@ -1285,10 +1325,6 @@ function shouldAttemptPeerReachability(candidate, nowMs = Date.now()) {
   return peerNetworking.shouldAttemptPeerReachability(candidate, nowMs);
 }
 
-function scheduleDiscoveredSeedPeerCacheSave() {
-  persistence.scheduleDiscoveredSeedPeerCacheSave();
-}
-
 function rememberDiscoveredPeer(
   peerUrl,
   { source = 'peer-exchange', seenAtMs = Date.now(), quiet = false, peerIdentity = '' } = {},
@@ -1312,16 +1348,12 @@ function getLocalTunnelPeerLiveness(peerUrl) {
   return peerNetworking.getLocalTunnelPeerLiveness(peerUrl);
 }
 
-async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), localWorkerId = '', extraOpts = {}) {
+function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), localWorkerId = '', extraOpts = {}) {
   return peerNetworking.getOnlineAttestationPeers(settings, localWorkerId, extraOpts);
 }
 
 function pruneDiscoveredPeers(nowMs = Date.now()) {
   return peerNetworking.pruneDiscoveredPeers(nowMs);
-}
-
-function clearStalePeerAttestationHistory(nowMs = Date.now()) {
-  return peerNetworking.clearStalePeerAttestationHistory(nowMs);
 }
 
 function recordPeerAttestation(verifierAddress, workerId) {
@@ -1344,1002 +1376,12 @@ function getLedgerListenUrls(settings) {
   return ledgerNetwork.getLedgerListenUrls(settings);
 }
 
-async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') {
-  return peerNetworking.verifyReachablePeerCandidate(candidate, source);
-}
-
 function maybeRegisterReachableRequester(req, settings, source = 'peer-contact') {
   return peerNetworking.maybeRegisterReachableRequester(req, settings, source);
 }
 
 function rememberObservedRequester(req, settings, source = 'peer-presence') {
   return peerNetworking.rememberObservedRequester(req, settings, source);
-}
-
-function getReverseTunnelCoordinatorBaseUrl(req, settings = getLedgerNetworkSettings()) {
-  const advertisedUrls = getConfiguredAdvertisedPeerUrls(settings);
-  const publicAdvertisedUrl = advertisedUrls.find((candidate) => {
-    try {
-      const parsed = new URL(candidate);
-      return isPublicPeerHost(parsed.hostname) && !parsed.pathname.startsWith('/api/v1/tunnel/');
-    } catch (_) {
-      return false;
-    }
-  });
-  if (publicAdvertisedUrl) return publicAdvertisedUrl;
-  const host = String((req && req.headers && req.headers.host) || '').trim();
-  if (!host) return '';
-  return normalizePeerUrl(`http://${host}`);
-}
-
-function buildReverseTunnelCoordinatorCandidates(settings = getLedgerNetworkSettings()) {
-  const candidates = [];
-  for (const peerUrl of getPeerDirectoryTargets(settings)) {
-    try {
-      const parsed = new URL(peerUrl);
-      if (!isPublicPeerHost(parsed.hostname)) continue;
-      if (parsed.pathname && parsed.pathname !== '/') continue;
-      candidates.push(normalizePeerUrl(peerUrl));
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-    }
-  }
-  return Array.from(new Set(candidates.filter(Boolean)));
-}
-
-function chooseReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
-  const configuredCoordinator = normalizePeerUrl(settings && settings.coordinatorUrl);
-  if (configuredCoordinator) return configuredCoordinator;
-  const candidates = buildReverseTunnelCoordinatorCandidates(settings);
-  if (candidates.length === 0) return '';
-  if (!reverseTunnelClientState.rotateCoordinatorOnNextAttempt) {
-    return candidates[0];
-  }
-  const previousCoordinator = normalizePeerUrl(reverseTunnelClientState.coordinatorUrl);
-  const previousIndex = previousCoordinator ? candidates.indexOf(previousCoordinator) : -1;
-  if (previousIndex < 0) return candidates[0];
-  return candidates[(previousIndex + 1) % candidates.length];
-}
-
-function cleanupReverseTunnelPendingRequest(requestId) {
-  const pending = reverseTunnelPendingResponses.get(requestId);
-  if (!pending) return;
-  clearTimeout(pending.timer);
-  reverseTunnelPendingResponses.delete(requestId);
-}
-
-function failReverseTunnelPendingRequestsForSession(session, reason = 'Reverse tunnel disconnected.') {
-  for (const [requestId, pending] of reverseTunnelPendingResponses.entries()) {
-    if (!pending || pending.tunnelId !== session.tunnelId) continue;
-    cleanupReverseTunnelPendingRequest(requestId);
-    if (!pending.res.headersSent) {
-      sendJson(pending.res, 502, { ok: false, code: 'REVERSE_TUNNEL_DOWN', message: reason });
-    }
-  }
-}
-
-function destroyReverseTunnelSession(session, reason = 'closed') {
-  if (!session) return;
-  reverseTunnelSessions.delete(session.tunnelId);
-  if (session.peerIdentity) {
-    const mapped = reverseTunnelSessionsByPeerIdentity.get(session.peerIdentity);
-    if (mapped === session) {
-      reverseTunnelSessionsByPeerIdentity.delete(session.peerIdentity);
-    }
-  }
-  if (reason === 'replaced' || reason === 'stopped') {
-    forgetDiscoveredPeer(session.publicUrl);
-  } else if (session.publicUrl) {
-    rememberDiscoveredPeer(session.publicUrl, {
-      source: 'managed-tunnel',
-      quiet: true,
-      seenAtMs: Math.max(0, Number(session.lastSeenAtMs) || Date.now()),
-      peerIdentity: session.peerIdentity || '',
-    });
-    scheduleWtcPeerSync(`managed-reverse-tunnel-${reason}`, 150);
-  }
-  failReverseTunnelPendingRequestsForSession(session, `Reverse tunnel ${reason}.`);
-  // Close all relayed worker WS connections for this tunnel.
-  const relayed = relayWorkerConns.get(session.tunnelId);
-  if (relayed) {
-    for (const [, ws] of relayed) {
-      try {
-        ws.close();
-      } catch (_) {
-        /* ignore */
-      }
-    }
-    relayWorkerConns.delete(session.tunnelId);
-  }
-  try {
-    clearInterval(session.pingTimer);
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-  try {
-    session.socket.close();
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-}
-
-function getReverseTunnelPeerIdentity(req) {
-  const headerValue = String(req && req.headers ? req.headers['x-wtc-peer-identity'] || '' : '').trim();
-  return peerUtils.isValidPeerIdentity(headerValue) ? headerValue : '';
-}
-
-function handleReverseTunnelResponseMessage(session, message) {
-  const requestId = String((message && message.requestId) || '').trim();
-  const pending = reverseTunnelPendingResponses.get(requestId);
-  if (!pending || pending.tunnelId !== session.tunnelId) return;
-  cleanupReverseTunnelPendingRequest(requestId);
-  const statusCode = Math.max(100, Number(message && message.statusCode) || 500);
-  const headers =
-    message && typeof message.headers === 'object' && message.headers
-      ? message.headers
-      : { 'content-type': 'application/json; charset=utf-8' };
-  const bodyBuffer =
-    message && message.bodyBase64 ? Buffer.from(String(message.bodyBase64), 'base64') : Buffer.alloc(0);
-  pending.res.writeHead(statusCode, headers);
-  pending.res.end(bodyBuffer);
-}
-
-function handleReverseTunnelSocketMessage(session, rawMessage) {
-  let message = null;
-  try {
-    message = JSON.parse(String(rawMessage || ''));
-  } catch (_) {
-    return;
-  }
-  if (!message || typeof message !== 'object') return;
-  session.lastSeenAtMs = Date.now();
-  if (session.publicUrl) {
-    // Aggressively refresh lastSeenMs for tunnel peers on every tunnel message
-    rememberDiscoveredPeer(session.publicUrl, {
-      source: 'managed-tunnel',
-      quiet: true,
-      seenAtMs: session.lastSeenAtMs,
-      peerIdentity: session.peerIdentity || '',
-    });
-  }
-  if (message.type === 'pong' || message.type === 'ping' || message.type === 'tunnel-ready') {
-    // Also refresh on tunnel-ready and ping
-    if (session.publicUrl) {
-      rememberDiscoveredPeer(session.publicUrl, {
-        source: 'managed-tunnel',
-        quiet: true,
-        seenAtMs: Date.now(),
-        peerIdentity: session.peerIdentity || '',
-      });
-    }
-    return;
-  }
-  if (message.type === 'http-response') {
-    handleReverseTunnelResponseMessage(session, message);
-    return;
-  }
-  // Relay WS messages - forward data/close from the mobile node to the
-  // worker's WS that is connected to us via /api/v1/tunnel/<id>/api/v1/probe/push.
-  if (message.type === 'relay-ws-data') {
-    const workerId = String(message.workerId || '');
-    const dataBase64 = String(message.dataBase64 || '');
-    const relays = relayWorkerConns.get(session.tunnelId);
-    if (relays) {
-      const ws = relays.get(workerId);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(Buffer.from(dataBase64, 'base64'));
-      }
-    }
-    return;
-  }
-  if (message.type === 'relay-ws-close') {
-    const workerId = String(message.workerId || '');
-    const relays = relayWorkerConns.get(session.tunnelId);
-    if (relays) {
-      const ws = relays.get(workerId);
-      if (ws) {
-        relays.delete(workerId);
-        try {
-          ws.close();
-        } catch (_) {
-          /* ignore */
-        }
-      }
-    }
-    return;
-  }
-}
-
-async function handleReverseTunnelHttpRequest(req, res, _settings) {
-  const segments = String(req.url || '')
-    .split('?')[0]
-    .split('/')
-    .filter(Boolean);
-  const tunnelId = segments[3] ? decodeURIComponent(segments[3]) : '';
-  const session = reverseTunnelSessions.get(tunnelId);
-  if (!session || session.socket.readyState !== WebSocket.OPEN) {
-    sendJson(res, 502, { ok: false, code: 'REVERSE_TUNNEL_UNAVAILABLE', message: 'Tunnel session unavailable.' });
-    return true;
-  }
-  if (reverseTunnelPendingResponses.size >= REVERSE_TUNNEL_MAX_PENDING) {
-    sendJson(res, 503, { ok: false, code: 'REVERSE_TUNNEL_BUSY', message: 'Tunnel is temporarily busy.' });
-    return true;
-  }
-  const proxiedPath = `/${segments.slice(4).join('/')}${new URL(req.url || '/', 'http://127.0.0.1').search}`;
-  if (!proxiedPath.startsWith('/api/v1/')) {
-    sendJson(res, 404, { ok: false, code: 'NOT_FOUND', message: 'Ledger endpoint not found.' });
-    return true;
-  }
-  const requestId = crypto.randomBytes(12).toString('hex');
-  const bodyBuffer = await peerUtils.readRequestBodyBuffer(req);
-  const forwardedHeaders = {
-    'content-type': String(req.headers['content-type'] || 'application/json; charset=utf-8'),
-    'x-wtc-network-id': String(req.headers['x-wtc-network-id'] || ''),
-    'x-wtc-protocol-version': String(req.headers['x-wtc-protocol-version'] || ''),
-    'x-wtc-genesis-hash': String(req.headers['x-wtc-genesis-hash'] || ''),
-    'x-wtc-peer-identity': String(req.headers['x-wtc-peer-identity'] || ''),
-    'x-wtc-peer-port': String(req.headers['x-wtc-peer-port'] || ''),
-    'x-wtc-peer-urls': String(req.headers['x-wtc-peer-urls'] || ''),
-    'x-wtc-via-tunnel': '1',
-    'x-wattcoin-ledger-token': String(req.headers['x-wattcoin-ledger-token'] || ''),
-  };
-  reverseTunnelPendingResponses.set(requestId, {
-    tunnelId,
-    res,
-    timer: setTimeout(() => {
-      cleanupReverseTunnelPendingRequest(requestId);
-      if (!res.headersSent) {
-        sendJson(res, 504, { ok: false, code: 'REVERSE_TUNNEL_TIMEOUT', message: 'Reverse tunnel request timed out.' });
-      }
-    }, REVERSE_TUNNEL_REQUEST_TIMEOUT_MS),
-  });
-  session.socket.send(
-    JSON.stringify({
-      type: 'http-request',
-      requestId,
-      method: String(req.method || 'GET').toUpperCase(),
-      path: proxiedPath,
-      headers: forwardedHeaders,
-      bodyBase64: bodyBuffer.toString('base64'),
-    }),
-  );
-  return true;
-}
-
-function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
-  if (!ledgerNetworkServer || reverseTunnelWss) return;
-  reverseTunnelWss = new WebSocketServer({ noServer: true });
-  reverseTunnelWss.on('connection', (socket, req) => {
-    const tunnelId = crypto.randomBytes(16).toString('hex');
-    const coordinatorBaseUrl = getReverseTunnelCoordinatorBaseUrl(req, settings);
-    const publicUrl = peerUtils.buildReverseTunnelPublicUrl(coordinatorBaseUrl, tunnelId);
-    const peerIdentity = getReverseTunnelPeerIdentity(req);
-    // Reject self-connecting tunnels - the seed peer should not tunnel to itself.
-    const localPeerIdentity = getLocalPeerIdentity();
-    if (peerIdentity && localPeerIdentity && peerIdentity === localPeerIdentity) {
-      console.log(`[ReverseTunnel] Rejecting self-connecting tunnel from ${peerIdentity}`);
-      try {
-        socket.close();
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-      return;
-    }
-    if (peerIdentity) {
-      const previousSession = reverseTunnelSessionsByPeerIdentity.get(peerIdentity);
-      if (previousSession) {
-        console.log(`[ReverseTunnel] Replacing stale tunnel session for ${peerIdentity}`);
-        destroyReverseTunnelSession(previousSession, 'replaced');
-      }
-    }
-    const session = {
-      tunnelId,
-      publicUrl,
-      peerIdentity,
-      socket,
-      connectedAtMs: Date.now(),
-      lastSeenAtMs: Date.now(),
-      pingTimer: setInterval(() => {
-        if (socket.readyState !== WebSocket.OPEN) return;
-        try {
-          socket.send(JSON.stringify({ type: 'ping', nowMs: Date.now() }));
-        } catch (_) {
-          if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-        }
-      }, REVERSE_TUNNEL_PING_INTERVAL_MS),
-    };
-    reverseTunnelSessions.set(tunnelId, session);
-    if (peerIdentity) {
-      reverseTunnelSessionsByPeerIdentity.set(peerIdentity, session);
-    }
-    rememberDiscoveredPeer(publicUrl, {
-      source: 'managed-tunnel',
-      quiet: true,
-      peerIdentity,
-    });
-    if (peerIdentity) {
-      forgetDiscoveredPeersByIdentity(peerIdentity, { keepUrl: publicUrl });
-    }
-    socket.on('message', (message) => handleReverseTunnelSocketMessage(session, message));
-    socket.on('close', () => destroyReverseTunnelSession(session, 'closed'));
-    socket.on('error', () => destroyReverseTunnelSession(session, 'errored'));
-    socket.send(JSON.stringify({ type: 'tunnel-ready', tunnelId, publicUrl }));
-    // Immediately query the new tunnel peer for its peer directory so the seed
-    // peer discovers the rest of the network faster.
-    refreshPeerDirectory(getLedgerNetworkSettings()).catch(() => {});
-  });
-  ledgerNetworkServer.on('upgrade', (req, socket, head) => {
-    try {
-      const reqUrl = new URL(req.url || '/', 'http://127.0.0.1');
-
-      // Probe push WebSocket - workers connect here to receive probes at
-      // unpredictable times instead of polling an HTTP endpoint.
-      if (reqUrl.pathname === '/api/v1/probe/push') {
-        const workerId = String(reqUrl.searchParams.get('workerId') || 'unknown');
-        const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
-        const hasAsic = reqUrl.searchParams.get('hasAsic') === 'true';
-        const gpuPowCapable = reqUrl.searchParams.get('gpuPowCapable') === 'true';
-        if (!_probePushWss) {
-          _probePushWss = new WebSocketServer({ noServer: true });
-        }
-        _probePushWss.handleUpgrade(req, socket, head, (ws) => {
-          const existing = _probePushConns.get(workerId);
-          if (existing) {
-            cancelPendingPeerProbesForWorker(workerId);
-            try {
-              existing.ws.close();
-            } catch (_) {
-              /* ws already closed */
-            }
-          }
-          const hadWorkers = _probePushConns.size > 0;
-          _probePushConns.set(workerId, { ws, allowGpu, hasAsic, gpuPowCapable });
-          // Mark worker as pending - don't issue probes until we know its
-          // mining status. A 5s safety timeout falls back to unknown
-          // (probe) for workers that never send mining-status (old clients).
-          _workerIsMining.set(workerId, null);
-          const _pendingMiningTimeout = setTimeout(() => {
-            if (_workerIsMining.get(workerId) === null) {
-              _workerIsMining.delete(workerId);
-            }
-          }, 5000);
-          ws._pendingMiningTimeout = _pendingMiningTimeout;
-          // First worker just connected - push a probe immediately instead of
-          // waiting up to 60s for the next random _scheduleProbePush cycle.
-          if (!hadWorkers) {
-            _clearProbePushTimer();
-            _runProbePush();
-          }
-          const dropWorker = (id) => {
-            clearInterval(ws._probePushPingInterval);
-            if (ws._pendingMiningTimeout) {
-              clearTimeout(ws._pendingMiningTimeout);
-              ws._pendingMiningTimeout = null;
-            }
-            if (_probePushConns.get(id) && _probePushConns.get(id).ws === ws) {
-              _probePushConns.delete(id);
-            }
-            _workerIsMining.delete(id);
-            cancelPendingPeerProbesForWorker(id);
-          };
-          ws.on('close', () => dropWorker(workerId));
-          ws.on('error', () => dropWorker(workerId));
-          // Heartbeat: detect half-open TCP connections so dead workers
-          // don't accumulate orphaned probes in peerProbeIssuances.
-          // Grace period: allow up to 2 consecutive missed pongs (~90s) before
-          // terminating, so transient network jitter does not disconnect workers.
-          const PROBE_PUSH_MAX_MISSED_PONGS = 2;
-          try {
-            if (ws._socket) ws._socket.setKeepAlive(true, 15000);
-          } catch (_) {
-            /* ignore */
-          }
-          ws.isAlive = true;
-          ws._probePushMissedPongs = 0;
-          ws.on('pong', () => {
-            ws.isAlive = true;
-            if (ws._pingSentAt) {
-              const rtt = Date.now() - ws._pingSentAt;
-              ws._pingSentAt = 0;
-              ws._smoothedRttMs = ws._smoothedRttMs ? Math.round(ws._smoothedRttMs * 0.7 + rtt * 0.3) : rtt;
-              updateWorkerRtt(workerId, ws._smoothedRttMs);
-            }
-          });
-          // Listen for worker messages: busy signals, shutdown notification.
-          ws.on('message', (data) => {
-            try {
-              const msg = JSON.parse(String(data));
-              if (msg.type === 'busy' && msg.probeId) {
-                handleWorkerBusy(workerId, msg.probeId);
-              } else if (msg.type === 'worker-done') {
-                dropWorker(workerId);
-              } else if (msg.type === 'probe-result') {
-                _handleWsProbeResult(workerId, msg, ws).catch(() => {});
-              } else if (msg.type === 'mining-status') {
-                if (msg.data && typeof msg.data.mining === 'boolean') {
-                  _workerIsMining.set(workerId, msg.data.mining);
-                }
-              }
-            } catch (_) {
-              /* ignore */
-            }
-          });
-          ws._probePushPingInterval = setInterval(() => {
-            if (ws.readyState !== WebSocket.OPEN) {
-              clearInterval(ws._probePushPingInterval);
-              return;
-            }
-            if (!ws.isAlive) {
-              ws._probePushMissedPongs++;
-              if (ws._probePushMissedPongs >= PROBE_PUSH_MAX_MISSED_PONGS) {
-                dropWorker(workerId);
-                ws.terminate();
-                return;
-              }
-              // Grace cycle: send another ping instead of terminating.
-              ws.isAlive = false;
-              try {
-                ws._pingSentAt = Date.now();
-                ws.ping();
-              } catch (_) {
-                /* ignore */
-              }
-              return;
-            }
-            ws._probePushMissedPongs = 0;
-            ws.isAlive = false;
-            try {
-              ws._pingSentAt = Date.now();
-              ws.ping();
-            } catch (_) {
-              /* ignore */
-            }
-          }, 30_000);
-        });
-        return;
-      }
-
-      // Relay push WebSocket - workers connect here to be probed by a
-      // tunneled (CGNAT / mobile data) peer.  The seed peer pipes the
-      // WS frames bidirectionally through the reverse tunnel so the
-      // mobile node acts as the coordinator transparently.
-      const tunnelProbePushMatch = reqUrl.pathname.match(/^\/api\/v1\/tunnel\/([^/]+)\/api\/v1\/probe\/push$/);
-      if (tunnelProbePushMatch) {
-        const tunnelId = decodeURIComponent(tunnelProbePushMatch[1]);
-        const session = reverseTunnelSessions.get(tunnelId);
-        if (!session || session.socket.readyState !== WebSocket.OPEN) {
-          socket.destroy();
-          return;
-        }
-        const workerId = String(reqUrl.searchParams.get('workerId') || 'unknown');
-        const allowGpu = reqUrl.searchParams.get('allowGpu') === 'true';
-        const hasAsic = reqUrl.searchParams.get('hasAsic') === 'true';
-        if (!_probePushWss) {
-          _probePushWss = new WebSocketServer({ noServer: true });
-        }
-        _probePushWss.handleUpgrade(req, socket, head, (ws) => {
-          let tunnelRelays = relayWorkerConns.get(tunnelId);
-          if (!tunnelRelays) {
-            tunnelRelays = new Map();
-            relayWorkerConns.set(tunnelId, tunnelRelays);
-          }
-          tunnelRelays.set(workerId, ws);
-          // Notify the mobile node that a worker connected via relay.
-          try {
-            session.socket.send(
-              JSON.stringify({
-                type: 'relay-ws-open',
-                workerId,
-                allowGpu,
-                hasAsic,
-              }),
-            );
-          } catch (_) {
-            /* tunnel closed */
-          }
-          // Forward WS messages from the worker to the mobile node.
-          ws.on('message', (data) => {
-            try {
-              session.socket.send(
-                JSON.stringify({
-                  type: 'relay-ws-data',
-                  workerId,
-                  dataBase64: Buffer.from(data).toString('base64'),
-                }),
-              );
-            } catch (_) {
-              /* tunnel closed */
-            }
-          });
-          // Clean up relay mapping on worker disconnect.
-          ws.on('close', () => {
-            const relays = relayWorkerConns.get(tunnelId);
-            if (relays) relays.delete(workerId);
-            try {
-              session.socket.send(JSON.stringify({ type: 'relay-ws-close', workerId }));
-            } catch (_) {
-              /* tunnel closed */
-            }
-          });
-          ws.on('error', () => {
-            const relays = relayWorkerConns.get(tunnelId);
-            if (relays) relays.delete(workerId);
-          });
-        });
-        return;
-      }
-
-      if (reqUrl.pathname !== '/api/v1/tunnel/connect') {
-        socket.destroy();
-        return;
-      }
-      const compat = verifyChainPeerCompatibility(req);
-      if (!compat.ok) {
-        console.warn(
-          `[ReverseTunnel] Rejected upgrade from ${(req.socket && req.socket.remoteAddress) || 'unknown'}: ${compat.reason}`,
-        );
-        socket.destroy();
-        return;
-      }
-      reverseTunnelWss.handleUpgrade(req, socket, head, (ws) => {
-        reverseTunnelWss.emit('connection', ws, req);
-      });
-    } catch (_) {
-      try {
-        socket.destroy();
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-    }
-  });
-}
-
-function stopReverseTunnelCoordinator() {
-  for (const session of reverseTunnelSessions.values()) {
-    destroyReverseTunnelSession(session, 'stopped');
-  }
-  reverseTunnelSessions.clear();
-  for (const requestId of Array.from(reverseTunnelPendingResponses.keys())) {
-    cleanupReverseTunnelPendingRequest(requestId);
-  }
-  if (reverseTunnelWss) {
-    try {
-      reverseTunnelWss.close();
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-    }
-    reverseTunnelWss = null;
-  }
-}
-
-function stopManagedReverseTunnelClient() {
-  reverseTunnelClientState.connecting = false;
-  reverseTunnelClientState.publicUrl = '';
-  reverseTunnelClientState.tunnelId = '';
-  reverseTunnelClientState.coordinatorUrl = '';
-  reverseTunnelClientState.connectedAtMs = 0;
-  reverseTunnelClientState.lastSeenAtMs = 0;
-  reverseTunnelClientState.reconnectDelayMs = REVERSE_TUNNEL_RECONNECT_BASE_MS;
-  if (reverseTunnelClientState.reconnectTimer) {
-    clearTimeout(reverseTunnelClientState.reconnectTimer);
-    reverseTunnelClientState.reconnectTimer = null;
-  }
-  if (reverseTunnelClientState.pingTimer) {
-    clearInterval(reverseTunnelClientState.pingTimer);
-    reverseTunnelClientState.pingTimer = null;
-  }
-  if (reverseTunnelClientState.socket) {
-    try {
-      reverseTunnelClientState.socket.close();
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-    }
-    reverseTunnelClientState.socket = null;
-  }
-  // Remove all relayed (virtual WS) probe push connections.
-  for (const [wid, conn] of _probePushConns) {
-    if (conn && conn.ws && conn.ws._isRelayWs) {
-      cancelPendingPeerProbesForWorker(wid);
-    }
-  }
-  for (const [wid, conn] of _probePushConns) {
-    if (conn && conn.ws && conn.ws._isRelayWs) {
-      _probePushConns.delete(wid);
-    }
-  }
-}
-
-function scheduleManagedReverseTunnelReconnect() {
-  if (reverseTunnelClientState.reconnectTimer) return;
-  const delayMs = reverseTunnelClientState.reconnectDelayMs;
-  reverseTunnelClientState.rotateCoordinatorOnNextAttempt = true;
-  reverseTunnelClientState.reconnectTimer = setTimeout(() => {
-    reverseTunnelClientState.reconnectTimer = null;
-    ensureManagedReverseTunnelClient();
-  }, delayMs);
-  reverseTunnelClientState.reconnectDelayMs = Math.min(
-    REVERSE_TUNNEL_RECONNECT_MAX_MS,
-    Math.max(REVERSE_TUNNEL_RECONNECT_BASE_MS, delayMs * 2),
-  );
-}
-
-async function forwardReverseTunnelRequestToLocalNode(socket, message) {
-  const settings = getLedgerNetworkSettings();
-  const targetPath = String((message && message.path) || '/').trim() || '/';
-  const method = String((message && message.method) || 'GET').toUpperCase();
-  const requestId = String((message && message.requestId) || '').trim();
-  const bodyBuffer =
-    message && message.bodyBase64 ? Buffer.from(String(message.bodyBase64), 'base64') : Buffer.alloc(0);
-  const forwardedHeaders = sanitizeForwardedTunnelHeaders(message && message.headers);
-  const protocolInfo = getPeerProtocolInfo();
-  const requestOptions = {
-    method,
-    hostname: '127.0.0.1',
-    port: settings.listenPort,
-    path: targetPath,
-    timeout: REVERSE_TUNNEL_REQUEST_TIMEOUT_MS,
-    headers: {
-      ...forwardedHeaders,
-      'Content-Length': Buffer.byteLength(bodyBuffer),
-      'x-wtc-network-id': forwardedHeaders['x-wtc-network-id'] || protocolInfo.networkId,
-      'x-wtc-protocol-version': forwardedHeaders['x-wtc-protocol-version'] || String(protocolInfo.protocolVersion),
-      ...(protocolInfo.genesisHash && !forwardedHeaders['x-wtc-genesis-hash']
-        ? { 'x-wtc-genesis-hash': protocolInfo.genesisHash }
-        : {}),
-    },
-  };
-  const responsePayload = await new Promise((resolve) => {
-    const request = http.request(requestOptions, (response) => {
-      const chunks = [];
-      response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => {
-        resolve({
-          statusCode: Number(response.statusCode) || 500,
-          headers: { 'content-type': String(response.headers['content-type'] || 'application/json; charset=utf-8') },
-          bodyBase64: Buffer.concat(chunks).toString('base64'),
-        });
-      });
-    });
-    request.on('timeout', () => request.destroy(new Error('Local reverse tunnel request timed out.')));
-    request.on('error', (error) => {
-      resolve({
-        statusCode: 502,
-        headers: { 'content-type': 'application/json; charset=utf-8' },
-        bodyBase64: Buffer.from(
-          JSON.stringify({
-            ok: false,
-            code: 'REVERSE_TUNNEL_LOCAL_ERROR',
-            message: error && error.message ? error.message : 'Local reverse tunnel request failed.',
-          }),
-          'utf8',
-        ).toString('base64'),
-      });
-    });
-    request.write(bodyBuffer);
-    request.end();
-  });
-  try {
-    socket.send(JSON.stringify({ type: 'http-response', requestId, ...responsePayload }));
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-}
-
-function createRelayVirtualWs(workerId) {
-  const eventHandlers = { message: [], close: [], error: [] };
-  const virtualWs = {
-    _isRelayWs: true,
-    readyState: 1, // WebSocket.OPEN
-    _probePushMissedPongs: 0,
-    send: (data) => {
-      const ws = reverseTunnelClientState.socket;
-      if (ws && ws.readyState === 1) {
-        const payload = typeof data === 'string' ? data : String(data);
-        try {
-          ws.send(
-            JSON.stringify({
-              type: 'relay-ws-data',
-              workerId,
-              dataBase64: Buffer.from(payload).toString('base64'),
-            }),
-          );
-        } catch (_) {
-          /* tunnel closed */
-        }
-      }
-    },
-    close: () => {
-      virtualWs.readyState = 3; // CLOSED
-      const ws = reverseTunnelClientState.socket;
-      if (ws && ws.readyState === 1) {
-        try {
-          ws.send(JSON.stringify({ type: 'relay-ws-close', workerId }));
-        } catch (_) {
-          /* tunnel closed */
-        }
-      }
-    },
-    on: (event, handler) => {
-      if (eventHandlers[event]) {
-        eventHandlers[event].push(handler);
-      }
-    },
-    _emitMessage: (data) => {
-      virtualWs.readyState = 1;
-      for (const handler of eventHandlers.message) {
-        try {
-          handler(data);
-        } catch (_) {
-          /* ignore handler error */
-        }
-      }
-    },
-    _emitClose: () => {
-      virtualWs.readyState = 3;
-      for (const handler of eventHandlers.close) {
-        try {
-          handler();
-        } catch (_) {
-          /* ignore handler error */
-        }
-      }
-    },
-  };
-  return virtualWs;
-}
-
-function handleManagedReverseTunnelMessage(socket, rawMessage) {
-  let message = null;
-  try {
-    message = JSON.parse(String(rawMessage || ''));
-  } catch (_) {
-    return;
-  }
-  if (!message || typeof message !== 'object') return;
-  reverseTunnelClientState.lastSeenAtMs = Date.now();
-  if (message.type === 'ping') {
-    try {
-      socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-    }
-    return;
-  }
-  if (message.type === 'tunnel-ready') {
-    const previousPublicUrl = normalizePeerUrl(reverseTunnelClientState.publicUrl);
-    reverseTunnelClientState.tunnelId = String(message.tunnelId || '');
-    reverseTunnelClientState.publicUrl = normalizePeerUrl(message.publicUrl);
-    if (previousPublicUrl && previousPublicUrl !== reverseTunnelClientState.publicUrl) {
-      forgetPeerUrlState(previousPublicUrl);
-    }
-    reverseTunnelClientState.connectedAtMs = Date.now();
-    reverseTunnelClientState.lastSeenAtMs = Date.now();
-    reverseTunnelClientState.reconnectDelayMs = REVERSE_TUNNEL_RECONNECT_BASE_MS;
-    writeStartupTrace('reverse-tunnel.ready', {
-      tunnelId: reverseTunnelClientState.tunnelId,
-      publicUrl: obfuscatePublicPeerUrl(reverseTunnelClientState.publicUrl),
-      coordinatorUrl: obfuscatePublicPeerUrl(reverseTunnelClientState.coordinatorUrl),
-    });
-    console.log(
-      `[ReverseTunnel] Reachable via ${obfuscatePublicPeerUrl(reverseTunnelClientState.publicUrl) || 'managed tunnel'}; awaiting a higher compatible peer chain before sync import.`,
-    );
-    scheduleWtcPeerSync('managed-reverse-tunnel-ready', 150);
-    return;
-  }
-  if (message.type === 'http-request') {
-    forwardReverseTunnelRequestToLocalNode(socket, message).catch(() => {});
-    return;
-  }
-  // Relay WS messages - the seed peer is forwarding probe push WS
-  // connections so we can act as coordinator through the tunnel.
-  if (message.type === 'relay-ws-open') {
-    const workerId = String(message.workerId || '');
-    const allowGpu = message.allowGpu === true;
-    const hasAsic = message.hasAsic === true;
-    const existing = _probePushConns.get(workerId);
-    if (existing) {
-      cancelPendingPeerProbesForWorker(workerId);
-      try {
-        existing.ws.close();
-      } catch (_) {
-        /* ignore */
-      }
-    }
-    const virtualWs = createRelayVirtualWs(workerId);
-    _probePushConns.set(workerId, { ws: virtualWs, allowGpu, hasAsic });
-    _workerIsMining.set(workerId, null);
-    const _pendingTimeout = setTimeout(() => {
-      if (_workerIsMining.get(workerId) === null) {
-        _workerIsMining.delete(workerId);
-      }
-    }, 5000);
-    virtualWs._pendingMiningTimeout = _pendingTimeout;
-    virtualWs.on('message', (data) => {
-      try {
-        const msg = JSON.parse(String(data));
-        if (msg.type === 'busy' && msg.probeId) {
-          handleWorkerBusy(workerId, msg.probeId);
-        } else if (msg.type === 'worker-done') {
-          if (virtualWs._pendingMiningTimeout) {
-            clearTimeout(virtualWs._pendingMiningTimeout);
-            virtualWs._pendingMiningTimeout = null;
-          }
-          const conn = _probePushConns.get(workerId);
-          if (conn && conn.ws === virtualWs) {
-            _probePushConns.delete(workerId);
-          }
-          _workerIsMining.delete(workerId);
-          cancelPendingPeerProbesForWorker(workerId);
-        } else if (msg.type === 'probe-result') {
-          _handleWsProbeResult(workerId, msg, virtualWs).catch(() => {});
-        } else if (msg.type === 'mining-status') {
-          if (msg.data && typeof msg.data.mining === 'boolean') {
-            _workerIsMining.set(workerId, msg.data.mining);
-          }
-        }
-      } catch (_) {
-        /* ignore */
-      }
-    });
-    console.log(`[RelayWS] Worker ${workerId} connected via relay tunnel`);
-    return;
-  }
-  if (message.type === 'relay-ws-data') {
-    const workerId = String(message.workerId || '');
-    const conn = _probePushConns.get(workerId);
-    if (conn && conn.ws && conn.ws._isRelayWs) {
-      const data = Buffer.from(String(message.dataBase64 || ''), 'base64');
-      conn.ws._emitMessage(data);
-    }
-    return;
-  }
-  if (message.type === 'relay-ws-close') {
-    const workerId = String(message.workerId || '');
-    const conn = _probePushConns.get(workerId);
-    if (conn && conn.ws && conn.ws._isRelayWs) {
-      if (conn.ws._pendingMiningTimeout) {
-        clearTimeout(conn.ws._pendingMiningTimeout);
-        conn.ws._pendingMiningTimeout = null;
-      }
-      _probePushConns.delete(workerId);
-      _workerIsMining.delete(workerId);
-      cancelPendingPeerProbesForWorker(workerId);
-      conn.ws._emitClose();
-    }
-    return;
-  }
-}
-
-function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerNetworkSettings()) {
-  const connectUrl = peerUtils.buildReverseTunnelConnectUrl(coordinatorUrl);
-  if (!connectUrl) {
-    writeStartupTrace('reverse-tunnel.connect-skipped', {
-      reason: 'missing-connect-url',
-      coordinatorUrl,
-    });
-    return false;
-  }
-  const protocolInfo = getPeerProtocolInfo();
-  const localPeerIdentity = getLocalPeerIdentity();
-  const headers = {
-    ...buildPeerAnnouncementHeaders(settings),
-    'x-wtc-network-id': protocolInfo.networkId,
-    'x-wtc-protocol-version': String(protocolInfo.protocolVersion),
-    ...(localPeerIdentity ? { 'x-wtc-peer-identity': localPeerIdentity } : {}),
-    ...(protocolInfo.genesisHash ? { 'x-wtc-genesis-hash': protocolInfo.genesisHash } : {}),
-  };
-  writeStartupTrace('reverse-tunnel.connecting', {
-    coordinatorUrl,
-    connectUrl,
-    peerIdentity: localPeerIdentity,
-    networkId: protocolInfo.networkId,
-    protocolVersion: protocolInfo.protocolVersion,
-    genesisHash: protocolInfo.genesisHash,
-    peerUrls: String(headers['x-wtc-peer-urls'] || ''),
-  });
-  reverseTunnelClientState.connecting = true;
-  reverseTunnelClientState.coordinatorUrl = coordinatorUrl;
-  let socket;
-  try {
-    socket = new WebSocket(connectUrl, { headers, handshakeTimeout: REVERSE_TUNNEL_CONNECT_TIMEOUT_MS });
-  } catch (_) {
-    reverseTunnelClientState.connecting = false;
-    writeStartupTrace('reverse-tunnel.connect-failed', {
-      coordinatorUrl,
-      connectUrl,
-      reason: 'websocket-constructor-failed',
-    });
-    scheduleManagedReverseTunnelReconnect();
-    return false;
-  }
-  reverseTunnelClientState.socket = socket;
-  socket.on('open', () => {
-    reverseTunnelClientState.connecting = false;
-    writeStartupTrace('reverse-tunnel.open', {
-      coordinatorUrl,
-      connectUrl,
-    });
-    reverseTunnelClientState.pingTimer = setInterval(() => {
-      if (socket.readyState !== WebSocket.OPEN) return;
-      try {
-        socket.send(JSON.stringify({ type: 'pong', nowMs: Date.now() }));
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-    }, REVERSE_TUNNEL_PING_INTERVAL_MS);
-  });
-  socket.on('message', (message) => handleManagedReverseTunnelMessage(socket, message));
-  socket.on('close', () => {
-    writeStartupTrace('reverse-tunnel.closed', {
-      coordinatorUrl,
-      connectUrl,
-    });
-    if (reverseTunnelClientState.socket === socket) {
-      stopManagedReverseTunnelClient();
-      scheduleManagedReverseTunnelReconnect();
-    }
-  });
-  socket.on('error', (error) => {
-    writeStartupTrace('reverse-tunnel.error', {
-      coordinatorUrl,
-      connectUrl,
-      message: error && error.message ? error.message : String(error || ''),
-    });
-    if (reverseTunnelClientState.socket === socket) {
-      stopManagedReverseTunnelClient();
-      scheduleManagedReverseTunnelReconnect();
-    }
-  });
-  return true;
-}
-
-function ensureManagedReverseTunnelClient(settings = getLedgerNetworkSettings()) {
-  if (!peerUtils.shouldUseManagedReverseTunnel(settings)) {
-    writeStartupTrace('reverse-tunnel.disabled', {
-      enabled: Boolean(settings && settings.enabled),
-      mode: settings && settings.mode,
-      explicitAdvertisedPeerUrls: peerUtils.getExplicitAdvertisedPeerUrls(settings),
-    });
-    stopManagedReverseTunnelClient();
-    return;
-  }
-  if (reverseTunnelClientState.socket || reverseTunnelClientState.connecting) return;
-  const coordinatorUrl = chooseReverseTunnelCoordinator(settings);
-  if (!coordinatorUrl) {
-    writeStartupTrace('reverse-tunnel.connect-skipped', {
-      reason: 'missing-coordinator-url',
-    });
-    scheduleManagedReverseTunnelReconnect();
-    return;
-  }
-  // Do not tunnel to ourselves - seed peer is its own coordinator.
-  if (isSelfPeerUrl(coordinatorUrl) || isLocallyServedReverseTunnelPeerUrl(coordinatorUrl, settings)) {
-    writeStartupTrace('reverse-tunnel.connect-skipped', {
-      reason: 'coordinator-is-self',
-      coordinatorUrl: obfuscatePublicPeerUrl(coordinatorUrl),
-    });
-    return;
-  }
-  // Also skip if the coordinator resolves to a local interface IP + our listen port,
-  // which covers the case where autoDetectedPublicPeerUrl is not yet resolved.
-  try {
-    const coordParsed = new URL(coordinatorUrl);
-    const coordPort = Number(coordParsed.port || (coordParsed.protocol === 'https:' ? 443 : 80));
-    if (coordPort === Number(settings.listenPort) && getLocalPeerHosts().has(coordParsed.hostname)) {
-      writeStartupTrace('reverse-tunnel.connect-skipped', {
-        reason: 'coordinator-is-local',
-        coordinatorUrl: obfuscatePublicPeerUrl(coordinatorUrl),
-      });
-      return;
-    }
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-  writeStartupTrace('reverse-tunnel.enabled', {
-    coordinatorUrl: obfuscatePublicPeerUrl(coordinatorUrl),
-  });
-  reverseTunnelClientState.rotateCoordinatorOnNextAttempt = false;
-  connectManagedReverseTunnelClient(coordinatorUrl, settings);
 }
 
 function getPeerDiscoverySnapshot(settings = getLedgerNetworkSettings()) {
@@ -2494,7 +1536,6 @@ const LOCAL_HARDWARE_PROFILE_DB = [
 const activeAttestationChallenges = new Map();
 const consumedBenchmarkProofs = new Map();
 
-const CONSUMED_PROOFS_FILE_NAME = 'consumed-proofs.json';
 function loadConsumedProofs() {
   try {
     const raw = fs.readFileSync(getConsumedProofsFilePath(), 'utf8');
@@ -2558,10 +1599,6 @@ function getPolicyAnchorCacheFilePath() {
 function loadPolicyAnchorState() {
   const loaded = persistence.loadPolicyAnchorState();
   if (loaded) policyAnchorState = loaded;
-}
-
-function savePolicyAnchorState(state) {
-  persistence.savePolicyAnchorState(state);
 }
 
 function getAttestationDbFilePath() {
@@ -3575,13 +2612,7 @@ async function inspectPeerConnectivityForTargets(
 }
 
 function getActiveReverseTunnelPeerConnectionCount() {
-  const now = Date.now();
-  return countLiveReverseTunnelPeers({
-    sessions: reverseTunnelSessions.values(),
-    nowMs: now,
-    liveThresholdMs: REVERSE_TUNNEL_LIVE_THRESHOLD_MS,
-    openState: WebSocket.OPEN,
-  });
+  return reverseTunnel.getActiveReverseTunnelPeerConnectionCount();
 }
 
 let opsSnapshotInFlight = false;
@@ -5106,7 +4137,6 @@ ipcMain.handle('wattcoin-clear-probe-history', () => {
 // -- Probe log persistence ------------------------------------------------------
 // The renderer probe log is persisted to userData so entries survive restarts.
 // Capped at 500 entries on save; renderer may further cap at 150 for display.
-const PROBE_LOG_FILE_NAME = 'probe-log.json';
 ipcMain.handle('wattcoin-get-probe-log', () => {
   try {
     const raw = fs.readFileSync(getProbeLogFilePath(), 'utf8');
@@ -5769,27 +4799,6 @@ ipcMain.handle('wattcoin-request-peer-probe', (_event, opts) => {
 
   return { ok: false, error: 'No probe available.' };
 });
-
-// -- WebSocket push-probe coordinator -------------------------------------------
-// Pushes probes to connected workers at unpredictable intervals so the
-// renderer cannot predict or control probe timing.
-const _probePushConns = new Map(); // workerId -> { ws, allowGpu }
-let _probePushWss = null;
-let _probePushTimer = null;
-const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
-
-// Tracks whether this node's own renderer is actively mining (worker side).
-// Forwarded to coordinators so they only send probes when useful.
-let _localMiningStatus = false;
-
-// On the coordinator side: tracks which connected workers have reported
-// they are actively mining. Workers that explicitly signal non-mining
-// (idle) are skipped in _runProbePush to avoid sending probes that
-// would time out. Workers that haven't reported a status default to
-// unknown (undefined), which preserves backward compatibility - they
-// continue to receive probes. New connections start as null (pending)
-// and are skipped until the first mining-status message or a 5s timeout.
-const _workerIsMining = new Map(); // workerId ? boolean | null | undefined
 
 function _clearProbePushTimer() {
   if (_probePushTimer) {
@@ -8404,7 +7413,7 @@ function validateContributionProbe(address, totalWh, chainIndex) {
   return roundContributions.validateContributionProbe(address, totalWh, chainIndex);
 }
 
-async function pullContributionsFromPeers() {
+function pullContributionsFromPeers() {
   return roundContributions.pullContributionsFromPeers();
 }
 
@@ -8416,10 +7425,6 @@ function buildRewardMapFromRoundSnapshot(roundSnapshot, fallbackAddress = '') {
   return roundContributions.buildRewardMapFromRoundSnapshot(roundSnapshot, fallbackAddress);
 }
 
-function broadcastRoundContributionToPeers({ address, roundId, totalWh }) {
-  roundContributions.broadcastRoundContributionToPeers({ address, roundId, totalWh });
-}
-
 // Flush the entire pending buffer to the round ledger on a successful peer
 // probe.  After flushing the buffer is reset to 0 - no carryover, no rewind,
 // so energy accumulated between probes is always credited on the next success.
@@ -8429,81 +7434,6 @@ function _flushPendingContribution(chainIndex) {
 
 function broadcastProbeReceiptToPeers(receipt) {
   roundContributions.broadcastProbeReceiptToPeers(receipt);
-}
-
-function queueRoundContributionBroadcast(peerUrl, payload) {
-  roundContributions.queueRoundContributionBroadcast(peerUrl, payload);
-}
-
-async function getLocalLedgerBalances(selectedAddress) {
-  alignRoundLedgerToChain();
-  const address = typeof selectedAddress === 'string' ? selectedAddress.trim() : '';
-  const blockHeight = await getCurrentBlockHeight();
-  roundLedger.syncMaturity(blockHeight);
-  const snapshot = roundLedger.getAddressSnapshot(address);
-  const currentRoundWh = roundLedger.getRoundContribution(address);
-  const maturityDepth = typeof roundLedger.getMaturityDepth === 'function' ? roundLedger.getMaturityDepth() : 100;
-  return {
-    ok: true,
-    address: snapshot.address,
-    balanceSource: 'backend-round-ledger',
-    accountingModel: 'proportional-energy-rounds',
-    balanceSemanticsVersion: 2,
-    isAddressSpecific: true,
-    totalMinedCoins: snapshot.total,
-    maturedMinedCoins: snapshot.matured,
-    unmaturedMinedCoins: snapshot.pending,
-    currentRoundContributionWh: currentRoundWh,
-    blockHeight,
-    maturityDepth,
-  };
-}
-
-async function settleLocalLedgerRound(payload = {}) {
-  // Tier 5: reject settlement when no power-proof commitment was attached to this block.
-  const proofCommitment = payload && payload.proofCommitment ? String(payload.proofCommitment).trim() : '';
-  if (ENABLE_POWER_PROOF_COMMITMENT && !proofCommitment) {
-    console.warn('[Ledger] Settlement rejected: missing power-proof commitment.');
-    return {
-      ok: false,
-      code: 'PROOF_MISSING',
-      message: 'Settlement rejected: no power-proof commitment was present for this block.',
-    };
-  }
-
-  // Tier 5b: verify commitment matches what was recorded at mine time to prevent
-  // a patched renderer from swapping in a fake contribution between mine and settle.
-  if (ENABLE_POWER_PROOF_COMMITMENT && proofCommitment) {
-    const expected = hwAuthority.pendingProofCommitment;
-    if (!expected || proofCommitment !== expected) {
-      console.warn('[Ledger] Settlement rejected: proof commitment mismatch.');
-      hwAuthority.pendingProofCommitment = '';
-      return {
-        ok: false,
-        code: 'PROOF_COMMITMENT_MISMATCH',
-        message: 'Settlement rejected: proof commitment does not match mined block.',
-      };
-    }
-  }
-  hwAuthority.pendingProofCommitment = '';
-
-  const minedAddress = payload && payload.minedAddress ? String(payload.minedAddress) : '';
-
-  const blockHeight = await getCurrentBlockHeight();
-  const round = roundLedger.settleCurrentRound({
-    blockHash: payload && payload.blockHash ? String(payload.blockHash) : '',
-    minedAddress,
-    blockHeight,
-    rewardCoins: Number(payload && payload.rewardCoins) || 0,
-    contributionsWh:
-      payload && payload.contributionsWh && typeof payload.contributionsWh === 'object'
-        ? payload.contributionsWh
-        : null,
-  });
-  const maturedRounds = roundLedger.syncMaturity(blockHeight);
-  // Fire-and-forget broadcast to peers for cross-node audit trail.
-  if (round && !round.idempotent) broadcastSettlementToPeers(round).catch(() => {});
-  return { ok: true, round, maturedRounds, blockHeight };
 }
 
 // Returns the union of statically configured peers, seed peers, and dynamically
@@ -8537,18 +7467,6 @@ function getTrustedPeerTargets(settings) {
   return peerDiscovery.getTrustedPeerTargets(settings);
 }
 
-function sendPeerBeacon(httpPort, publicUrl = '') {
-  peerDiscovery.sendPeerBeacon(httpPort, publicUrl);
-}
-
-function hasKnownPrivateLanPeer(settings = getLedgerNetworkSettings()) {
-  return peerDiscovery.hasKnownPrivateLanPeer(settings);
-}
-
-async function discoverPeersOnLocalSubnets(httpPort, settings = getLedgerNetworkSettings()) {
-  return peerDiscovery.discoverPeersOnLocalSubnets(httpPort, settings);
-}
-
 function startPeerDiscovery(httpPort, publicUrl = '') {
   peerDiscovery.startPeerDiscovery(httpPort, publicUrl);
 }
@@ -8561,17 +7479,7 @@ function recordWitnessedSettlement(summary, fromPeer) {
   roundContributions.recordWitnessedSettlement(summary, fromPeer);
 }
 
-function broadcastSettlementToPeers(round) {
-  return roundContributions.broadcastSettlementToPeers(round);
-}
-
 // -- Governance P2P gossip -----------------------------------------------------
-
-/** Fetch governance snapshots from all peers and merge locally.
- *  Only runs on NFT-holding nodes - non-NFT nodes never receive governance data. */
-async function syncGovernanceFromPeers() {
-  return governance.syncGovernanceFromPeers();
-}
 
 /** Schedule periodic governance sync. */
 let _govSyncInterval = null;
@@ -8582,12 +7490,6 @@ function stopGovernanceSync() {
   governance.stopGovernanceSync();
 }
 
-/** Fetch team/docs snapshots from all peers and merge locally.
- *  Only runs on NFT-holding nodes - non-NFT nodes never receive the data. */
-async function syncTeamDocsFromPeers() {
-  return governance.syncTeamDocsFromPeers();
-}
-
 /** Broadcast local team/docs data to all peers (fire-and-forget). */
 function broadcastTeamDocsToPeers() {
   governance.broadcastTeamDocsToPeers();
@@ -8596,7 +7498,7 @@ function broadcastTeamDocsToPeers() {
 const ledgerRequestHandler = createLedgerRequestHandler({
   getRequesterIdentity,
   isPeerIdentityBanned,
-  handleReverseTunnelHttpRequest,
+  handleReverseTunnelHttpRequest: reverseTunnel.handleReverseTunnelHttpRequest,
   refreshCoordinatorIdentityKey,
   enforceEndpointRateLimit,
   submitPeerProbeResult,
@@ -8655,7 +7557,8 @@ function startLedgerNetworkServer() {
   if (!settings.enabled || settings.mode !== 'peer') return;
 
   ledgerNetworkServer = http.createServer(ledgerRequestHandler);
-  startReverseTunnelCoordinator(settings);
+  ledgerNetworkServerRef.current = ledgerNetworkServer;
+  reverseTunnel.startReverseTunnelCoordinator(settings);
   _scheduleProbePush();
 
   ledgerNetworkServer.listen(settings.listenPort, settings.listenHost, async () => {
@@ -8717,7 +7620,7 @@ function startLedgerNetworkServer() {
     startAutoPublicPeerUrlRefresh(effectiveSettings);
     startRemoteSeedPeerRefresh(effectiveSettings);
     startSeedRegistryHeartbeat(effectiveSettings);
-    ensureManagedReverseTunnelClient(effectiveSettings);
+    reverseTunnel.ensureManagedReverseTunnelClient(effectiveSettings);
     attemptHolePunchToSeedPeers(effectiveSettings);
   });
 }
@@ -8728,8 +7631,8 @@ function stopLedgerNetworkServer() {
   stopAutoPublicPeerUrlRefresh();
   stopSeedRegistryHeartbeat();
   stopPeerDiscovery();
-  stopManagedReverseTunnelClient();
-  stopReverseTunnelCoordinator();
+  reverseTunnel.stopManagedReverseTunnelClient();
+  reverseTunnel.stopReverseTunnelCoordinator();
   removeUpnpMapping();
   autoDetectedPublicPeerUrlFromUpnp = false;
   stunNatInfo = null;
@@ -8743,6 +7646,7 @@ function stopLedgerNetworkServer() {
   } catch (_) {
     if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
+  ledgerNetworkServerRef.current = null;
   ledgerNetworkServer = null;
 }
 
@@ -9024,8 +7928,6 @@ const userDataPath = getWalletDataDir();
 app.setPath('userData', userDataPath);
 app.setPath('cache', path.join(userDataPath, 'Cache'));
 
-let ledgerReconcileTimer = null;
-
 function startLedgerReconcileLoop() {
   ledgerNetwork.startLedgerReconcileLoop();
 }
@@ -9034,7 +7936,7 @@ function stopLedgerReconcileLoop() {
   ledgerNetwork.stopLedgerReconcileLoop();
 }
 
-async function runWtcPeerSync(triggerLabel) {
+function runWtcPeerSync(triggerLabel) {
   return wtcChainSync.runWtcPeerSync(triggerLabel);
 }
 
@@ -9064,10 +7966,6 @@ function scheduleWtcPeerSync(reason, delayMs = WTC_PEER_SYNC_DEBOUNCE_MS) {
 
 function handlePeerTipSignal(peerUrl, tip = null, source = 'tip-probe') {
   wtcChainSync.handlePeerTipSignal(peerUrl, tip, source);
-}
-
-function buildPushChainPayload(windowSize = 200) {
-  return wtcChainSync.buildPushChainPayload(windowSize);
 }
 
 function pushChainToPeers({ windowSize = 200 } = {}) {

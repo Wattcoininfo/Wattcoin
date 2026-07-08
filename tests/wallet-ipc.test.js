@@ -36,12 +36,12 @@ async function run() {
       ipcMain,
       wtcNode: null,
       getLedgerNetworkSettings: () => ({ enabled: false }),
-      enforceEndpointRateLimit: async () => ({ ok: true }),
+      enforceEndpointRateLimit: () => ({ ok: true }),
       normalizePeerUrl: (url) => url,
-      requestPeerJson: async () => null,
+      requestPeerJson: () => null,
       getActivePeers: () => [],
       getCurrentBlockHeight: () => 0,
-      settleLocalLedgerRound: async () => ({ ok: true }),
+      settleLocalLedgerRound: () => ({ ok: true }),
       https: { get: () => ({ on: () => {}, destroy: () => {} }) },
       getBetaPolicy: () => ({ withdrawalsEnabled: false, policyMessage: 'Betas only' }),
       logAbuseEvent: async () => {},
@@ -50,7 +50,7 @@ async function run() {
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
+  if (!process.env.VITEST) process.exit(failed > 0 ? 1 : 0);
 }
 
 run();

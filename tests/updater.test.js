@@ -25,12 +25,12 @@ function makeMockElectron() {
     app: {
       isPackaged: true,
       whenReady() {
-        return { then: (cb) => {} };
+        return { then: (_cb) => {} };
       },
     },
     autoUpdater: {
       setFeedURL: () => {},
-      checkForUpdates: async () => ({ updateInfo: { version: '1.0.500' } }),
+      checkForUpdates: () => ({ updateInfo: { version: '1.0.500' } }),
       on: (event, handler) => {
         autoUpdaterHandlers[event] = handler;
       },
@@ -154,7 +154,7 @@ async function run() {
 
   await test('wattcoin-check-for-update returns result from checkForUpdates', async () => {
     const mock = makeMockElectron();
-    mock.autoUpdater.checkForUpdates = async () => ({ updateInfo: { version: '2.0.0' } });
+    mock.autoUpdater.checkForUpdates = () => ({ updateInfo: { version: '2.0.0' } });
     silence(() => initUpdater({ ...mock, updateInstallInProgressRef: { value: false } }));
     const result = await mock._handlers['wattcoin-check-for-update']();
     assert.deepStrictEqual(result, { updateInfo: { version: '2.0.0' } });
@@ -162,7 +162,7 @@ async function run() {
 
   await test('wattcoin-check-for-update returns null on failure', async () => {
     const mock = makeMockElectron();
-    mock.autoUpdater.checkForUpdates = async () => {
+    mock.autoUpdater.checkForUpdates = () => {
       throw new Error('network error');
     };
     silence(() => initUpdater({ ...mock, updateInstallInProgressRef: { value: false } }));
@@ -231,7 +231,7 @@ async function run() {
 
   await test('returns null when all fallback feeds fail in checkForUpdates', async () => {
     const mock = makeMockElectron();
-    mock.autoUpdater.checkForUpdates = async () => {
+    mock.autoUpdater.checkForUpdates = () => {
       throw new Error('all failed');
     };
     silence(() => initUpdater({ ...mock, updateInstallInProgressRef: { value: false } }));

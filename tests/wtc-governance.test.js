@@ -16,7 +16,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const { GovernanceStore, GOVERNANCE_MIN_RESERVE, GOVERNANCE_MAX_TRANSFER } = require('../wtc-governance');
+const { GovernanceStore, GOVERNANCE_MAX_TRANSFER } = require('../wtc-governance');
 const { generateKeypair, sign, txHash } = require('../wtc-address');
 const { Mempool } = require('../wtc-mempool');
 const { Consensus } = require('../wtc-consensus');

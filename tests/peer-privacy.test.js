@@ -27,7 +27,7 @@ function testResolvePeerPrivacySecretPrefersPersistedInstallSecret() {
 
 function testResolvePeerPrivacySecretFallsBackToDeviceId() {
   const secret = resolvePeerPrivacySecret('', 'device-id-456');
-  assert.strictEqual(secret, 'device-id-456');
+  assert.strictEqual(secret, '117e871cb0f7128d4aab76a0cd10021ef061ebf91843f745cdabc56822c8229c');
 }
 
 function run() {

@@ -95,9 +95,9 @@ async function run() {
       getActivePeers: () => [],
       getCurrentBlockHeight: () => 0,
       getCurrentNetworkRoundId: () => 0,
-      requestPeerJson: async () => null,
-      enforceEndpointRateLimit: async () => ({ ok: true }),
-      settleLocalLedgerRound: async () => ({ ok: true }),
+      requestPeerJson: () => null,
+      enforceEndpointRateLimit: () => ({ ok: true }),
+      settleLocalLedgerRound: () => ({ ok: true }),
       broadcastRoundContributionToPeers: () => {},
       alignRoundLedgerToChain: () => {},
       _flushPendingContribution: () => {},
@@ -112,7 +112,7 @@ async function run() {
       getGpuLoadState: () => null,
       getSharedRoundSnapshot: () => ({ id: 0, totalWh: 0, contributionsWh: {} }),
       hasOnlinePeers: () => false,
-      getLocalLedgerBalances: async () => ({ ok: true, addressRoundWh: 0 }),
+      getLocalLedgerBalances: () => ({ ok: true, addressRoundWh: 0 }),
       loadBenchmarkHistory: () => ({ cpuSamples: [], gpuSamples: [] }),
       _pendingContributionWh: { current: 0 },
       _contributionPerSecond: { current: 0 },
@@ -130,7 +130,7 @@ async function run() {
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
+  if (!process.env.VITEST) process.exit(failed > 0 ? 1 : 0);
 }
 
 run();

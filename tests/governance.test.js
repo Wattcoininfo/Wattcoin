@@ -25,7 +25,7 @@ function createMockWtcNode() {
       if (!votes[pipId]) votes[pipId] = [];
       votes[pipId].push(v);
     },
-    verifyMessage: (voter, signature, msg) => {
+    verifyMessage: (voter, signature, _msg) => {
       return signature === 'valid-sig';
     },
     getProposals: () => proposals,
@@ -43,7 +43,7 @@ function buildMinimalCtx(overrides = {}) {
       seedPeers: ['http://seed-a:39310'],
     }),
     getActivePeers: () => ['http://peer-a:39310', 'http://peer-b:39310'],
-    requestPeerJson: async () => ({ ok: true, proposals: [], members: [], docs: [] }),
+    requestPeerJson: () => Promise.resolve({ ok: true, proposals: [], members: [], docs: [] }),
     readTeamData: () => [],
     writeTeamData: noop,
     readDocsData: () => [],
@@ -121,7 +121,7 @@ describe('governance', function () {
       ];
       const g = createGovernance({
         ...ctx,
-        requestPeerJson: async () => peerResponses[0],
+        requestPeerJson: () => Promise.resolve(peerResponses[0]),
       });
       await g.syncGovernanceFromPeers();
     });
@@ -153,16 +153,13 @@ describe('governance', function () {
       ];
       let callIdx = 0;
       let writtenMembers = null;
-      let writtenDocs = null;
       const g = createGovernance({
         ...ctx,
-        requestPeerJson: async () => peerResponses[callIdx++],
+        requestPeerJson: () => Promise.resolve(peerResponses[callIdx++]),
         writeTeamData: (members) => {
           writtenMembers = members;
         },
-        writeDocsData: (docs) => {
-          writtenDocs = docs;
-        },
+        writeDocsData: () => {},
       });
       await g.syncTeamDocsFromPeers();
       expect(writtenMembers).to.not.be.null;
@@ -187,9 +184,9 @@ describe('governance', function () {
       let requestCount = 0;
       const g = createGovernance({
         ...ctx,
-        requestPeerJson: async () => {
+        requestPeerJson: () => {
           requestCount++;
-          return { ok: true };
+          return Promise.resolve({ ok: true });
         },
       });
       g.broadcastTeamDocsToPeers();
@@ -201,9 +198,9 @@ describe('governance', function () {
       const g = createGovernance({
         ...ctx,
         getLedgerNetworkSettings: () => ({ enabled: false }),
-        requestPeerJson: async () => {
+        requestPeerJson: () => {
           requestCount++;
-          return { ok: true };
+          return Promise.resolve({ ok: true });
         },
       });
       g.broadcastTeamDocsToPeers();

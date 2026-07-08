@@ -5,27 +5,15 @@ const saleQueue = require('../wtc-sale-queue');
 
 // --- Internal state ---------------------------------------------------------
 let walletAddressCache = { address: '', at: 0 };
+void walletAddressCache;
 
 const ELECTRICITY_PRICE_FALLBACK = 0.174;
 const ELECTRICITY_PRICE_CACHE_MS = 24 * 60 * 60 * 1000;
 let _electricityCache = { price: null, fetchedAt: 0 };
 
 function registerWalletIpcHandlers(deps) {
-  const {
-    ipcMain,
-    wtcNode,
-    getLedgerNetworkSettings,
-    enforceEndpointRateLimit,
-    normalizePeerUrl,
-    requestPeerJson,
-    getActivePeers,
-    getCurrentBlockHeight,
-    settleLocalLedgerRound,
-    https,
-    getBetaPolicy,
-    logAbuseEvent,
-    refreshWalletSyncState,
-  } = deps;
+  const { ipcMain, wtcNode, enforceEndpointRateLimit, https, getBetaPolicy, logAbuseEvent, refreshWalletSyncState } =
+    deps;
 
   // Get WTC balances reconstructed from mined block history for a specific mining address.
   ipcMain.handle('wattcoin-get-node-mined-coins', (_, selectedAddress) => {

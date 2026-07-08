@@ -136,7 +136,7 @@ async function run() {
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
+  if (!process.env.VITEST) process.exit(failed > 0 ? 1 : 0);
 }
 
 run();

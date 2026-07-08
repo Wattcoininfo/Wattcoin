@@ -46,7 +46,7 @@ function createMockDeps(overrides = {}) {
       configuredPeers: [],
     }),
     rememberDiscoveredPeer: () => {},
-    requestPeerJson: async () => null,
+    requestPeerJson: () => null,
     getConfiguredAdvertisedPeerUrls: () => [],
     getPrimaryAdvertisedPeerUrl: () => '',
     getLocalPeerHosts: () => new Set(['127.0.0.1', '::1']),
@@ -226,7 +226,7 @@ async function run() {
     let passedPeers = null;
     const pd = createPeerDiscovery(
       createMockDeps({
-        checkHasKnownPrivateLanPeer: (peers, opts) => {
+        checkHasKnownPrivateLanPeer: (peers, _opts) => {
           called = true;
           passedPeers = peers;
           return true;
@@ -250,7 +250,7 @@ async function run() {
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);
-  process.exit(failed > 0 ? 1 : 0);
+  if (!process.env.VITEST) process.exit(failed > 0 ? 1 : 0);
 }
 
 run();

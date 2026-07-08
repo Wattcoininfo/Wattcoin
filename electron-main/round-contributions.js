@@ -33,7 +33,6 @@ function createRoundContributions(deps) {
     witnessedProbeReceipts,
     bootstrapPeerAddresses,
     MIN_PROBE_VERIFIERS,
-    REVERSE_TUNNEL_LIVE_THRESHOLD_MS,
     ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS,
   } = deps;
 
