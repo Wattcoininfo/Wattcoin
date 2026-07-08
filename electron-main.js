@@ -86,12 +86,62 @@ const { createRoundLedger } = require('./round-ledger');
 const { buildOpsHealthResponse, checkLedgerNetworkAuth } = require('./ops-health');
 const { createRemoteSeedManifestManager } = require('./remote-seed-manifest');
 const { maybeRegisterReachableRequester: maybeRegisterReachableRequesterHelper } = require('./requester-registration');
-function getDataDir() {
-  return path.join(os.homedir(), 'WattcoinMinerUserData');
-}
-function getActiveNetwork() {
-  return 'wtc-mainnet';
-}
+const peerUtils = require('./electron-main/peer-utils');
+const hwProf = require('./electron-main/hardware-profiles');
+const {
+  normalizePeerUrl,
+  isDeprecatedPeerUrl,
+  normalizeIpLiteral,
+  isPrivateIpv4,
+  isPrivateIpv6,
+  isPublicPeerHost,
+  isLoopbackPeerHost,
+  formatPeerHostForUrl,
+  isUnusableGpuIdentity,
+  normalizeGpuFingerprintValue,
+  formatHardwareChangeList,
+  appendBenchmarkSample,
+  getPersonalReference,
+  isPowerCpuOutlier,
+  secureStringEquals,
+  formatBackupTimestampForFilename,
+  encryptBackupPayload,
+  decryptBackupPayload,
+  isReverseTunnelPeerUrl,
+  extractTunnelIdFromUrl,
+  validatePassphrase,
+  normalizeWalletError,
+  sha256Hex,
+  median,
+  pruneOldTimestamps,
+  pushTimestampWindow,
+  hardwareModelsMatch,
+  getEndpointActorKey,
+  shouldEscalateRateLimitToIdentityFailure,
+  normalizeMinerIdentity,
+  normalizeHardwareDescriptor,
+  sanitizeForwardedTunnelHeaders,
+  getPeerNetworkSegment,
+  defaultAttestationState,
+  verifyPolicyFeedEnvelope,
+  computeMinedCoinsFromHeight,
+  _computeMaturedMinedCoinsFromHeight,
+  _computeWattcoinFromMinedBlocks,
+  sendJson,
+  readJsonBody,
+  getHostLanIp,
+  computeNextReattestDueAt,
+  verifyManifestSignature,
+} = require('./electron-main/main-utils');
+const { initUpdater } = require('./electron-main/updater');
+const {
+  buildPeerUrlFromSocket,
+  getLocalPeerHosts,
+  getLocalPeerIpv4InterfaceEntries,
+  getLocalPeerIpv4Interfaces,
+} = require('./electron-main/peer-utils');
+const { BACKUP_FILE_EXTENSION, BACKUP_FORMAT_VERSION, parseBackupContainer } = require('./electron-main/backup');
+const { getDataDir, getActiveNetwork } = require('./electron-main/env');
 function refreshCoordinatorIdentityKey() {
   try {
     const address = String(
@@ -106,25 +156,21 @@ function refreshCoordinatorIdentityKey() {
     return '';
   }
 }
-function getAppDisplayVersion() {
-  let packageVersion = '';
-  try {
-    packageVersion = String(require('./package.json').version || '').trim();
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-
-  if (!app.isPackaged) {
-    return packageVersion || '?';
-  }
-
-  try {
-    const packagedVersion = String(app.getVersion() || '').trim();
-    return packagedVersion || packageVersion || '?';
-  } catch (_) {
-    return packageVersion || '?';
-  }
-}
+const {
+  getFocusedWindow,
+  getAppDisplayVersion,
+  createWindow,
+  getRateLockFilePath,
+  getHwAuthStatePath,
+  getHwFingerprintPath,
+  getBenchmarkHistoryPath,
+  getDiscoveredSeedPeerCachePath,
+  getRemoteSeedPeerCachePath,
+  getConsumedProofsFilePath,
+  getProbeLogFilePath,
+  persistDevPeerPrivacyRecoveryKey,
+} = require('./electron-main/electron-utils');
+const { registerWalletBackupIpcHandlers } = require('./electron-main/wallet-backup-ipc');
 const { getRuntimeConfig } = require('./runtime-config');
 const { autoUpdater } = require('electron-updater');
 const { createWtcNode } = require('./wtc-node');
@@ -160,8 +206,6 @@ const stakingQueue = require('./wtc-staking-queue');
 const { isValidAddress: isValidWtcAddress, verifyWalletMessagePureJS } = require('./wtc-address');
 const { rewardForHeight } = require('./wtc-chain');
 
-const BACKUP_FILE_EXTENSION = 'wcbak';
-const BACKUP_FORMAT_VERSION = 1;
 const ABUSE_LOG_FILE_NAME = 'abuse-events.jsonl';
 const STARTUP_TRACE_FILE_NAME = 'wattcoin-startup-trace.log';
 const BUNDLED_SEED_PEER_FILE_NAMES = ['seed-peers.mainnet.json', 'bootstrap-peers.mainnet.json'];
@@ -199,10 +243,6 @@ const endpointRateState = new Map();
 // window.  Only the lock expiry timestamps are persisted (not hit counts) since
 // those would be stale after a restart anyway.
 const RATE_LOCK_FILE_NAME = 'rate-locks.json';
-function getRateLockFilePath() {
-  return path.join(app.getPath('userData'), RATE_LOCK_FILE_NAME);
-}
-
 function loadRateLocks() {
   try {
     const raw = fs.readFileSync(getRateLockFilePath(), 'utf8');
@@ -418,35 +458,6 @@ function recordMinerStats(address, powerW, cpuOps) {
   }
 }
 
-// Returns true if this miner's power/cpu ratio is an outlier (>3s from network mean).
-function isPowerCpuOutlier(address, powerW, cpuOps) {
-  if (networkMiningStats.size < 3) return false;
-  let sumRatio = 0,
-    count = 0;
-  for (const [addr, stats] of networkMiningStats) {
-    if (addr === address || stats.count === 0) continue;
-    const ratio = stats.totalCpuOps > 0 ? stats.totalPowerW / stats.totalCpuOps : 0;
-    sumRatio += ratio;
-    count++;
-  }
-  if (count < 2) return false;
-  const mean = sumRatio / count;
-  let sumSq = 0;
-  for (const [addr, stats] of networkMiningStats) {
-    if (addr === address || stats.count === 0) continue;
-    const ratio = stats.totalCpuOps > 0 ? stats.totalPowerW / stats.totalCpuOps : 0;
-    sumSq += (ratio - mean) ** 2;
-  }
-  const stdDev = Math.sqrt(sumSq / count);
-  if (stdDev === 0) return false;
-  const myRatio = cpuOps > 0 ? powerW / cpuOps : 0;
-  return (myRatio - mean) / stdDev > 3;
-}
-
-function getHwAuthStatePath() {
-  return path.join(app.getPath('userData'), 'hw-auth-state.json');
-}
-
 // True until hw-auth-state.json is created for the first time.  Renderer can
 // send a one-shot seed message so legacy localStorage trust scores survive the
 // migration to the backend-authoritative store.
@@ -576,17 +587,6 @@ function saveHwAuthState() {
 // APIs in the main process.  They are used to cross-check the renderer's hardware
 // declarations; any mismatch triggers a trust penalty.
 let osHardwareIdentity = null; // { cpuModel, gpuModels[], chassisType, deviceType, isVM, vmType }
-
-function isUnusableGpuIdentity(value) {
-  const s = String(value || '').trim();
-  if (!s) return true;
-  if (/^unknown/i.test(s)) return true;
-  if (/^0x[0-9a-f]+$/i.test(s)) return true;
-  if (/^[0-9\s,./-]+$/.test(s)) return true;
-  if (/Microsoft (Basic|Remote) (Render|Display)( Driver)?/i.test(s)) return true;
-  if (/Microsoft Hyper-V/i.test(s)) return true;
-  return !/[a-z]/i.test(s);
-}
 
 async function resolveOsHardwareIdentity() {
   if (osHardwareIdentity) return osHardwareIdentity;
@@ -757,39 +757,6 @@ async function verifyAsicLiveness(_modelName) {
   return { ok: false, elapsedMs: 0, asicType: '', telemetry: null, driverName: 'cgminer', driverConfig: null };
 }
 
-// Compare two hardware model strings - returns true if they refer to the same
-// component.  Strips OEM decoration ((R), (TM), '@ X.XXGHz', gen-prefix) and
-// uses case-insensitive includes in both directions (OS strings may be shorter
-// or longer than renderer strings).
-function hardwareModelsMatch(osModel, declaredModel) {
-  const normalize = (s) =>
-    String(s || '')
-      .normalize('NFKC')
-      // Handle common mojibake variants of trademark symbols from mixed encodings.
-      .replace(/G--|™|-/g, ' ')
-      // Handle collapsed trademark text forms (e.g. CoreTM).
-      .replace(/([a-z])tm\b/gi, '$1')
-      .replace(/\b(tm|trademark|registered)\b/gi, ' ')
-      .replace(/\(R\)|\(TM\)/gi, '')
-      .replace(/@.*$/i, '')
-      .replace(/[^\x20-\x7E]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
-  const strip = (s) => s.replace(/\s+/g, ' ').trim();
-  const a = normalize(strip(osModel));
-  const b = normalize(strip(declaredModel));
-  if (!a || !b) return false;
-  if (a.includes(b) || b.includes(a)) return true;
-
-  // CPU/GPU model token fallback: if both contain the same key model token
-  // (e.g. i5-3320m, rtx-4090), treat as equivalent despite vendor/prefix noise.
-  const tokenRe = /\b(?:[a-z]+-)?[a-z]?\d[\w-]{2,}\b/gi;
-  const aTokens = new Set((a.match(tokenRe) || []).map((t) => t.toLowerCase()));
-  const bTokens = (b.match(tokenRe) || []).map((t) => t.toLowerCase());
-  return bTokens.some((t) => aTokens.has(t));
-}
-
 // -- ASIC firmware attestation: verify the device's firmware across multiple --
 // independent API commands to detect modified firmware.
 // A patched firmware must consistently lie across all of: check, version, stats.
@@ -816,14 +783,6 @@ const HW_FINGERPRINT_FILE_NAME = 'hw-fingerprint.json';
 const BENCHMARK_HISTORY_FILE_NAME = 'benchmark-history.json';
 const HISTORY_ENROLL_COUNT = 8; // samples before personal mean starts blending in
 const HISTORY_MAX_SAMPLES = 20; // rolling window size
-
-function getHwFingerprintPath() {
-  return path.join(app.getPath('userData'), HW_FINGERPRINT_FILE_NAME);
-}
-
-function getBenchmarkHistoryPath() {
-  return path.join(app.getPath('userData'), BENCHMARK_HISTORY_FILE_NAME);
-}
 
 function loadHwFingerprint() {
   try {
@@ -860,53 +819,6 @@ function clearHwFingerprint() {
   } catch (_) {
     if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
-}
-
-function normalizeGpuFingerprintValue(gpuModels) {
-  if (!Array.isArray(gpuModels)) return [];
-  return gpuModels
-    .map((gpu) => String(gpu || '').trim())
-    .filter(Boolean)
-    .sort((left, right) => left.localeCompare(right));
-}
-
-function formatHardwareChangeList(previousDescriptor, nextDescriptor) {
-  const changes = [];
-  const previousCpu = String((previousDescriptor && previousDescriptor.cpuModel) || '').trim();
-  const nextCpu = String((nextDescriptor && nextDescriptor.cpuModel) || '').trim();
-  if (previousCpu !== nextCpu) {
-    changes.push(`CPU: ${previousCpu || 'unknown'} -> ${nextCpu || 'unknown'}`);
-  }
-
-  const previousGpu = normalizeGpuFingerprintValue(previousDescriptor && previousDescriptor.gpuModels).filter(
-    (g) => !isUnusableGpuIdentity(g),
-  );
-  const nextGpu = normalizeGpuFingerprintValue(nextDescriptor && nextDescriptor.gpuModels).filter(
-    (g) => !isUnusableGpuIdentity(g),
-  );
-  if (previousGpu.join(' | ') !== nextGpu.join(' | ')) {
-    changes.push(`GPU: ${previousGpu.join(', ') || 'unknown'} -> ${nextGpu.join(', ') || 'unknown'}`);
-  }
-
-  const previousMemType = String((previousDescriptor && previousDescriptor.memType) || '').trim();
-  const nextMemType = String((nextDescriptor && nextDescriptor.memType) || '').trim();
-  if (previousMemType !== nextMemType) {
-    changes.push(`Memory type: ${previousMemType || 'unknown'} -> ${nextMemType || 'unknown'}`);
-  }
-
-  const previousMemSpeed = Number((previousDescriptor && previousDescriptor.memSpeedMhz) || 0);
-  const nextMemSpeed = Number((nextDescriptor && nextDescriptor.memSpeedMhz) || 0);
-  if (previousMemSpeed !== nextMemSpeed) {
-    changes.push(`Memory speed: ${previousMemSpeed || 0} MHz -> ${nextMemSpeed || 0} MHz`);
-  }
-
-  const previousMemSticks = Number((previousDescriptor && previousDescriptor.memSticks) || 0);
-  const nextMemSticks = Number((nextDescriptor && nextDescriptor.memSticks) || 0);
-  if (previousMemSticks !== nextMemSticks) {
-    changes.push(`Memory modules: ${previousMemSticks || 0} -> ${nextMemSticks || 0}`);
-  }
-
-  return changes;
 }
 
 function loadBenchmarkHistory() {
@@ -958,29 +870,6 @@ function clearBenchmarkHistory() {
   } catch (_) {
     if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
   }
-}
-
-// Append a new sample to a rolling window, rejecting clear outliers.
-// With fewer than 4 existing samples any value is accepted (insufficient history).
-// Outlier rule: reject if > 2.5- or < 0.40- the current mean.
-function appendBenchmarkSample(samples, newValue) {
-  if (samples.length >= 4) {
-    const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-    if (newValue > mean * 2.5 || newValue < mean * 0.4) {
-      return samples; // outlier - reject without adding
-    }
-  }
-  const updated = [...samples, newValue];
-  return updated.length > HISTORY_MAX_SAMPLES ? updated.slice(updated.length - HISTORY_MAX_SAMPLES) : updated;
-}
-
-// Return a blended reference: before enrollment the hardware-table value dominates;
-// at full enrollment (HISTORY_MAX_SAMPLES) the personal mean dominates entirely.
-function getPersonalReference(samples, tableValue) {
-  if (samples.length < HISTORY_ENROLL_COUNT || samples.length === 0) return tableValue;
-  const personalMean = samples.reduce((a, b) => a + b, 0) / samples.length;
-  const blendFactor = Math.min(1.0, samples.length / HISTORY_MAX_SAMPLES);
-  return tableValue > 0 ? tableValue * (1 - blendFactor) + personalMean * blendFactor : personalMean;
 }
 
 let startupTraceEnabled = false;
@@ -1037,16 +926,6 @@ function beginStartupTrace(reason) {
   });
 }
 
-function _getCliCommandName(args = []) {
-  for (const raw of args) {
-    const token = String(raw || '').trim();
-    if (!token || token.startsWith('-')) continue;
-    if (token.includes('=')) continue;
-    return token;
-  }
-  return '';
-}
-
 const roundLedger = createRoundLedger({
   baseDir: getWalletDataDir(),
   signingSecret: () => {
@@ -1057,7 +936,6 @@ const roundLedger = createRoundLedger({
     }
   },
 });
-const LEDGER_NETWORK_BODY_MAX_BYTES = 64 * 1024;
 const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
 let ledgerNetworkServer = null;
 let wtcNode = null; // WTC native chain node (initialized in app.whenReady)
@@ -1076,7 +954,6 @@ const PEER_DISCOVERY_PORT = 39311;
 const PEER_DISCOVERY_MCAST = '239.0.52.67'; // administratively-scoped multicast, LAN-only
 const PEER_BEACON_INTERVAL_MS = 120_000; // 2 min - low-rate discovery
 const PEER_STALE_THRESHOLD_MS = 15 * 60_000; // 15 min without beacon -> evict
-const PEER_EXCHANGE_TARGET_LIMIT = 4;
 const PEER_REACHABILITY_RETRY_MS = 3 * 60_000; // 3 min - WAN peers need longer backoff before re-probe
 const PEER_REACHABILITY_SUCCESS_TTL_MS = 10 * 60_000;
 const PEER_REACHABILITY_TIMEOUT_MS = 20_000; // WAN: allow for TCP handshake + high latency
@@ -1094,22 +971,12 @@ const REVERSE_TUNNEL_RECONNECT_BASE_MS = 3_000;
 const REVERSE_TUNNEL_RECONNECT_MAX_MS = 60_000;
 const REVERSE_TUNNEL_PING_INTERVAL_MS = 20_000;
 const REVERSE_TUNNEL_LIVE_THRESHOLD_MS = 90_000;
-const AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_MS = 4_000;
 const AUTO_PUBLIC_IP_REFRESH_INTERVAL_MS = 60_000;
 const SEED_REGISTRY_HEARTBEAT_INTERVAL_MS = 30 * 60_000;
 const REMOTE_SEED_MANIFEST_REFRESH_INTERVAL_MS = 5 * 60_000;
 const REMOTE_SEED_MANIFEST_FETCH_TIMEOUT_MS = 5_000;
 const DEFAULT_REMOTE_SEED_MANIFEST_URLS = [];
 const AUTO_PUBLIC_IP_SERVICES = ['https://api.ipify.org', 'https://ifconfig.me/ip', 'https://ident.me'];
-const DEPRECATED_PEER_ENDPOINTS = [
-  { hostParts: ['91', '95', '15', '55'], port: 39310 },
-  { hostParts: ['62', '65', '200', '145'], port: 39310 },
-];
-const DEPRECATED_PEER_URLS = new Set(
-  DEPRECATED_PEER_ENDPOINTS.map(({ hostParts, port }) =>
-    normalizePeerUrl(`http://${(hostParts || []).join('.')}:${port}`),
-  ).filter(Boolean),
-);
 const DISCOVERED_SEED_PEER_CACHE_FILE_NAME = 'discovered-seed-peer-cache.json';
 let peerDiscoverySocket = null;
 let peerDiscoveryInterval = null;
@@ -1175,150 +1042,18 @@ const peerGossipSeen = new Map(); // `peerUrl:gossipId` -> detectedAtMs
 // blockHash - { minedAddress, totalWh, rewardCoins, settledAtMs, sig, fromPeer }
 const witnessedSettlements = new Map();
 
-function getDiscoveredSeedPeerCachePath() {
-  return path.join(app.getPath('userData'), DISCOVERED_SEED_PEER_CACHE_FILE_NAME);
-}
-
-function getRemoteSeedPeerCachePath() {
-  return path.join(app.getPath('userData'), 'remote-seed-peers-cache.json');
-}
-
 const remoteSeedManifestManager = createRemoteSeedManifestManager({
   fs,
   getRuntimeConfig,
   getCachePath: getRemoteSeedPeerCachePath,
   normalizePeerUrl,
   isDeprecatedPeerUrl,
-  requestExternalResponse,
+  requestExternalResponse: peerUtils.requestExternalResponse,
   fetchTimeoutMs: REMOTE_SEED_MANIFEST_FETCH_TIMEOUT_MS,
   defaultRemoteSeedManifestUrls: DEFAULT_REMOTE_SEED_MANIFEST_URLS,
   schedulePeerSync: scheduleWtcPeerSync,
   logger: console,
 });
-
-function normalizePeerUrl(candidate) {
-  try {
-    const parsed = new URL(String(candidate || '').trim());
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
-    const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80));
-    if (!Number.isInteger(port) || port <= 1023) return '';
-    const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname.replace(/\/+$/, '') : '';
-    return `${parsed.protocol}//${parsed.hostname}:${port}${pathname}`;
-  } catch (_) {
-    return '';
-  }
-}
-
-function isDeprecatedPeerUrl(candidate) {
-  const normalized = normalizePeerUrl(candidate);
-  return normalized ? DEPRECATED_PEER_URLS.has(normalized) : false;
-}
-
-function normalizeIpLiteral(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  const withoutZone = raw.split('%')[0];
-  if (withoutZone.startsWith('::ffff:')) {
-    const mapped = withoutZone.slice('::ffff:'.length);
-    if (net.isIP(mapped) === 4) return mapped;
-  }
-  return withoutZone;
-}
-
-function isPrivateIpv4(host) {
-  const normalized = normalizeIpLiteral(host);
-  if (net.isIP(normalized) !== 4) return false;
-  const octets = normalized.split('.').map((part) => Number(part));
-  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
-  if (octets[0] === 10) return true;
-  if (octets[0] === 127) return true;
-  if (octets[0] === 169 && octets[1] === 254) return true;
-  if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
-  if (octets[0] === 192 && octets[1] === 168) return true;
-  if (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) return true;
-  if (octets[0] === 0) return true;
-  return false;
-}
-
-function isPrivateIpv6(host) {
-  const normalized = normalizeIpLiteral(host).toLowerCase();
-  const family = net.isIP(normalized);
-  if (family === 4) return isPrivateIpv4(normalized);
-  if (family !== 6) return false;
-  return (
-    normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:')
-  );
-}
-
-function isPublicPeerHost(host) {
-  const normalized = normalizeIpLiteral(host).toLowerCase();
-  if (!normalized || normalized === 'localhost') return false;
-  const family = net.isIP(normalized);
-  if (family === 4) return !isPrivateIpv4(normalized);
-  if (family === 6) return !isPrivateIpv6(normalized);
-  return false;
-}
-
-function isLoopbackPeerHost(host) {
-  const normalized = normalizeIpLiteral(host).toLowerCase();
-  if (!normalized) return false;
-  return normalized === '127.0.0.1' || normalized === '::1' || normalized === 'localhost';
-}
-
-function formatPeerHostForUrl(host) {
-  const normalized = normalizeIpLiteral(host);
-  if (!normalized) return '';
-  return net.isIP(normalized) === 6 ? `[${normalized}]` : normalized;
-}
-
-function requestExternalResponse(url, timeoutMs = AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_MS) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const req = https.get(
-      url,
-      {
-        timeout: timeoutMs,
-        headers: {
-          'User-Agent': 'wattcoin-miner/1.0 (public-ip-detect)',
-          Accept: 'text/plain',
-        },
-      },
-      (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => {
-          if (settled) return;
-          settled = true;
-          resolve({
-            statusCode: Number(res.statusCode) || 0,
-            contentType: String((res.headers && res.headers['content-type']) || '').trim(),
-            body: Buffer.concat(chunks).toString('utf8').trim(),
-          });
-        });
-        res.on('error', (err) => {
-          if (settled) return;
-          settled = true;
-          reject(err);
-        });
-      },
-    );
-    req.on('timeout', () => {
-      if (settled) return;
-      settled = true;
-      req.destroy(new Error('public ip lookup timeout'));
-    });
-    req.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      reject(err);
-    });
-  });
-}
-
-async function requestExternalText(url, timeoutMs = AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_MS) {
-  const response = await requestExternalResponse(url, timeoutMs);
-  return response.body;
-}
 
 function _getRemoteSeedManifestUrls(settings = getLedgerNetworkSettings()) {
   return remoteSeedManifestManager.getRemoteSeedManifestUrls(settings);
@@ -1362,7 +1097,7 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
     autoDetectedPublicPeerUrl = '';
     return '';
   }
-  if (getExplicitAdvertisedPeerUrls(settings).length > 0) {
+  if (peerUtils.getExplicitAdvertisedPeerUrls(settings).length > 0) {
     autoDetectedPublicPeerUrl = '';
     return '';
   }
@@ -1385,7 +1120,7 @@ function detectAutoPublicPeerUrl(settings = getLedgerNetworkSettings(), { force 
   autoDetectedPublicPeerLookupPromise = (async () => {
     for (const serviceUrl of AUTO_PUBLIC_IP_SERVICES) {
       try {
-        const ipText = normalizeIpLiteral(await requestExternalText(serviceUrl));
+        const ipText = normalizeIpLiteral(await peerUtils.requestExternalText(serviceUrl));
         if (!isPublicPeerHost(ipText)) continue;
         const host = formatPeerHostForUrl(ipText);
         const peerUrl = normalizePeerUrl(`http://${host}:${settings.listenPort}`);
@@ -1438,7 +1173,7 @@ function sendSeedRegistryHeartbeat() {
 function startAutoPublicPeerUrlRefresh(settings = getLedgerNetworkSettings()) {
   stopAutoPublicPeerUrlRefresh();
   if (!settings || !settings.enabled || settings.mode !== 'peer') return;
-  if (getExplicitAdvertisedPeerUrls(settings).length > 0) return;
+  if (peerUtils.getExplicitAdvertisedPeerUrls(settings).length > 0) return;
   autoPublicPeerRefreshTimer = setInterval(() => {
     refreshAutoPublicPeerUrl(getLedgerNetworkSettings())
       .then(() => sendSeedRegistryHeartbeat())
@@ -1470,58 +1205,6 @@ function stopSeedRegistryHeartbeat() {
   if (!seedRegistryHeartbeatTimer) return;
   clearInterval(seedRegistryHeartbeatTimer);
   seedRegistryHeartbeatTimer = null;
-}
-
-function buildPeerUrlFromSocket(remoteAddress, listenPort, protocol = 'http:') {
-  const port = Math.max(1, Number(listenPort) || 0);
-  const host = formatPeerHostForUrl(remoteAddress);
-  if (!host || !port) return '';
-  return normalizePeerUrl(`${protocol}//${host}:${port}`);
-}
-
-function getLocalPeerHosts() {
-  const hosts = new Set(['127.0.0.1', 'localhost']);
-  try {
-    const interfaces = os.networkInterfaces() || {};
-    for (const entries of Object.values(interfaces)) {
-      for (const entry of entries || []) {
-        if (entry && entry.family === 'IPv4' && entry.address) {
-          hosts.add(String(entry.address));
-        }
-      }
-    }
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-  return hosts;
-}
-
-function getLocalPeerIpv4Interfaces() {
-  const addresses = new Set();
-  for (const entry of getLocalPeerIpv4InterfaceEntries()) {
-    addresses.add(entry.address);
-  }
-  return Array.from(addresses);
-}
-
-function getLocalPeerIpv4InterfaceEntries() {
-  const entries = [];
-  try {
-    const interfaces = os.networkInterfaces() || {};
-    for (const interfaceEntries of Object.values(interfaces)) {
-      for (const entry of interfaceEntries || []) {
-        if (!entry || entry.family !== 'IPv4' || !entry.address || entry.internal) continue;
-        entries.push({
-          address: String(entry.address),
-          netmask: String(entry.netmask || ''),
-          internal: !!entry.internal,
-        });
-      }
-    }
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-  return entries;
 }
 
 function isSelfPeerUrl(candidate) {
@@ -1599,15 +1282,6 @@ function getConfiguredAdvertisedPeerUrls(settings = getLedgerNetworkSettings()) 
 function getPrimaryAdvertisedPeerUrl(settings = getLedgerNetworkSettings()) {
   const urls = getConfiguredAdvertisedPeerUrls(settings);
   return urls.length > 0 ? urls[0] : '';
-}
-
-function getExplicitAdvertisedPeerUrls(settings = getLedgerNetworkSettings()) {
-  const candidates = [
-    settings && settings.publicUrl,
-    settings && settings.tunnelPublicUrl,
-    ...((settings && settings.advertiseUrls) || []),
-  ];
-  return filterAdvertisedPeerUrls(candidates);
 }
 
 function buildPeerAnnouncementHeaders(settings = getLedgerNetworkSettings()) {
@@ -1753,30 +1427,6 @@ function forgetDiscoveredPeersByIdentity(peerIdentity, { keepUrl = '' } = {}) {
   return removed;
 }
 
-function isReverseTunnelPeerUrl(peerUrl) {
-  const normalized = normalizePeerUrl(peerUrl);
-  if (!normalized) return false;
-  try {
-    const parsed = new URL(normalized);
-    return parsed.pathname.startsWith('/api/v1/tunnel/');
-  } catch (_) {
-    return false;
-  }
-}
-
-function extractTunnelIdFromUrl(peerUrl) {
-  try {
-    const parsed = new URL(peerUrl);
-    const segments = String(parsed.pathname || '')
-      .split('/')
-      .filter(Boolean);
-    // URL pattern: /api/v1/tunnel/<tunnelId>
-    return segments.length >= 4 ? decodeURIComponent(segments[3]) : '';
-  } catch (_) {
-    return '';
-  }
-}
-
 /**
  * Returns liveness info for a locally-served reverse-tunnel peer,
  * or null if the URL is not a live local tunnel peer.
@@ -1867,7 +1517,7 @@ async function getOnlineAttestationPeers(settings = getLedgerNetworkSettings(), 
       const peerIdentity = String((tip && tip.peerIdentity) || '').trim();
       _cacheBootstrapIdentity(peerUrl, peerIdentity);
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) return;
-      const peerKey = getPeerIdentityKey(peerUrl, tip);
+      const peerKey = peerUtils.getPeerIdentityKey(peerUrl, tip);
       if (distinctPeerKeys.has(peerKey)) return;
       distinctPeerKeys.add(peerKey);
       rememberDiscoveredPeer(peerUrl, { source: 'peer-probe-select', quiet: true });
@@ -2148,7 +1798,7 @@ async function verifyReachablePeerCandidate(candidate, source = 'peer-contact') 
 
 function maybeRegisterReachableRequester(req, settings, source = 'peer-contact') {
   return maybeRegisterReachableRequesterHelper(req, settings, source, {
-    isReverseTunnelForwardedRequest,
+    isReverseTunnelForwardedRequest: peerUtils.isReverseTunnelForwardedRequest,
     rememberObservedRequester,
     extractReachablePeerCandidates,
     isPublicPeerHost,
@@ -2174,34 +1824,6 @@ function rememberObservedRequester(req, settings, source = 'peer-presence') {
     forgetDiscoveredPeersByIdentity(peerIdentity, { keepUrl: preferredPeerUrl });
   }
   return observed;
-}
-
-function readRequestBodyBuffer(req, maxBytes = LEDGER_NETWORK_BODY_MAX_BYTES) {
-  return new Promise((resolve, reject) => {
-    let total = 0;
-    const chunks = [];
-    req.on('data', (chunk) => {
-      total += chunk.length;
-      if (total > maxBytes) {
-        reject(new Error('Request body too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', (err) => reject(err));
-  });
-}
-
-function buildReverseTunnelPublicUrl(baseUrl, tunnelId) {
-  try {
-    const base = new URL(baseUrl);
-    const prefix = base.pathname && base.pathname !== '/' ? base.pathname.replace(/\/+$/, '') : '';
-    return normalizePeerUrl(`${base.origin}${prefix}/api/v1/tunnel/${encodeURIComponent(tunnelId)}`);
-  } catch (_) {
-    return '';
-  }
 }
 
 function getReverseTunnelCoordinatorBaseUrl(req, settings = getLedgerNetworkSettings()) {
@@ -2247,11 +1869,6 @@ function chooseReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
   const previousIndex = previousCoordinator ? candidates.indexOf(previousCoordinator) : -1;
   if (previousIndex < 0) return candidates[0];
   return candidates[(previousIndex + 1) % candidates.length];
-}
-
-function shouldUseManagedReverseTunnel(settings = getLedgerNetworkSettings()) {
-  if (!settings || !settings.enabled || settings.mode !== 'peer') return false;
-  return getExplicitAdvertisedPeerUrls(settings).length === 0;
 }
 
 function cleanupReverseTunnelPendingRequest(requestId) {
@@ -2318,13 +1935,7 @@ function destroyReverseTunnelSession(session, reason = 'closed') {
 
 function getReverseTunnelPeerIdentity(req) {
   const headerValue = String(req && req.headers ? req.headers['x-wtc-peer-identity'] || '' : '').trim();
-  return isValidPeerIdentity(headerValue) ? headerValue : '';
-}
-
-function isReverseTunnelForwardedRequest(req) {
-  const marker = String(req && req.headers ? req.headers['x-wtc-via-tunnel'] || '' : '').trim();
-  if (marker !== '1') return false;
-  return isLoopbackPeerHost(req && req.socket ? req.socket.remoteAddress : '');
+  return peerUtils.isValidPeerIdentity(headerValue) ? headerValue : '';
 }
 
 function handleReverseTunnelResponseMessage(session, message) {
@@ -2430,7 +2041,7 @@ async function handleReverseTunnelHttpRequest(req, res, _settings) {
     return true;
   }
   const requestId = crypto.randomBytes(12).toString('hex');
-  const bodyBuffer = await readRequestBodyBuffer(req);
+  const bodyBuffer = await peerUtils.readRequestBodyBuffer(req);
   const forwardedHeaders = {
     'content-type': String(req.headers['content-type'] || 'application/json; charset=utf-8'),
     'x-wtc-network-id': String(req.headers['x-wtc-network-id'] || ''),
@@ -2471,7 +2082,7 @@ function startReverseTunnelCoordinator(settings = getLedgerNetworkSettings()) {
   reverseTunnelWss.on('connection', (socket, req) => {
     const tunnelId = crypto.randomBytes(16).toString('hex');
     const coordinatorBaseUrl = getReverseTunnelCoordinatorBaseUrl(req, settings);
-    const publicUrl = buildReverseTunnelPublicUrl(coordinatorBaseUrl, tunnelId);
+    const publicUrl = peerUtils.buildReverseTunnelPublicUrl(coordinatorBaseUrl, tunnelId);
     const peerIdentity = getReverseTunnelPeerIdentity(req);
     // Reject self-connecting tunnels - the seed peer should not tunnel to itself.
     const localPeerIdentity = getLocalPeerIdentity();
@@ -2822,27 +2433,6 @@ function scheduleManagedReverseTunnelReconnect() {
   );
 }
 
-function buildReverseTunnelConnectUrl(coordinatorUrl) {
-  try {
-    const base = new URL(coordinatorUrl);
-    const prefix = base.pathname && base.pathname !== '/' ? base.pathname.replace(/\/+$/, '') : '';
-    return `${base.origin}${prefix}/api/v1/tunnel/connect`;
-  } catch (_) {
-    return '';
-  }
-}
-
-function sanitizeForwardedTunnelHeaders(headers = {}) {
-  const nextHeaders = {};
-  for (const [key, value] of Object.entries(headers)) {
-    if (value === undefined || value === null || value === '') continue;
-    if (/^(content-type|x-wtc-|x-wattcoin-ledger-token)/i.test(key)) {
-      nextHeaders[key] = String(value);
-    }
-  }
-  return nextHeaders;
-}
-
 async function forwardReverseTunnelRequestToLocalNode(socket, message) {
   const settings = getLedgerNetworkSettings();
   const targetPath = String((message && message.path) || '/').trim() || '/';
@@ -3091,7 +2681,7 @@ function handleManagedReverseTunnelMessage(socket, rawMessage) {
 }
 
 function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerNetworkSettings()) {
-  const connectUrl = buildReverseTunnelConnectUrl(coordinatorUrl);
+  const connectUrl = peerUtils.buildReverseTunnelConnectUrl(coordinatorUrl);
   if (!connectUrl) {
     writeStartupTrace('reverse-tunnel.connect-skipped', {
       reason: 'missing-connect-url',
@@ -3174,11 +2764,11 @@ function connectManagedReverseTunnelClient(coordinatorUrl, settings = getLedgerN
 }
 
 function ensureManagedReverseTunnelClient(settings = getLedgerNetworkSettings()) {
-  if (!shouldUseManagedReverseTunnel(settings)) {
+  if (!peerUtils.shouldUseManagedReverseTunnel(settings)) {
     writeStartupTrace('reverse-tunnel.disabled', {
       enabled: Boolean(settings && settings.enabled),
       mode: settings && settings.mode,
-      explicitAdvertisedPeerUrls: getExplicitAdvertisedPeerUrls(settings),
+      explicitAdvertisedPeerUrls: peerUtils.getExplicitAdvertisedPeerUrls(settings),
     });
     stopManagedReverseTunnelClient();
     return;
@@ -3252,18 +2842,9 @@ function obfuscatePublicPeerUrl(peerUrl) {
   return obfuscatePeerUrl(peerUrl, getPeerPrivacySecret());
 }
 
-function pickPeerExchangeTargets(peerUrls, limit = PEER_EXCHANGE_TARGET_LIMIT) {
-  const candidates = Array.from(new Set((peerUrls || []).map(normalizePeerUrl).filter(Boolean)));
-  for (let index = candidates.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
-  }
-  return candidates.slice(0, Math.max(0, Number(limit) || 0));
-}
-
 async function refreshPeerDirectory(settings = getLedgerNetworkSettings()) {
   if (!settings || !settings.enabled || settings.mode !== 'peer') return;
-  const peers = pickPeerExchangeTargets(getPeerDirectoryTargets(settings));
+  const peers = peerUtils.pickPeerExchangeTargets(getPeerDirectoryTargets(settings));
   const discoveredCandidates = [];
   for (const peerUrl of peers) {
     try {
@@ -3401,10 +2982,6 @@ const activeAttestationChallenges = new Map();
 const consumedBenchmarkProofs = new Map();
 
 const CONSUMED_PROOFS_FILE_NAME = 'consumed-proofs.json';
-function getConsumedProofsFilePath() {
-  return path.join(app.getPath('userData'), CONSUMED_PROOFS_FILE_NAME);
-}
-
 function loadConsumedProofs() {
   try {
     const raw = fs.readFileSync(getConsumedProofsFilePath(), 'utf8');
@@ -3505,66 +3082,6 @@ function getEffectiveHardwareProfiles() {
     : LOCAL_HARDWARE_PROFILE_DB;
 }
 
-function parseRegexSafe(pattern) {
-  if (!pattern || typeof pattern !== 'string') return null;
-  try {
-    return new RegExp(pattern, 'i');
-  } catch (_) {
-    return null;
-  }
-}
-
-function normalizeRemoteProfile(entry = {}) {
-  const id = String(entry.id || '').trim();
-  if (!id) return null;
-  const deviceTypeRe = parseRegexSafe(String(entry.deviceTypeRegex || ''));
-  const cpuRe = parseRegexSafe(String(entry.cpuRegex || ''));
-  const gpuRe = parseRegexSafe(String(entry.gpuRegex || ''));
-  const conservativeCapW = Math.max(10, Number(entry.conservativeCapW) || 0);
-  const maxCapW = Math.max(conservativeCapW, Number(entry.maxCapW) || conservativeCapW);
-  const stepW = Math.max(1, Number(entry.stepW) || 10);
-  const minCpuOpsPerSec = Math.max(10_000, Number(entry.minCpuOpsPerSec) || 100_000);
-  const minMemoryMBps = Math.max(100, Number(entry.minMemoryMBps) || 400);
-  const requireGpuProof = !!entry.requireGpuProof;
-  const spotCheckProbability = Math.min(0.5, Math.max(0, Number(entry.spotCheckProbability) || 0.05));
-
-  return {
-    id,
-    match: (descriptor) => {
-      const typeOk = !deviceTypeRe || deviceTypeRe.test(String(descriptor.deviceType || ''));
-      const cpuOk = !cpuRe || cpuRe.test(String(descriptor.cpu || ''));
-      const gpuOk = !gpuRe || gpuRe.test(String(descriptor.gpu || ''));
-      return typeOk && cpuOk && gpuOk;
-    },
-    conservativeCapW,
-    maxCapW,
-    stepW,
-    minCpuOpsPerSec,
-    minMemoryMBps,
-    requireGpuProof,
-    spotCheckProbability,
-  };
-}
-
-function verifyPolicyFeedEnvelope(envelope, publicKeyPem) {
-  if (!envelope || typeof envelope !== 'object') return false;
-  const policy = envelope.policy && typeof envelope.policy === 'object' ? envelope.policy : null;
-  const signatureBase64 = String(envelope.signature || '');
-  if (!policy || !signatureBase64 || !publicKeyPem) return false;
-  try {
-    const verifier = crypto.createVerify('RSA-SHA256');
-    verifier.update(JSON.stringify(policy));
-    verifier.end();
-    return verifier.verify(publicKeyPem, Buffer.from(signatureBase64, 'base64'));
-  } catch (_) {
-    return false;
-  }
-}
-
-function _fetchJsonWithTimeout(url, timeoutMs = 5000) {
-  return fetchTextWithTimeout(url, timeoutMs).then((text) => JSON.parse(text));
-}
-
 function fetchTextWithTimeout(url, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     try {
@@ -3612,7 +3129,7 @@ function loadCachedRemoteProfiles() {
     if (!fs.existsSync(filePath)) return;
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     const profiles = Array.isArray(parsed && parsed.profiles)
-      ? parsed.profiles.map(normalizeRemoteProfile).filter(Boolean)
+      ? parsed.profiles.map(hwProf.normalizeRemoteProfile).filter(Boolean)
       : [];
     const expiresAtMs = Number(parsed && parsed.expiresAtMs) || 0;
     if (profiles.length > 0 && expiresAtMs > Date.now()) {
@@ -3709,7 +3226,7 @@ async function refreshRemoteProfilesFromPolicyFeed() {
     }
 
     const expiresAtMs = Math.max(Date.now() + 30 * 60_000, Number(policy.expiresAtMs) || 0);
-    const normalizedProfiles = policy.profiles.map(normalizeRemoteProfile).filter(Boolean);
+    const normalizedProfiles = policy.profiles.map(hwProf.normalizeRemoteProfile).filter(Boolean);
     if (normalizedProfiles.length === 0) {
       return { ok: false, code: 'POLICY_FEED_EMPTY' };
     }
@@ -3749,14 +3266,6 @@ ipcMain.handle('wattcoin-publish-policy-anchor', (_event, _policyText) => {
     message: 'Policy anchor publishing is not supported on WTC native chain.',
   };
 });
-
-function defaultAttestationState() {
-  return {
-    version: 1,
-    secret: crypto.randomBytes(32).toString('hex'),
-    miners: {},
-  };
-}
 
 function loadAttestationState() {
   const filePath = getAttestationDbFilePath();
@@ -3853,37 +3362,6 @@ function saveAttestationState() {
   }
 }
 
-function normalizeMinerIdentity(minerId) {
-  if (typeof minerId === 'string' && minerId.trim()) return minerId.trim().slice(0, 128);
-  return 'local-client';
-}
-
-function normalizeHardwareDescriptor(summary = {}) {
-  return {
-    deviceType: String(summary && summary.deviceType ? summary.deviceType : '').trim(),
-    cpu: String(summary && summary.cpu ? summary.cpu : '').trim(),
-    gpu: String(summary && summary.gpu ? summary.gpu : '').trim(),
-    memory: String(summary && summary.memory ? summary.memory : '').trim(),
-  };
-}
-
-function shouldAllowGpuWorkloadsForSummary(summary = {}) {
-  const descriptor = normalizeHardwareDescriptor(summary);
-  if (/laptop|notebook|mini\s*pc/i.test(descriptor.deviceType)) return false;
-  if (!descriptor.gpu) return true;
-  if (/RTX|GTX|MX\d|Arc\s*(?:A|B)|Quadro|Tesla|Titan|GeForce|Radeon\s*(?:RX|Pro|VII)|FirePro/i.test(descriptor.gpu)) {
-    return true;
-  }
-  if (
-    /Intel.*(?:HD|UHD|Iris(?!\s*(?:Xe\s*Max|Pro))|Xe(?!\s*Max))|Radeon\(TM\)\s+Graphics|Radeon\s+Graphics|Vega\s*(?:3|5|6|7|8|10|11)|Mali|Adreno/i.test(
-      descriptor.gpu,
-    )
-  ) {
-    return false;
-  }
-  return true;
-}
-
 function resolveHardwareProfile(summary = {}) {
   const descriptor = normalizeHardwareDescriptor(summary);
   const profiles = getEffectiveHardwareProfiles();
@@ -3936,12 +3414,6 @@ function buildChallengeSignature(challengePayload) {
   return hmac.digest('hex');
 }
 
-function computeNextReattestDueAt(nowMs = Date.now()) {
-  const range = Math.max(1, ATTESTATION_REATTEST_MAX_MS - ATTESTATION_REATTEST_MIN_MS);
-  const jitter = crypto.randomInt(0, range + 1);
-  return nowMs + ATTESTATION_REATTEST_MIN_MS + jitter;
-}
-
 function evaluateReattestationNeed(record, profile, options = {}) {
   const nowMs = Date.now();
   const reasons = [];
@@ -3978,7 +3450,7 @@ function evaluateReattestationNeed(record, profile, options = {}) {
 
 function computePolicyForMiner(minerId, summary = {}, options = {}) {
   const profile = resolveHardwareProfile(summary);
-  const allowGpuWorkloads = shouldAllowGpuWorkloadsForSummary(summary);
+  const allowGpuWorkloads = hwProf.shouldAllowGpuWorkloadsForSummary(summary);
   const record = getMinerRecord(minerId);
   const level = Math.max(0, Math.min(ATTESTATION_MAX_LEVEL, Number(record.level) || 0));
   const capW = Math.min(profile.maxCapW, profile.conservativeCapW + profile.stepW * level);
@@ -4014,10 +3486,6 @@ function computePolicyForMiner(minerId, summary = {}, options = {}) {
   };
 }
 
-function buildAttestationMessage(challenge) {
-  return `WATTCOIN_ATTEST:${challenge.id}:${challenge.challengeSeed}:${challenge.expiresAtMs}:${challenge.minerId}`;
-}
-
 function verifyIdentityWithWalletSignature(identity = {}, expectedMessage = '') {
   const _walletName = 'wattminer';
   const address = String(identity.address || '').trim();
@@ -4039,45 +3507,6 @@ function verifyIdentityWithWalletSignature(identity = {}, expectedMessage = '') 
 }
 
 // verifyWalletMessagePureJS moved to wtc-address.js
-
-// Verifies a remotely-supplied wallet signature for HTTP ledger endpoints.
-// Unlike verifyIdentityWithWalletSignature this does NOT check wallet ownership
-// (the signer is a remote worker whose address isn't in the coordinator wallet).
-// Message format: "<prefix>:<address>:<2-minute-time-window>"
-// Accepts the current window and the previous one for clock-skew tolerance.
-// Primary: pure JS offline verification (no node required).
-// Fallback: RPC verifymessage (used if pure JS throws unexpectedly).
-function _verifyContributionSignature(address, signature, message, expectedPrefix) {
-  if (!address || !signature || !message || !expectedPrefix) {
-    return { ok: false, reason: 'address, signature, message, or prefix missing' };
-  }
-  const expectedStart = `${expectedPrefix}:${address}:`;
-  if (!message.startsWith(expectedStart)) {
-    return { ok: false, reason: 'message format invalid or address mismatch' };
-  }
-  const windowStr = message.slice(expectedStart.length);
-  const windowNum = Number(windowStr);
-  if (!Number.isFinite(windowNum) || windowNum <= 0) {
-    return { ok: false, reason: 'message time window invalid' };
-  }
-  // Each window is 2 minutes wide; accepting currentWindow and currentWindow-1 provides
-  // ~4 minutes of maximum replay tolerance (clock-skew / polling lag between worker and
-  // coordinator).  This is a deliberate trade-off: a captured signature is replayable for
-  // at most one full additional 2-minute window before it expires.
-  const currentWindow = Math.floor(Date.now() / 120_000);
-  if (windowNum !== currentWindow && windowNum !== currentWindow - 1) {
-    return { ok: false, reason: 'contribution signature expired or from the future' };
-  }
-  // Pure JS verification - works offline, no node dependency.
-  try {
-    const valid = verifyWalletMessagePureJS(address, signature, message, getActiveNetwork());
-    if (valid) return { ok: true };
-    // Pure JS says invalid - try RPC as a secondary check in case of network/address edge case.
-  } catch (pureJsErr) {
-    console.warn('[SigVerify] Pure JS verification threw, falling back to RPC:', pureJsErr && pureJsErr.message);
-  }
-  return { ok: false, reason: 'signature verification failed' };
-}
 
 function issueBenchmarkChallenge(minerId, hardwareSummary = {}, identityAddress = '') {
   if (!ENABLE_NODE_ATTESTATION) {
@@ -4108,7 +3537,7 @@ function issueBenchmarkChallenge(minerId, hardwareSummary = {}, identityAddress 
     profileId: policy.profileId,
     identityAddress: String(identityAddress || '').trim(),
   };
-  challengePayload.attestationMessage = buildAttestationMessage(challengePayload);
+  challengePayload.attestationMessage = hwProf.buildAttestationMessage(challengePayload);
   const signature = buildChallengeSignature(challengePayload);
   const challenge = { ...challengePayload, signature };
   activeAttestationChallenges.set(challenge.id, challenge);
@@ -4354,14 +3783,6 @@ async function submitBenchmarkProof(payload = {}) {
   };
 }
 
-function sha256Hex(data) {
-  return crypto.createHash('sha256').update(data).digest('hex');
-}
-
-function validatePassphrase(passphrase) {
-  return typeof passphrase === 'string' && passphrase.length >= 8;
-}
-
 function isBetaModeEnabled() {
   return Boolean(getRuntimeConfig().betaMode);
 }
@@ -4401,26 +3822,6 @@ function getOpsMetricsFilePath() {
   return path.join(getWalletDataDir(), OPS_METRICS_FILE_NAME);
 }
 
-function pruneOldTimestamps(timestamps, windowMs) {
-  const cutoff = Date.now() - windowMs;
-  return timestamps.filter((ts) => ts >= cutoff);
-}
-
-function pushTimestampWindow(target, windowMs, maxLen = 5000) {
-  const now = Date.now();
-  target.push(now);
-  const pruned = pruneOldTimestamps(target, windowMs);
-  if (pruned.length > maxLen) return pruned.slice(pruned.length - maxLen);
-  return pruned;
-}
-
-function median(values) {
-  if (!Array.isArray(values) || values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
-
 function recordOpsAlert(code, severity, message, details = {}) {
   const cooldownUntil = opsState.alertCooldownUntil.get(code) || 0;
   const now = Date.now();
@@ -4440,19 +3841,6 @@ function recordOpsAlert(code, severity, message, details = {}) {
   logAbuseEvent({ type: 'ops-alert', ...entry }).catch(() => {});
 }
 
-function getPeerNetworkSegment(peerUrl) {
-  try {
-    const host = new URL(peerUrl).hostname;
-    const parts = host.split('.');
-    if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
-      return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
-    }
-    return host;
-  } catch (_) {
-    return '';
-  }
-}
-
 function isPeerIdentityBanned(identity) {
   const key = String(identity || '').trim();
   if (!key) return false;
@@ -4465,21 +3853,10 @@ function isPeerIdentityBanned(identity) {
   return true;
 }
 
-function isPinnedPeerUrl(peerUrl, settings = getLedgerNetworkSettings()) {
-  const normalized = normalizePeerUrl(peerUrl);
-  if (!normalized) return false;
-  const persistentPeers = [
-    ...((settings && settings.peers) || []),
-    ...((settings && settings.configuredPeers) || []),
-    ...((settings && settings.seedPeers) || []),
-  ];
-  return persistentPeers.some((entry) => normalizePeerUrl(entry) === normalized);
-}
-
 function isPeerUrlBanned(peerUrl) {
   const key = String(peerUrl || '').trim();
   if (!key) return false;
-  if (isPinnedPeerUrl(key)) {
+  if (peerUtils.isPinnedPeerUrl(key, getLedgerNetworkSettings())) {
     bannedPeerUrls.delete(key);
     return false;
   }
@@ -4503,7 +3880,7 @@ function banPeerIdentity(identity, reason, durationMs = PEER_IDENTITY_BAN_MS) {
 function banPeerUrl(peerUrl, reason, durationMs = PEER_URL_BAN_MS) {
   const key = String(peerUrl || '').trim();
   if (!key) return;
-  if (isPinnedPeerUrl(key)) return;
+  if (peerUtils.isPinnedPeerUrl(key, getLedgerNetworkSettings())) return;
   const untilMs = Date.now() + durationMs;
   bannedPeerUrls.set(key, { untilMs, reason: String(reason || 'policy') });
   if (process.env.WATTCOIN_DEBUG)
@@ -4566,14 +3943,6 @@ function recordRollbackDepth(depth, details = {}) {
   }
 }
 
-function getPeerIdentityKey(peerUrl, tipResponse) {
-  const peerIdentity =
-    tipResponse && typeof tipResponse.peerIdentity === 'string' ? tipResponse.peerIdentity.trim() : '';
-  if (peerIdentity) return `id:${peerIdentity}`;
-  const normalized = normalizePeerUrl(peerUrl);
-  return normalized ? `url:${normalized}` : `url:${String(peerUrl || '').trim()}`;
-}
-
 function _getDiscoveredPeerPresenceCount(settings = getLedgerNetworkSettings()) {
   const now = Date.now();
   const selfAdvertisedUrls = new Set(getConfiguredAdvertisedPeerUrls(settings).map(normalizePeerUrl).filter(Boolean));
@@ -4623,7 +3992,7 @@ async function inspectPeerConnectivityForTargets(
     const discoveredInfo = normalizedPeerUrl ? discoveredPeers.get(normalizedPeerUrl) : null;
     const peerIdentity = String((discoveredInfo && discoveredInfo.peerIdentity) || '').trim();
     if (peerIdentity) return `id:${peerIdentity}`;
-    return getPeerIdentityKey(peerUrl, null);
+    return peerUtils.getPeerIdentityKey(peerUrl, null);
   };
 
   // Partition peers: locally-served tunnel peers use WebSocket session liveness
@@ -4696,7 +4065,7 @@ async function inspectPeerConnectivityForTargets(
       if (isPeerIdentitySelfReference(peerIdentity, peerUrl)) {
         return;
       }
-      const peerKey = getPeerIdentityKey(peerUrl, tip);
+      const peerKey = peerUtils.getPeerIdentityKey(peerUrl, tip);
       distinctPeerKeys.add(peerKey);
       healthyPeerKeys.add(peerKey);
       rememberDiscoveredPeer(peerUrl, { source, quiet: true });
@@ -4883,18 +4252,6 @@ function stopOpsMetricsLoop() {
   opsMetricsTimer = null;
 }
 
-function getEndpointActorKey(endpointName, actorId = 'local-client') {
-  return `${endpointName}:${String(actorId || 'local-client')}`;
-}
-
-function shouldEscalateRateLimitToIdentityFailure(endpointName) {
-  const normalized = String(endpointName || '').trim();
-  if (!normalized) return false;
-  if (normalized.startsWith('wtc-peer-')) return false;
-  if (normalized.startsWith('peer-probe-')) return false;
-  return true;
-}
-
 async function enforceEndpointRateLimit(endpointName, actorId = 'local-client', metadata = {}) {
   const limit = ENDPOINT_RATE_LIMITS[endpointName];
   if (!limit) {
@@ -4966,83 +4323,10 @@ function isMinerPasswordRequired() {
   return getMinerBetaPassword().trim().length > 0;
 }
 
-function secureStringEquals(a, b) {
-  const left = Buffer.from(String(a || ''), 'utf8');
-  const right = Buffer.from(String(b || ''), 'utf8');
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
-}
-
-function formatBackupTimestampForFilename(date = new Date()) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return (
-    [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('') +
-    '-' +
-    [pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join('')
-  );
-}
-
-function encryptBackupPayload(payloadObject, passphrase) {
-  const salt = crypto.randomBytes(16);
-  const iv = crypto.randomBytes(12);
-  const key = crypto.scryptSync(passphrase, salt, 32);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const plaintext = Buffer.from(JSON.stringify(payloadObject), 'utf8');
-  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return {
-    salt: salt.toString('base64'),
-    iv: iv.toString('base64'),
-    tag: tag.toString('base64'),
-    ciphertext: ciphertext.toString('base64'),
-  };
-}
-
-function decryptBackupPayload(encryptedObject, passphrase) {
-  const salt = Buffer.from(encryptedObject.salt || '', 'base64');
-  const iv = Buffer.from(encryptedObject.iv || '', 'base64');
-  const tag = Buffer.from(encryptedObject.tag || '', 'base64');
-  const ciphertext = Buffer.from(encryptedObject.ciphertext || '', 'base64');
-  const key = crypto.scryptSync(passphrase, salt, 32);
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  return JSON.parse(plaintext.toString('utf8'));
-}
-
-function parseBackupContainer(raw) {
-  let parsed = null;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (_) {
-    throw new Error('Invalid backup file format (JSON parsing failed).');
-  }
-
-  const format = parsed && parsed.format;
-  const version = parsed && parsed.version;
-  if (format !== 'WATTCOIN_WALLET_BACKUP' || version !== BACKUP_FORMAT_VERSION) {
-    throw new Error('Unsupported backup format version.');
-  }
-
-  if (!parsed.encrypted || typeof parsed.encrypted !== 'object') {
-    throw new Error('Backup is missing encrypted payload.');
-  }
-
-  return parsed;
-}
-
-function getFocusedWindow() {
-  return BrowserWindow.getFocusedWindow() || null;
-}
-
-function _sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 let _walletReadinessCache = null;
 let _walletReadinessCacheAt = 0;
 let walletAddressCache = { address: '', at: 0 };
-let updateInstallInProgress = false;
+const updateInstallInProgressRef = { value: false };
 const walletSyncEmitter = new EventEmitter();
 let walletSyncRefreshPromise = null;
 let walletSyncStateTimer = null;
@@ -5201,63 +4485,6 @@ walletSyncEmitter.on('changed', (snapshot) => {
 function getCurrentBlockHeight() {
   if (wtcNode) return wtcNode.getHeight();
   return 0;
-}
-function normalizeWalletError(e) {
-  const code = e && e.code ? e.code : 'UNKNOWN';
-  const message = e && e.message ? e.message : 'Unknown wallet error';
-  return { ok: false, code, message };
-}
-
-function _parseGeneratedBlockHash(minedOutput) {
-  const raw = typeof minedOutput === 'string' ? minedOutput.trim() : '';
-  if (!raw) return '';
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
-      return parsed[0];
-    }
-  } catch (_) {
-    if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-  }
-  return raw;
-}
-
-function computeMinedCoinsFromHeight(height) {
-  const halvingInterval = 210000;
-  let remainingBlocks = Math.max(0, Math.floor(Number(height) || 0));
-  let subsidy = 50;
-  let total = 0;
-
-  while (remainingBlocks > 0 && subsidy > 0) {
-    const blocksThisEra = Math.min(remainingBlocks, halvingInterval);
-    total += blocksThisEra * subsidy;
-    remainingBlocks -= blocksThisEra;
-    subsidy /= 2;
-  }
-
-  return total;
-}
-
-function _computeMaturedMinedCoinsFromHeight(height) {
-  // Coinbase maturity: rewards are spendable only after 100 confirmations.
-  const maturityDepth = 100;
-  const maturedHeight = Math.max(0, Math.floor(Number(height) || 0) - maturityDepth);
-  return computeMinedCoinsFromHeight(maturedHeight);
-}
-
-function _computeWattcoinFromMinedBlocks(blockCount) {
-  let remainingBlocks = Math.max(0, Math.floor(Number(blockCount) || 0));
-  let totalCoins = 0;
-
-  for (let tier = 0; tier < 21 && remainingBlocks > 0; tier++) {
-    const reward = 1000 / Math.pow(2, tier);
-    const blocksThisTier = Math.round(1000000 / reward);
-    const minedThisTier = Math.min(remainingBlocks, blocksThisTier);
-    totalCoins += minedThisTier * reward;
-    remainingBlocks -= minedThisTier;
-  }
-
-  return Number(totalCoins.toFixed(8));
 }
 
 ipcMain.handle('wattcoin-get-wallet-address', () => {
@@ -6142,16 +5369,6 @@ function getAsicConfig() {
   return _asicConfig;
 }
 
-function getHostLanIp() {
-  const ifaces = os.networkInterfaces();
-  for (const name of Object.keys(ifaces)) {
-    for (const iface of ifaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
-    }
-  }
-  return '127.0.0.1';
-}
-
 async function configureAsicPool(asicIp, apiPort, stratumPort, hostIp, driverName, driverConfig) {
   const driver = asicDrivers.getDriver(driverName || 'cgminer');
   if (!driver) return false;
@@ -6420,10 +5637,6 @@ ipcMain.handle('wattcoin-clear-probe-history', () => {
 // The renderer probe log is persisted to userData so entries survive restarts.
 // Capped at 500 entries on save; renderer may further cap at 150 for display.
 const PROBE_LOG_FILE_NAME = 'probe-log.json';
-function getProbeLogFilePath() {
-  return path.join(app.getPath('userData'), PROBE_LOG_FILE_NAME);
-}
-
 ipcMain.handle('wattcoin-get-probe-log', () => {
   try {
     const raw = fs.readFileSync(getProbeLogFilePath(), 'utf8');
@@ -6626,21 +5839,6 @@ function loadOrCreateDeviceIdentity() {
     isNew,
   };
   return _deviceIdentity;
-}
-
-function persistDevPeerPrivacyRecoveryKey() {
-  if (app.isPackaged) return '';
-  const { buildPeerPrivacyRecoveryPayload, writePeerPrivacyRecoveryFile } = require('./peer-privacy-dev');
-  const secret = getDeviceIdentitySecret();
-  if (!secret) return '';
-  const identity = loadOrCreateDeviceIdentity();
-  const payload = buildPeerPrivacyRecoveryPayload({
-    secret,
-    deviceId: identity && identity.deviceId,
-    createdAt: identity && identity.createdAt,
-  });
-  if (!payload) return '';
-  return writePeerPrivacyRecoveryFile({ fs, baseDir: __dirname, payload });
 }
 
 ipcMain.handle('wattcoin-get-device-identity', () => {
@@ -9475,47 +8673,10 @@ function loadBundledSeedPeers() {
   return bundledSeedPeersCache;
 }
 
-function sendJson(res, statusCode, payload) {
-  const body = JSON.stringify(payload || {});
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-  });
-  res.end(body);
-}
-
-function readJsonBody(req, maxBytes = LEDGER_NETWORK_BODY_MAX_BYTES) {
-  return new Promise((resolve, reject) => {
-    let total = 0;
-    const chunks = [];
-    req.on('data', (chunk) => {
-      total += chunk.length;
-      if (total > maxBytes) {
-        reject(new Error('Request body too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => {
-      if (chunks.length === 0) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')) || {});
-      } catch (_) {
-        reject(new Error('Invalid JSON body'));
-      }
-    });
-    req.on('error', (err) => reject(err));
-  });
-}
-
 function getTrustedRequesterPeerIdentity(req, settings = getLedgerNetworkSettings()) {
   const declaredPeerIdentity = String(req && req.headers ? req.headers['x-wtc-peer-identity'] || '' : '').trim();
-  if (!isValidPeerIdentity(declaredPeerIdentity)) return '';
-  if (isReverseTunnelForwardedRequest(req)) return declaredPeerIdentity;
+  if (!peerUtils.isValidPeerIdentity(declaredPeerIdentity)) return '';
+  if (peerUtils.isReverseTunnelForwardedRequest(req)) return declaredPeerIdentity;
   if (isLedgerNetworkAuthorized(req, settings)) return declaredPeerIdentity;
   return '';
 }
@@ -9563,23 +8724,16 @@ function getLocalPeerIdentity() {
   }
 }
 
-function isValidPeerIdentity(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) return false;
-  if (isValidWtcAddress(normalized)) return true;
-  return /^[a-f0-9]{64}$/i.test(normalized);
-}
-
 // ─── Peer gossip topology (connection reports from peers) ──────────────────
 
 function handleIncomingGossip(senderIdentity, body) {
   if (!body || !body.sender || !Array.isArray(body.connectedPeers)) return;
   const sender = String(body.sender).trim();
-  if (!isValidPeerIdentity(sender)) return;
+  if (!peerUtils.isValidPeerIdentity(sender)) return;
   if (isPeerIdentitySelfReference(sender, '')) return;
   const connected = body.connectedPeers
     .map((id) => String(id || '').trim())
-    .filter((id) => isValidPeerIdentity(id) && id !== sender)
+    .filter((id) => peerUtils.isValidPeerIdentity(id) && id !== sender)
     .slice(0, GOSSIP_MAX_CONNECTIONS_PER_PEER);
   const now = Date.now();
   peerGossipTopology.set(sender, { connectedIds: new Set(connected), lastReceivedMs: now });
@@ -9600,14 +8754,14 @@ async function broadcastOurTopology() {
     const reachable = peerReachabilityCache.get(url);
     if (!reachable || !reachable.ok) continue;
     const id = String(info.peerIdentity || '').trim();
-    if (!id || !isValidPeerIdentity(id) || id === ourIdentity || seenIds.has(id)) continue;
+    if (!id || !peerUtils.isValidPeerIdentity(id) || id === ourIdentity || seenIds.has(id)) continue;
     seenIds.add(id);
     connectedPeers.push(id);
   }
   for (const [, session] of reverseTunnelSessions) {
     if (!session || !session.peerIdentity || !session.socket || session.socket.readyState !== 1) continue;
     const id = String(session.peerIdentity).trim();
-    if (!id || !isValidPeerIdentity(id) || id === ourIdentity || seenIds.has(id)) continue;
+    if (!id || !peerUtils.isValidPeerIdentity(id) || id === ourIdentity || seenIds.has(id)) continue;
     seenIds.add(id);
     connectedPeers.push(id);
   }
@@ -12224,204 +11378,33 @@ ipcMain.handle('wattcoin-get-seed', () => {
   return { ok: false, code: 'NOT_SUPPORTED', message: 'Seed phrases are not available for WTC native wallets.' };
 });
 
-ipcMain.handle('wattcoin-export-wallet-backup', async (_, options = {}) => {
-  const passphrase = options && typeof options.passphrase === 'string' ? options.passphrase : '';
-  if (!validatePassphrase(passphrase)) {
-    return { ok: false, code: 'INVALID_PASSPHRASE', message: 'Passphrase must be at least 8 characters.' };
-  }
-  try {
-    const walletFilePath = path.join(getWalletDataDir(), 'wtc-wallet.json');
-    if (!fs.existsSync(walletFilePath)) {
-      return { ok: false, code: 'WALLET_FILE_MISSING', message: 'WTC wallet file not found.' };
-    }
-    const backupTimestamp = formatBackupTimestampForFilename();
-    const saveResult = await dialog.showSaveDialog(getFocusedWindow(), {
-      title: 'Export Encrypted Wallet Backup',
-      defaultPath: `wattcoin-wtc-${backupTimestamp}.${BACKUP_FILE_EXTENSION}`,
-      filters: [{ name: 'Wattcoin Wallet Backup', extensions: [BACKUP_FILE_EXTENSION] }],
-      properties: ['createDirectory', 'showOverwriteConfirmation'],
-    });
-    if (saveResult.canceled || !saveResult.filePath) {
-      return { ok: false, code: 'CANCELED', message: 'Backup export canceled.' };
-    }
-    const walletBytes = await fsp.readFile(walletFilePath);
-    const createdAt = new Date().toISOString();
-    const walletHash = sha256Hex(walletBytes);
-    const payload = {
-      metadata: { walletName: 'wtc-native', network: getActiveNetwork(), createdAt, app: 'Wattcoin' },
-      walletDatBase64: walletBytes.toString('base64'),
-      integrity: { algorithm: 'sha256', walletDatHex: walletHash },
-    };
-    const encrypted = encryptBackupPayload(payload, passphrase);
-    const container = {
-      format: 'WATTCOIN_WALLET_BACKUP',
-      version: BACKUP_FORMAT_VERSION,
-      kdf: { name: 'scrypt', keyLength: 32 },
-      cipher: { name: 'aes-256-gcm' },
-      encrypted,
-    };
-    await fsp.writeFile(saveResult.filePath, JSON.stringify(container, null, 2), 'utf8');
-    return { ok: true, filePath: saveResult.filePath, walletName: 'wtc-native', createdAt, checksum: walletHash };
-  } catch (e) {
-    return normalizeWalletError(e);
-  }
+registerWalletBackupIpcHandlers({
+  getWalletDataDir,
+  getDeviceIdentityFilePath,
+  getOrCreateWalletEncryptionKey,
+  loadOrCreateDeviceIdentity,
+  getActivePeers,
+  getActiveReverseTunnelPeerConnectionCount,
+  getPeerDirectoryTargets,
+  getTrustedPeerTargets,
+  requestPeerJson,
+  isSelfPeerUrl,
+  handlePeerTipSignal,
+  getLedgerNetworkSettings,
+  getLocalTunnelPeerLiveness,
+  roundLedger,
+  startGovernanceSync,
+  setCoordinatorIdentityKey,
+  refreshWalletSyncState,
+  stopHardwareLoad,
+  createWtcNode,
+  setWtcNode: (node) => {
+    wtcNode = node;
+  },
+  setWalletAddressCache: (cache) => {
+    walletAddressCache = cache;
+  },
 });
-
-ipcMain.handle('wattcoin-restore-wallet-backup', async (_, options = {}) => {
-  const defaultWalletName = 'wattminer';
-  const passphrase = options && typeof options.passphrase === 'string' ? options.passphrase : '';
-  if (!validatePassphrase(passphrase)) {
-    return { ok: false, code: 'INVALID_PASSPHRASE', message: 'Passphrase must be at least 8 characters.' };
-  }
-  try {
-    const openResult = await dialog.showOpenDialog(getFocusedWindow(), {
-      title: 'Restore Encrypted Wallet Backup',
-      filters: [{ name: 'Wattcoin Wallet Backup', extensions: [BACKUP_FILE_EXTENSION] }],
-      properties: ['openFile'],
-    });
-    if (openResult.canceled || !openResult.filePaths || openResult.filePaths.length === 0) {
-      return { ok: false, code: 'CANCELED', message: 'Backup restore canceled.' };
-    }
-    const backupPath = openResult.filePaths[0];
-    if (!backupPath) {
-      return { ok: false, code: 'CANCELED', message: 'Backup restore canceled.' };
-    }
-    if (!fs.existsSync(backupPath)) {
-      return { ok: false, code: 'BACKUP_FILE_MISSING', message: `Backup file not found: ${backupPath}` };
-    }
-    const raw = await fsp.readFile(backupPath, 'utf8');
-    const container = parseBackupContainer(raw);
-    let payload = null;
-    try {
-      payload = decryptBackupPayload(container.encrypted, passphrase);
-    } catch (_) {
-      return { ok: false, code: 'DECRYPT_FAILED', message: 'Failed to decrypt backup. Check your passphrase.' };
-    }
-    const metadata = payload && payload.metadata ? payload.metadata : {};
-    const _walletName =
-      typeof metadata.walletName === 'string' && metadata.walletName ? metadata.walletName : defaultWalletName;
-    const expectedNetwork = getActiveNetwork();
-    const network = metadata && metadata.network ? metadata.network : 'unknown';
-    if (network !== expectedNetwork) {
-      return {
-        ok: false,
-        code: 'NETWORK_MISMATCH',
-        message: `Backup network is ${network}, expected ${expectedNetwork}.`,
-      };
-    }
-    const walletDataBase64 = payload && payload.walletDatBase64 ? payload.walletDatBase64 : '';
-    const walletDat = Buffer.from(walletDataBase64, 'base64');
-    if (!walletDat || walletDat.length === 0) {
-      return { ok: false, code: 'INVALID_BACKUP', message: 'Backup payload does not contain wallet data.' };
-    }
-    const expectedHash = payload && payload.integrity ? payload.integrity.walletDatHex : '';
-    const actualHash = sha256Hex(walletDat);
-    if (!expectedHash || expectedHash !== actualHash) {
-      return { ok: false, code: 'INTEGRITY_CHECK_FAILED', message: 'Backup checksum verification failed.' };
-    }
-    const walletFilePath = path.join(getWalletDataDir(), 'wtc-wallet.json');
-    const walletDir = path.dirname(walletFilePath);
-    if (fs.existsSync(walletFilePath)) {
-      const overwriteResult = await dialog.showMessageBox(getFocusedWindow(), {
-        type: 'warning',
-        buttons: ['Cancel Restore', 'Overwrite Wallet'],
-        defaultId: 0,
-        cancelId: 0,
-        title: 'Wallet Already Exists',
-        message: 'A wallet already exists at this location.',
-        detail: `${walletFilePath}\n\nRestoring this backup will replace your current wallet. Make sure you have exported a backup of your current wallet first.`,
-      });
-      if (overwriteResult.response !== 1) {
-        return { ok: false, code: 'CANCELED', message: 'Restore canceled.' };
-      }
-    }
-    try {
-      stopHardwareLoad();
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-    }
-    await fsp.mkdir(walletDir, { recursive: true });
-    await fsp.writeFile(walletFilePath, walletDat);
-    try {
-      const wtcSecret = (() => {
-        try {
-          const raw = JSON.parse(fs.readFileSync(getDeviceIdentityFilePath(), 'utf8'));
-          return raw && raw.secret ? raw.secret : '';
-        } catch (_) {
-          return '';
-        }
-      })();
-      wtcNode = createWtcNode({
-        dataDir: getWalletDataDir(),
-        signingSecret: wtcSecret || crypto.randomBytes(32).toString('hex'),
-        peerIdentity: String(loadOrCreateDeviceIdentity().deviceId || '').trim(),
-        walletKey: getOrCreateWalletEncryptionKey(),
-        getActivePeers: () => getActivePeers(getLedgerNetworkSettings()),
-        getConnectedPeerCount: () => getActiveReverseTunnelPeerConnectionCount(),
-        getPeerTargets: () => getPeerDirectoryTargets(getLedgerNetworkSettings()),
-        getTrustedPeerTargets: () => getTrustedPeerTargets(getLedgerNetworkSettings()),
-        requestPeerJson,
-        isSelfPeerUrl,
-        onPeerTip: (peerUrl, tip) => handlePeerTipSignal(peerUrl, tip, 'tip-probe'),
-        allowPartialQuorumCommit: !(getLedgerNetworkSettings().enabled && getLedgerNetworkSettings().mode === 'peer'),
-        isLiveLocalTunnelPeer: getLocalTunnelPeerLiveness,
-        getEnergyContributions: () => roundLedger.getCurrentRoundSnapshot().contributionsWh,
-      });
-      startGovernanceSync();
-      try {
-        const restoredPrimary = wtcNode.getPrimaryAddress();
-        walletAddressCache = { address: restoredPrimary || '', at: restoredPrimary ? Date.now() : 0 };
-        if (restoredPrimary) setCoordinatorIdentityKey(restoredPrimary);
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-    } catch (reinitErr) {
-      console.error('[RestoreBackup] Failed to re-init WTC node:', reinitErr && reinitErr.message);
-    }
-    const allAddresses = wtcNode ? wtcNode.getAddresses() : [];
-    refreshWalletSyncState('restore-wallet-backup', { force: true }).catch(() => {});
-    return {
-      ok: true,
-      walletName: 'wtc-native',
-      filePath: backupPath,
-      restoredTo: walletFilePath,
-      checksum: actualHash,
-      restartedNode: true,
-      allAddresses,
-    };
-  } catch (e) {
-    return normalizeWalletError(e);
-  }
-});
-
-// -- Integrity manifest signing key -------------------------------------------
-// ED25519 public key used to verify manifest.sig files.  The corresponding
-// private key is held in CI (never packaged).  If the .sig file is absent or
-// verification fails, a warning is logged but the check passes (graceful
-// fallback) so old manifests without signatures are still accepted.
-const MANIFEST_SIGNING_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAS+Hbx0leVnkpk6O8Oh15Vl87/MIoa8sMofYK/CJrf7U=
------END PUBLIC KEY-----`;
-
-function verifyManifestSignature(manifestPath, manifestContent) {
-  const sigPath = manifestPath + '.sig';
-  if (!fs.existsSync(sigPath)) {
-    console.warn(`[Integrity] ${path.basename(sigPath)} not found - manifest is not signed.`);
-    return true;
-  }
-  try {
-    const signature = fs.readFileSync(sigPath);
-    const canonical = Buffer.from(JSON.stringify(manifestContent), 'utf8');
-    const key = crypto.createPublicKey({ key: MANIFEST_SIGNING_PUBLIC_KEY, format: 'pem', type: 'spki' });
-    const ok = crypto.verify(null, canonical, key, signature);
-    if (!ok)
-      console.warn(`[Integrity] ${path.basename(sigPath)} signature INVALID - manifest may have been tampered with.`);
-    return ok;
-  } catch (e) {
-    console.warn(`[Integrity] signature verification error:`, e?.message);
-    return false;
-  }
-}
 
 // -- Binary integrity verification ----------------------------------------------
 // Reads binary-manifest.json (written by scripts/after-sign-windows.js afterSign
@@ -12750,7 +11733,7 @@ function gossipAnnounce(peerUrls, options = {}) {
   const dedupKey = `${gossipId}`;
   if (ttl > 1 && peerGossipSeen.has(dedupKey)) return;
   if (ttl > 1) peerGossipSeen.set(dedupKey, Date.now());
-  const targets = pickPeerExchangeTargets(getPeerDirectoryTargets(settings), PEER_GOSSIP_FANOUT);
+  const targets = peerUtils.pickPeerExchangeTargets(getPeerDirectoryTargets(settings), PEER_GOSSIP_FANOUT);
   const payload = { peers: normalizedEntries.map((url) => ({ url })), ttl, gossipId };
   for (const targetUrl of targets) {
     requestPeerJson(targetUrl, 'POST', '/api/v1/network/gossip', payload, undefined, {
@@ -12855,75 +11838,6 @@ function stopWtcPeerSyncLoop() {
   if (!wtcPeerSyncTimer) return;
   clearInterval(wtcPeerSyncTimer);
   wtcPeerSyncTimer = null;
-}
-
-function createWindow() {
-  // -- Content Security Policy -----------------------------------------------
-  // Set before the window is created so it applies from the very first navigation.
-  // Restricts script, style, and connection sources to 'self' (the local app bundle).
-  // In dev mode we also allow localhost:5173 for the Vite dev server.
-  const devMode = process.env.NODE_ENV === 'development';
-  const externalApiHosts = [].join(' ');
-  const connectSrc = devMode
-    ? `'self' http://localhost:5173 ws://localhost:5173 ${externalApiHosts}`
-    : `'self' ${externalApiHosts}`;
-  const cspValue = `default-src 'self'; script-src 'self'${devMode ? " 'unsafe-eval'" : ''}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src ${connectSrc}; object-src 'none'; base-uri 'none'; form-action 'none';`;
-  require('electron').session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [cspValue],
-      },
-    });
-  });
-
-  const win = new BrowserWindow({
-    width: 1240,
-    height: 800,
-    icon: path.join(__dirname, 'assets', 'icons', 'icon.ico'),
-    title: `Wattcoin Miner v${getAppDisplayVersion()}`,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: false,
-      // Must be false so setTimeout-driven GPU load loop keeps firing when the
-      // window is minimized.  true (the Electron default) throttles all timers
-      // in hidden pages, which drops GPU utilisation to 0%.
-      backgroundThrottling: false,
-      preload: path.join(__dirname, 'preload.js'),
-    },
-  });
-  // Pass --debug on the command line to open DevTools automatically.
-  if (process.argv.includes('--debug')) {
-    win.webContents.openDevTools();
-  }
-  // Keep the versioned title even after the page's <title> tag loads.
-  win.on('page-title-updated', (event) => {
-    event.preventDefault();
-  });
-  // Block all new-window openings and external navigations.
-  // The renderer is a local single-page app; it should never open popups or
-  // navigate away from the local file:// bundle.
-  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', (event, url) => {
-    const allowed = devMode
-      ? url.startsWith('http://localhost:5173') || url.startsWith('file://')
-      : url.startsWith('file://');
-    if (!allowed) {
-      event.preventDefault();
-      console.warn('[Security] Blocked renderer navigation to:', url);
-    }
-  });
-
-  ipcMain.on('wattcoin-get-app-version', (event) => {
-    event.returnValue = getAppDisplayVersion();
-  });
-  // Load the Vite dev server in development, or the built miner.html in production
-  if (process.env.NODE_ENV === 'development') {
-    win.loadURL('http://localhost:5173/miner.html');
-  } else {
-    win.loadFile(path.join(__dirname, 'dist', 'miner.html'));
-  }
 }
 
 app.setAppPath(__dirname);
@@ -13093,7 +12007,7 @@ app.whenReady().then(() => {
   })();
 
   try {
-    persistDevPeerPrivacyRecoveryKey();
+    persistDevPeerPrivacyRecoveryKey(getDeviceIdentitySecret, loadOrCreateDeviceIdentity);
   } catch (e) {
     console.warn('[PeerPrivacy] Failed to write dev recovery key:', e && e.message ? e.message : e);
   }
@@ -13296,7 +12210,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  if (updateInstallInProgress) {
+  if (updateInstallInProgressRef.value) {
     // quitAndInstall handles shutdown - don't call app.quit() here
     return;
   }
@@ -13329,186 +12243,28 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-// -- Auto-updater --------------------------------------------------------------
-// Only runs in a packaged app (app.isPackaged). In dev mode autoUpdater is a
-// no-op so it never interferes with the development workflow.
-// Flow: check automatically on startup - download silently in background -
-// notify renderer via 'wattcoin-update-downloaded' - user clicks Restart -
-// renderer calls 'wattcoin-install-update' - quitAndInstall.
-// -----------------------------------------------------------------------------
-function normalizeUpdateFeedUrl(value) {
-  const s = String(value || '').trim();
-  if (!s) return '';
-  return s.replace(/\/+$/, '');
-}
+initUpdater({ app, autoUpdater, BrowserWindow, ipcMain, updateInstallInProgressRef });
 
-function readConfiguredUpdateFeedUrl() {
+// Clean up native GPU process on exit
+process.on('exit', () => {
   try {
-    const appUpdatePath = path.join(process.resourcesPath, 'app-update.yml');
-    if (!fs.existsSync(appUpdatePath)) return '';
-    const raw = fs.readFileSync(appUpdatePath, 'utf8');
-    const m = raw.match(/^url:\s*(.+)$/m);
-    return normalizeUpdateFeedUrl(m ? m[1] : '');
+    shutdownGpu();
   } catch (_) {
-    return '';
+    return undefined;
   }
-}
-
-function buildUpdateFeedOrder() {
-  const configured = readConfiguredUpdateFeedUrl();
-  const defaults = ['https://wattcoin.ee/releases', 'https://wattcoin.ee'];
-
-  const ordered = [];
-  const seen = new Set();
-  [configured, ...defaults].forEach((u) => {
-    const n = normalizeUpdateFeedUrl(u);
-    if (!n || seen.has(n)) return;
-    seen.add(n);
-    ordered.push(n);
-  });
-  return ordered;
-}
-
-if (app.isPackaged) {
-  const updateFeeds = buildUpdateFeedOrder();
-  let activeUpdateFeed = updateFeeds[0] || 'https://wattcoin.ee/releases';
-
-  const setUpdateFeed = (url) => {
-    const normalized = normalizeUpdateFeedUrl(url);
-    if (!normalized) return false;
-    try {
-      autoUpdater.setFeedURL({ provider: 'generic', url: normalized });
-      activeUpdateFeed = normalized;
-      console.log('[auto-update] feed set:', normalized);
-      return true;
-    } catch (e) {
-      console.warn('[auto-update] failed to set feed:', normalized, e && e.message ? e.message : e);
-      return false;
-    }
-  };
-
-  const checkForUpdatesWithFallback = async () => {
-    const feeds = updateFeeds.length > 0 ? updateFeeds : [activeUpdateFeed];
-    const startIndex = Math.max(0, feeds.indexOf(activeUpdateFeed));
-    let lastError = null;
-
-    for (let offset = 0; offset < feeds.length; offset += 1) {
-      const idx = (startIndex + offset) % feeds.length;
-      const feed = feeds[idx];
-      if (!setUpdateFeed(feed)) continue;
-      try {
-        return await autoUpdater.checkForUpdates();
-      } catch (e) {
-        lastError = e;
-        console.warn('[auto-update] check failed on feed:', feed, e && e.message ? e.message : e);
-      }
-    }
-
-    if (lastError) {
-      throw lastError;
-    }
-    return null;
-  };
-
-  // Set preferred feed at startup so downloaded update metadata and logs are clear.
-  setUpdateFeed(activeUpdateFeed);
-
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = false; // quitAndInstall handles shutdown explicitly
-
-  // Dev builds use a self-signed cert ("Wattcoin Dev Root CA") which is not in
-  // Windows' Trusted Root store, so Get-AuthenticodeSignature returns NotTrusted
-  // and rejects the update.  Set WATTCOIN_WINDOWS_SIGNING_ON_HOLD=1 in dev to
-  // skip publisher-name verification.  In production the installer is signed with
-  // a trusted cert, so autoUpdater's built-in verification runs normally.
-  if (process.env.WATTCOIN_WINDOWS_SIGNING_ON_HOLD === '1') {
-    autoUpdater._verifyUpdateCodeSignature = () => Promise.resolve(null);
+});
+app.on('before-quit', () => {
+  try {
+    shutdownGpu();
+  } catch (_) {
+    return undefined;
   }
-
-  autoUpdater.on('before-quit-for-update', () => {
-    updateInstallInProgress = true;
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    const wins = BrowserWindow.getAllWindows();
-    wins.forEach((w) => {
-      try {
-        w.webContents.send('wattcoin-update-downloaded', { version: info.version });
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-    });
-  });
-
-  autoUpdater.on('error', (err) => {
-    console.warn('[auto-update] error:', err && err.message ? err.message : err);
-  });
-
-  ipcMain.handle('wattcoin-check-for-update', async () => {
-    try {
-      return await checkForUpdatesWithFallback();
-    } catch (_) {
-      return null;
-    }
-  });
-
-  ipcMain.handle('wattcoin-install-update', () => {
-    updateInstallInProgress = true;
-
-    const wins = BrowserWindow.getAllWindows();
-    wins.forEach((win) => {
-      try {
-        win.removeAllListeners('close');
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-      try {
-        win.close();
-      } catch (_) {
-        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
-      }
-    });
-
-    try {
-      autoUpdater.quitAndInstall(false, true);
-    } catch (err) {
-      updateInstallInProgress = false;
-      console.warn('[auto-update] install failed:', err && err.message ? err.message : err);
-    }
-
-    return { ok: true };
-  });
-
-  // Check ~30 s after ready so the node has time to start,
-  // then re-check every 4 h so long-running miners don't miss updates.
-  app.whenReady().then(() => {
-    setTimeout(() => {
-      checkForUpdatesWithFallback().catch(() => undefined);
-      setInterval(() => checkForUpdatesWithFallback().catch(() => undefined), 4 * 60 * 60_000);
-    }, 30_000);
-  });
-
-  // Clean up native GPU process on exit
-  process.on('exit', () => {
-    try {
-      shutdownGpu();
-    } catch (_) {
-      return undefined;
-    }
-  });
-  app.on('before-quit', () => {
-    try {
-      shutdownGpu();
-    } catch (_) {
-      return undefined;
-    }
-    try {
-      stopAllStrata();
-    } catch (_) {
-      return undefined;
-    }
-  });
-}
+  try {
+    stopAllStrata();
+  } catch (_) {
+    return undefined;
+  }
+});
 
 // --- Global average electricity price (USD/kWh) ------------------------------
 // Fetches from GlobalPetrolPrices.com. Cached for 24 h. Falls back to the
