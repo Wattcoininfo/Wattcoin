@@ -66,7 +66,7 @@ module.exports = {
   overrides: [
     {
       files: ['tests/**/*.js'],
-      env: { mocha: false },
+      env: { mocha: true },
       rules: {
         'no-console': 'off',
         'no-empty': 'off',
