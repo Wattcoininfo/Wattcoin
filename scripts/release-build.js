@@ -524,6 +524,9 @@ function syncWhitepaperVersionLabels(html, version, monthName, year) {
   next = next.replace(/v\d+\.\d+\.\d+(?= &nbsp;—&nbsp; <a href="mailto:info@wattcoin\.ee">)/g, `v${version}`);
   next = next.replace(/(VERSION \d+\.\d+\.\d+ — )[A-Z]+ \d{4}/g, `$1${monthName} ${year}`);
   next = next.replace(/(v\d+\.\d+\.\d+ — )[A-Z]+ \d{4}/g, `$1${monthName} ${year}`);
+  // middle-dot separator (used on homepage hero pill)
+  next = next.replace(/VERSION \d+\.\d+\.\d+(?= · [A-Z]+ \d{4})/g, `VERSION ${version}`);
+  next = next.replace(/(VERSION \d+\.\d+\.\d+ · )[A-Z]+ \d{4}/g, `$1${monthName} ${year}`);
   // &mdash; entity variants (used in static HTML footer and inline version labels)
   next = next.replace(/VERSION \d+\.\d+\.\d+(?= &mdash; [A-Z]+ \d{4})/g, `VERSION ${version}`);
   next = next.replace(/(VERSION \d+\.\d+\.\d+ &mdash; )[A-Z]+ \d{4}/g, `$1${monthName} ${year}`);
