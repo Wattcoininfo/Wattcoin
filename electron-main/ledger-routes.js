@@ -128,6 +128,21 @@ function createLedgerRequestHandler(ctx) {
                 if (verdict.receipt) {
                   recordPeerAttestation(verifierAddress, workerId);
                   broadcastProbeReceiptToPeers(verdict.receipt);
+                  const selfNorm = normalizeProbeReceipt(verdict.receipt);
+                  if (selfNorm) {
+                    const _wAddr = String(selfNorm.workerId || '').trim();
+                    const _wChain = Math.max(0, Math.floor(Number(selfNorm.chainIndex) || 0));
+                    if (_wAddr) {
+                      if (!witnessedProbeReceipts.has(_wAddr)) {
+                        witnessedProbeReceipts.set(_wAddr, { maxChainIndex: 0, receipts: new Map() });
+                      }
+                      const _wEntry = witnessedProbeReceipts.get(_wAddr);
+                      if (_wChain > (_wEntry.maxChainIndex || 0)) _wEntry.maxChainIndex = _wChain;
+                      const _wMap = _wEntry.receipts.get(_wChain) || new Map();
+                      _wMap.set(String(selfNorm.verifierAddress || '').trim(), selfNorm);
+                      _wEntry.receipts.set(_wChain, _wMap);
+                    }
+                  }
                 }
               } catch (error) {
                 console.warn(

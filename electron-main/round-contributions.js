@@ -41,16 +41,18 @@ function createRoundContributions(deps) {
     if (witnessedProbeReceipts.has(address)) {
       const verifiedEntry = witnessedProbeReceipts.get(address);
       const receiptsForClaimedIndex = verifiedEntry.receipts.get(chainIndex) || new Map();
-      if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
-        return {
-          ok: false,
-          code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
-          message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}`,
-        };
-      }
       const hasBootstrapVerifier = [...receiptsForClaimedIndex.keys()].some((vAddr) =>
         bootstrapPeerAddresses.has(vAddr),
       );
+      if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
+        if (!(hasBootstrapVerifier && receiptsForClaimedIndex.size >= 1)) {
+          return {
+            ok: false,
+            code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
+            message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifier attestations, requires ${MIN_PROBE_VERIFIERS}`,
+          };
+        }
+      }
       if (!hasBootstrapVerifier) {
         return {
           ok: false,

@@ -28,15 +28,18 @@ function validateContributionProbe({
     const verifiedEntry = witnessedProbeReceipts.get(address);
     const receiptsForClaimedIndex = verifiedEntry.receipts.get(chainIndex) || new Map();
 
+    const hasBootstrapVerifier = [...receiptsForClaimedIndex.keys()].some((vAddr) => bootstrapPeerAddresses.has(vAddr));
+
     if (receiptsForClaimedIndex.size < MIN_PROBE_VERIFIERS) {
-      return {
-        ok: false,
-        code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
-        message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifiers, requires ${MIN_PROBE_VERIFIERS}`,
-      };
+      if (!(hasBootstrapVerifier && receiptsForClaimedIndex.size >= 1)) {
+        return {
+          ok: false,
+          code: 'INSUFFICIENT_PROBE_ATTESTATIONS',
+          message: `chainIndex ${chainIndex} has only ${receiptsForClaimedIndex.size} verifiers, requires ${MIN_PROBE_VERIFIERS}`,
+        };
+      }
     }
 
-    const hasBootstrapVerifier = [...receiptsForClaimedIndex.keys()].some((vAddr) => bootstrapPeerAddresses.has(vAddr));
     if (!hasBootstrapVerifier) {
       return {
         ok: false,
@@ -143,13 +146,59 @@ async function run() {
     assert.ok(result.attestedPowerW > 0);
   });
 
-  // ─── Insufficient verifiers rejected ─────────────────────────────────────
-  await test('Insufficient verifiers (< 3) rejected', () => {
+  // ─── Single bootstrap verifier is sufficient ────────────────────────────
+  await test('Single bootstrap verifier passes even below MIN_PROBE_VERIFIERS', () => {
     const witnessedProbeReceipts = new Map();
     witnessedProbeReceipts.set(
       'miner-addr',
       makeWitnessedEntry(1, {
         'bootstrap-peer': 100,
+      }),
+    );
+
+    const result = validateContributionProbe({
+      address: 'miner-addr',
+      totalWh: 1,
+      chainIndex: 1,
+      witnessedProbeReceipts,
+      bootstrapPeerAddresses: new Set(['bootstrap-peer']),
+      MIN_PROBE_VERIFIERS: 3,
+      PROBE_INTERVAL_MS: 60000,
+    });
+    assert.ok(result.ok, 'single bootstrap verifier must be accepted');
+    assert.ok(result.attestedPowerW > 0);
+  });
+
+  // ─── Single non-bootstrap verifier rejected ────────────────────────────
+  await test('Single non-bootstrap verifier rejected below MIN_PROBE_VERIFIERS', () => {
+    const witnessedProbeReceipts = new Map();
+    witnessedProbeReceipts.set(
+      'miner-addr',
+      makeWitnessedEntry(1, {
+        'random-peer': 100,
+      }),
+    );
+
+    const result = validateContributionProbe({
+      address: 'miner-addr',
+      totalWh: 1,
+      chainIndex: 1,
+      witnessedProbeReceipts,
+      bootstrapPeerAddresses: new Set(['bootstrap-peer']),
+      MIN_PROBE_VERIFIERS: 3,
+      PROBE_INTERVAL_MS: 60000,
+    });
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'INSUFFICIENT_PROBE_ATTESTATIONS');
+  });
+
+  // ─── Insufficient verifiers without bootstrap rejected ──────────────────
+  await test('2 non-bootstrap verifiers rejected', () => {
+    const witnessedProbeReceipts = new Map();
+    witnessedProbeReceipts.set(
+      'miner-addr',
+      makeWitnessedEntry(1, {
+        'peer-1': 100,
         'peer-2': 100,
       }),
     );
