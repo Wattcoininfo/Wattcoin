@@ -142,7 +142,7 @@ function getProbeLogFilePath() {
 function persistDevPeerPrivacyRecoveryKey(getDeviceIdentitySecret, loadOrCreateDeviceIdentity) {
   const { app } = require('electron');
   if (app.isPackaged) return '';
-  const { buildPeerPrivacyRecoveryPayload, writePeerPrivacyRecoveryFile } = require('./peer-privacy-dev');
+  const { buildPeerPrivacyRecoveryPayload, writePeerPrivacyRecoveryFile } = require('./peer-privacy');
   const secret = getDeviceIdentitySecret();
   if (!secret) return '';
   const identity = loadOrCreateDeviceIdentity();

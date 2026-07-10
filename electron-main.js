@@ -115,13 +115,13 @@ const {
   sanitizeForwardedTunnelHeaders,
 } = require('./electron-main/main-utils');
 const { initUpdater } = require('./electron-main/updater');
-const { registerAttestationIpcHandlers } = require('./electron-main/attestation-ipc');
-const { registerMinerAccessIpcHandlers } = require('./electron-main/miner-access-ipc');
+const { registerAttestationIpcHandlers } = require('./electron-main/attestation');
+const { registerMinerAccessIpcHandlers } = require('./electron-main/mining-ipc');
 const { registerFirewallIpcHandlers } = require('./electron-main/firewall-ipc');
 const { registerHardwareAuthorityIpcHandlers } = require('./electron-main/hardware-authority-ipc');
 const { registerExternalUrlIpcHandlers } = require('./electron-main/external-url-ipc');
 const { setupRpcCredentials } = require('./electron-main/setup-rpc-credentials');
-const { ensureCanonicalGenesis } = require('./electron-main/genesis-copy');
+const { ensureCanonicalGenesis } = require('./electron-main/main-utils');
 const { initQueues } = require('./electron-main/queue-init');
 const { registerPeerNetworkIpcHandlers } = require('./electron-main/peer-network-ipc');
 const { registerHardwareLoadIpcHandlers } = require('./electron-main/hardware-load-ipc');
@@ -139,7 +139,7 @@ const {
 const { createLedgerServer } = require('./electron-main/ledger-server');
 const { createPeerDirectoryRefresher } = require('./electron-main/peer-directory-refresh');
 
-const { getDataDir, getActiveNetwork } = require('./electron-main/env');
+const { getDataDir, getActiveNetwork } = require('./electron-main/main-utils');
 function refreshCoordinatorIdentityKey() {
   try {
     const address = String(
@@ -171,14 +171,14 @@ const { registerWalletBackupIpcHandlers } = require('./electron-main/wallet-back
 const { getRuntimeConfig } = require('./electron-main/runtime-config');
 const { autoUpdater } = require('electron-updater');
 const { createWtcNode } = require('./electron-main/wtc-node');
-const { summarizeDisplayedPeerCounts } = require('./electron-main/peer-count-observability');
+const { summarizeDisplayedPeerCounts } = require('./electron-main/peer-utils');
 const { buildPeerDiscoverySnapshot } = require('./electron-main/peer-discovery-observability');
 const {
   filterAdvertisedPeerUrls,
   obfuscatePeerUrl,
   resolvePeerPrivacySecret,
 } = require('./electron-main/peer-privacy');
-const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./electron-main/peer-self-filter');
+const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./electron-main/peer-utils');
 const { setupUpnpPortMapping, removeUpnpPortMapping: removeUpnpMapping } = require('./electron-main/upnp-port-forward');
 const {
   getLocalSubnetProbeCandidates,
@@ -888,9 +888,9 @@ function getAttestationProfileCacheFilePath() {
   return path.join(getWalletDataDir(), ATTESTATION_PROFILE_CACHE_FILE_NAME);
 }
 
-const LOCAL_HARDWARE_PROFILE_DB = require('./electron-main/hardware-profiles-db');
+const { LOCAL_HARDWARE_PROFILE_DB } = require('./electron-main/hardware-profiles');
 
-const createAttestation = require('./electron-main/attestation');
+const { createAttestation } = require('./electron-main/attestation');
 const attestation = createAttestation({
   getWalletDataDir,
   safeStorage,
@@ -1126,6 +1126,7 @@ const { collectOpsSnapshot, startOpsMetricsLoop, stopOpsMetricsLoop, recordOpsAl
     OPS_WINDOW_MS,
     CHAIN_STALL_ALERT_MS,
     OPS_ALERT_COOLDOWN_MS: 5 * 60_000,
+    getDataDir,
   });
 
 // Wire up forward refs
@@ -1278,7 +1279,7 @@ registerMiningIpcHandlers(ipcMain, {
   getLedgerNetworkSettings: (settings) => ledgerNetwork.getLedgerNetworkSettings(settings),
   normalizeProbeReceipt,
   hasRecentPeerAttestationRelation: (a, b, ...args) => peerNetworking.hasRecentPeerAttestationRelation(a, b, ...args),
-  buildPowerProofCommitment: require('./electron-main/power-proof-commitment').buildPowerProofCommitment,
+  buildPowerProofCommitment: require('./electron-main/probe-attestation').buildPowerProofCommitment,
   getSharedRoundSnapshot,
   buildRewardMapFromRoundSnapshot: (...args) => roundContributions.buildRewardMapFromRoundSnapshot(...args),
   hwAuthority,

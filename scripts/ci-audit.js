@@ -12,16 +12,18 @@ const report = JSON.parse(stdout);
 
 const advisories = Object.values(report.vulnerabilities || {});
 const allowed = [
-  'elliptic', 'tmp', 'vite', 'vitest', '@vitest/coverage-v8',
+  'elliptic',
+  'tmp',
+  'vite',
+  'vitest',
+  '@vitest/coverage-v8',
   'esbuild', // transitive through vite/vitest, no breaking-change fix path
-  'undici',  // transitive through Node.js internals, elevated by GHSA and pending patched release
+  'undici', // transitive through Node.js internals, elevated by GHSA and pending patched release
 ];
 
-const failures = advisories.filter(
-  (v) => v.severity === 'high' || v.severity === 'critical'
-).filter(
-  (v) => !allowed.includes(v.name)
-);
+const failures = advisories
+  .filter((v) => v.severity === 'high' || v.severity === 'critical')
+  .filter((v) => !allowed.includes(v.name));
 
 if (failures.length > 0) {
   console.error('High/critical severity vulnerabilities found:');

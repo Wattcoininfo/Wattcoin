@@ -18,7 +18,11 @@ async function test(name, fn) {
 }
 
 async function run() {
-  const { BACKUP_FILE_EXTENSION, BACKUP_FORMAT_VERSION, parseBackupContainer } = require('../electron-main/backup');
+  const {
+    BACKUP_FILE_EXTENSION,
+    BACKUP_FORMAT_VERSION,
+    parseBackupContainer,
+  } = require('../electron-main/wallet-backup-ipc');
 
   await test('BACKUP_FILE_EXTENSION is wcbak', () => {
     assert.strictEqual(BACKUP_FILE_EXTENSION, 'wcbak');

@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { getDataDir } = require('./env');
+const { getDataDir } = require('./main-utils');
 
 const STARTUP_TRACE_FILE_NAME = 'wattcoin-startup-trace.log';
 

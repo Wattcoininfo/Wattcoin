@@ -202,6 +202,74 @@ function shouldUseManagedReverseTunnel(settings) {
   return getExplicitAdvertisedPeerUrls(settings).length === 0;
 }
 
+// -- Peer self-filter (from peer-self-filter.js) ----------------------------
+
+function isSelfPeerUrlCandidate(candidate, { selfAdvertisedUrls = [], listenPort = 0, localHosts = [] } = {}) {
+  if (!candidate) return false;
+
+  const selfUrls = new Set(
+    (Array.isArray(selfAdvertisedUrls) ? selfAdvertisedUrls : [])
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  );
+  if (selfUrls.has(candidate)) return true;
+
+  try {
+    const parsed = new URL(candidate);
+    const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80));
+    const pathname = String(parsed.pathname || '/').replace(/\/+$/, '') || '/';
+    if (pathname !== '/') {
+      if (!pathname.startsWith('/api/v1/tunnel/')) {
+        return false;
+      }
+      const segments = pathname.split('/').filter(Boolean);
+      if (segments.length < 4) {
+        return false;
+      }
+      return false;
+    }
+    return port === listenPort && new Set(localHosts || []).has(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
+function filterExternalPeerUrls(candidates, selfOptions = {}) {
+  const urls = Array.isArray(candidates) ? candidates : [];
+  return Array.from(
+    new Set(
+      urls
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .filter((value) => !isSelfPeerUrlCandidate(value, selfOptions)),
+    ),
+  );
+}
+
+// -- Peer count observability (from peer-count-observability.js) -------------
+
+function countLiveReverseTunnelPeers({ sessions = [], nowMs = Date.now(), liveThresholdMs = 0, openState = 1 } = {}) {
+  const inboundConnections = new Set();
+  for (const session of sessions) {
+    if (!session || !session.socket || session.socket.readyState !== openState) continue;
+    if (nowMs - Number(session.lastSeenAtMs || 0) > liveThresholdMs) continue;
+    const key = String(session.peerIdentity || '').trim() || `tunnel:${String(session.tunnelId || '').trim()}`;
+    inboundConnections.add(key);
+  }
+  return inboundConnections.size;
+}
+
+function summarizeDisplayedPeerCounts({ healthyDistinct = 0, reverseTunnelDistinct = 0 } = {}) {
+  const activeCount = Math.max(0, Number(healthyDistinct) || 0);
+  const tunnelCount = Math.max(0, Number(reverseTunnelDistinct) || 0);
+  const onlineCount = Math.max(activeCount, tunnelCount);
+  return {
+    activeCount,
+    onlineCount,
+    tunnelCount: Math.min(tunnelCount, onlineCount),
+  };
+}
+
 module.exports = {
   buildPeerUrlFromSocket,
   getLocalPeerHosts,
@@ -219,4 +287,8 @@ module.exports = {
   isValidPeerIdentity,
   getPeerIdentityKey,
   shouldUseManagedReverseTunnel,
+  isSelfPeerUrlCandidate,
+  filterExternalPeerUrls,
+  countLiveReverseTunnelPeers,
+  summarizeDisplayedPeerCounts,
 };

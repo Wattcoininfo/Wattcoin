@@ -37,7 +37,6 @@ __pycache__/
 
 # Python packages installed locally (e.g. by pip into project dir)
 Lib/
-Scripts/
 Include/
 share/
 pyvenv.cfg

@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const https = require('https');
 const { spawnSync } = require('child_process');
-const { assertUnobfuscatedDevSources } = require('./check-dev-source');
+const { assertUnobfuscatedDevSources: _assertUnobfuscatedDevSources } = require('./check-dev-source');
 
 const APP_INTEGRITY_FILES = [
   'electron-main.js',
@@ -30,15 +30,10 @@ const APP_INTEGRITY_FILES = [
 ];
 
 function assertReleaseObfuscationDisabled() {
-  const forbiddenFlags = [
-    'WATTCOIN_RELEASE_OBFUSCATE',
-    'WATTCOIN_RELEASE_OBFUSCATE_RENDERER',
-  ];
+  const forbiddenFlags = ['WATTCOIN_RELEASE_OBFUSCATE', 'WATTCOIN_RELEASE_OBFUSCATE_RENDERER'];
   const enabledFlags = forbiddenFlags.filter((name) => optionalBoolean(name, false));
   if (enabledFlags.length === 0) return;
-  throw new Error(
-    `Obfuscation is no longer supported. Clear: ${enabledFlags.join(', ')}`,
-  );
+  throw new Error(`Obfuscation is no longer supported. Clear: ${enabledFlags.join(', ')}`);
 }
 
 function verifyRendererSaleBundle(root) {
@@ -49,8 +44,8 @@ function verifyRendererSaleBundle(root) {
 
   const bundle = fs
     .readdirSync(assetsDir)
-    .filter(name => /\.js$/i.test(name))
-    .map(name => fs.readFileSync(path.join(assetsDir, name), 'utf8'))
+    .filter((name) => /\.js$/i.test(name))
+    .map((name) => fs.readFileSync(path.join(assetsDir, name), 'utf8'))
     .join('\n');
 
   if (!bundle) {
@@ -58,12 +53,15 @@ function verifyRendererSaleBundle(root) {
   }
 
   const hasFixedActiveTierGuard = />=\s*[A-Za-z_$][\w$]*\s*\?\s*-1\s*:/.test(bundle);
-  const hasFixedPerTierSoldMath = /Math\.min\(\s*[A-Za-z_$][\w$]*\s*,\s*Math\.max\(\s*0\s*,\s*[A-Za-z_$][\w$]*\s*-\s*[A-Za-z_$][\w$]*\.start\s*\)\s*\)/.test(bundle);
+  const hasFixedPerTierSoldMath =
+    /Math\.min\(\s*[A-Za-z_$][\w$]*\s*,\s*Math\.max\(\s*0\s*,\s*[A-Za-z_$][\w$]*\s*-\s*[A-Za-z_$][\w$]*\.start\s*\)\s*\)/.test(
+      bundle,
+    );
 
   if (!hasFixedActiveTierGuard || !hasFixedPerTierSoldMath) {
     throw new Error(
       'Renderer verification failed: built sale UI bundle does not contain the fixed tier math. ' +
-      'Refusing to package a release with stale wallet sale rendering.'
+        'Refusing to package a release with stale wallet sale rendering.',
     );
   }
 
@@ -78,7 +76,7 @@ function assertMainProcessRuntimeFilesPackaged(root) {
   const allowlist = new Set(
     (Array.isArray(builderConfig && builderConfig.files) ? builderConfig.files : [])
       .filter((entry) => typeof entry === 'string')
-      .map((entry) => entry.replace(/\\/g, '/'))
+      .map((entry) => entry.replace(/\\/g, '/')),
   );
   const runtimeRequires = new Set();
   const requirePattern = /require\('\.\/([^']+)'\)/g;
@@ -100,18 +98,17 @@ function assertMainProcessRuntimeFilesPackaged(root) {
     }
   }
 
-  const missing = [...runtimeRequires]
-    .filter((entry) => !allowlist.has(entry))
-    .sort();
+  const missing = [...runtimeRequires].filter((entry) => !allowlist.has(entry)).sort();
 
   if (missing.length > 0) {
     throw new Error(
-      'Packaging verification failed: electron-builder.config.js is missing runtime file(s): ' +
-      missing.join(', ')
+      'Packaging verification failed: electron-builder.config.js is missing runtime file(s): ' + missing.join(', '),
     );
   }
 
-  console.log(`[release-build] Packaged runtime file check passed (${runtimeRequires.size} main-process dependency files).`);
+  console.log(
+    `[release-build] Packaged runtime file check passed (${runtimeRequires.size} main-process dependency files).`,
+  );
 }
 
 function applyReleaseHardening(root) {
@@ -132,9 +129,7 @@ function applyReleaseHardening(root) {
     manifest[relPath.replace(/^electron-main\//, '').replace(/\\/g, '/')] = hash;
   }
   const manifestPath = path.join(root, 'app-integrity-manifest.json');
-  const previousManifest = fs.existsSync(manifestPath)
-    ? fs.readFileSync(manifestPath, 'utf8')
-    : null;
+  const previousManifest = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, 'utf8') : null;
   backups.set(manifestPath, previousManifest);
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(`[release-build] app-integrity-manifest.json generated (${Object.keys(manifest).length} files).`);
@@ -192,7 +187,7 @@ function hasWindowsSigningConfiguration() {
     optionalString('CSC_LINK') ||
     optionalString('WIN_CSC_LINK') ||
     optionalString('WATTCOIN_WINDOWS_CERT_FILE') ||
-    optionalString('WATTCOIN_WINDOWS_CERT_SUBJECT_NAME')
+    optionalString('WATTCOIN_WINDOWS_CERT_SUBJECT_NAME'),
   );
 }
 
@@ -226,7 +221,7 @@ function logSigningMode() {
 
   if (required && !configured) {
     throw new Error(
-      'WATTCOIN_REQUIRE_WINDOWS_SIGNING is enabled, but no Windows signing certificate configuration was found.'
+      'WATTCOIN_REQUIRE_WINDOWS_SIGNING is enabled, but no Windows signing certificate configuration was found.',
     );
   }
 }
@@ -249,18 +244,18 @@ function runNpmExec(args) {
   if (npmCliPath) {
     // Invoked via `npm run` — use the same node + npm script path (no shell needed).
     executable = process.execPath;
-    finalArgs  = [npmCliPath, ...args];
-    useShell   = false;
+    finalArgs = [npmCliPath, ...args];
+    useShell = false;
   } else if (process.platform === 'win32') {
     // Direct `node scripts/release-build.js` on Windows — invoke via cmd.exe /c
     // so .cmd extensions are resolved without needing shell:true with concatenated args.
     executable = process.env.ComSpec || 'cmd.exe';
-    finalArgs  = ['/c', 'npm', ...args];
-    useShell   = false;
+    finalArgs = ['/c', 'npm', ...args];
+    useShell = false;
   } else {
     executable = 'npm';
-    finalArgs  = args;
-    useShell   = false;
+    finalArgs = args;
+    useShell = false;
   }
 
   const res = spawnSync(executable, finalArgs, {
@@ -374,11 +369,13 @@ function buildNativeGpuBinary(root) {
 
 function findWorkspaceElectronProcesses(root) {
   if (process.platform !== 'win32') return [];
-  const normalizedRoot = String(root || '').replace(/\\/g, '\\\\').replace(/'/g, "''");
+  const normalizedRoot = String(root || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "''");
   const script = [
     `$root = '${normalizedRoot}'`,
-    "$matches = Get-CimInstance Win32_Process -Filter \"name = 'electron.exe'\" | Where-Object {",
-    "  $_.CommandLine -and ($_.CommandLine -like \"*$root*\" -or $_.CommandLine -match 'electron-main\\.js')",
+    '$matches = Get-CimInstance Win32_Process -Filter "name = \'electron.exe\'" | Where-Object {',
+    '  $_.CommandLine -and ($_.CommandLine -like "*$root*" -or $_.CommandLine -match \'electron-main\\.js\')',
     '} | Select-Object ProcessId, CommandLine',
     "if (-not $matches) { '[]' } else { $matches | ConvertTo-Json -Compress }",
   ].join('; ');
@@ -400,12 +397,8 @@ function findWorkspaceElectronProcesses(root) {
 function assertWorkspaceElectronProcessesStopped(root) {
   const processes = findWorkspaceElectronProcesses(root);
   if (processes.length === 0) return;
-  const summary = processes
-    .map((proc) => `${proc.ProcessId}: ${String(proc.CommandLine || '').trim()}`)
-    .join(' | ');
-  throw new Error(
-    `Close the running Wattcoin Electron app before release build. Locked process(es): ${summary}`
-  );
+  const summary = processes.map((proc) => `${proc.ProcessId}: ${String(proc.CommandLine || '').trim()}`).join(' | ');
+  throw new Error(`Close the running Wattcoin Electron app before release build. Locked process(es): ${summary}`);
 }
 
 function getBuildLogPaths(root, version) {
@@ -509,10 +502,7 @@ function verifyAndArchiveInstaller(root, version) {
 
 function normalizeDownloadLinks(html, version) {
   const expectedHref = `/releases/Wattcoin Miner Setup ${version}.exe`;
-  return html.replace(
-    /(<a) href="[^"]*Wattcoin Miner Setup [^"]+\.exe"([^>]*>)/g,
-    `$1 href="${expectedHref}"$2`
-  );
+  return html.replace(/(<a) href="[^"]*Wattcoin Miner Setup [^"]+\.exe"([^>]*>)/g, `$1 href="${expectedHref}"$2`);
 }
 
 function syncWhitepaperVersionLabels(html, version, monthName, year) {
@@ -647,18 +637,15 @@ function logPackagingChecklistReminder() {
 function autoConfigureDevSigning(root) {
   if (process.platform !== 'win32') return;
   // Don't override explicit certificate configuration already in the environment.
-  if (
-    optionalString('WATTCOIN_WINDOWS_CERT_FILE') ||
-    optionalString('CSC_LINK') ||
-    optionalString('WIN_CSC_LINK')
-  ) return;
+  if (optionalString('WATTCOIN_WINDOWS_CERT_FILE') || optionalString('CSC_LINK') || optionalString('WIN_CSC_LINK'))
+    return;
 
   const certPfx = path.join(root, 'certs', 'sign.pfx');
   if (!fs.existsSync(certPfx)) return;
 
-  process.env.WATTCOIN_WINDOWS_CERT_FILE       = certPfx;
+  process.env.WATTCOIN_WINDOWS_CERT_FILE = certPfx;
   process.env.WATTCOIN_WINDOWS_SIGNING_ON_HOLD = '0';
-  process.env.WATTCOIN_ENABLE_WINDOWS_SIGNING  = '1';
+  process.env.WATTCOIN_ENABLE_WINDOWS_SIGNING = '1';
 
   if (!optionalString('WATTCOIN_WINDOWS_CERT_PASSWORD', 'WIN_CSC_KEY_PASSWORD')) {
     const certPassFile = path.join(root, 'certs', '.password');
@@ -671,7 +658,9 @@ function autoConfigureDevSigning(root) {
   }
 
   if (!optionalString('WATTCOIN_WINDOWS_CERT_PASSWORD', 'WIN_CSC_KEY_PASSWORD')) {
-    console.error('[release-build] WATTCOIN_WINDOWS_CERT_PASSWORD (or WIN_CSC_KEY_PASSWORD) env var must be set for signing.');
+    console.error(
+      '[release-build] WATTCOIN_WINDOWS_CERT_PASSWORD (or WIN_CSC_KEY_PASSWORD) env var must be set for signing.',
+    );
     process.exit(1);
   }
 
@@ -688,7 +677,9 @@ async function main() {
   let mutableReleaseBackups = new Map();
   let buildSucceeded = false;
   const deployOnly = optionalBoolean('WATTCOIN_RELEASE_DEPLOY_ONLY', false);
-  const skipDeploy = deployOnly ? false : (process.argv.includes('--local') || optionalBoolean('WATTCOIN_SKIP_DEPLOY', false));
+  const skipDeploy = deployOnly
+    ? false
+    : process.argv.includes('--local') || optionalBoolean('WATTCOIN_SKIP_DEPLOY', false);
   autoConfigureDevSigning(root);
   logSigningMode();
   const packageJsonPath = path.join(root, 'package.json');
@@ -700,19 +691,35 @@ async function main() {
     if (!currentVersion) {
       throw new Error('Deploy-only mode requires a valid package.json version.');
     }
-    writeBuildChangeLog(root, collectBuildChangeLog(root, {
-      mode: 'deploy-only',
-      previousVersion: currentVersion,
-      nextVersion: currentVersion,
-      deployOnly: true,
-    }));
+    writeBuildChangeLog(
+      root,
+      collectBuildChangeLog(root, {
+        mode: 'deploy-only',
+        previousVersion: currentVersion,
+        nextVersion: currentVersion,
+        deployOnly: true,
+      }),
+    );
     verifyAndArchiveInstaller(root, currentVersion);
     verifyReleaseMetadata(root, currentVersion);
 
     // Sync version labels in HTML files before deploying (deploy-only mode
     // is called independently and must never upload stale version strings)
     {
-      const months = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+      const months = [
+        'JANUARY',
+        'FEBRUARY',
+        'MARCH',
+        'APRIL',
+        'MAY',
+        'JUNE',
+        'JULY',
+        'AUGUST',
+        'SEPTEMBER',
+        'OCTOBER',
+        'NOVEMBER',
+        'DECEMBER',
+      ];
       const now = new Date();
       const monthName = months[now.getMonth()];
       const year = now.getFullYear();
@@ -724,7 +731,10 @@ async function main() {
       ];
       const deployBlogDir = path.join(root, 'website/blog');
       if (fs.existsSync(deployBlogDir)) {
-        const posts = fs.readdirSync(deployBlogDir).filter(f => f.endsWith('.html')).map(f => path.join(deployBlogDir, f));
+        const posts = fs
+          .readdirSync(deployBlogDir)
+          .filter((f) => f.endsWith('.html'))
+          .map((f) => path.join(deployBlogDir, f));
         syncFiles.push(...posts);
       }
       for (const filePath of syncFiles) {
@@ -767,7 +777,10 @@ async function main() {
   const blogDir = path.join(root, 'website/blog');
   let blogPostPaths = [];
   if (fs.existsSync(blogDir)) {
-    blogPostPaths = fs.readdirSync(blogDir).filter(f => f.endsWith('.html')).map(f => path.join(blogDir, f));
+    blogPostPaths = fs
+      .readdirSync(blogDir)
+      .filter((f) => f.endsWith('.html'))
+      .map((f) => path.join(blogDir, f));
   }
   mutableReleaseBackups = snapshotFileContents([
     packageJsonPath,
@@ -781,12 +794,15 @@ async function main() {
     versionLogPath,
   ]);
   removeExistingVersionArtifacts(root, nextVersion);
-  writeBuildChangeLog(root, collectBuildChangeLog(root, {
-    mode: 'build-and-deploy',
-    previousVersion,
-    nextVersion,
-    deployOnly: false,
-  }));
+  writeBuildChangeLog(
+    root,
+    collectBuildChangeLog(root, {
+      mode: 'build-and-deploy',
+      previousVersion,
+      nextVersion,
+      deployOnly: false,
+    }),
+  );
   packageJson.version = nextVersion;
   const origDescription = packageJson.description;
   packageJson.description = `${origDescription} v${nextVersion}`;
@@ -796,7 +812,20 @@ async function main() {
 
   // Update all version references in index.html, wattcoin-whitepaper.html and wallet.html
   {
-    const months = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+    const months = [
+      'JANUARY',
+      'FEBRUARY',
+      'MARCH',
+      'APRIL',
+      'MAY',
+      'JUNE',
+      'JULY',
+      'AUGUST',
+      'SEPTEMBER',
+      'OCTOBER',
+      'NOVEMBER',
+      'DECEMBER',
+    ];
     const now = new Date();
     const monthName = months[now.getMonth()];
     const year = now.getFullYear();

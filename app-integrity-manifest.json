@@ -1,5 +1,5 @@
 {
-  "electron-main.js": "d7c7a8511e6acf83bc47b2e6786dbda22a2340ebe929e7a6f596159ce8fe79ec",
+  "electron-main.js": "ce3f4066a85e6f9179a12819df9e5e1e3312150f65b3b6deb9828967654f77d7",
   "preload.js": "384b225d8cd2ba3eb6bf571663895b219c8af0a7e805ab456779160a9927488c",
   "backend-benchmark.js": "f62625476ec5287699fd1028cfe7d2c39fbdd689144e56fbbd3e576a676d2c34",
   "hardware-load-controller.js": "986e9ab47d18d0877849da8cf67c333a44e466d68d388fd5b14904908ac77c1f",
@@ -7,7 +7,7 @@
   "local-stratum.js": "39925b02f2493435182815aefb2c26f99d80ddddd0d6635b0ba05c9a529f4279",
   "cpu-load-worker.js": "f4d8829518ac4ffc31b9b95386a3d9c5db16c1c9519209275e683e68886cfe56",
   "ddr-load-worker.js": "cdc43afa5df21c2bc58e3078fa5c061cba0194c067b335c979955cb88cb4f656",
-  "probe-attestation.js": "b293116ba459eef43204ebb8b8b87b64004cc6b7036bca3e7d4fd957fe4839ee",
+  "probe-attestation.js": "3ac5a269f12564d1422e7268aa9096642c07e282c641d1ac826a71a441c87fdd",
   "wtc-node.js": "e93369a34f2a2357cbffaa40194322509249cf5e5aa00f1bbf3a58e80640f0c7",
   "wtc-consensus.js": "2184b9ff9d0524847bee0d7ddc497ee2d0ece8a7ad7d2a1a6714c94b6380bbf3",
   "wtc-chain.js": "0a97b81fda90ba790b471958fa65d089ef669cd3a4dd7a0acff046b2ca46c212",

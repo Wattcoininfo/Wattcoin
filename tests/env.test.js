@@ -20,7 +20,7 @@ async function test(name, fn) {
 }
 
 async function run() {
-  const { getDataDir, getActiveNetwork } = require('../electron-main/env');
+  const { getDataDir, getActiveNetwork } = require('../electron-main/main-utils');
 
   await test('getDataDir returns correct path', () => {
     assert.strictEqual(getDataDir(), path.join(os.homedir(), 'WattcoinMinerUserData'));

@@ -2,10 +2,7 @@
 
 const assert = require('assert');
 
-const {
-  countLiveReverseTunnelPeers,
-  summarizeDisplayedPeerCounts,
-} = require('../electron-main/peer-count-observability');
+const { countLiveReverseTunnelPeers, summarizeDisplayedPeerCounts } = require('../electron-main/peer-utils');
 
 function testIgnoresCoordinatorAndOnlyCountsLiveInboundTunnelPeers() {
   const nowMs = 1_000_000;

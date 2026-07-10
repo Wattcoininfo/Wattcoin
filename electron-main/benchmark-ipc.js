@@ -34,9 +34,9 @@ const {
   isPowerCpuOutlier,
   hardwareModelsMatch,
   getHostLanIp,
+  getDataDir,
 } = require('./main-utils');
 const { getProbeLogFilePath } = require('./electron-utils');
-const { getDataDir } = require('./env');
 const { startStratumServer, waitForFreshShares, injectCustomJob } = require('./local-stratum');
 
 // -- Internal state ---------------------------------------------------------

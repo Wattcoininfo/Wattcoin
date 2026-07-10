@@ -1,7 +1,13 @@
 'use strict';
 
-const { sendJson, readJsonBody, secureStringEquals, isPublicPeerHost, normalizePeerUrl } = require('./main-utils');
-const { getActiveNetwork } = require('./env');
+const {
+  sendJson,
+  readJsonBody,
+  secureStringEquals,
+  isPublicPeerHost,
+  normalizePeerUrl,
+  getActiveNetwork,
+} = require('./main-utils');
 
 function createLedgerRequestHandler(ctx) {
   const {

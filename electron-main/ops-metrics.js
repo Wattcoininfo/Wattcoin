@@ -17,6 +17,7 @@ function createOpsMetricsManager({
   OPS_WINDOW_MS,
   CHAIN_STALL_ALERT_MS,
   OPS_ALERT_COOLDOWN_MS,
+  getDataDir,
 }) {
   let opsMetricsTimer = null;
   let opsSnapshotInFlight = false;
@@ -24,7 +25,6 @@ function createOpsMetricsManager({
   const ABUSE_LOG_FILE_NAME = 'abuse-events.jsonl';
 
   function getAbuseLogFilePath() {
-    const { getDataDir } = require('./env');
     return path.join(getDataDir(), ABUSE_LOG_FILE_NAME);
   }
 
