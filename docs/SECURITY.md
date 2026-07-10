@@ -24,7 +24,7 @@ You will receive an acknowledgment within 48 hours. We will investigate and prov
 - The Electron desktop application (`electron-main.js`, preload, renderer)
 - The WTC blockchain node (`wtc-node.js`, consensus, chain, accounts)
 - The hardware load controllers and benchmarking
-- The PHP APIs (`counter-api`, `sale-api`, `elec-price-api`)
+- The PHP APIs (`server/counter`, `server/api`, `server/elec-price`)
 - The build and deploy pipeline
 
 ## Out of Scope

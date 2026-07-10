@@ -202,15 +202,18 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │   │   └── proof.hlsl            # GPU proof shader (integer XOR-shift)
 │   └── build.ps1                 # Build script (Visual Studio)
 │
-├── counter-api/                  # Visit/download counter API (PHP)
-│   ├── index.php
-│   └── .htaccess
-├── elec-price-api/               # Electricity price API (PHP)
-│   ├── index.php
-│   └── .htaccess
-├── sale-api/                     # Token sale API (PHP)
-│   ├── index.php
-│   └── .htaccess
+├── server/                     # PHP microservices for wattcoin.ee
+│   ├── api/                    # Token sale API
+│   │   ├── index.php
+│   │   └── .htaccess
+│   ├── counter/                # Visit/download counter API
+│   │   ├── index.php
+│   │   └── .htaccess
+│   ├── elec-price/             # Electricity price API
+│   │   ├── index.php
+│   │   └── .htaccess
+│   └── seed-registry/          # Seed registry proxy
+│       └── seed-registry-proxy.php
 │
 ├── scripts/
 │   ├── release-build.js          # Build + deploy orchestrator
@@ -222,7 +225,6 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │   ├── whitepaper.css            # Whitepaper page styles
 │   ├── new_icon.png
 │   └── Vortex NFT *.jpg          # NFT collection images
-├── updates.xml                   # RSS feed
 ├── docs/                         # Operations documentation
 ├── monitoring/                   # Prometheus/Grafana monitoring stack
 ├── tests/                        # Test files (36 test suites)
@@ -238,9 +240,9 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │                    Website (wattcoin.ee)                          │
 │  ┌──────────────────┐  ┌──────────────────────────────────────┐  │
 │  │ Static Pages     │  │ PHP APIs                             │  │
-│  │  - index.html    │  │  - counter-api/   (visits/downloads) │  │
-│  │  - wallet.html   │  │  - elec-price-api/(electricity cost) │  │
-│  │  - miner.html    │  │  - sale-api/      (token sale)      │  │
+│  │  - index.html    │  │  - counter/      (visits/downloads) │  │
+│  │  - wallet.html   │  │  - elec-price/   (electricity cost) │  │
+│  │  - miner.html    │  │  - api/          (token sale)      │  │
 │  │  - whitepaper    │  └──────────────────────────────────────┘  │
 │  │  - blog.html     │  ┌──────────────────────────────────────┐  │
 │  │  - sitemap.xml   │  │ Apache (.htaccess)                   │  │

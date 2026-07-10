@@ -10,8 +10,6 @@ pnpm-debug.log*
 .electron-startup.err.txt
 
 # Build / release outputs
-build/*
-!build/installer.nsh
 releases/
 resources/
 *.exe

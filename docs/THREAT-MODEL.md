@@ -52,7 +52,7 @@ The source ships with a bundled shared API key for external services where the a
 ### Etherscan API Key
 
 - **Key value**: `HHV1CUFUIEH1F32V9DBSX2Q3AUJFDCARSZ` (base64-encoded at rest)
-- **Location**: `wtc-sale-queue.js:61`, `sale-api/index.php:62`
+- **Location**: `wtc-sale-queue.js:61`, `server/api/index.php:62`
 - **Scope**: Read-only queries to Etherscan API — fetches USDC transfer confirmations for the WTC sale
 - **Rate limit**: ~5 calls/sec (free-tier public key)
 - **Why bundled**: The sale-queue watcher must work out-of-the-box for anyone running the app. Without a key, the sale feature is completely non-functional.
