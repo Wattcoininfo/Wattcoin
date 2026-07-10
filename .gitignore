@@ -26,10 +26,10 @@ resources/
 *.lib
 
 # Bitcoin core build artifacts inside bundled source tree
-Wattcoin/
-Wattcoin/build/
-Wattcoin/build-*/
-Wattcoin/.vscode/
+/Wattcoin/
+/Wattcoin/build/
+/Wattcoin/build-*/
+/Wattcoin/.vscode/
 
 # Python / misc cache
 __pycache__/
