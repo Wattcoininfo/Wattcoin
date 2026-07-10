@@ -236,4 +236,9 @@ function registerWalletBackupIpcHandlers(ctx) {
   });
 }
 
-module.exports = { registerWalletBackupIpcHandlers };
+module.exports = {
+  BACKUP_FILE_EXTENSION,
+  BACKUP_FORMAT_VERSION,
+  parseBackupContainer,
+  registerWalletBackupIpcHandlers,
+};
