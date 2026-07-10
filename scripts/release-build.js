@@ -68,6 +68,17 @@ function verifyRendererSaleBundle(root) {
   console.log('[release-build] Renderer sale bundle verification passed.');
 }
 
+function isCoveredByAllowlist(entry, allowlist) {
+  if (allowlist.has(entry)) return true;
+  for (const pattern of allowlist) {
+    if (pattern.includes('**')) {
+      const prefix = pattern.replace(/\/?\*\*\/?\*?$/, '');
+      if (prefix && entry.startsWith(prefix + '/')) return true;
+    }
+  }
+  return false;
+}
+
 function assertMainProcessRuntimeFilesPackaged(root) {
   const entryPath = path.join(root, 'electron-main.js');
   const builderConfigPath = path.join(root, 'electron-builder.config.js');
@@ -98,7 +109,7 @@ function assertMainProcessRuntimeFilesPackaged(root) {
     }
   }
 
-  const missing = [...runtimeRequires].filter((entry) => !allowlist.has(entry)).sort();
+  const missing = [...runtimeRequires].filter((entry) => !isCoveredByAllowlist(entry, allowlist)).sort();
 
   if (missing.length > 0) {
     throw new Error(
