@@ -5,7 +5,7 @@ const { loadBundledSeedPeers } = require('./bundled-seed-peers');
 
 function setupRpcCredentials({ getRuntimeConfig, normalizePeerUrl }) {
   try {
-    const { getLocalOverrideConfigPath } = require('../runtime-config');
+    const { getLocalOverrideConfigPath } = require('./runtime-config');
     const localPath = getLocalOverrideConfigPath();
     let localCfg = {};
     try {

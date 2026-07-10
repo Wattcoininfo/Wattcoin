@@ -16,16 +16,16 @@ const {
   getAttestHistory,
   clearProbeHistory,
   setAsicHardwareSpec,
-} = require('../backend-benchmark');
+} = require('./backend-benchmark');
 const {
   getExpectedCpuSpeedOps,
   getExpectedMemBandwidthMBps,
   getAsicPowerW,
   getAsicHashrateTHs,
   getGpuTdpW,
-} = require('../hardware-tables.cjs');
-const { ensureGpu, getGpuInfo } = require('../gpu-load-controller');
-const { getHardwareLoadState, setHardwareLoadPercent } = require('../hardware-load-controller');
+} = require('./hardware-tables.cjs');
+const { ensureGpu, getGpuInfo } = require('./gpu-load-controller');
+const { getHardwareLoadState, setHardwareLoadPercent } = require('./hardware-load-controller');
 const {
   normalizeGpuFingerprintValue,
   formatHardwareChangeList,
@@ -37,7 +37,7 @@ const {
 } = require('./main-utils');
 const { getProbeLogFilePath } = require('./electron-utils');
 const { getDataDir } = require('./env');
-const { startStratumServer, waitForFreshShares, injectCustomJob } = require('../local-stratum');
+const { startStratumServer, waitForFreshShares, injectCustomJob } = require('./local-stratum');
 
 // -- Internal state ---------------------------------------------------------
 let _asicConfig = [];

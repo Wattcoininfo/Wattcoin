@@ -15,9 +15,9 @@ const {
   PROBE_GPU_POW_ITERS,
   GPU_PROOF_SIZE,
   GPU_PROOF_ITERS,
-} = require('./electron-main/backend-benchmark/benchmark-execution');
+} = require('./backend-benchmark/benchmark-execution');
 
-const { updateWorkerRtt, getActiveWorkerCount } = require('./electron-main/backend-benchmark/worker-state');
+const { updateWorkerRtt, getActiveWorkerCount } = require('./backend-benchmark/worker-state');
 
 const {
   PROBE_INTERVAL_MS,
@@ -28,7 +28,7 @@ const {
   submitProbeResult,
   getProbeHistory,
   getLocalProbeChain,
-} = require('./electron-main/backend-benchmark/local-probes');
+} = require('./backend-benchmark/local-probes');
 const {
   setCoordinatorIdentityKey,
   issuePeerProbe,
@@ -37,7 +37,7 @@ const {
   getPeerProbeHistory,
   cancelPendingPeerProbesForWorker,
   handleWorkerBusy,
-} = require('./electron-main/backend-benchmark/peer-probes');
+} = require('./backend-benchmark/peer-probes');
 const {
   clearProbeHistory,
   getWorkerPeerProbeVerified,
@@ -46,7 +46,7 @@ const {
   getWorkerHwStats,
   getCoordinatorStateSnapshot,
   restoreCoordinatorState,
-} = require('./electron-main/backend-benchmark/coordinator-state');
+} = require('./backend-benchmark/coordinator-state');
 
 module.exports = {
   getBenchmarkCapabilities,

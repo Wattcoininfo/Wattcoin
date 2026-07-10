@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { filterAdvertisedPeerUrls, resolvePeerPrivacySecret } = require('../peer-privacy');
+const { filterAdvertisedPeerUrls, resolvePeerPrivacySecret } = require('../electron-main/peer-privacy');
 
 function testKeepsDirectIpUrlsWhenTheyAreAllWeHave() {
   const urls = filterAdvertisedPeerUrls(['http://198.51.100.24:39310', 'http://192.168.1.44:39310']);

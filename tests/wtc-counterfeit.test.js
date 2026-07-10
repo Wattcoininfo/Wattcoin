@@ -23,10 +23,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createWtcNode } = require('../wtc-node');
-const { generateKeypair, sign, txHash, verifySignature: _verifySignature } = require('../wtc-address');
-const { Mempool } = require('../wtc-mempool');
-const { energyForHeight: _energyForHeight } = require('../wtc-chain');
+const { createWtcNode } = require('../electron-main/wtc-node');
+const { generateKeypair, sign, txHash, verifySignature: _verifySignature } = require('../electron-main/wtc-address');
+const { Mempool } = require('../electron-main/wtc-mempool');
+const { energyForHeight: _energyForHeight } = require('../electron-main/wtc-chain');
 
 const TIER1_ENERGY = 10_000_000; // 10 MWh
 
@@ -251,7 +251,7 @@ async function run() {
   // ─── ATTACK 6: Block hash tampering ──────────────────────────────────────────
   // Build a valid block, then mutate its rewardTotal and try to get it committed.
   await test('Attack 6 — tampered block hash is rejected by peers', async () => {
-    const { computeBlockHash: _computeBlockHash } = require('../wtc-chain');
+    const { computeBlockHash: _computeBlockHash } = require('../electron-main/wtc-chain');
 
     const dir1 = mkTmp('tamper-a');
     const dir2 = mkTmp('tamper-b');
@@ -416,7 +416,7 @@ async function run() {
         stateRoot: '',
         votes: {},
       };
-      const { computeBlockHash: _computeBlockHash } = require('../wtc-chain');
+      const { computeBlockHash: _computeBlockHash } = require('../electron-main/wtc-chain');
       fakeBlock.hash = _computeBlockHash(fakeBlock);
 
       const result = await node.handleProposal(fakeBlock, 'http://attacker:39310');

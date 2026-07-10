@@ -6,8 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const _crypto = require('crypto');
 
-const { NftStore, NFT_COLLECTION, MINTER_ADDRESS } = require('../wtc-nfts');
-const { generateKeypair, sign, txHash } = require('../wtc-address');
+const { NftStore, NFT_COLLECTION, MINTER_ADDRESS } = require('../electron-main/wtc-nfts');
+const { generateKeypair, sign, txHash } = require('../electron-main/wtc-address');
 
 const TEST_SECRET = 'test-hmac-secret-for-nft-tests';
 

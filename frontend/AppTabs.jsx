@@ -3,9 +3,9 @@ import Wattcoin from './Wattcoin.jsx';
 import Miner from './Miner.jsx';
 import MiningLog from './MiningLog.jsx';
 import Governance from './Governance.jsx';
-import nftImgGold from './assets/Vortex NFT Gold.jpg';
-import nftImgSilver from './assets/Vortex NFT Silver.jpg';
-import nftImgBronze from './assets/Vortex NFT Bronze.jpg';
+import nftImgGold from '../assets/Vortex NFT Gold.jpg';
+import nftImgSilver from '../assets/Vortex NFT Silver.jpg';
+import nftImgBronze from '../assets/Vortex NFT Bronze.jpg';
 
 const TIER0_ENERGY = 1;
 const TIER1_ENERGY = 20_000;

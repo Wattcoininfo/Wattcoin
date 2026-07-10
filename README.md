@@ -135,53 +135,65 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 ## Project Structure
 
 ```
-├── index.html                    # Website homepage (also Vite SPA shell for desktop app)
-├── wallet.html                   # Web wallet page
 ├── miner.html                    # Desktop miner app entry (Vite)
-├── wattcoin-whitepaper.html      # Whitepaper page
-├── blog.html                     # Blog page
-├── main.jsx                      # React entry point
-├── Miner.jsx                     # Mining UI component
-├── AppTabs.jsx                   # Tab-based application shell
-├── Wattcoin.jsx                  # Buy/stake/wallet UI
-├── Governance.jsx                # Governance UI component
-├── MiningLog.jsx                 # Mining log viewer
 │
-├── electron-main.js              # Electron main process (RPC, networking, attestation)
+├── frontend/                     # React UI components
+│   ├── main.jsx                  # React entry point
+│   ├── AppTabs.jsx               # Tab-based application shell
+│   ├── Miner.jsx                 # Mining UI component
+│   ├── Wattcoin.jsx              # Buy/stake/wallet UI
+│   ├── Governance.jsx            # Governance UI component
+│   ├── MiningLog.jsx             # Mining log viewer
+│   ├── wattcoin/                 # Wattcoin.jsx sub-components
+│   └── governance/               # Governance.jsx sub-components
+│
+├── website/                      # Website content (deployed to wattcoin.ee)
+│   ├── index.html                # Website homepage
+│   ├── wattcoin-whitepaper.html  # Whitepaper page
+│   ├── wallet.html               # Web wallet page
+│   ├── blog.html                 # Blog listing page
+│   ├── blog/                     # Individual blog post pages
+│   ├── sitemap.xml               # SEO sitemap
+│   ├── robots.txt                # Robots exclusion rules
+│   ├── site.webmanifest          # Web app manifest
+│   └── htdocs.htaccess           # Apache config (deployed as .htaccess)
+│
+├── electron-main.js              # Electron main process entry
 ├── electron-start.js             # Electron startup script
 ├── preload.js                    # IPC preload bridge with channel allowlist
 ├── electron-builder.config.js    # Electron-builder configuration
-├── vite.config.js                # Vite build configuration
+├── vite.config.mjs               # Vite build configuration
 │
-├── wtc-node.js                   # WTC blockchain node
-├── wtc-chain.js                  # Block/chain data structures
-├── wtc-consensus.js              # BFT consensus (propose, vote, commit)
-├── wtc-accounts.js               # Account state (balances, nonces, maturity)
-├── wtc-address.js                # Address derivation, signing, verification
-├── wtc-mempool.js                # Transaction mempool
-├── wtc-staking-queue.js          # Staking logic
-├── wtc-sale-queue.js             # Sale order queue
-├── wtc-nfts.js                   # NFT store
-├── wtc-governance.js             # Governance logic
-├── probe-attestation.js          # Hardware probe attestation
-├── protocol-constants.js         # Network protocol constants
-├── peer-privacy.js               # Peer privacy & relay
-├── peer-self-filter.js           # Self-connection filter
-├── peer-discovery-observability.js
-├── peer-count-observability.js
-├── remote-seed-manifest.js       # Remote seed peer manifest
-├── requester-registration.js     # Requester registration
-├── local-subnet-discovery.js     # LAN peer discovery
-├── round-ledger.js               # Round event ledger
-├── runtime-config.js             # Configuration loader
-├── hardware-load-controller.js   # CPU + DDR load controller
-├── gpu-load-controller.js        # Native GPU load controller (gpu-miner.exe)
-├── cpu-load-worker.js            # CPU load simulation worker
-├── ddr-load-worker.js            # RAM load simulation worker
-├── hardware-tables.cjs           # Hardware energy tables
-├── ops-health.js                 # Operational health checks
-├── backend-benchmark.js          # Backend benchmarking
-├── app-integrity-manifest.json   # Runtime integrity hashes
+├── electron-main/                # Backend modules (main process)
+│   ├── wtc-node.js               # WTC blockchain node (orchestrator)
+│   ├── wtc-chain.js              # Block/chain data structures
+│   ├── wtc-consensus.js          # BFT consensus (propose, vote, commit)
+│   ├── wtc-accounts.js           # Account state (balances, nonces, maturity)
+│   ├── wtc-address.js            # Address derivation, signing, verification
+│   ├── wtc-mempool.js            # Transaction mempool
+│   ├── wtc-staking-queue.js      # Staking logic
+│   ├── wtc-sale-queue.js         # Sale order queue
+│   ├── wtc-nfts.js               # NFT store
+│   ├── wtc-governance.js         # Governance logic
+│   ├── probe-attestation.js      # Hardware probe attestation
+│   ├── protocol-constants.js     # Network protocol constants
+│   ├── peer-privacy.js           # Peer privacy & relay
+│   ├── peer-self-filter.js       # Self-connection filter
+│   ├── peer-discovery-observability.js
+│   ├── peer-count-observability.js
+│   ├── remote-seed-manifest.js   # Remote seed peer manifest
+│   ├── requester-registration.js # Requester registration
+│   ├── local-subnet-discovery.js # LAN peer discovery
+│   ├── round-ledger.js           # Round event ledger
+│   ├── runtime-config.js         # Configuration loader
+│   ├── hardware-load-controller.js # CPU + DDR load controller
+│   ├── gpu-load-controller.js    # Native GPU load controller (gpu-miner.exe)
+│   ├── cpu-load-worker.js        # CPU load simulation worker
+│   ├── ddr-load-worker.js        # RAM load simulation worker
+│   ├── hardware-tables.cjs       # Hardware energy tables
+│   ├── ops-health.js             # Operational health checks
+│   ├── backend-benchmark.js      # Backend benchmarking
+│   └── ...                       # IPC handlers, peer networking, wallet, etc.
 │
 ├── native-gpu/                   # Native GPU miner binary (C++)
 │   ├── src/
@@ -210,11 +222,7 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │   ├── whitepaper.css            # Whitepaper page styles
 │   ├── new_icon.png
 │   └── Vortex NFT *.jpg          # NFT collection images
-├── htdocs.htaccess               # Apache config (deployed as .htaccess)
-├── sitemap.xml                   # SEO sitemap
-├── robots.txt                    # Robots exclusion rules
 ├── updates.xml                   # RSS feed
-├── site.webmanifest              # Web app manifest
 ├── docs/                         # Operations documentation
 ├── monitoring/                   # Prometheus/Grafana monitoring stack
 ├── tests/                        # Test files (36 test suites)
@@ -281,7 +289,7 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 
 ## Security
 
-See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability reporting process.
+See [SECURITY.md](docs/SECURITY.md) for the full security policy and vulnerability reporting process.
 
 - **Attestation:** Hardware identity is HMAC-SHA256 signed with an encrypted device secret (DPAPI on Windows)
 - **Wallet Encryption:** AES-256-GCM encrypted with key derived from device identity
@@ -296,7 +304,7 @@ See [SECURITY.md](SECURITY.md) for the full security policy and vulnerability re
 
 ## Contributing
 
-Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on code style, testing, and pull requests.
+Contributions are welcome. Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines on code style, testing, and pull requests.
 
 ---
 

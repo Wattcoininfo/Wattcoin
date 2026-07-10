@@ -1,7 +1,7 @@
 const assert = require('assert');
 
-const { buildPeerDiscoverySnapshot } = require('../peer-discovery-observability');
-const { obfuscatePeerUrl } = require('../peer-privacy');
+const { buildPeerDiscoverySnapshot } = require('../electron-main/peer-discovery-observability');
+const { obfuscatePeerUrl } = require('../electron-main/peer-privacy');
 
 function testDiscoverySnapshotIncludesSourceFields() {
   const snapshot = {

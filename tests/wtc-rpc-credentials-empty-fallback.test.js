@@ -40,9 +40,9 @@ function withEnv(overrides, fn) {
 }
 
 function freshRuntimeConfig() {
-  const modulePath = require.resolve('../runtime-config');
+  const modulePath = require.resolve('../electron-main/runtime-config');
   delete require.cache[modulePath];
-  const { getRuntimeConfig } = require('../runtime-config');
+  const { getRuntimeConfig } = require('../electron-main/runtime-config');
   return getRuntimeConfig;
 }
 
@@ -135,7 +135,7 @@ function run() {
   } finally {
     process.chdir(origCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    delete require.cache[require.resolve('../runtime-config')];
+    delete require.cache[require.resolve('../electron-main/runtime-config')];
   }
 }
 

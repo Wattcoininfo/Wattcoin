@@ -10,8 +10,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createRoundLedger } = require('../round-ledger');
-const { generateKeypair } = require('../wtc-address');
+const { createRoundLedger } = require('../electron-main/round-ledger');
+const { generateKeypair } = require('../electron-main/wtc-address');
 
 const TEST_SECRET = 'test-contribution-hmac';
 

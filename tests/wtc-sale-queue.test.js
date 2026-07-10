@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const sq = require('../wtc-sale-queue');
+const sq = require('../electron-main/wtc-sale-queue');
 
 const _tmpDirs = [];
 

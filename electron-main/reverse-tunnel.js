@@ -1012,7 +1012,7 @@ function createReverseTunnel(ctx) {
   }
 
   function getActiveReverseTunnelPeerConnectionCount() {
-    const { countLiveReverseTunnelPeers } = require('../peer-count-observability');
+    const { countLiveReverseTunnelPeers } = require('./peer-count-observability');
     const now = Date.now();
     return countLiveReverseTunnelPeers({
       sessions: reverseTunnelSessions.values(),

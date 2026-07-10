@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('../peer-self-filter');
+const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('../electron-main/peer-self-filter');
 
 function testRootPeerUrlOnLocalHostIsSelf() {
   assert.strictEqual(

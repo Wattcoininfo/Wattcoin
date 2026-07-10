@@ -3,10 +3,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { Accounts } = require('../wtc-accounts');
-const { computeBlockHash } = require('../wtc-chain');
-const { createWtcNode } = require('../wtc-node');
-const { generateKeypair } = require('../wtc-address');
+const { Accounts } = require('../electron-main/wtc-accounts');
+const { computeBlockHash } = require('../electron-main/wtc-chain');
+const { createWtcNode } = require('../electron-main/wtc-node');
+const { generateKeypair } = require('../electron-main/wtc-address');
 
 const ENERGY_WH_PER_BLOCK = 10_000_000;
 const LEGACY_BLOCK_ONE_STATE_ROOT = '81ec02a5243792a58f9de21b67a216b03faa25ac1cb03ce114c4d53545a36c10';

@@ -14,7 +14,7 @@ const {
   PROBE_PEER_SLACK,
   PROBE_LOCAL_SLACK,
 } = require('./benchmark-execution');
-const { verifyX11Share, STRATUM_DIFFICULTY } = require('../../local-stratum');
+const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 
 // --- Calibration probe system ------------------------------------------------
 // There is no solo mining — mining always requires a peer connection and

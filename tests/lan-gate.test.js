@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { checkHasKnownPrivateLanPeer } = require('../local-subnet-discovery');
+const { checkHasKnownPrivateLanPeer } = require('../electron-main/local-subnet-discovery');
 
 const STALE_MS = 5 * 60_000; // 5 min  — mirrors PEER_STALE_THRESHOLD_MS
 const REACHABILITY_TTL = 10 * 60_000; // 10 min — mirrors PEER_REACHABILITY_SUCCESS_TTL_MS

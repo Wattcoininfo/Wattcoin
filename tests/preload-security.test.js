@@ -5,7 +5,7 @@ const assert = require('assert');
 
 // Import the production allowlist from the shared module so this test
 // always reflects the actual channels that preload.js exposes to the renderer.
-const { ALLOWED_CHANNELS } = require('../preload-channels');
+const { ALLOWED_CHANNELS } = require('../electron-main/preload-channels');
 
 function invoke(channel) {
   if (!ALLOWED_CHANNELS.has(channel)) {

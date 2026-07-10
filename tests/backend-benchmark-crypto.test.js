@@ -2,7 +2,7 @@
 'use strict';
 
 const assert = require('assert');
-const { computeGpuProbeExpectedHash } = require('../backend-benchmark');
+const { computeGpuProbeExpectedHash } = require('../electron-main/backend-benchmark');
 
 // ─── describe / it helpers ────────────────────────────────────────────────
 

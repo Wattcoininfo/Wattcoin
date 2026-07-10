@@ -5,10 +5,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createWtcNode } = require('../wtc-node');
-const { createRoundLedger } = require('../round-ledger');
-const { energyForHeight } = require('../wtc-chain');
-const { generateKeypair } = require('../wtc-address');
+const { createWtcNode } = require('../electron-main/wtc-node');
+const { createRoundLedger } = require('../electron-main/round-ledger');
+const { energyForHeight } = require('../electron-main/wtc-chain');
+const { generateKeypair } = require('../electron-main/wtc-address');
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });

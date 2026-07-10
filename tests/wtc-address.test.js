@@ -15,7 +15,7 @@ const {
   txHash,
   hash160,
   privateKeyToPublicKey,
-} = require('../wtc-address');
+} = require('../electron-main/wtc-address');
 
 const VALID_ADDRESS = 'wtc1qmpnxc4jtpdys0h6hwkx8wcju2qmhn08ah870cg';
 

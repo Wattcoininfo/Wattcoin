@@ -5,8 +5,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createWtcNode } = require('../wtc-node');
-const { generateKeypair } = require('../wtc-address');
+const { createWtcNode } = require('../electron-main/wtc-node');
+const { generateKeypair } = require('../electron-main/wtc-address');
 
 function rmrf(target) {
   try {

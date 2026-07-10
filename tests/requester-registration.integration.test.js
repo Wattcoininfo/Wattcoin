@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { maybeRegisterReachableRequester } = require('../requester-registration');
+const { maybeRegisterReachableRequester } = require('../electron-main/requester-registration');
 
 async function testDirectPublicPeerUsesExplicitAnnouncement() {
   const calls = [];

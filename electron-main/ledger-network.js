@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { normalizePeerUrl, isDeprecatedPeerUrl } = require('./main-utils');
 const peerUtils = require('./peer-utils');
-const { checkLedgerNetworkAuth } = require('../ops-health');
+const { checkLedgerNetworkAuth } = require('./ops-health');
 
 /**
  * Factory that creates the ledger-network module.

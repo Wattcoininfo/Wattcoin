@@ -5,7 +5,7 @@ import {
   PROBE_GPU_POW_SIZE,
   PROBE_GPU_POW_ITERS,
   PROBE_GPU_POW_DIFFICULTY,
-} from '../backend-benchmark.js';
+} from '../electron-main/backend-benchmark.js';
 
 const DIFFICULTY = PROBE_GPU_POW_DIFFICULTY;
 

@@ -1,7 +1,7 @@
 'use strict';
 
-const { ALLOWED_SENDER_ADDRESSES } = require('../protocol-constants');
-const saleQueue = require('../wtc-sale-queue');
+const { ALLOWED_SENDER_ADDRESSES } = require('./protocol-constants');
+const saleQueue = require('./wtc-sale-queue');
 
 const ELECTRICITY_PRICE_FALLBACK = 0.174;
 const ELECTRICITY_PRICE_CACHE_MS = 24 * 60 * 60 * 1000;

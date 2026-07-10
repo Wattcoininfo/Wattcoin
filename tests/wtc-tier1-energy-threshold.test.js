@@ -5,9 +5,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createWtcNode } = require('../wtc-node');
-const { energyForHeight } = require('../wtc-chain');
-const { generateKeypair } = require('../wtc-address');
+const { createWtcNode } = require('../electron-main/wtc-node');
+const { energyForHeight } = require('../electron-main/wtc-chain');
+const { generateKeypair } = require('../electron-main/wtc-address');
 
 const TIER1_ENERGY_WH = 10_000_000;
 

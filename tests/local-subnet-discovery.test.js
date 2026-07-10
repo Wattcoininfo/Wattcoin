@@ -6,7 +6,7 @@ const {
   selectDiscoveryPeerUrl,
   selectPreferredPeerUrl,
   sortPeerUrlsByPreference,
-} = require('../local-subnet-discovery');
+} = require('../electron-main/local-subnet-discovery');
 
 function testPrivateIpv4Detection() {
   assert.strictEqual(isPrivateIpv4('192.168.1.10'), true);

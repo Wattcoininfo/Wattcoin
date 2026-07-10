@@ -1,8 +1,8 @@
 'use strict';
 const crypto = require('crypto');
-const { PROBE_RECEIPT_VERSION, normalizeProbeReceipt } = require('../../probe-attestation');
-const { getExpectedCpuSpeedOps, getAsicPowerW, getGpuTdpW } = require('../../hardware-tables.cjs');
-const { verifyX11Share, STRATUM_DIFFICULTY } = require('../../local-stratum');
+const { PROBE_RECEIPT_VERSION, normalizeProbeReceipt } = require('../probe-attestation');
+const { getExpectedCpuSpeedOps, getAsicPowerW, getGpuTdpW } = require('../hardware-tables.cjs');
+const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 const {
   computeGpuProbeExpectedHash,
   verifyGpuPowProbe,

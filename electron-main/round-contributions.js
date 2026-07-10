@@ -1,7 +1,7 @@
 'use strict';
 
-const { getGpuTdpW, getExpectedCpuSpeedOps } = require('../hardware-tables.cjs');
-const { PROBE_INTERVAL_MS, PROBE_CPU_ITERS } = require('../backend-benchmark');
+const { getGpuTdpW, getExpectedCpuSpeedOps } = require('./hardware-tables.cjs');
+const { PROBE_INTERVAL_MS, PROBE_CPU_ITERS } = require('./backend-benchmark');
 
 const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
 

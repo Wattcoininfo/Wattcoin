@@ -13,7 +13,6 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        index: resolve(__dirname, 'index.html'),
         miner: resolve(__dirname, 'miner.html'),
       },
       output: {

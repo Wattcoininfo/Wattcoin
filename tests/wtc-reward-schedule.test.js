@@ -12,7 +12,7 @@
  */
 
 const assert = require('assert');
-const { rewardForHeight, energyForHeight } = require('../wtc-chain');
+const { rewardForHeight, energyForHeight } = require('../electron-main/wtc-chain');
 
 const BLOCK_ENERGY_WH = 10_000_000; // 10 MWh — the invariant across all tiers
 const SUPPLY_PER_TIER = 1_000_000;

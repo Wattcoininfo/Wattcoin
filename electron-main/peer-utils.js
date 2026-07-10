@@ -1,7 +1,7 @@
 const https = require('https');
 const os = require('os');
-const { filterAdvertisedPeerUrls } = require('../peer-privacy');
-const { isValidAddress: isValidWtcAddress } = require('../wtc-address');
+const { filterAdvertisedPeerUrls } = require('./peer-privacy');
+const { isValidAddress: isValidWtcAddress } = require('./wtc-address');
 const { formatPeerHostForUrl, normalizePeerUrl, isLoopbackPeerHost } = require('./main-utils');
 
 const AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_MS = 4_000;

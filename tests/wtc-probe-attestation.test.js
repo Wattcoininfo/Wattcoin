@@ -5,14 +5,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { computeBlockHash } = require('../wtc-chain');
-const { createWtcNode } = require('../wtc-node');
-const { generateKeypair, sign, txHash } = require('../wtc-address');
+const { computeBlockHash } = require('../electron-main/wtc-chain');
+const { createWtcNode } = require('../electron-main/wtc-node');
+const { generateKeypair, sign, txHash } = require('../electron-main/wtc-address');
 const {
   attachProbeReceiptSignature,
   getProbeReceiptSigningPayload,
   PROBE_RECEIPT_VERSION,
-} = require('../probe-attestation');
+} = require('../electron-main/probe-attestation');
 
 const ENERGY_WH_PER_BLOCK = 10_000_000;
 

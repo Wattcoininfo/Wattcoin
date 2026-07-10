@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createRemoteSeedManifestManager } = require('../remote-seed-manifest');
+const { createRemoteSeedManifestManager } = require('../electron-main/remote-seed-manifest');
 
 function rmrf(target) {
   try {

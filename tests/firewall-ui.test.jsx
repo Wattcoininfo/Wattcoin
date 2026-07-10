@@ -1,6 +1,6 @@
 import { render, screen, cleanup } from '@testing-library/react';
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
-import Miner from '../Miner.jsx';
+import Miner from '../frontend/Miner.jsx';
 
 const NOOP = () => {};
 

@@ -16,11 +16,11 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 
-const { GovernanceStore, GOVERNANCE_MAX_TRANSFER } = require('../wtc-governance');
-const { generateKeypair, sign, txHash } = require('../wtc-address');
-const { Mempool } = require('../wtc-mempool');
-const { Consensus } = require('../wtc-consensus');
-const { computeBlockHash } = require('../wtc-chain');
+const { GovernanceStore, GOVERNANCE_MAX_TRANSFER } = require('../electron-main/wtc-governance');
+const { generateKeypair, sign, txHash } = require('../electron-main/wtc-address');
+const { Mempool } = require('../electron-main/wtc-mempool');
+const { Consensus } = require('../electron-main/wtc-consensus');
+const { computeBlockHash } = require('../electron-main/wtc-chain');
 
 const TEST_SECRET = 'test-governance-hmac';
 

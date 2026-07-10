@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { normalizeProbeReceipt } = require('../probe-attestation');
+const { normalizeProbeReceipt } = require('./probe-attestation');
 
 function buildPowerProofCommitment(proofData) {
   if (!proofData || typeof proofData !== 'object') return null;

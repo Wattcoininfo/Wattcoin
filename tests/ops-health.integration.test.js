@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { buildOpsHealthResponse } = require('../ops-health');
+const { buildOpsHealthResponse } = require('../electron-main/ops-health');
 
 function testHistoricalAlertsDoNotStickHealth() {
   const snapshot = {

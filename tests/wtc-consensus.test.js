@@ -4,9 +4,9 @@
 const assert = require('assert');
 const crypto = require('crypto');
 
-const { Consensus } = require('../wtc-consensus');
-const { generateKeypair, txHash: _txHash, sign: _sign } = require('../wtc-address');
-const { computeBlockHash } = require('../wtc-chain');
+const { Consensus } = require('../electron-main/wtc-consensus');
+const { generateKeypair, txHash: _txHash, sign: _sign } = require('../electron-main/wtc-address');
+const { computeBlockHash } = require('../electron-main/wtc-chain');
 
 function noop() {}
 

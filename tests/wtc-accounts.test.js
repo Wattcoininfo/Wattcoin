@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 
-const { Accounts, MATURITY_DEPTH } = require('../wtc-accounts');
+const { Accounts, MATURITY_DEPTH } = require('../electron-main/wtc-accounts');
 
 const ALICE = 'wtc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
 const BOB = 'wtc1q3t8y4q7g0q5c5txsp9arysrx4k6zdkfs4nce4xj0';
@@ -200,7 +200,7 @@ describe('wtc-accounts — applyBlock', () => {
   it('credits mining rewards from block', () => {
     const dir = tmpDir();
     const accts = makeAccounts(dir);
-    const kpAlice = require('../wtc-address').generateKeypair();
+    const kpAlice = require('../electron-main/wtc-address').generateKeypair();
     const block = makeBlock({
       rewardAddresses: { [kpAlice.address]: 500 },
       rewardTotal: 500,

@@ -3,9 +3,9 @@
 const crypto = require('crypto');
 const { dialog, ipcMain } = require('electron');
 const { getFocusedWindow } = require('./electron-utils');
-const saleQueue = require('../wtc-sale-queue');
-const stakingQueue = require('../wtc-staking-queue');
-const { isValidAddress: isValidWtcAddress } = require('../wtc-address');
+const saleQueue = require('./wtc-sale-queue');
+const stakingQueue = require('./wtc-staking-queue');
+const { isValidAddress: isValidWtcAddress } = require('./wtc-address');
 
 function userHasVhpn1(wtcNode, address) {
   if (!wtcNode || !address) return false;
@@ -646,7 +646,7 @@ function registerBusinessIpcHandlers(deps) {
 
       const peerCount = (typeof getActivePeers === 'function' ? getActivePeers(getLedgerNetworkSettings()) : []).length;
 
-      const { cumulativeSupplyAtHeight } = require('../wtc-chain');
+      const { cumulativeSupplyAtHeight } = require('./wtc-chain');
       const totalSupply = cumulativeSupplyAtHeight(height);
 
       const latestBlocks = [];

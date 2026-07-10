@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { checkLedgerNetworkAuth } = require('../ops-health');
+const { checkLedgerNetworkAuth } = require('../electron-main/ops-health');
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 

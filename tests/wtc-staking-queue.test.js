@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const _crypto = require('crypto');
 
-const sq = require('../wtc-staking-queue');
+const sq = require('../electron-main/wtc-staking-queue');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

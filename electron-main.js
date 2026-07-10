@@ -31,15 +31,15 @@ const {
   getLocalProbeChain,
   cancelPendingPeerProbesForWorker,
   handleWorkerBusy,
-} = require('./backend-benchmark');
+} = require('./electron-main/backend-benchmark');
 const {
   getExpectedCpuSpeedOps,
   getAsicPowerW,
   getAsicHashrateTHs,
   getGpuTdpW,
   getCpuTdpW,
-} = require('./hardware-tables.cjs');
-const { stopStratumServer, stopAll: stopAllStrata } = require('./local-stratum');
+} = require('./electron-main/hardware-tables.cjs');
+const { stopStratumServer, stopAll: stopAllStrata } = require('./electron-main/local-stratum');
 const asicDrivers = require('./asic-drivers');
 const {
   setHardwareLoadPercent,
@@ -47,7 +47,7 @@ const {
   getHardwareLoadState,
   configurePhysicalCores,
   getMeasuredCpuDuty,
-} = require('./hardware-load-controller');
+} = require('./electron-main/hardware-load-controller');
 const {
   ensureGpu,
   getGpuInfo,
@@ -59,12 +59,14 @@ const {
   runGpuPowProbe,
   runGpuBenchmark,
   findGpuBinary,
-} = require('./gpu-load-controller');
+} = require('./electron-main/gpu-load-controller');
 const si = require('systeminformation');
-const { createRoundLedger } = require('./round-ledger');
-const { buildOpsHealthResponse } = require('./ops-health');
-const { createRemoteSeedManifestManager } = require('./remote-seed-manifest');
-const { maybeRegisterReachableRequester: maybeRegisterReachableRequesterHelper } = require('./requester-registration');
+const { createRoundLedger } = require('./electron-main/round-ledger');
+const { buildOpsHealthResponse } = require('./electron-main/ops-health');
+const { createRemoteSeedManifestManager } = require('./electron-main/remote-seed-manifest');
+const {
+  maybeRegisterReachableRequester: maybeRegisterReachableRequesterHelper,
+} = require('./electron-main/requester-registration');
 const peerUtils = require('./electron-main/peer-utils');
 const hwProf = require('./electron-main/hardware-profiles');
 const { createPersistence } = require('./electron-main/persistence');
@@ -166,22 +168,31 @@ const {
   persistDevPeerPrivacyRecoveryKey,
 } = require('./electron-main/electron-utils');
 const { registerWalletBackupIpcHandlers } = require('./electron-main/wallet-backup-ipc');
-const { getRuntimeConfig } = require('./runtime-config');
+const { getRuntimeConfig } = require('./electron-main/runtime-config');
 const { autoUpdater } = require('electron-updater');
-const { createWtcNode } = require('./wtc-node');
-const { summarizeDisplayedPeerCounts } = require('./peer-count-observability');
-const { buildPeerDiscoverySnapshot } = require('./peer-discovery-observability');
-const { filterAdvertisedPeerUrls, obfuscatePeerUrl, resolvePeerPrivacySecret } = require('./peer-privacy');
-const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./peer-self-filter');
-const { setupUpnpPortMapping, removeUpnpPortMapping: removeUpnpMapping } = require('./upnp-port-forward');
+const { createWtcNode } = require('./electron-main/wtc-node');
+const { summarizeDisplayedPeerCounts } = require('./electron-main/peer-count-observability');
+const { buildPeerDiscoverySnapshot } = require('./electron-main/peer-discovery-observability');
+const {
+  filterAdvertisedPeerUrls,
+  obfuscatePeerUrl,
+  resolvePeerPrivacySecret,
+} = require('./electron-main/peer-privacy');
+const { isSelfPeerUrlCandidate, filterExternalPeerUrls } = require('./electron-main/peer-self-filter');
+const { setupUpnpPortMapping, removeUpnpPortMapping: removeUpnpMapping } = require('./electron-main/upnp-port-forward');
 const {
   getLocalSubnetProbeCandidates,
   selectDiscoveryPeerUrl,
   selectPreferredPeerUrl,
   sortPeerUrlsByPreference,
   checkHasKnownPrivateLanPeer,
-} = require('./local-subnet-discovery');
-const { detectNatType, getMappedAddress: _getMappedAddress, NAT_TYPE, DEFAULT_STUN_SERVERS } = require('./stun-client');
+} = require('./electron-main/local-subnet-discovery');
+const {
+  detectNatType,
+  getMappedAddress: _getMappedAddress,
+  NAT_TYPE,
+  DEFAULT_STUN_SERVERS,
+} = require('./electron-main/stun-client');
 const {
   allocatePunchPort,
   buildPunchResponse,
@@ -190,16 +201,16 @@ const {
   performPunch,
   MIN_PUNCH_PORT: _MIN_PUNCH_PORT,
   MAX_PUNCH_PORT: _MAX_PUNCH_PORT,
-} = require('./tcp-hole-punch');
+} = require('./electron-main/tcp-hole-punch');
 const {
   normalizeProbeReceipt,
   getProbeReceiptSigningPayload,
   attachProbeReceiptSignature,
-} = require('./probe-attestation');
-const saleQueue = require('./wtc-sale-queue');
-const stakingQueue = require('./wtc-staking-queue');
-const { isValidAddress: isValidWtcAddress } = require('./wtc-address');
-const { rewardForHeight } = require('./wtc-chain');
+} = require('./electron-main/probe-attestation');
+const saleQueue = require('./electron-main/wtc-sale-queue');
+const stakingQueue = require('./electron-main/wtc-staking-queue');
+const { isValidAddress: isValidWtcAddress } = require('./electron-main/wtc-address');
+const { rewardForHeight } = require('./electron-main/wtc-chain');
 
 const _CLI_DEFAULT_TIMEOUT_MS = 6000;
 const _WALLET_READINESS_REFRESH_INTERVAL_MS = 12000;

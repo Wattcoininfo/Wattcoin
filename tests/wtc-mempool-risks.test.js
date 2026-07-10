@@ -20,8 +20,8 @@
 
 const assert = require('assert');
 
-const { Mempool } = require('../wtc-mempool');
-const { generateKeypair, sign, txHash } = require('../wtc-address');
+const { Mempool } = require('../electron-main/wtc-mempool');
+const { generateKeypair, sign, txHash } = require('../electron-main/wtc-address');
 
 const senderKp = generateKeypair();
 

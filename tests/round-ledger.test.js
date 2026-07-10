@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { createRoundLedger } = require('../round-ledger');
+const { createRoundLedger } = require('../electron-main/round-ledger');
 
 function rmrf(target) {
   try {

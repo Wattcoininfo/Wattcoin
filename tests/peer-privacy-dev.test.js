@@ -7,7 +7,7 @@ const {
   buildPeerPrivacyRecoveryPayload,
   getPeerPrivacyRecoveryFilePath,
   writePeerPrivacyRecoveryFile,
-} = require('../peer-privacy-dev');
+} = require('../electron-main/peer-privacy-dev');
 
 function testBuildPeerPrivacyRecoveryPayload() {
   const recoverySecret = ['peer', 'privacy', 'secret'].join('-');

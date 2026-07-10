@@ -8,21 +8,21 @@ const { assertUnobfuscatedDevSources } = require('./check-dev-source');
 const APP_INTEGRITY_FILES = [
   'electron-main.js',
   'preload.js',
-  'backend-benchmark.js',
-  'hardware-load-controller.js',
-  'gpu-load-controller.js',
-  'local-stratum.js',
-  'cpu-load-worker.js',
-  'ddr-load-worker.js',
-  'probe-attestation.js',
-  'wtc-node.js',
-  'wtc-consensus.js',
-  'wtc-chain.js',
-  'wtc-mempool.js',
-  'wtc-governance.js',
-  'wtc-sale-queue.js',
-  'wtc-staking-queue.js',
-  'runtime-config.js',
+  'electron-main/backend-benchmark.js',
+  'electron-main/hardware-load-controller.js',
+  'electron-main/gpu-load-controller.js',
+  'electron-main/local-stratum.js',
+  'electron-main/cpu-load-worker.js',
+  'electron-main/ddr-load-worker.js',
+  'electron-main/probe-attestation.js',
+  'electron-main/wtc-node.js',
+  'electron-main/wtc-consensus.js',
+  'electron-main/wtc-chain.js',
+  'electron-main/wtc-mempool.js',
+  'electron-main/wtc-governance.js',
+  'electron-main/wtc-sale-queue.js',
+  'electron-main/wtc-staking-queue.js',
+  'electron-main/runtime-config.js',
   'asic-drivers/index.js',
   'asic-drivers/cgminer.js',
   'asic-drivers/nmminer.js',
@@ -129,7 +129,7 @@ function applyReleaseHardening(root) {
     const absPath = path.join(root, relPath);
     if (!fs.existsSync(absPath)) continue;
     const hash = crypto.createHash('sha256').update(fs.readFileSync(absPath)).digest('hex');
-    manifest[relPath.replace(/\\/g, '/')] = hash;
+    manifest[relPath.replace(/^electron-main\//, '').replace(/\\/g, '/')] = hash;
   }
   const manifestPath = path.join(root, 'app-integrity-manifest.json');
   const previousManifest = fs.existsSync(manifestPath)
@@ -717,12 +717,12 @@ async function main() {
       const monthName = months[now.getMonth()];
       const year = now.getFullYear();
       const syncFiles = [
-        path.join(root, 'index.html'),
-        path.join(root, 'wattcoin-whitepaper.html'),
-        path.join(root, 'wallet.html'),
-        path.join(root, 'blog.html'),
+        path.join(root, 'website/index.html'),
+        path.join(root, 'website/wattcoin-whitepaper.html'),
+        path.join(root, 'website/wallet.html'),
+        path.join(root, 'website/blog.html'),
       ];
-      const deployBlogDir = path.join(root, 'blog');
+      const deployBlogDir = path.join(root, 'website/blog');
       if (fs.existsSync(deployBlogDir)) {
         const posts = fs.readdirSync(deployBlogDir).filter(f => f.endsWith('.html')).map(f => path.join(deployBlogDir, f));
         syncFiles.push(...posts);
@@ -759,12 +759,12 @@ async function main() {
   const previousVersion = packageJson.version;
   const nextVersion = bumpPatchVersion(previousVersion);
   const { historyPath, versionLogPath } = getBuildLogPaths(root, nextVersion);
-  const whitepaperPath = path.join(root, 'wattcoin-whitepaper.html');
-  const indexHtmlPath = path.join(root, 'index.html');
-  const walletPath = path.join(root, 'wallet.html');
+  const whitepaperPath = path.join(root, 'website/wattcoin-whitepaper.html');
+  const indexHtmlPath = path.join(root, 'website/index.html');
+  const walletPath = path.join(root, 'website/wallet.html');
   const latestYmlPath = path.join(root, 'Releases', 'latest.yml');
-  const blogPath = path.join(root, 'blog.html');
-  const blogDir = path.join(root, 'blog');
+  const blogPath = path.join(root, 'website/blog.html');
+  const blogDir = path.join(root, 'website/blog');
   let blogPostPaths = [];
   if (fs.existsSync(blogDir)) {
     blogPostPaths = fs.readdirSync(blogDir).filter(f => f.endsWith('.html')).map(f => path.join(blogDir, f));
