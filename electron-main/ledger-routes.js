@@ -56,7 +56,7 @@ function createLedgerRequestHandler(ctx) {
     forwardedContributionMessages,
     peerReachabilityCache,
     usedPunchPorts,
-    stunNatInfo,
+    stunNatInfoRef,
     CHAIN_STALL_ALERT_MS,
   } = ctx;
 
@@ -362,9 +362,9 @@ function createLedgerRequestHandler(ctx) {
             /* ignore URL parse error */
           }
         }
-        if (!ourPublicIp && stunNatInfo && stunNatInfo.mappedIp) {
-          ourPublicIp = stunNatInfo.mappedIp;
-          ourPublicPort = stunNatInfo.mappedPort;
+        if (!ourPublicIp && stunNatInfoRef.current && stunNatInfoRef.current.mappedIp) {
+          ourPublicIp = stunNatInfoRef.current.mappedIp;
+          ourPublicPort = stunNatInfoRef.current.mappedPort;
         }
         const requesterCandidates = extractReachablePeerCandidates(req, settings);
         const referrerPeerUrl = requesterCandidates.length > 0 ? requesterCandidates[0] : '';

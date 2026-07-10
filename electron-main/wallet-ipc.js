@@ -3,33 +3,37 @@
 const { ALLOWED_SENDER_ADDRESSES } = require('../protocol-constants');
 const saleQueue = require('../wtc-sale-queue');
 
-// --- Internal state ---------------------------------------------------------
-let walletAddressCache = { address: '', at: 0 };
-void walletAddressCache;
-
 const ELECTRICITY_PRICE_FALLBACK = 0.174;
 const ELECTRICITY_PRICE_CACHE_MS = 24 * 60 * 60 * 1000;
 let _electricityCache = { price: null, fetchedAt: 0 };
 
 function registerWalletIpcHandlers(deps) {
-  const { ipcMain, wtcNode, enforceEndpointRateLimit, https, getBetaPolicy, logAbuseEvent, refreshWalletSyncState } =
-    deps;
+  const {
+    ipcMain,
+    getWtcNode,
+    walletAddressCache,
+    enforceEndpointRateLimit,
+    https,
+    getBetaPolicy,
+    logAbuseEvent,
+    refreshWalletSyncState,
+  } = deps;
 
   // Get WTC balances reconstructed from mined block history for a specific mining address.
   ipcMain.handle('wattcoin-get-node-mined-coins', (_, selectedAddress) => {
     // -- WTC native chain fast-path ---------------------------------------
-    if (wtcNode) {
+    if (getWtcNode()) {
       try {
         const addr =
           typeof selectedAddress === 'string' && selectedAddress.trim()
             ? selectedAddress.trim()
-            : wtcNode.getPrimaryAddress();
-        const bal = wtcNode.getBalance(addr);
-        const stats = wtcNode.getMinedStats(addr);
+            : getWtcNode().getPrimaryAddress();
+        const bal = getWtcNode().getBalance(addr);
+        const stats = getWtcNode().getMinedStats(addr);
         return {
           ok: true,
           address: addr,
-          blocks: wtcNode.getHeight(),
+          blocks: getWtcNode().getHeight(),
           minedCoins: stats.totalWTC,
           maturedMinedCoins: bal.confirmed,
           unmaturedMinedCoins: bal.unmatured,
@@ -88,13 +92,13 @@ function registerWalletIpcHandlers(deps) {
     }
 
     // -- WTC native chain path -------------------------------------------------
-    if (wtcNode) {
+    if (getWtcNode()) {
       try {
         const fromAddress =
           payload && typeof payload.selectedAddress === 'string'
             ? payload.selectedAddress.trim()
-            : wtcNode.getPrimaryAddress();
-        const result = wtcNode.send({ fromAddress, toAddress, amount, subtractFeeFromAmount });
+            : getWtcNode().getPrimaryAddress();
+        const result = getWtcNode().send({ fromAddress, toAddress, amount, subtractFeeFromAmount });
         // Transaction is now in the mempool - it will be included in the next
         // naturally mined block. No flush block is triggered here.
         return { ok: true, txid: result.txid, toAddress, amount: result.amount, subtractFeeFromAmount };
@@ -107,8 +111,8 @@ function registerWalletIpcHandlers(deps) {
   ipcMain.handle('wattcoin-get-tx-status', (_, payload = {}) => {
     const txid = typeof payload.txid === 'string' ? payload.txid.trim() : '';
     if (!txid) return { ok: false, code: 'MISSING_TXID', message: 'txid required' };
-    if (wtcNode) {
-      const { status } = wtcNode.getTxStatus(txid);
+    if (getWtcNode()) {
+      const { status } = getWtcNode().getTxStatus(txid);
       return { ok: true, txid, status };
     }
     return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
@@ -131,8 +135,8 @@ function registerWalletIpcHandlers(deps) {
     const selectedAddress = typeof payload.selectedAddress === 'string' ? payload.selectedAddress.trim() : '';
 
     // -- WTC native chain path -------------------------------------------------
-    if (wtcNode) {
-      const txs = wtcNode.listTransactions(selectedAddress || wtcNode.getPrimaryAddress(), count);
+    if (getWtcNode()) {
+      const txs = getWtcNode().listTransactions(selectedAddress || getWtcNode().getPrimaryAddress(), count);
       return { ok: true, selectedAddress, count: txs.length, transactions: txs };
     }
     return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
@@ -140,8 +144,8 @@ function registerWalletIpcHandlers(deps) {
 
   // Get all addresses with their labels
   ipcMain.handle('wattcoin-get-addresses', () => {
-    if (wtcNode) {
-      const addresses = wtcNode.getAddresses();
+    if (getWtcNode()) {
+      const addresses = getWtcNode().getAddresses();
       return { ok: true, addresses };
     }
     return { ok: false, code: 'NODE_NOT_READY', message: 'Node is starting up.' };
@@ -149,12 +153,13 @@ function registerWalletIpcHandlers(deps) {
 
   // Create a new mining address
   ipcMain.handle('wattcoin-create-address', () => {
-    if (wtcNode) {
+    if (getWtcNode()) {
       try {
-        const { address } = wtcNode.createAddress();
-        wtcNode.setPrimaryAddress(address);
-        walletAddressCache = { address, at: Date.now() };
-        const allAddresses = wtcNode.getAddresses();
+        const { address } = getWtcNode().createAddress();
+        getWtcNode().setPrimaryAddress(address);
+        walletAddressCache.address = address;
+        walletAddressCache.at = Date.now();
+        const allAddresses = getWtcNode().getAddresses();
         refreshWalletSyncState('create-address', { force: true }).catch(() => {});
         return { ok: true, address, allAddresses };
       } catch (e) {
@@ -169,20 +174,23 @@ function registerWalletIpcHandlers(deps) {
     if (!address) {
       return { ok: false, code: 'INVALID_ADDRESS', message: 'No address selected for deletion.' };
     }
-    if (wtcNode) {
+    if (getWtcNode()) {
       try {
-        if (wtcNode.getPrimaryAddress() === address) {
-          const remaining = wtcNode.getAddresses().filter((entry) => entry !== address);
+        if (getWtcNode().getPrimaryAddress() === address) {
+          const remaining = getWtcNode()
+            .getAddresses()
+            .filter((entry) => entry !== address);
           if (remaining.length === 0) {
             return { ok: false, code: 'DELETE_FAILED', message: 'Cannot delete the only wallet address.' };
           }
-          wtcNode.setPrimaryAddress(remaining[0]);
+          getWtcNode().setPrimaryAddress(remaining[0]);
         }
-        wtcNode.deleteAddress(address);
-        const nextPrimary = wtcNode.getPrimaryAddress();
-        walletAddressCache = { address: nextPrimary || '', at: nextPrimary ? Date.now() : 0 };
+        getWtcNode().deleteAddress(address);
+        const nextPrimary = getWtcNode().getPrimaryAddress();
+        walletAddressCache.address = nextPrimary || '';
+        walletAddressCache.at = nextPrimary ? Date.now() : 0;
         refreshWalletSyncState('delete-address', { force: true }).catch(() => {});
-        return { ok: true, deletedAddress: address, allAddresses: wtcNode.getAddresses() };
+        return { ok: true, deletedAddress: address, allAddresses: getWtcNode().getAddresses() };
       } catch (e) {
         return { ok: false, code: 'DELETE_FAILED', message: e && e.message ? e.message : 'Delete failed' };
       }

@@ -84,7 +84,7 @@ async function run() {
       forwardedContributionMessages: new Map(),
       peerReachabilityCache: new Map(),
       usedPunchPorts: new Set(),
-      stunNatInfo: null,
+      stunNatInfoRef: { current: null },
       CHAIN_STALL_ALERT_MS: 20 * 60_000,
     });
     assert.strictEqual(typeof handler, 'function');

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pay with USDC — Wattcoin</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #060d06;
+        color: #e8f5e8;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+      .card {
+        background: #0a1a0a;
+        border: 1px solid #2d4a2d;
+        border-radius: 18px;
+        padding: 32px 28px;
+        max-width: 420px;
+        width: 100%;
+      }
+      h1 {
+        color: #4ade80;
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .sub {
+        color: #6b9b6b;
+        font-size: 13px;
+        margin-bottom: 22px;
+      }
+      .amount {
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        border-radius: 10px;
+        padding: 14px 16px;
+        font-size: 20px;
+        font-weight: 700;
+        color: #fcd34d;
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .amount span {
+        color: #a7ffb0;
+      }
+      .wallets {
+        font-size: 11px;
+        color: #4a6a4a;
+        text-align: center;
+        margin-bottom: 18px;
+      }
+      .btn {
+        display: block;
+        width: 100%;
+        padding: 14px;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        margin-bottom: 10px;
+        transition: background 0.15s;
+      }
+      .btn-primary {
+        background: #4ade80;
+        color: #000;
+      }
+      .btn-primary:hover {
+        background: #22c55e;
+      }
+      .btn-secondary {
+        background: #1e3a1e;
+        color: #a7ffb0;
+        border: 1px solid #2d4a2d;
+      }
+      .btn-secondary:hover {
+        background: #253a25;
+      }
+      .status {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        text-align: center;
+        display: none;
+        line-height: 1.5;
+      }
+      .ok {
+        display: block;
+        background: #0d2a0d;
+        border: 1px solid #2d5a2d;
+        color: #4ade80;
+      }
+      .err {
+        display: block;
+        background: #1a0a0a;
+        border: 1px solid #4a1a1a;
+        color: #fca5a5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Pay with USDC</h1>
+      <p class="sub">Complete your Wattcoin purchase</p>
+      <div class="amount">${{USDC_REQUIRED}} USDC <span>→ {{WTC_AMOUNT_LOCALE}} WTC</span></div>
+      <p class="wallets">MetaMask · Trust Wallet · Coinbase Wallet · Base · any EIP-681 wallet</p>
+      <button class="btn btn-primary" id="btn-ext">Pay with Wallet Extension</button>
+      <div id="status"></div>
+    </div>
+    <script>
+      const SELLER='{{SAFE_ADDR}}';
+      const CONTRACT='{{USDC_CONTRACT}}';
+      const USDC={{USDC_REQUIRED_RAW}};
+      const EIP681='{{EIP681}}';
+      function show(type,msg){const s=document.getElementById('status');s.className='status '+type;s.textContent=msg;}
+      function showSuccess(hash){const s=document.getElementById('status');s.className='status ok';s.textContent='';const t=document.createElement('div');t.textContent='\u2713 Transaction submitted!';const h=document.createElement('small');h.style.wordBreak='break-all';h.style.color='#a7ffb0';h.textContent=hash.replace(/[^0-9a-fA-Fx]/g,'');const d=document.createElement('small');d.textContent='WTC will be delivered to your wallet once queued.';s.appendChild(t);s.appendChild(h);s.appendChild(d);}
+      function encData(to,amt){
+        const data='0xa9059cbb'+to.replace(/^0x/,'').toLowerCase().padStart(64,'0')+BigInt(Math.round(amt*1000000)).toString(16).padStart(64,'0');
+        return data;
+      }
+      async function pay(){
+        if(!window.ethereum){
+          window.location.href=EIP681;
+          return;
+        }
+        const btn=document.getElementById('btn-ext');
+        btn.disabled=true;btn.textContent='Connecting\u2026';
+        try{
+          const accounts=await window.ethereum.request({method:'eth_requestAccounts'});
+          if(!accounts||!accounts[0])throw new Error('No account returned');
+          btn.textContent='Check wallet\u2026';
+          const chainId=await window.ethereum.request({method:'eth_chainId'});
+          if(chainId!=='0x1'){
+            show('err','Please switch your wallet to Ethereum Mainnet first, then try again.');
+            btn.disabled=false;btn.textContent='Pay with Wallet Extension';return;
+          }
+          btn.textContent='Confirm in wallet\u2026';
+          const hash=await window.ethereum.request({method:'eth_sendTransaction',params:[{from:accounts[0],to:CONTRACT,value:'0x0',data:encData(SELLER,USDC)}]});
+          showSuccess(hash);
+          btn.textContent='Payment Submitted';
+        }catch(e){
+          if(e&&e.code===4001){show('err','Transaction cancelled.');btn.disabled=false;btn.textContent='Pay with Wallet Extension';}
+          else{show('err',e&&e.message?String(e.message).slice(0,200):'Unknown error');btn.disabled=false;btn.textContent='Pay with Wallet Extension';}
+        }
+      }
+      document.getElementById('btn-ext').addEventListener('click',pay);
+    </script>
+  </body>
+</html>

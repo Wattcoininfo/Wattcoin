@@ -36,6 +36,7 @@ function createReverseTunnel(ctx) {
     verifyChainPeerCompatibility,
     getLocalPeerIdentity,
     peerUtils,
+    sanitizeForwardedTunnelHeaders,
     updateWorkerRtt,
     forgetPeerUrlState,
     crypto,
@@ -643,7 +644,7 @@ function createReverseTunnel(ctx) {
     const requestId = String((message && message.requestId) || '').trim();
     const bodyBuffer =
       message && message.bodyBase64 ? Buffer.from(String(message.bodyBase64), 'base64') : Buffer.alloc(0);
-    const forwardedHeaders = peerUtils.sanitizeForwardedTunnelHeaders(message && message.headers);
+    const forwardedHeaders = sanitizeForwardedTunnelHeaders(message && message.headers);
     const protocolInfo = getPeerProtocolInfo();
     const requestOptions = {
       method,

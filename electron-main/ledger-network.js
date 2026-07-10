@@ -36,7 +36,12 @@ function createLedgerNetwork(ctx) {
       if (process.resourcesPath) {
         candidates.push(path.join(process.resourcesPath, fileName));
       }
-      candidates.push(path.join(__dirname, 'docs', fileName), path.join(__dirname, 'resources', fileName));
+      candidates.push(
+        path.join(__dirname, 'docs', fileName),
+        path.join(__dirname, 'resources', fileName),
+        path.join(__dirname, '..', 'docs', fileName),
+        path.join(__dirname, '..', 'resources', fileName),
+      );
     }
     return Array.from(new Set(candidates));
   }
@@ -156,7 +161,7 @@ function createLedgerNetwork(ctx) {
     return checkLedgerNetworkAuth(supplied, requiredToken);
   }
 
-  function getTrustedRequesterPeerIdentity(req, settings) {
+  function getTrustedRequesterPeerIdentity(req, settings = getLedgerNetworkSettings()) {
     const declaredPeerIdentity = String(req && req.headers ? req.headers['x-wtc-peer-identity'] || '' : '').trim();
     if (!peerUtils.isValidPeerIdentity(declaredPeerIdentity)) return '';
     if (peerUtils.isReverseTunnelForwardedRequest(req)) return declaredPeerIdentity;
@@ -164,7 +169,7 @@ function createLedgerNetwork(ctx) {
     return '';
   }
 
-  function getRequesterIdentity(req, settings) {
+  function getRequesterIdentity(req, settings = getLedgerNetworkSettings()) {
     const trustedPeerIdentity = getTrustedRequesterPeerIdentity(req, settings);
     if (trustedPeerIdentity) {
       return trustedPeerIdentity;
