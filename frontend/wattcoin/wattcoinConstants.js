@@ -7,9 +7,9 @@ export const APP_VERSION =
     : '?';
 
 // ─── Core Parameters ───────────────────────────────────────────────────────────
-const COINS_PER_TIER = 1_000_000;
-const NUM_TIERS = 21;
-export const TOTAL_SUPPLY = NUM_TIERS * COINS_PER_TIER; // 21,000,000
+export const COINS_PER_TIER = 1_000_000;
+export const TOTAL_TIERS = 21;
+export const TOTAL_SUPPLY = TOTAL_TIERS * COINS_PER_TIER; // 21,000,000
 
 // Tier 0 = 1 Wh (bootstrap tier)
 // Tier 1 = 20,000 Wh (20 kWh)
@@ -21,10 +21,10 @@ export const BASE_REWARD = 1000;
 const energyForTier = (n) => (n === 0 ? TIER0_ENERGY : TIER1_ENERGY * Math.pow(2, n - 1));
 
 let _totalWh = 0;
-for (let n = 0; n < NUM_TIERS; n++) _totalWh += COINS_PER_TIER * energyForTier(n);
+for (let n = 0; n < TOTAL_TIERS; n++) _totalWh += COINS_PER_TIER * energyForTier(n);
 export const TOTAL_ENERGY_TWH = _totalWh / 1e12; // ~21,000 TWh
 
-export const TIERS = Array.from({ length: NUM_TIERS }, (_, n) => {
+export const TIERS = Array.from({ length: TOTAL_TIERS }, (_, n) => {
   const epc = energyForTier(n);
   const reward = BASE_REWARD / Math.pow(2, n);
   const blocksThisTier = Math.round(COINS_PER_TIER / reward);
