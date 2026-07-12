@@ -495,76 +495,6 @@ async function runGpuPowProbe(seed, difficulty) {
   return results;
 }
 
-async function runGpuProof(seed, size, iters) {
-  const count = Math.max(1, gpuStates.size || 1);
-  if (!(await ensureGpu(count))) return null;
-
-  const results = [];
-  for (const deviceIndex of gpuStates.keys()) {
-    try {
-      const res = await sendCommand(deviceIndex, { proof: true, seed, size, iters });
-      if (res && res.t === 'proof') {
-        results.push({
-          deviceIndex,
-          hash: String(res.hash),
-          elapsedMs: res.ms,
-          seed: res.seed,
-        });
-      } else {
-        results.push({ deviceIndex, hash: null, elapsedMs: 0, error: 'proof failed' });
-      }
-    } catch (err) {
-      results.push({ deviceIndex, hash: null, elapsedMs: 0, error: err.message });
-    }
-  }
-
-  if (results.length === 0) return null;
-
-  return results;
-}
-
-async function runGpuBenchmark() {
-  const count = Math.max(1, gpuStates.size || 1);
-  if (!(await ensureGpu(count))) {
-    const errMsg = gpuTelemetry.error || 'GPU unavailable';
-    console.warn(`[GpuLoad] benchmark failed: ${errMsg}`);
-    return { score: 0, error: errMsg };
-  }
-
-  const results = [];
-  for (const deviceIndex of gpuStates.keys()) {
-    try {
-      const res = await sendCommand(deviceIndex, { bench: true });
-      if (res && res.t === 'bench') {
-        results.push({
-          deviceIndex,
-          score: res.score || 0,
-          frames: res.frames || 0,
-          elapsedMs: res.elapsedMs || 0,
-          opsPerMs: res.opsPerMs || 0,
-        });
-      }
-    } catch (err) {
-      results.push({ deviceIndex, score: 0, error: err.message });
-    }
-  }
-
-  // Aggregate: total score across all GPUs
-  const totalScore = results.reduce((s, r) => s + r.score, 0);
-  const totalFrames = results.reduce((s, r) => s + (r.frames || 0), 0);
-  const maxElapsed = results.reduce((s, r) => Math.max(s, r.elapsedMs || 0), 0);
-  const avgOpsPerMs = results.length > 0 ? results.reduce((s, r) => s + (r.opsPerMs || 0), 0) / results.length : 0;
-
-  mergeTelemetry();
-  return {
-    score: totalScore,
-    frames: totalFrames,
-    elapsedMs: maxElapsed,
-    opsPerMs: avgOpsPerMs,
-    devices: results,
-  };
-}
-
 function getGpuInfo() {
   if (gpuStates.size === 0) return null;
   const firstState = gpuStates.values().next().value;
@@ -680,9 +610,7 @@ module.exports = {
   setGpuLoadPercent,
   stopGpuHardwareLoad,
   shutdownGpu,
-  runGpuProof,
   runGpuPowProbe,
-  runGpuBenchmark,
   startGpuLoad,
   setGpuLoad,
   stopGpuLoad,

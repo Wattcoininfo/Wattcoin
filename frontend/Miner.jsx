@@ -1,7 +1,5 @@
 import React from 'react';
 
-// === Lines 3-80 from original (constants + helpers) ===
-
 const COINS_PER_TIER = 1_000_000;
 const TOTAL_TIERS = 21;
 const TIER0_ENERGY = 1;
@@ -80,11 +78,8 @@ import {
   getCpuProbeCallCount,
   resetCpuProbeCallCount,
   runCpuProbe,
-  runGpuProbe,
-  runWebGLBenchmark,
-  runGpuBenchmarkProof,
-  GPU_PROOF_SIZE,
-  GPU_PROOF_ITERS,
+  runCpuProbeForDuration,
+  runGpuPowBenchmark,
   getExpectedMemBandwidthMBps,
   getExpectedGpuScore,
   getExpectedCpuSpeedOps,
@@ -93,8 +88,6 @@ import {
 import { computeCoinsFromEnergy } from './miner/minerUtils';
 import { estimateHardwarePower } from './miner/minerPowerEstimation';
 import { cpuTDPTable, gpuTDPTable } from './miner/minerTDPTables';
-
-// === Lines 1751-7450 from original (Miner component) ===
 
 // Add a prop: isActive (true if dashboard is visible)
 export default function Miner({
@@ -864,18 +857,19 @@ export default function Miner({
         // Laptops are modelled as a single thermal unit (CPU+iGPU envelope), so GPU
         // benchmarking is meaningless there.  Also skip for any device where GPU
         // workloads are disabled (allowGpuWorkloads = false).
-        // runWebGLBenchmark now uses a DOM canvas (hardware-accelerated path) and
-        // already returns null if readPixels failed to actually drag the GPU pipeline.
+        // Uses GPU-PoW native binary for self-authenticating measurement.
         let gpuScore = 0;
         let _gpuScoreElapsedMs = 0;
+        let gpuPowDevices = null;
         if (allowGpuWorkloads) {
           try {
-            const gpuBench = await runWebGLBenchmark();
+            const gpuBench = await runGpuPowBenchmark();
             if (gpuBench && gpuBench.score) {
               gpuScore = gpuBench.score;
               _gpuScoreElapsedMs = gpuBench.elapsedMs;
+              gpuPowDevices = gpuBench.devices;
             } else if (gpuBench && gpuBench.error) {
-              issues.push('gpu-bench: ' + gpuBench.error);
+              issues.push('gpu-pow-bench: ' + gpuBench.error);
             }
           } catch (_) {
             if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
@@ -887,42 +881,23 @@ export default function Miner({
             : hardware.gpu && hardware.gpu !== 'Unknown'
               ? [hardware.gpu]
               : [];
-        // Use the highest-ranked expected score among declared GPUs (multi-GPU systems)
         let maxExpectedGpuScore = 0;
-        let _gpuTableMatch = false;
         for (const g of declaredGpus) {
           const exp = getExpectedGpuScore(g);
-          if (exp > maxExpectedGpuScore) {
-            maxExpectedGpuScore = exp;
-            _gpuTableMatch = true;
-          }
+          if (exp > maxExpectedGpuScore) maxExpectedGpuScore = exp;
         }
         if (
           maxExpectedGpuScore > 0 &&
-          !declaredGpus.some((g) => {
-            // Re-check if any GPU was truly matched (not just the fallback 3_500_000)
-            // by seeing if at least one model string matched a named entry.
-            return /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g);
-          })
+          !declaredGpus.some((g) => /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g))
         ) {
-          console.warn(
-            '[GPU] Unrecognised GPU model(s):',
-            declaredGpus.join(', '),
-            '- using fallback expected score 3.5M ops/ms',
-          );
+          console.warn('[GPU] Unrecognised GPU model(s):', declaredGpus.join(', '), '- using fallback expected score');
         }
-        // True when at least one declared GPU is a named, table-matched entry.
-        // For known GPUs, substituting the table value when readPixels doesn’t stall
-        // is correct behaviour — not an anomaly worth flagging.
-        const _isNamedGpu = declaredGpus.some((g) =>
-          /RTX|GTX|RX\s*[5-9]|Arc|Vega|Iris|UHD|HD Graphics|Radeon|M[1-4]/i.test(g),
-        );
         let gpuScoreRatio = 1.0;
         if (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0) {
           gpuScoreRatio = gpuScore / maxExpectedGpuScore;
           if (gpuScoreRatio < 0.05) {
             issues.push(
-              `GPU score ${Math.round(gpuScore / 1e3)}K ops/ms far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`,
+              `GPU score ${Math.round(gpuScore / 1e3)}K far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`,
             );
           }
         }
@@ -931,9 +906,6 @@ export default function Miner({
             ? Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * gpuScoreRatio))
             : 1.0;
         setBenchmarkGpuCalibration(newGpuCalibration);
-        // Report GPU calibration to main process so it owns the authoritative value.
-        // GPU benchmarking requires WebGL and must run in the renderer; main process
-        // receives the raw score and performs the same ratio calc independently.
         let gpuCalibResult = null;
         if (allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0) {
           try {
@@ -944,66 +916,6 @@ export default function Miner({
                   maxExpectedScore: maxExpectedGpuScore,
                 })
                 .catch(() => null);
-            }
-          } catch (_) {
-            if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-          }
-        }
-
-        // GPU proof: single deterministic integer-shader render keyed by challengeSeed.
-        // Node verifies it independently using computeGpuProbeExpectedHash (pure JS,
-        // no GPU needed) — requires WebGL2; skipped on software-rendered contexts.
-        let gpuProofHash = '';
-        let gpuProofVerified = false;
-        if (allowGpuWorkloads) {
-          try {
-            const gpuProof = await runGpuBenchmarkProof(challengeSeed, GPU_PROOF_SIZE, GPU_PROOF_ITERS);
-            if (gpuProof) {
-              gpuProofHash = gpuProof.proofHash;
-              if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-                const vr = await window.wattcoinHardware
-                  .invoke('wattcoin-verify-gpu-proof', {
-                    seed: challengeSeed,
-                    size: GPU_PROOF_SIZE,
-                    shaderIterations: GPU_PROOF_ITERS,
-                    proofHash: gpuProofHash,
-                  })
-                  .catch(() => null);
-                gpuProofVerified = !!(vr && vr.verified);
-              }
-              if (!gpuProofVerified) {
-                issues.push('gpu proof failed verification — GPU render may be software-emulated');
-              }
-              if (gpuProof.benchError) {
-                issues.push(gpuProof.benchError);
-              }
-              // Always use the proof's embedded MAD benchmark score — it runs on the
-              // same DOM canvas path that produced the proof, so it is guaranteed to
-              // reflect real GPU execution. Prefer it over runWebGLBenchmark which has
-              // historically been unreliable on discrete GPUs with ANGLE/D3D11.
-              if (gpuProof.gpuScore > 0) {
-                // Always use the raw measured score — let the real number show.
-                gpuScore = gpuProof.gpuScore;
-                gpuScoreRatio = maxExpectedGpuScore > 0 ? gpuProof.gpuScore / maxExpectedGpuScore : 1.0;
-                if (gpuScoreRatio < 0.05) {
-                  issues.push(
-                    `GPU score ${Math.round(gpuScore / 1e3)}K ops/ms far below expected ${Math.round(maxExpectedGpuScore / 1e3)}K for declared GPU (integrated-only?)`,
-                  );
-                }
-                setBenchmarkGpuCalibration(Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * gpuScoreRatio)));
-                try {
-                  if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-                    gpuCalibResult = await window.wattcoinHardware
-                      .invoke('wattcoin-report-gpu-calibration', {
-                        gpuScore,
-                        maxExpectedScore: maxExpectedGpuScore,
-                      })
-                      .catch(() => null);
-                  }
-                } catch (_) {
-                  if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-                }
-              }
             }
           } catch (_) {
             if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
@@ -1316,10 +1228,10 @@ export default function Miner({
           `, trust ${trustAfter}/100${!isBaselineBenchmark ? ` (${lastTrustDelta > 0 ? '+' : ''}${lastTrustDelta})` : ''}` +
           `, cpu-proof ${backendBench.cpuSpeedProof || 'n/a'} (seed ${backendBench.cpuSpeedInitialSeed || 0})` +
           `, mem-proof ${backendBench.memProof || 'n/a'}` +
-          (gpuProofHash
-            ? `, gpu-proof ${gpuProofHash}${gpuProofVerified ? '' : ' (unverified)'}`
+          (gpuPowDevices && gpuPowDevices.length > 0
+            ? `, gpu-pow ${gpuPowDevices.length} device${gpuPowDevices.length > 1 ? 's' : ''} (${gpuPowDevices.map((d) => `${d.deviceIndex}:${d.nonce}`).join(' ')})`
             : allowGpuWorkloads
-              ? ', gpu-proof n/a'
+              ? ', gpu-pow n/a'
               : '');
         const issueSummary = issues.length ? `issues: ${issues.join('; ')}` : 'no anomalies';
 
@@ -1376,9 +1288,9 @@ export default function Miner({
           memProof: backendBench.memProof || '',
           memProofSeed: Number(backendBench.memProofSeed) || 0,
           memLatencyNs: Math.max(0, Number(backendBench.memLatencyNs) || 0),
-          gpuProof: gpuProofHash || '',
-          gpuProofSeed: gpuProofHash ? challengeSeed : 0,
-          gpuProofVerified,
+          gpuPowDevices: gpuPowDevices || [],
+          gpuPowScore: Math.round(gpuScore),
+          gpuPowElapsedMs: _gpuScoreElapsedMs,
           challengeSeed: Number(backendBench.challengeSeed) || 0,
           cpuOpsPerSec: Math.round(cpuOpsPerSec),
           cpuSpeedOpsPerSec: Math.round(cpuSpeedOpsPerSec),
@@ -1861,22 +1773,51 @@ export default function Miner({
         const source = response.source || 'local'; // 'peer' | 'local'
         const probeStartedAt = performance.now();
 
+        // Start VDF computation BEFORE the benchmark so both run in parallel.
+        // The VDF input only depends on probe.id, workerId, and chainIndex — all
+        // available immediately. The VDF runs in the main process via IPC while the
+        // benchmark runs in the renderer, so total probe time = max(benchmark, VDF)
+        // instead of benchmark + VDF.
+        let vdfPromise = null;
+        let vdfStartMs = 0;
+        if (source === 'peer' && window.wattcoinHardware && window.wattcoinHardware.invoke) {
+          const chainIndex = probeChainRef.current ? probeChainRef.current.chainIndex : 0;
+          vdfStartMs = performance.now();
+          vdfPromise = window.wattcoinHardware
+            .invoke('wattcoin-vdf-derive-input', {
+              probeId: probe.id,
+              workerId: hardware.address || '',
+              chainIndex,
+            })
+            .then((vdfInputRes) => {
+              if (vdfInputRes && vdfInputRes.ok) {
+                return window.wattcoinHardware.invoke('wattcoin-vdf-evaluate', {
+                  challenge: vdfInputRes.challenge,
+                  difficulty: 2000,
+                  discriminantSizeBits: 512,
+                });
+              }
+              return null;
+            })
+            .catch(() => null);
+        }
+
         let probeResult = null;
 
         if (probe.type === 'cpu') {
           resetCpuProbeCallCount(0); // exclude keepalive calls from counter
           const seed = probe.params.seed | 0 || 1;
-          const iterations = probe.params.iterations | 0;
+          const durationMs = probe.params.durationMs || 1000;
           // Warmup — keeps CPU hot; no yield here because yielding lets the CPU drop into a
           // lower power state, causing the main loop to run at reduced frequency.
           runCpuProbe(seed, 5000000);
-          // Real measurement loop
-          let cpuResult = runCpuProbe(seed, iterations, true);
+          // Real measurement loop — runs for fixed duration, counts iterations
+          let cpuResult = runCpuProbeForDuration(seed, durationMs, true);
           let mainMs = cpuResult.chunks ? cpuResult.chunks.reduce((a, b) => a + b, 0) : 0;
           let retried = false;
           // Retry once if suspiciously slow — transient dips resolve on the second attempt
           if (mainMs > 3000) {
-            cpuResult = runCpuProbe(seed, iterations, true);
+            cpuResult = runCpuProbeForDuration(seed, durationMs, true);
             mainMs = cpuResult.chunks ? cpuResult.chunks.reduce((a, b) => a + b, 0) : 0;
             retried = true;
           }
@@ -1887,7 +1828,7 @@ export default function Miner({
             id: probe.id,
             type: 'cpu',
             proof: cpuResult.proof,
-            _probeIterations: iterations,
+            iterations: cpuResult.iterations,
             _intDateMs: mainMs,
             _warmupTotalMs: wallMs,
             _retried: retried ? 1 : 0,
@@ -1903,57 +1844,22 @@ export default function Miner({
             arr[fillIdx] = ((fillIdx * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
           }
           let idx = arr[0];
-          const N = probe.params.iterations | 0;
-          for (let i = 0; i < N; i++) idx = arr[idx & (ENTRIES - 1)];
-          probeResult = { id: probe.id, type: 'memory', proof: (idx >>> 0).toString(16).padStart(8, '0') };
-        } else if (probe.type === 'gpu') {
-          // GPU probe: backend-defined render size with readPixels() for true synchronous completion.
-          // Silently skip if the hardware can't run GPU probes — the background poller
-          // will fetch a new probe on its next cycle.
-          const gpuCount = Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0;
-          if (gpuCount > 1 && window.wattcoinHardware && window.wattcoinHardware.invoke) {
-            // Multi-GPU: run proof on ALL GPUs via native binary and collect per-device hashes
-            const nativeProofs = await window.wattcoinHardware
-              .invoke('wattcoin-gpu-proof', {
-                seed: probe.params.seed,
-                size: probe.params.size,
-                shaderIterations: probe.params.shaderIterations,
-              })
-              .catch(() => null);
-            if (
-              nativeProofs &&
-              nativeProofs.ok &&
-              Array.isArray(nativeProofs.devices) &&
-              nativeProofs.devices.length > 0
-            ) {
-              // All GPUs should produce the same hash (deterministic algorithm)
-              const primaryHash = nativeProofs.devices[0].hash;
-              const allMatch = nativeProofs.devices.every((d) => d.hash === primaryHash);
-              probeResult = {
-                id: probe.id,
-                type: 'gpu',
-                pixelHash: primaryHash || '',
-                gpuCount: nativeProofs.devices.length,
-                gpuHashes: nativeProofs.devices.map((d) => ({
-                  deviceIndex: d.deviceIndex,
-                  hash: d.hash,
-                  elapsedMs: d.elapsedMs,
-                })),
-                gpuHashesAllMatch: allMatch,
-              };
-            }
+          const durationMs = probe.params.durationMs || 1000;
+          const walkStart = performance.now();
+          const deadline = walkStart + durationMs;
+          let iterations = 0;
+          const MEM_CHUNK = 1000000;
+          while (performance.now() < deadline) {
+            const chunkEnd = iterations + MEM_CHUNK;
+            for (let i = iterations; i < chunkEnd; i++) idx = arr[idx & (ENTRIES - 1)];
+            iterations = chunkEnd;
           }
-          // Fall back to WebGL probe for single-GPU or when native binary unavailable
-          if (!probeResult) {
-            const gpuResult = allowGpuWorkloads
-              ? await runGpuProbe(probe.params.seed, probe.params.size, probe.params.shaderIterations)
-              : null;
-            if (!gpuResult || !gpuResult.pixelHash) {
-              probeResult = { id: probe.id, type: 'skip' };
-            } else {
-              probeResult = { id: probe.id, type: 'gpu', pixelHash: gpuResult.pixelHash, gpuCount: 1 };
-            }
-          }
+          probeResult = {
+            id: probe.id,
+            type: 'memory',
+            proof: (idx >>> 0).toString(16).padStart(8, '0'),
+            iterations,
+          };
         } else if (probe.type === 'gpu-pow') {
           // GPU PoW probe: use native binary to search for a nonce where hash < difficulty.
           // Each device gets its own seed partition so all GPUs independently prove work.
@@ -2015,15 +1921,37 @@ export default function Miner({
 
         if (disposed) return;
 
+        // Await VDF result — the promise was started before the benchmark so
+        // VDF and benchmark ran in parallel. Total probe time = max(benchmark, VDF).
+        let vdfResult = null;
+        let vdfTimingMs = 0;
+        if (vdfPromise) {
+          try {
+            vdfResult = await vdfPromise;
+            if (vdfResult && vdfResult.ok) {
+              vdfTimingMs = Math.round(performance.now() - vdfStartMs);
+            }
+          } catch (_) {
+            // VDF failure is non-fatal — fall back to coordinator timing.
+          }
+        }
+
         const submitPayload = {
           source,
           result: {
             ...probeResult,
             _peerUrl: probe._peerUrl,
-            probeWallClockMs:
-              probeResult.probeWallClockMs != null
-                ? probeResult.probeWallClockMs
-                : Math.round(performance.now() - probeStartedAt),
+            probeWallClockMs: Math.round(performance.now() - probeStartedAt),
+            ...(vdfResult && vdfResult.ok
+              ? {
+                  vdfSteps: vdfResult.steps,
+                  vdfDiscriminantSize: vdfResult.discriminantSizeBits,
+                  vdfInput: vdfResult.challenge || '',
+                  vdfOutput: vdfResult.output,
+                  vdfProof: vdfResult.proof,
+                  vdfTimingMs,
+                }
+              : {}),
           },
           hardwareSpec: {
             measuredCpuOpsPerSec: Number(benchmarkProofRef.current && benchmarkProofRef.current.cpuSpeedOpsPerSec) || 0,
@@ -2108,13 +2036,16 @@ export default function Miner({
                   ok: !!verdict.ok,
                   timedOut: false,
                   wallClockMs:
-                    typeof verdict.probeWallClockMs === 'number'
-                      ? Math.round(verdict.probeWallClockMs)
-                      : typeof verdict.wallClockMs === 'number'
-                        ? Math.round(verdict.wallClockMs)
-                        : null,
+                    typeof verdict.vdfTimingMs === 'number' && verdict.vdfVerified
+                      ? Math.round(verdict.vdfTimingMs)
+                      : typeof verdict.probeWallClockMs === 'number'
+                        ? Math.round(verdict.probeWallClockMs)
+                        : typeof verdict.wallClockMs === 'number'
+                          ? Math.round(verdict.wallClockMs)
+                          : null,
+                  vdfVerified: !!verdict.vdfVerified,
+                  vdfTimingMs: typeof verdict.vdfTimingMs === 'number' ? Math.round(verdict.vdfTimingMs) : null,
                   rttMs: typeof verdict.rttMs === 'number' ? Math.round(verdict.rttMs) : null,
-                  computeTimeMs: typeof verdict.computeTimeMs === 'number' ? Math.round(verdict.computeTimeMs) : null,
                   pixelHash: typeof probeResult.pixelHash === 'string' ? probeResult.pixelHash : '',
                   nonce:
                     Array.isArray(probeResult.devices) && probeResult.devices.length > 0
@@ -2243,6 +2174,8 @@ export default function Miner({
           ok: !!h.ok,
           timedOut: false,
           wallClockMs: typeof h.wallClockMs === 'number' ? Math.round(h.wallClockMs) : null,
+          vdfVerified: !!h.vdfVerified,
+          vdfTimingMs: typeof h.vdfTimingMs === 'number' ? Math.round(h.vdfTimingMs) : null,
           rttMs: typeof h.rttMs === 'number' ? Math.round(h.rttMs) : null,
           computeTimeMs: typeof h.computeTimeMs === 'number' ? Math.round(h.computeTimeMs) : null,
           chainIndex: typeof h.chainIndex === 'number' ? h.chainIndex : null,
@@ -2771,7 +2704,7 @@ export default function Miner({
       const gl = canvas.getContext('webgl2');
       if (!gl) return;
       const vSrc = `#version 300 es\n        in vec2 p;\n        void main() { gl_Position = vec4(p, 0.0, 1.0); }\n      `;
-      // Heavy MAD loop — same workload class as runWebGLBenchmark.
+      // Heavy MAD loop — same workload class as GPU-PoW native binary.
       const fSrc = `#version 300 es\n        precision highp float;\n        uniform float u;\n        out vec4 fragColor;\n        void main() {\n          vec4 v = vec4(gl_FragCoord.xy / 2048.0, u, 1.0 - u);\n          for (int i = 0; i < 256; i++) {\n            v.x = v.x * v.y + v.z * 0.00013;\n            v.y = v.y * v.z + v.w * 0.00017;\n            v.z = v.z * v.w + v.x * 0.00019;\n            v.w = v.w * v.x + v.y * 0.00023;\n          }\n          fragColor = v;\n        }\n      `;
       const vs = gl.createShader(gl.VERTEX_SHADER);
       gl.shaderSource(vs, vSrc);

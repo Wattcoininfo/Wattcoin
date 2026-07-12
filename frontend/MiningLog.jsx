@@ -123,8 +123,8 @@ function MiningLog({
   };
 
   // ── Probe column helpers ────────────────────────────────────────────────────
-  const TYPE_LABEL = { cpu: 'CPU', memory: 'MEM', gpu: 'GPU' };
-  const TYPE_COLOR = { cpu: '#38bdf8', memory: '#a78bfa', gpu: '#fb923c' };
+  const TYPE_LABEL = { cpu: 'CPU', memory: 'MEM', 'gpu-pow': 'GPU-PoW' };
+  const TYPE_COLOR = { cpu: '#38bdf8', memory: '#a78bfa', 'gpu-pow': '#fb923c' };
 
   const getProbeStatus = (entry) => {
     if (entry.timedOut) return { label: 'TIMEOUT', bg: '#2d2a1a', color: '#fbbf24', border: '#92400e' };
@@ -243,19 +243,18 @@ function MiningLog({
           {typeof entry.wallClockMs === 'number' && (
             <span style={{ color: '#64748b', fontSize: 11 }}>{Math.round(entry.wallClockMs)} ms</span>
           )}
+          {entry.vdfVerified && <span style={{ color: '#8b5cf6', fontSize: 9, fontWeight: 600 }}>VDF</span>}
           {typeof entry.rttMs === 'number' && (
             <span style={{ color: '#475569', fontSize: 10 }}>net {Math.round(entry.rttMs)}ms</span>
           )}
-          {typeof entry.computeTimeMs === 'number' && (
-            <span style={{ color: '#5b8d5b', fontSize: 10 }}>hw {Math.round(entry.computeTimeMs)}ms</span>
-          )}
+
           {/* Chain index */}
           {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (
             <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
           )}
           {probeId && <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>}
-          {entry.type === 'gpu' && typeof entry.pixelHash === 'string' && entry.pixelHash && (
-            <span style={{ color: '#64748b', fontSize: 11 }}>hash {entry.pixelHash}</span>
+          {entry.type === 'gpu-pow' && typeof entry.proof === 'string' && entry.proof && (
+            <span style={{ color: '#64748b', fontSize: 11 }}>proof {entry.proof}</span>
           )}
           {/* Source label */}
           <span style={{ color: '#4b5563', fontSize: 10, marginLeft: 'auto' }}>{peerLabel}</span>

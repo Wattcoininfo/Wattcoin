@@ -25,7 +25,6 @@ const {
   getPeerProbeHistory: _getPeerProbeHistory,
   verifyCpuSpeedProof: _verifyCpuSpeedProof,
   verifyMemProof: _verifyMemProof,
-  computeGpuProbeExpectedHash,
   setCoordinatorIdentityKey,
   PROBE_INTERVAL_MS,
   getLocalProbeChain,
@@ -55,9 +54,7 @@ const {
   setGpuLoadPercent: setGpuLoadPercentFn,
   stopGpuHardwareLoad,
   shutdownGpu,
-  runGpuProof,
   runGpuPowProbe,
-  runGpuBenchmark,
   findGpuBinary,
 } = require('./electron-main/gpu-load-controller');
 const si = require('systeminformation');
@@ -1172,7 +1169,6 @@ registerHardwareAuthorityIpcHandlers(ipcMain, {
   appendBenchmarkSample,
   getPersonalReference,
   saveBenchmarkHistory,
-  computeGpuProbeExpectedHash,
 });
 
 registerAttestationIpcHandlers(ipcMain, {
@@ -1254,8 +1250,6 @@ registerHardwareLoadIpcHandlers(ipcMain, {
   getGpuLoadState,
   setGpuLoadPercentFn,
   stopGpuHardwareLoad,
-  runGpuBenchmark,
-  runGpuProof,
   runGpuPowProbe,
 });
 

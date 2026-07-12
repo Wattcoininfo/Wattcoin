@@ -8,10 +8,10 @@ const CPU_SPEED_N = 20_000_000;
 const CPU_SPEED_DEFAULT_RUNS = 5;
 
 const PROBE_CPU_ITERS = 200_000_000;
+const PROBE_CPU_DURATION_MS = 1000;
 const PROBE_MEM_ENTRIES = 1 << 24;
 const PROBE_MEM_ITERS = 10_000_000;
-const PROBE_GPU_SIZE = 640;
-const PROBE_GPU_ITERS = 160;
+const PROBE_MEM_DURATION_MS = 1000;
 const PROBE_GPU_POW_DIFFICULTY = 1024;
 const PROBE_GPU_POW_SIZE = 32;
 const PROBE_GPU_POW_ITERS = 50000;
@@ -354,9 +354,6 @@ async function runBackendBenchmark(_request = {}) {
       gpuFps: 0,
       gpuBenchAvailable: false,
       gpuProvider: 'none',
-      gpuProofHash: '',
-      gpuProofWorkload: 'none',
-      gpuProofError: '',
       cpuSamples: cpuMem.cpuSamples,
       logicalCoresHint: os.cpus().length,
       cpuSpeedOpsPerSec: cpuSpeed.opsPerSec,
@@ -389,6 +386,21 @@ function _runCpuProbe(seed, iterations) {
   return { proof: (x >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed) };
 }
 
+function _runCpuProbeForDuration(seed, durationMs) {
+  let x = seed | 0 || 1;
+  const start = performance.now();
+  const deadline = start + durationMs;
+  let iterations = 0;
+  const BATCH = 25_000_000;
+  while (performance.now() < deadline) {
+    const end = iterations + BATCH;
+    for (let i = iterations; i < end; i++) x = cpuSpeedStep(x);
+    iterations = end;
+  }
+  const elapsed = Math.max(1, performance.now() - start);
+  return { proof: (x >>> 0).toString(16).padStart(8, '0'), iterations, elapsedMs: Math.round(elapsed) };
+}
+
 async function verifyCpuProbe(seed, iterations, expectedProof) {
   try {
     let x = seed | 0 || 1;
@@ -418,6 +430,27 @@ function _runMemProbe(arraySeed, iterations) {
   for (let i = 0; i < iterations; i++) idx = arr[idx & (ENTRIES - 1)];
   const elapsed = Math.max(1, performance.now() - start);
   return { proof: (idx >>> 0).toString(16).padStart(8, '0'), elapsedMs: Math.round(elapsed) };
+}
+
+function _runMemProbeForDuration(arraySeed, durationMs) {
+  const ENTRIES = PROBE_MEM_ENTRIES;
+  const s = arraySeed | 0 || 1;
+  const arr = new Uint32Array(ENTRIES);
+  for (let i = 0; i < ENTRIES; i++) {
+    arr[i] = ((i * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
+  }
+  let idx = arr[0];
+  const start = performance.now();
+  const deadline = start + durationMs;
+  let iterations = 0;
+  const BATCH = 1_000_000;
+  while (performance.now() < deadline) {
+    const end = iterations + BATCH;
+    for (let i = iterations; i < end; i++) idx = arr[idx & (ENTRIES - 1)];
+    iterations = end;
+  }
+  const elapsed = Math.max(1, performance.now() - start);
+  return { proof: (idx >>> 0).toString(16).padStart(8, '0'), iterations, elapsedMs: Math.round(elapsed) };
 }
 
 async function verifyMemProbe(arraySeed, iterations, expectedProof) {
@@ -490,8 +523,10 @@ module.exports = {
   verifyMemProof,
   _runCpuProbe,
   verifyCpuProbe,
+  _runCpuProbeForDuration,
   _runMemProbe,
   verifyMemProbe,
+  _runMemProbeForDuration,
   computeGpuProbeExpectedHash,
   verifyGpuPowProbe,
   average,
@@ -504,10 +539,10 @@ module.exports = {
   GPU_PROOF_SIZE,
   GPU_PROOF_ITERS,
   PROBE_CPU_ITERS,
+  PROBE_CPU_DURATION_MS,
   PROBE_MEM_ENTRIES,
   PROBE_MEM_ITERS,
-  PROBE_GPU_SIZE,
-  PROBE_GPU_ITERS,
+  PROBE_MEM_DURATION_MS,
   PROBE_GPU_POW_DIFFICULTY,
   PROBE_GPU_POW_SIZE,
   PROBE_GPU_POW_ITERS,

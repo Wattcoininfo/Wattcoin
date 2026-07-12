@@ -34,7 +34,6 @@ const DEFAULT_PROFILES = [
     stepW: 35,
     minCpuOpsPerSec: 260000,
     minMemoryMBps: 800,
-    requireGpuProof: true,
     spotCheckProbability: 0.08,
   },
   {
@@ -47,7 +46,6 @@ const DEFAULT_PROFILES = [
     stepW: 25,
     minCpuOpsPerSec: 170000,
     minMemoryMBps: 650,
-    requireGpuProof: true,
     spotCheckProbability: 0.06,
   },
   {
@@ -60,7 +58,6 @@ const DEFAULT_PROFILES = [
     stepW: 10,
     minCpuOpsPerSec: 120000,
     minMemoryMBps: 500,
-    requireGpuProof: false,
     spotCheckProbability: 0.04,
   },
   {
@@ -73,7 +70,6 @@ const DEFAULT_PROFILES = [
     stepW: 15,
     minCpuOpsPerSec: 100000,
     minMemoryMBps: 450,
-    requireGpuProof: false,
     spotCheckProbability: 0.05,
   },
 ];

@@ -427,8 +427,8 @@
             <div>│&nbsp;&nbsp; └─ Peer discovery — Seed nodes, LAN, gossip</div>
             <div>│</div>
             <div>
-              ├─ Probe Engine — Hardware verification
-              <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> trust scoring
+              ├─ Probe Engine — VDF proof-of-time
+              <span style="font-family: 'DM Mono', monospace; font-size: 0.85em">&amp;</span> hardware verification
             </div>
             <div>│</div>
             <div>└─ Seed Registry (wattcoin.ee) — Bootstrap peer list</div>
@@ -516,16 +516,27 @@
         <h3>Phase 3: Peer probe verification</h3>
         <p>
           Throughout the round, peer coordinators issue computational probes to verify that each miner is running real
-          hardware at the declared load. Five probe types are used:
+          hardware at the declared load. Every probe is paired with a <strong>VDF (Verifiable Delay Function)</strong>
+          proof-of-time that proves a minimum amount of sequential computation has elapsed — replacing the coordinator's
+          wall clock as the authoritative timing source. Four probe types are used:
         </p>
         <ul>
-          <li><strong>CPU probe</strong> — Verifies the CPU is computing at the expected speed.</li>
-          <li><strong>Memory probe</strong> — Measures memory bandwidth to confirm the declared RAM is active.</li>
-          <li><strong>GPU probe</strong> — Verifies the GPU is running real compute workloads.</li>
           <li>
-            <strong>GPU PoW probe</strong> — A proof-of-work challenge that confirms the GPU is genuinely hashing.
+            <strong>CPU probe</strong> — Fixed-duration (1000 ms) integer hash-chain; throughput computed as iterations
+            / VDF time.
           </li>
-          <li><strong>ASIC probe</strong> — Verifies the ASIC is alive and producing real hashes.</li>
+          <li>
+            <strong>Memory probe</strong> — Fixed-duration (1000 ms) pointer-chase; memory latency derived from
+            iteration count.
+          </li>
+          <li>
+            <strong>GPU PoW probe</strong> — A self-authenticating proof-of-work challenge where each GPU searches for a
+            nonce hash below a difficulty target.
+          </li>
+          <li>
+            <strong>ASIC probe</strong> — Liveness challenge injected into stratum; coordinator verifies X11 shares
+            cryptographically.
+          </li>
         </ul>
         <p>
           Each miner accumulates a trust score based on probe results. The trust score scales the effective contribution
@@ -698,7 +709,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.445 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.449 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

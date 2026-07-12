@@ -15,7 +15,6 @@ function registerHardwareAuthorityIpcHandlers(ipcMain, deps) {
     appendBenchmarkSample,
     getPersonalReference,
     saveBenchmarkHistory,
-    computeGpuProbeExpectedHash,
   } = deps;
 
   ipcMain.handle('wattcoin-get-authority-state', () => {
@@ -137,18 +136,6 @@ function registerHardwareAuthorityIpcHandlers(ipcMain, deps) {
       }
     }
     return { ok: true, personalMeanGpuRatio: 0 };
-  });
-
-  ipcMain.handle('wattcoin-verify-gpu-proof', (_event, payload = {}) => {
-    const seed = Number(payload && payload.seed) | 0 || 1;
-    const size = Math.max(1, Math.min(512, Number(payload && payload.size) || 128));
-    const shaderIters = Math.max(1, Math.min(256, Number(payload && payload.shaderIterations) || 32));
-    const submittedHash = String((payload && payload.proofHash) || '')
-      .trim()
-      .toLowerCase();
-    if (!submittedHash || submittedHash.length !== 8) return { verified: false };
-    const expectedHash = computeGpuProbeExpectedHash(seed, size, shaderIters);
-    return { verified: submittedHash === expectedHash };
   });
 
   const HARDWARE_HOLD_MAX_DURATION_MS = 48 * 60 * 60_000;

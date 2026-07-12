@@ -38,6 +38,13 @@ const {
 } = require('./main-utils');
 const { getProbeLogFilePath } = require('./electron-utils');
 const { startStratumServer, waitForFreshShares, injectCustomJob } = require('./local-stratum');
+const {
+  vdfEvaluate,
+  vdfVerify,
+  deriveVdfInput,
+  DEFAULT_VDF_DIFFICULTY,
+  DEFAULT_VDF_DISCRIMINANT_BITS,
+} = require('./vdf');
 
 // -- Internal state ---------------------------------------------------------
 let _asicConfig = [];
@@ -671,12 +678,9 @@ function registerBenchmarkIpcHandlers(deps) {
       if (!isBaseline) {
         const rendererIssues = Array.isArray(result.issues) ? result.issues : [];
         const backendFail = result.cpuSpeedProofVerified === false || result.memProofVerified === false;
-        const _allowGpu = !!(request && request.allowGpuWorkloads);
-        const gpuProofFail = _allowGpu && result.gpuProofVerified === false && result.gpuProofHash;
         const allIssues = [
           ...rendererIssues,
           ...(backendFail ? ['backend proof integrity failed'] : []),
-          ...(gpuProofFail ? ['gpu proof failed verification'] : []),
           ...(anyHwMismatch ? ['hardware identity mismatch (OS ? renderer)'] : []),
           ...(powerVsCpuOverride ? ['power/cpu mismatch - fake ASIC declaration'] : []),
           ...(asicLivenessFailed ? ['asic liveness check failed - hash boards unresponsive'] : []),
@@ -978,6 +982,45 @@ function registerBenchmarkIpcHandlers(deps) {
 
   ipcMain.handle('wattcoin-clear-probe-history', () => {
     clearProbeHistory();
+  });
+
+  ipcMain.handle('wattcoin-vdf-evaluate', async (_event, opts = {}) => {
+    try {
+      const challengeHex = typeof opts.challenge === 'string' ? opts.challenge : '';
+      const challenge = challengeHex ? Buffer.from(challengeHex, 'hex') : Uint8Array.from([0]);
+      const difficulty = typeof opts.difficulty === 'number' ? opts.difficulty : DEFAULT_VDF_DIFFICULTY;
+      const discriminantSizeBits =
+        typeof opts.discriminantSizeBits === 'number' ? opts.discriminantSizeBits : DEFAULT_VDF_DISCRIMINANT_BITS;
+      const result = await vdfEvaluate({ challenge, difficulty, discriminantSizeBits });
+      return { ok: true, ...result };
+    } catch (e) {
+      return { ok: false, error: e && e.message ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle('wattcoin-vdf-verify', (_event, opts = {}) => {
+    try {
+      const challengeHex = typeof opts.challenge === 'string' ? opts.challenge : '';
+      const challenge = challengeHex ? Buffer.from(challengeHex, 'hex') : Uint8Array.from([0]);
+      const ok = vdfVerify({
+        challenge,
+        difficulty: opts.difficulty,
+        discriminantSizeBits: opts.discriminantSizeBits,
+        proof: opts.proof,
+      });
+      return { ok };
+    } catch (e) {
+      return { ok: false, error: e && e.message ? e.message : String(e) };
+    }
+  });
+
+  ipcMain.handle('wattcoin-vdf-derive-input', (_event, { probeId, workerId, chainIndex } = {}) => {
+    try {
+      const input = deriveVdfInput(probeId || '', workerId || '', chainIndex || 0);
+      return { ok: true, challenge: input.toString('hex') };
+    } catch (e) {
+      return { ok: false, error: e && e.message ? e.message : String(e) };
+    }
   });
 
   // -- Probe log persistence ------------------------------------------------------

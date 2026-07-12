@@ -4,7 +4,7 @@
 const crypto = require('crypto');
 const { txHash, verifySignature, isValidAddress } = require('./wtc-address');
 
-const PROBE_RECEIPT_VERSION = 1;
+const PROBE_RECEIPT_VERSION = 2;
 const BLOCK_ATTESTATION_VERSION = 1;
 
 function toSafeNumber(value) {
@@ -35,6 +35,7 @@ function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
     type: String(receipt.type || '').trim(),
     ok: !!receipt.ok,
     wallClockMs: Math.max(0, Math.round(toSafeNumber(receipt.wallClockMs))),
+    iterations: Math.max(0, Math.round(toSafeNumber(receipt.iterations))),
     ts: Math.max(0, Math.round(toSafeNumber(receipt.ts))),
     roundId: Math.max(0, Math.round(toSafeNumber(receipt.roundId))),
     chainIndex: Math.max(0, Math.round(toSafeNumber(receipt.chainIndex))),
@@ -49,6 +50,16 @@ function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
   if (gpuModels.length > 0) normalized.gpuModels = gpuModels;
   if (receipt.cpuModel) normalized.cpuModel = String(receipt.cpuModel).trim();
   if (receipt.asicModel) normalized.asicModel = String(receipt.asicModel).trim();
+  // VDF fields (version 2+) — optional for backward compatibility.
+  if (receipt.vdfSteps > 0) {
+    normalized.vdfSteps = Math.max(0, Math.floor(toSafeNumber(receipt.vdfSteps)));
+  }
+  if (receipt.vdfDiscriminantSize > 0) {
+    normalized.vdfDiscriminantSize = Math.max(0, Math.floor(toSafeNumber(receipt.vdfDiscriminantSize)));
+  }
+  if (receipt.vdfInput) normalized.vdfInput = String(receipt.vdfInput).trim();
+  if (receipt.vdfOutput) normalized.vdfOutput = String(receipt.vdfOutput).trim();
+  if (receipt.vdfProof) normalized.vdfProof = String(receipt.vdfProof).trim();
   if (includeSignature) {
     normalized.signature = normalizeProbeReceiptSignature(receipt.signature || receipt.sig || '');
   }

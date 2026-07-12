@@ -405,7 +405,7 @@ function createAttestation(deps) {
 
   function computePolicyForMiner(minerId, summary = {}, options = {}) {
     const profile = resolveHardwareProfile(summary);
-    const allowGpuWorkloads = hwProf.shouldAllowGpuWorkloadsForSummary(summary);
+    const _allowGpuWorkloads = hwProf.shouldAllowGpuWorkloadsForSummary(summary);
     const record = getMinerRecord(minerId);
     const level = Math.max(0, Math.min(ATTESTATION_MAX_LEVEL, Number(record.level) || 0));
     const capW = Math.min(profile.maxCapW, profile.conservativeCapW + profile.stepW * level);
@@ -423,7 +423,6 @@ function createAttestation(deps) {
         profile.maxCapW,
         profile.conservativeCapW + profile.stepW * Math.min(ATTESTATION_MAX_LEVEL, level + 1),
       ),
-      requireGpuProof: allowGpuWorkloads && !!profile.requireGpuProof,
       minimums: {
         cpuOpsPerSec: profile.minCpuOpsPerSec,
         memoryMBps: profile.minMemoryMBps,
@@ -487,10 +486,9 @@ function createAttestation(deps) {
         phaseCount: 4,
         phaseDurationMs: 120,
         memBytes: 8 * 1024 * 1024,
-        allowGpuWorkloads: !!policy.requireGpuProof,
+        allowGpuWorkloads: policy.profileId === 'desktop-high' || policy.profileId === 'desktop-mid',
       },
       minimums: policy.minimums,
-      requireGpuProof: !!policy.requireGpuProof,
       profileId: policy.profileId,
       identityAddress: String(identityAddress || '').trim(),
     };
@@ -613,7 +611,6 @@ function createAttestation(deps) {
       challengeSeed: expected.challengeSeed,
       workloadProfile: expected.workloadProfile,
       minimums: expected.minimums,
-      requireGpuProof: expected.requireGpuProof,
       profileId: expected.profileId,
       identityAddress: expected.identityAddress,
       attestationMessage: expected.attestationMessage,
@@ -651,8 +648,6 @@ function createAttestation(deps) {
     const cpuOpsPerSec = expected.measuredCpuOpsPerSec;
     const memoryMBps = expected.measuredMemoryMBps;
     const jitterRatio = Math.max(0, Number(proof.jitterRatio) || 0);
-    const gpuProofHash = String(proof.gpuProofHash || '').trim();
-    const gpuBenchAvailable = !!proof.gpuBenchAvailable;
 
     const failures = [];
 
@@ -676,9 +671,6 @@ function createAttestation(deps) {
         failures.push('benchmark jitter above node maximum');
       }
     }
-    if (expected.requireGpuProof && (!gpuBenchAvailable || !gpuProofHash)) {
-      failures.push('gpu proof required but missing');
-    }
 
     const replayKey = sha256Hex(
       JSON.stringify({
@@ -687,7 +679,6 @@ function createAttestation(deps) {
         challengeSeed,
         cpuOpsPerSec: Math.round(cpuOpsPerSec),
         memoryMBps: Math.round(memoryMBps),
-        gpuProofHash,
       }),
     );
     if (consumedBenchmarkProofs.has(replayKey)) {

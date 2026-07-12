@@ -12,8 +12,6 @@ function registerHardwareLoadIpcHandlers(
     getGpuLoadState,
     setGpuLoadPercentFn,
     stopGpuHardwareLoad,
-    runGpuBenchmark,
-    runGpuProof,
     runGpuPowProbe,
   },
 ) {
@@ -96,45 +94,6 @@ function registerHardwareLoadIpcHandlers(
       return { ok: true, ...getGpuLoadState() };
     } catch (e) {
       return { ok: false, error: e && e.message ? e.message : 'Failed to stop GPU load' };
-    }
-  });
-
-  ipcMain.handle('wattcoin-get-gpu-load-state', () => {
-    try {
-      return { ok: true, ...getGpuLoadState() };
-    } catch (e) {
-      return { ok: false, error: e && e.message ? e.message : 'Failed to read GPU load state' };
-    }
-  });
-
-  ipcMain.handle('wattcoin-gpu-benchmark', async () => {
-    try {
-      const result = await runGpuBenchmark();
-      if (!result || result.error) {
-        return { ok: false, error: (result && result.error) || 'GPU benchmark failed' };
-      }
-      return { ok: true, ...result };
-    } catch (e) {
-      return { ok: false, error: e && e.message ? e.message : 'GPU benchmark exception' };
-    }
-  });
-
-  ipcMain.handle('wattcoin-gpu-proof', async (_event, payload = {}) => {
-    try {
-      const seed = Number(payload && payload.seed) | 0 || 1;
-      const size = Math.max(1, Math.min(1024, Number(payload && payload.size) || 128));
-      const iters = Math.max(1, Math.min(256, Number(payload && payload.shaderIterations) || 32));
-      const results = await runGpuProof(seed, size, iters);
-      if (!results) return { ok: false, error: 'GPU proof failed' };
-      const devices = results.map((r) => ({
-        deviceIndex: r.deviceIndex,
-        hash: r.hash ? (Number(r.hash) >>> 0).toString(16).padStart(8, '0') : null,
-        elapsedMs: r.elapsedMs || 0,
-        error: r.error || null,
-      }));
-      return { ok: true, devices, seed };
-    } catch (e) {
-      return { ok: false, error: e && e.message ? e.message : 'GPU proof exception' };
     }
   });
 

@@ -3,16 +3,12 @@ const crypto = require('crypto');
 const {
   verifyCpuProbe,
   verifyMemProbe,
-  computeGpuProbeExpectedHash,
   verifyGpuPowProbe,
   deriveProbeSeed,
-  PROBE_CPU_ITERS,
+  PROBE_CPU_DURATION_MS,
   PROBE_MEM_ENTRIES,
-  PROBE_MEM_ITERS,
-  PROBE_GPU_SIZE,
-  PROBE_GPU_ITERS,
-  PROBE_PEER_SLACK,
-  PROBE_LOCAL_SLACK,
+  PROBE_MEM_DURATION_MS,
+  PROBE_GPU_POW_DIFFICULTY,
 } = require('./benchmark-execution');
 const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 
@@ -25,12 +21,11 @@ const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 //
 // The renderer runs a small challenge workload and returns a proof hash +
 // elapsed time.  The node re-runs the same deterministic computation to
-// verify the hash (CPU + memory).  GPU probes are timing-only — Node
-// cannot execute GPU code, but it checks that the wall-clock time is
-// consistent with what the declared GPU should take.
+// verify the hash (CPU + memory).  GPU-PoW probes use a native binary to
+// search for a nonce — the proof IS the nonce (self-authenticating).
 //
 // Calibration probe schedule: 2-8 min random jitter (PROBE_INTERVAL_MIN/MS)._MAX/MS).
-// Three types cycle randomly: 'cpu', 'memory', 'gpu' (only if allowGpuWorkloads).
+// Three types cycle randomly: 'cpu', 'memory', 'gpu-pow' (only if allowGpuWorkloads).
 // If the renderer does not respond within PROBE_TIMEOUT_MS, it is recorded as a failure.
 //
 // SIZING RATIONALE:
@@ -38,10 +33,9 @@ const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 //   To make network latency (~50-150 ms RTT) and scheduler jitter a minor fraction,
 //   computation should stay comfortably in the multi-hundred-ms to low-second range
 //   even on weaker hardware. Values below intentionally bias toward longer runtimes:
-//     CPU:    200M iters @ 100M ops/s (entry CPU)   = ~2000 ms
-//     Memory: 10M iters @ 50 ns/access (DDR4-3200) = ~500 ms
-//   GPU probes are timing-only (Node can't re-run GL) and use a 640x640 render with
-//   160 MAD iterations per pixel so timing is less bursty than the previous size.
+//     CPU:    1000 ms fixed duration (duration-based probe)
+//     Memory: 1000 ms fixed duration (duration-based probe)
+//     GPU-PoW: native binary nonce search (difficulty 1024)
 // ----------------------------------------------------------------------------------
 
 // Probe cadence: uniformly random in [PROBE_INTERVAL_MIN_MS, PROBE_INTERVAL_MAX_MS].
@@ -131,11 +125,11 @@ function getPendingProbe() {
   // Not yet time for a new probe.
   if (now - probeState.lastIssuedAt < probeState.nextIntervalMs) return null;
 
-  // Choose type at random; include 'gpu' only when hardware spec allows it.
+  // Choose type at random; include 'gpu-pow' only when hardware spec allows it.
   // Include 'asic' only when the hardware spec has an expected hashrate for it.
   const allowGpu = !!(probeState.hardwareSpec && probeState.hardwareSpec.allowGpuWorkloads);
   const hasAsic = !!(probeState.hardwareSpec && probeState.hardwareSpec.asicHashrateTHs > 0);
-  const types = ['cpu', 'memory', ...(allowGpu ? ['gpu'] : []), ...(hasAsic ? ['asic'] : [])];
+  const types = ['cpu', 'memory', ...(allowGpu ? ['gpu-pow'] : []), ...(hasAsic ? ['asic'] : [])];
   const type = types[Math.floor(Math.random() * types.length)];
   // Chain derivation: next seed is deterministically derived from the previous proof so
   // the worker cannot pre-compute answers without executing every prior probe in sequence.
@@ -150,11 +144,11 @@ function getPendingProbe() {
     issuedAt: now,
     params:
       type === 'cpu'
-        ? { seed, iterations: PROBE_CPU_ITERS }
+        ? { seed, durationMs: PROBE_CPU_DURATION_MS }
         : type === 'memory'
-          ? { arraySeed: seed, iterations: PROBE_MEM_ITERS, entries: PROBE_MEM_ENTRIES }
-          : type === 'gpu'
-            ? { seed, size: PROBE_GPU_SIZE, shaderIterations: PROBE_GPU_ITERS }
+          ? { arraySeed: seed, durationMs: PROBE_MEM_DURATION_MS, entries: PROBE_MEM_ENTRIES }
+          : type === 'gpu-pow'
+            ? { seed, difficulty: PROBE_GPU_POW_DIFFICULTY }
             : /* asic */ { minShares: 3 },
   };
 
@@ -164,31 +158,18 @@ function getPendingProbe() {
     probe.params.challengePrevHash = crypto.randomBytes(32).toString('hex');
   }
 
-  // Pre-compute the expected GPU pixel hash in pure JS so submitProbeResult can
-  // verify it cryptographically — identical approach to peer probe issuance.
-  if (type === 'gpu') {
-    probe._expectedPixelHash = computeGpuProbeExpectedHash(
-      probe.params.seed,
-      probe.params.size,
-      probe.params.shaderIterations,
-    );
-  }
-
   probeState.pending = probe;
   probeState.lastIssuedAt = now;
   probeState.nextIntervalMs = _nextProbeIntervalMs(); // randomise next window immediately
   console.log(
-    `[Probe] Issued ${type} probe id=${probe.id} (next in ~${Math.round(probeState.nextIntervalMs / 1000)}s)${probe._expectedPixelHash ? ' (GPU hash pre-computed)' : ''}`,
+    `[Probe] Issued ${type} probe id=${probe.id} (next in ~${Math.round(probeState.nextIntervalMs / 1000)}s)`,
   );
-  // Strip internal fields before handing the probe to the renderer — the renderer
-  // must not see _expectedPixelHash or it could trivially forge the GPU proof answer.
-  const { _expectedPixelHash: _hidden, ...publicProbe } = probe; // eslint-disable-line no-unused-vars
-  return publicProbe;
+  return probe;
 }
 
 // Called when the renderer returns a completed probe.
 // peerTimed=true means wallClockMs was measured by the coordinator (trusted external clock).
-async function submitProbeResult(result, peerTimed = false) {
+async function submitProbeResult(result, _peerTimed = false) {
   if (!result || !probeState.pending) {
     return { ok: false, issues: ['no pending probe'] };
   }
@@ -204,55 +185,26 @@ async function submitProbeResult(result, peerTimed = false) {
   let proofValid = false;
 
   if (probe.type === 'cpu') {
-    // Re-run exact same computation — proof MUST match for an honest node.
-    proofValid = await verifyCpuProbe(probe.params.seed, probe.params.iterations, result.proof || '');
-    if (!proofValid) {
-      issues.push('cpu probe: proof hash mismatch — computation was tampered or skipped');
-    } else if (probeState.hardwareSpec && probeState.hardwareSpec.measuredCpuOpsPerSec > 0) {
-      const expectedMs = (probe.params.iterations / probeState.hardwareSpec.measuredCpuOpsPerSec) * 1000;
-      const slack = peerTimed ? PROBE_PEER_SLACK : PROBE_LOCAL_SLACK;
-      const ratio = wallClockMs / Math.max(1, expectedMs);
-      if (ratio < 1 / slack)
-        issues.push(
-          `cpu probe suspiciously fast: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
-        );
-      if (ratio > slack)
-        issues.push(
-          `cpu probe unexpectedly slow: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
-        );
+    const cpuIters = result.iterations | 0;
+    if (cpuIters <= 0) {
+      issues.push('cpu probe: no iterations reported');
+      proofValid = false;
+    } else {
+      proofValid = await verifyCpuProbe(probe.params.seed, cpuIters, result.proof || '');
+      if (!proofValid) {
+        issues.push('cpu probe: proof hash mismatch — computation was tampered or skipped');
+      }
     }
   } else if (probe.type === 'memory') {
-    proofValid = await verifyMemProbe(probe.params.arraySeed, probe.params.iterations, result.proof || '');
-    if (!proofValid) {
-      issues.push('memory probe: proof hash mismatch — computation was tampered or skipped');
-    } else if (probeState.hardwareSpec && probeState.hardwareSpec.measuredMemLatencyNs > 0) {
-      const expectedMs = (probe.params.iterations * probeState.hardwareSpec.measuredMemLatencyNs) / 1e6;
-      const slack = peerTimed ? PROBE_PEER_SLACK : PROBE_LOCAL_SLACK;
-      const ratio = wallClockMs / Math.max(1, expectedMs);
-      if (ratio < 1 / slack)
-        issues.push(
-          `memory probe suspiciously fast: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
-        );
-      if (ratio > slack)
-        issues.push(
-          `memory probe unexpectedly slow: ${Math.round(wallClockMs)}ms (expected ~${Math.round(expectedMs)}ms load=${_probeLoadPercent}%)`,
-        );
-    }
-  } else if (probe.type === 'gpu') {
-    if (typeof result.pixelHash !== 'string' || result.pixelHash.length === 0) {
+    const memIters = result.iterations | 0;
+    if (memIters <= 0) {
+      issues.push('memory probe: no iterations reported');
       proofValid = false;
-      issues.push('gpu probe: no pixel hash returned — WebGL unavailable or render was skipped');
-    } else if (probe._expectedPixelHash) {
-      proofValid = result.pixelHash === probe._expectedPixelHash;
-      if (!proofValid) {
-        issues.push(`gpu probe: pixel hash mismatch (got ${result.pixelHash}, expected ${probe._expectedPixelHash})`);
-      } else if (wallClockMs < 2) {
-        issues.push(`gpu probe completed impossibly fast (${wallClockMs}ms) — GPU render was likely skipped`);
-      }
     } else {
-      proofValid = true;
-      if (wallClockMs < 2)
-        issues.push(`gpu probe completed impossibly fast (${wallClockMs}ms) — GPU render was likely skipped`);
+      proofValid = await verifyMemProbe(probe.params.arraySeed, memIters, result.proof || '');
+      if (!proofValid) {
+        issues.push('memory probe: proof hash mismatch — computation was tampered or skipped');
+      }
     }
   } else if (probe.type === 'gpu-pow') {
     const devices = Array.isArray(result.devices) ? result.devices : [];
@@ -355,7 +307,7 @@ async function submitProbeResult(result, peerTimed = false) {
 
   // Advance or break the chain based on outcome.
   if (ok && proofValid) {
-    const proofKey = probe.type === 'gpu' ? result.pixelHash || '' : result.proof || '';
+    const proofKey = result.proof || '';
     probeState.chainHead = proofKey;
     probeState.chainIndex += 1;
   } else {

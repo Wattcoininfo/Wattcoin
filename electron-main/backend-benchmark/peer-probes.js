@@ -4,16 +4,13 @@ const { PROBE_RECEIPT_VERSION, normalizeProbeReceipt } = require('../probe-attes
 const { getExpectedCpuSpeedOps, getAsicPowerW, getGpuTdpW } = require('../hardware-tables.cjs');
 const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 const {
-  computeGpuProbeExpectedHash,
   verifyGpuPowProbe,
   verifyCpuProbe,
   verifyMemProbe,
   deriveProbeSeed,
-  PROBE_CPU_ITERS,
+  PROBE_CPU_DURATION_MS,
   PROBE_MEM_ENTRIES,
-  PROBE_MEM_ITERS,
-  PROBE_GPU_SIZE,
-  PROBE_GPU_ITERS,
+  PROBE_MEM_DURATION_MS,
   PROBE_GPU_POW_DIFFICULTY,
   PROBE_PEER_SLACK,
 } = require('./benchmark-execution');
@@ -28,6 +25,7 @@ const {
   getWorkerRtt,
 } = require('./worker-state');
 const { PROBE_TIMEOUT_MS } = require('./local-probes');
+const { vdfVerify, deriveVdfInput, estimateVdfTimingMs } = require('../vdf');
 
 // --- Peer probe API (coordinator side) ----------------------------------------
 // When this node acts as a ledger coordinator it issues probes TO other workers.
@@ -69,15 +67,8 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
     workerChain.chainHead !== null
       ? deriveProbeSeed(workerChain.chainHead, workerChain.chainIndex) || 1
       : crypto.randomBytes(4).readUInt32BE(0) & 0x7fffffff || 1;
-  // GPU probes require gl.uniform1i-compatible seed: [1, 0x7FFFFFFF]
   const seed = (rawSeed & 0x7fffffff) | 1;
-  const types = [
-    'cpu',
-    'memory',
-    ...(allowGpuWorkloads ? ['gpu'] : []),
-    ...(gpuPowCapable ? ['gpu-pow'] : []),
-    ...(hasAsic ? ['asic'] : []),
-  ];
+  const types = ['cpu', 'memory', ...(gpuPowCapable ? ['gpu-pow'] : []), ...(hasAsic ? ['asic'] : [])];
   const type = types[Math.floor(Math.random() * types.length)];
 
   const probe = {
@@ -86,14 +77,12 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
     issuedAt: now,
     params:
       type === 'cpu'
-        ? { seed, iterations: PROBE_CPU_ITERS }
+        ? { seed, durationMs: PROBE_CPU_DURATION_MS }
         : type === 'memory'
-          ? { arraySeed: seed, iterations: PROBE_MEM_ITERS, entries: PROBE_MEM_ENTRIES }
-          : type === 'gpu'
-            ? { seed, size: PROBE_GPU_SIZE, shaderIterations: PROBE_GPU_ITERS }
-            : type === 'gpu-pow'
-              ? { seed, difficulty: PROBE_GPU_POW_DIFFICULTY }
-              : /* asic */ { minShares: 3 },
+          ? { arraySeed: seed, durationMs: PROBE_MEM_DURATION_MS, entries: PROBE_MEM_ENTRIES }
+          : type === 'gpu-pow'
+            ? { seed, difficulty: PROBE_GPU_POW_DIFFICULTY }
+            : /* asic */ { minShares: 3 },
   };
 
   // ASIC liveness challenge: generate a random 32-byte prevHash that the worker
@@ -158,23 +147,14 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
     return null;
   }
 
-  // For GPU probes: pre-compute the expected pixel hash using pure-JS integer algebra.
-  // This allows algebraic verification in submitPeerProbeResult without needing a GPU.
-  const expectedPixelHash =
-    type === 'gpu'
-      ? computeGpuProbeExpectedHash(probe.params.seed, probe.params.size, probe.params.shaderIterations)
-      : null;
   peerProbeIssuances.set(probe.id, {
     probe,
     issuedAt: now,
     workerId,
-    expectedPixelHash,
     challengePrevHash: probe.params.challengePrevHash || null,
     workerChainIndexAtIssuance: workerChain.chainIndex,
   });
-  console.log(
-    `[PeerProbe] Issued ${type} probe id=${probe.id} to worker=${workerId} chain=${workerChain.chainIndex}${expectedPixelHash ? ' (GPU expected hash pre-computed)' : ''}`,
-  );
+  console.log(`[PeerProbe] Issued ${type} probe id=${probe.id} to worker=${workerId} chain=${workerChain.chainIndex}`);
   // Return probe WITHOUT params.seed in plaintext for GPU (no computational advantage),
   // but CPU/memory seeds are needed by the worker to run the algorithm — they're fine
   // to transmit because re-running is equivalent to computing a new result.
@@ -190,91 +170,67 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   peerProbeIssuances.delete(result.id);
   const wallClockMs = Date.now() - entry.issuedAt;
-  // Use the worker-reported probeWallClockMs capped at the coordinator's RTT.
-  // The worker reports actual computation time; the RTT is an upper bound
-  // (computation can't exceed the total round-trip). This prevents network
-  // latency and poll-cycle delays from inflating the timing ratio.
-  const probeWallClockMs =
-    typeof result.probeWallClockMs === 'number' && result.probeWallClockMs > 0
-      ? Math.min(wallClockMs, result.probeWallClockMs)
-      : wallClockMs;
   const probe = entry.probe;
   const issues = [];
   let proofValid = false;
 
+  // VDF is mandatory for all peer probes. No VDF proof → probe fails immediately.
+  let vdfVerified = false;
+  let vdfTimingMs = 0;
+  let vdfChainIndex = null;
+  if (!result.vdfProof || !result.vdfOutput || !(result.vdfSteps > 0)) {
+    issues.push('vdf_missing');
+  } else {
+    const currentChain = workerChainState.get(entry.workerId) || { chainIndex: 0 };
+    vdfChainIndex = currentChain.chainIndex;
+    const vdfChallenge = deriveVdfInput(result.id, entry.workerId, vdfChainIndex);
+    vdfVerified = vdfVerify({
+      challenge: vdfChallenge,
+      difficulty: result.vdfSteps,
+      discriminantSizeBits: result.vdfDiscriminantSize || 512,
+      proof: result.vdfProof,
+    });
+    if (!vdfVerified) {
+      issues.push('vdf_invalid');
+    } else {
+      // Worker's measured VDF elapsed time is the authoritative timing source.
+      const measuredMs = typeof result.vdfTimingMs === 'number' && result.vdfTimingMs > 0 ? result.vdfTimingMs : 0;
+      const estimatedMs = estimateVdfTimingMs(result.vdfSteps, result.vdfDiscriminantSize || 512);
+      if (measuredMs > 0) {
+        // Sanity check: measured time must be at least 20% of the theoretical
+        // minimum (squarings take real CPU time — nothing is instant).
+        if (measuredMs < estimatedMs * 0.2) {
+          issues.push(`vdf measured time ${measuredMs}ms suspiciously below estimate ${Math.round(estimatedMs)}ms`);
+        }
+        vdfTimingMs = measuredMs;
+      } else {
+        issues.push('vdf_missing');
+      }
+    }
+  }
+  const probeWallClockMs = vdfTimingMs;
+
   if (probe.type === 'cpu') {
-    proofValid = await verifyCpuProbe(probe.params.seed, probe.params.iterations, result.proof || '');
-    if (!proofValid) {
-      issues.push('cpu peer-probe: proof hash mismatch');
-    } else if (hardwareSpec && hardwareSpec.measuredCpuOpsPerSec > 0) {
-      // Derive actual speed the coordinator measured independently from wall clock.
-      const workerHist = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [], gpuPowSamples: [] };
-      const historicalCpuMean =
-        workerHist.cpuSamples.length >= WORKER_HW_ENROLL_COUNT
-          ? workerHist.cpuSamples.reduce((a, b) => a + b, 0) / workerHist.cpuSamples.length
-          : 0;
-      // Floor: a worker cannot claim to be slower than history shows they actually are.
-      const effectiveCpuOpsPerSec = Math.max(hardwareSpec.measuredCpuOpsPerSec, historicalCpuMean);
-      const loadPct = result.loadPercent;
-      const expectedMs = (probe.params.iterations / effectiveCpuOpsPerSec) * 1000;
-      const probeTimeMs = probeWallClockMs;
-      const ratio = probeTimeMs / Math.max(1, expectedMs);
-      if (ratio < 1 / PROBE_PEER_SLACK)
-        issues.push(
-          `cpu peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms load=${loadPct != null ? loadPct : '?'}%`,
-        );
-      if (ratio > PROBE_PEER_SLACK)
-        issues.push(
-          `cpu peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms (ratio=${ratio.toFixed(2)}) load=${loadPct != null ? loadPct : '?'}%`,
-        );
+    const cpuIters = result.iterations | 0;
+    if (cpuIters <= 0) {
+      issues.push('cpu peer-probe: no iterations reported');
+      proofValid = false;
+    } else {
+      proofValid = await verifyCpuProbe(probe.params.seed, cpuIters, result.proof || '');
+      if (!proofValid) {
+        issues.push('cpu peer-probe: proof hash mismatch');
+      }
     }
   } else if (probe.type === 'memory') {
-    proofValid = await verifyMemProbe(probe.params.arraySeed, probe.params.iterations, result.proof || '');
-    if (!proofValid) {
-      issues.push('memory peer-probe: proof hash mismatch');
-    } else if (hardwareSpec && hardwareSpec.measuredMemLatencyNs > 0) {
-      const workerHist = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [], gpuPowSamples: [] };
-      const historicalMemMean =
-        workerHist.memSamples.length >= WORKER_HW_ENROLL_COUNT
-          ? workerHist.memSamples.reduce((a, b) => a + b, 0) / workerHist.memSamples.length
-          : 0;
-      // Floor: a worker cannot claim higher latency (slower) than history shows.
-      const effectiveMemLatencyNs = Math.min(
-        hardwareSpec.measuredMemLatencyNs,
-        historicalMemMean > 0 ? historicalMemMean : hardwareSpec.measuredMemLatencyNs,
-      );
-      const loadPct = result.loadPercent;
-      const expectedMs = (probe.params.iterations * effectiveMemLatencyNs) / 1e6;
-      const probeTimeMs = probeWallClockMs;
-      const ratio = probeTimeMs / Math.max(1, expectedMs);
-      if (ratio < 1 / PROBE_PEER_SLACK)
-        issues.push(
-          `memory peer-probe suspiciously fast: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms load=${loadPct != null ? loadPct : '?'}%`,
-        );
-      if (ratio > PROBE_PEER_SLACK)
-        issues.push(
-          `memory peer-probe too slow: ${Math.round(probeTimeMs)}ms vs expected ~${Math.round(expectedMs)}ms load=${loadPct != null ? loadPct : '?'}%`,
-        );
-    }
-  } else if (probe.type === 'gpu') {
-    if (typeof result.pixelHash !== 'string' || result.pixelHash.length === 0) {
-      issues.push('gpu peer-probe: no pixel hash returned');
+    const memIters = result.iterations | 0;
+    if (memIters <= 0) {
+      issues.push('memory peer-probe: no iterations reported');
       proofValid = false;
-    } else if (entry.expectedPixelHash) {
-      // Algebraic verification: coordinator pre-computed the expected hash using the
-      // integer shader algorithm in pure JS — must match exactly.
-      proofValid = result.pixelHash === entry.expectedPixelHash;
-      if (!proofValid) {
-        issues.push(
-          `gpu peer-probe: pixel hash mismatch (got ${result.pixelHash}, expected ${entry.expectedPixelHash})`,
-        );
-      } else if (wallClockMs < 5) {
-        issues.push(`gpu peer-probe suspiciously fast: ${wallClockMs}ms`);
-      }
     } else {
-      // No expected hash (coordinator couldn't pre-compute) — fall back to timing + presence.
-      proofValid = true;
-      if (wallClockMs < 5) issues.push(`gpu peer-probe suspiciously fast: ${wallClockMs}ms`);
+      proofValid = await verifyMemProbe(probe.params.arraySeed, memIters, result.proof || '');
+      if (!proofValid) {
+        issues.push('memory peer-probe: proof hash mismatch');
+      }
     }
   } else if (probe.type === 'gpu-pow') {
     // GPU PoW probe: worker found a nonce on each device where the proof hash (lower 16 bits) < difficulty.
@@ -368,12 +324,14 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         }
       }
       proofValid = allValid;
-      // Timing consistency: expected wall clock based on declared ASIC hashrate and stratum difficulty
+      // Timing consistency: expected wall clock based on declared ASIC hashrate and stratum difficulty.
+      // Use VDF-verified timing when available to avoid trusting the coordinator's wall clock.
+      const asicTimingMs = vdfTimingMs > 0 ? vdfTimingMs : wallClockMs;
       if (proofValid && expectedTHs > 0 && shares.length > 0) {
         const expectedMs = ((shares.length * STRATUM_DIFFICULTY * 4294967296) / (expectedTHs * 1e12)) * 1000;
-        if (wallClockMs > 0 && wallClockMs < expectedMs * 0.1) {
+        if (asicTimingMs > 0 && asicTimingMs < expectedMs * 0.1) {
           issues.push(
-            `asic peer-probe suspiciously fast: ${Math.round(wallClockMs)}ms for ${shares.length} shares ` +
+            `asic peer-probe suspiciously fast: ${Math.round(asicTimingMs)}ms for ${shares.length} shares ` +
               `(expected ~${Math.round(expectedMs)}ms at ${expectedTHs.toFixed(4)} TH/s, diff=${STRATUM_DIFFICULTY})`,
           );
         }
@@ -415,17 +373,14 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   const ok = issues.length === 0;
 
-  // Update per-worker hardware-speed history using actual computation time
-  // (worker-reported probeWallClockMs) so network latency does not distort
-  // the measured hardware speed. Only update on a passing proof so cheating
-  // attempts don't corrupt the history.
+  // Update per-worker hardware-speed history using VDF-measured timing.
   if (proofValid) {
     const wh = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [], gpuPowSamples: [] };
-    if (probe.type === 'cpu' && probeWallClockMs > 0) {
-      const actualCpuOpsPerSec = (probe.params.iterations / probeWallClockMs) * 1000;
+    if (probe.type === 'cpu' && probeWallClockMs > 0 && result.iterations > 0) {
+      const actualCpuOpsPerSec = (result.iterations / probeWallClockMs) * 1000;
       wh.cpuSamples = appendWorkerHwSample(wh.cpuSamples, actualCpuOpsPerSec);
-    } else if (probe.type === 'memory' && probeWallClockMs > 0) {
-      const actualMemLatencyNs = (probeWallClockMs * 1e6) / probe.params.iterations;
+    } else if (probe.type === 'memory' && probeWallClockMs > 0 && result.iterations > 0) {
+      const actualMemLatencyNs = (probeWallClockMs * 1e6) / result.iterations;
       wh.memSamples = appendWorkerHwSample(wh.memSamples, actualMemLatencyNs);
     } else if (probe.type === 'gpu-pow' && probeWallClockMs > 0) {
       const gpuCount = Math.max(1, Array.isArray(result.devices) ? result.devices.length : 1);
@@ -443,7 +398,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     lastShareCheckTime: 0,
   };
   if (proofValid && ok) {
-    const proofKey = probe.type === 'gpu' ? result.pixelHash || '' : result.proof || '';
+    const proofKey = result.proof || '';
     workerChainEntry.chainHead = proofKey;
     workerChainEntry.chainIndex = (workerChainEntry.chainIndex || 0) + 1;
     workerChainState.set(entry.workerId, workerChainEntry);
@@ -468,7 +423,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     let hardwareKnown = false;
     if (probe.type === 'cpu' || probe.type === 'memory') {
       hardwareKnown = hardwareSpec.cpuModel && getExpectedCpuSpeedOps(hardwareSpec.cpuModel) > 0;
-    } else if (probe.type === 'gpu' || probe.type === 'gpu-pow') {
+    } else if (probe.type === 'gpu-pow') {
       const gpuModels = Array.isArray(hardwareSpec.gpuModels) ? hardwareSpec.gpuModels : [];
       hardwareKnown = gpuModels.length > 0 && gpuModels.every((m) => getGpuTdpW(m) > 0);
     } else if (probe.type === 'asic') {
@@ -480,7 +435,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         if (hardwareSpec.hwPowerW <= maxPlausibleW) {
           verifiedHwPowerW = Math.round(hardwareSpec.hwPowerW);
         }
-      } else if (probe.type === 'memory' || probe.type === 'gpu' || probe.type === 'gpu-pow' || probe.type === 'asic') {
+      } else if (probe.type === 'memory' || probe.type === 'gpu-pow' || probe.type === 'asic') {
         verifiedHwPowerW = Math.round(hardwareSpec.hwPowerW);
       }
     }
@@ -491,7 +446,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   // that hwPowerW × computeTimeMs is physically plausible.  The product is
   // roughly constant across GPU tiers (20k–30k W·ms for the fixed probe workload)
   // because energy = power × time is conserved.  Threshold at 50k (≈2× margin).
-  if (verifiedHwPowerW > 0 && (probe.type === 'gpu' || probe.type === 'gpu-pow') && entry.workerId) {
+  if (verifiedHwPowerW > 0 && probe.type === 'gpu-pow' && entry.workerId) {
     const smoothedRtt = getWorkerRtt(entry.workerId);
     if (smoothedRtt !== null && wallClockMs > smoothedRtt) {
       const MAX_GPU_PROBE_PRODUCT = 50_000;
@@ -509,7 +464,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   // Hardware model fields for independent power verification by other peers.
   const receiptHwModels = {};
-  if (probe.type === 'gpu' || probe.type === 'gpu-pow') {
+  if (probe.type === 'gpu-pow') {
     const gpuModels = Array.isArray(hardwareSpec && hardwareSpec.gpuModels) ? hardwareSpec.gpuModels : [];
     if (gpuModels.length > 0) {
       receiptHwModels.gpuModels = gpuModels.map((m) => String(m || '').trim()).filter(Boolean);
@@ -528,6 +483,18 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   // verifier's secp256k1 wallet key before returning it to the worker.
   let receipt = null;
   if (coordinatorIdentityKey) {
+    const receiptVdfFields = {};
+    if (vdfVerified && result.vdfSteps > 0) {
+      receiptVdfFields.vdfSteps = result.vdfSteps;
+      receiptVdfFields.vdfDiscriminantSize = result.vdfDiscriminantSize || 512;
+      receiptVdfFields.vdfInput = deriveVdfInput(
+        result.id,
+        entry.workerId,
+        vdfChainIndex != null ? vdfChainIndex : workerChainEntry.chainIndex,
+      ).toString('hex');
+      receiptVdfFields.vdfOutput = result.vdfOutput || '';
+      receiptVdfFields.vdfProof = result.vdfProof || '';
+    }
     receipt = normalizeProbeReceipt(
       {
         version: PROBE_RECEIPT_VERSION,
@@ -537,19 +504,21 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         type: probe.type,
         ok,
         wallClockMs,
+        iterations: result.iterations | 0,
         ts: Date.now(),
         roundId: Math.max(0, Math.round(Number(currentRoundId) || 0)),
         chainIndex: workerChainEntry.chainIndex,
         chainHead: workerChainEntry.chainHead,
         hwPowerW: verifiedHwPowerW,
         ...receiptHwModels,
+        ...receiptVdfFields,
       },
       { includeSignature: false },
     );
   }
 
   console.log(
-    `[PeerProbe] ${probe.type} ${tag} wall=${wallClockMs}ms worker=${entry.workerId}${issues.length ? ' - ' + issues.join('; ') : ''}`,
+    `[PeerProbe] ${probe.type} ${tag} wall=${wallClockMs}ms${vdfVerified ? ` vdf=${vdfTimingMs}ms` : ''} worker=${entry.workerId}${issues.length ? ' - ' + issues.join('; ') : ''}`,
   );
 
   // Derive network RTT and pure compute time for the probe log UI.
@@ -563,15 +532,17 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     type: probe.type,
     workerId: entry.workerId,
     ok,
-    wallClockMs,
+    wallClockMs: vdfVerified && vdfTimingMs > 0 ? vdfTimingMs : wallClockMs,
     rttMs: attestRttMs,
     computeTimeMs: attestComputeTimeMs,
     chainIndex: workerChainEntry.chainIndex,
-    pixelHash: probe.type === 'gpu' ? String(result.pixelHash || '') : '',
-    proof: probe.type !== 'gpu' ? String(result.proof || '') : '',
+    pixelHash: '',
+    proof: String(result.proof || ''),
     issues,
     loadPercent: result.loadPercent,
     version: result.version,
+    vdfVerified,
+    vdfTimingMs,
   });
   if (peerAttestHistory.length > PEER_ATTEST_HISTORY_MAX) peerAttestHistory.length = PEER_ATTEST_HISTORY_MAX;
 
@@ -584,6 +555,8 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     computeTimeMs: attestComputeTimeMs,
     workerId: entry.workerId,
     receipt,
+    vdfVerified,
+    vdfTimingMs,
     probeWallClockMs: result && typeof result.probeWallClockMs === 'number' ? result.probeWallClockMs : undefined,
     loadPercent: result.loadPercent,
     version: result.version,

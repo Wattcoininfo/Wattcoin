@@ -11,7 +11,6 @@ const LOCAL_HARDWARE_PROFILE_DB = [
     stepW: 35,
     minCpuOpsPerSec: 260_000,
     minMemoryMBps: 800,
-    requireGpuProof: true,
     spotCheckProbability: 0.08,
   },
   {
@@ -22,7 +21,6 @@ const LOCAL_HARDWARE_PROFILE_DB = [
     stepW: 25,
     minCpuOpsPerSec: 170_000,
     minMemoryMBps: 650,
-    requireGpuProof: true,
     spotCheckProbability: 0.06,
   },
   {
@@ -33,7 +31,6 @@ const LOCAL_HARDWARE_PROFILE_DB = [
     stepW: 10,
     minCpuOpsPerSec: 120_000,
     minMemoryMBps: 500,
-    requireGpuProof: false,
     spotCheckProbability: 0.04,
   },
   {
@@ -44,7 +41,6 @@ const LOCAL_HARDWARE_PROFILE_DB = [
     stepW: 15,
     minCpuOpsPerSec: 100_000,
     minMemoryMBps: 450,
-    requireGpuProof: false,
     spotCheckProbability: 0.05,
   },
 ];
@@ -60,7 +56,6 @@ function normalizeRemoteProfile(entry = {}) {
   const stepW = Math.max(1, Number(entry.stepW) || 10);
   const minCpuOpsPerSec = Math.max(10_000, Number(entry.minCpuOpsPerSec) || 100_000);
   const minMemoryMBps = Math.max(100, Number(entry.minMemoryMBps) || 400);
-  const requireGpuProof = !!entry.requireGpuProof;
   const spotCheckProbability = Math.min(0.5, Math.max(0, Number(entry.spotCheckProbability) || 0.05));
 
   return {
@@ -76,7 +71,6 @@ function normalizeRemoteProfile(entry = {}) {
     stepW,
     minCpuOpsPerSec,
     minMemoryMBps,
-    requireGpuProof,
     spotCheckProbability,
   };
 }

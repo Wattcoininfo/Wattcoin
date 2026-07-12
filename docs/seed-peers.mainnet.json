@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-27T00:00:00.000Z",
+  "updatedAt": "2026-07-12T00:00:00.000Z",
   "requiredMinSeedPeers": 1,
   "requiredMinProviders": 1,
   "requiredMinNetworkSegments": 1,
   "seedPeers": [
     {
-      "url": "http://85.253.248.60:39310",
-      "ipB64": "ODUuMjUzLjI0OC42MDozOTMxMA==",
-      "provider": "seed-host-85-253-248-60",
+      "url": "http://85.253.248.11:39310",
+      "ipB64": "ODUuMjUzLjI0OC4xMTozOTMxMA==",
+      "provider": "seed-host-85-253-248-11",
       "region": "eu",
-      "label": "Seed host 85.253.248.60",
-      "notes": "Primary mainnet bootstrap seed at 85.253.248.60:39310. Seed registry heartbeat enabled — auto-registers on IP change."
+      "label": "Seed host 85.253.248.11",
+      "notes": "Primary mainnet bootstrap seed at 85.253.248.11:39310. Seed registry heartbeat enabled — auto-registers on IP change."
     }
   ]
 }

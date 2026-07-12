@@ -6,13 +6,13 @@
     <title>How the Peer Probe System Prevents Cheating | Wattcoin Blog</title>
     <meta
       name="description"
-      content="Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into computational proof, trust scoring, and multi-coordinator cross-attestation."
+      content="Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into VDF proof-of-time, computational proof, trust scoring, and multi-coordinator cross-attestation."
     />
     <link rel="canonical" href="https://wattcoin.ee/blog/probe-system.html" />
     <meta property="og:title" content="How the Peer Probe System Prevents Cheating | Wattcoin Blog" />
     <meta
       property="og:description"
-      content="Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into computational proof, trust scoring, and multi-coordinator cross-attestation."
+      content="Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into VDF proof-of-time, computational proof, trust scoring, and multi-coordinator cross-attestation."
     />
     <meta property="og:url" content="https://wattcoin.ee/blog/probe-system.html" />
     <meta property="og:type" content="article" />
@@ -27,7 +27,7 @@
     <meta name="twitter:title" content="How the Peer Probe System Prevents Cheating | Wattcoin Blog" />
     <meta
       name="twitter:description"
-      content="Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into computational proof, trust scoring, and multi-coordinator cross-attestation."
+      content="Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into VDF proof-of-time, computational proof, trust scoring, and multi-coordinator cross-attestation."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
@@ -53,7 +53,7 @@
             "publisher": {
               "@id": "https://wattcoin.ee/#organization"
             },
-            "description": "Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into computational proof, trust scoring, and multi-coordinator cross-attestation.",
+            "description": "Wattcoin's peer probe system verifies that miners are running real hardware and not faking energy expenditure. A technical deep dive into VDF proof-of-time, computational proof, trust scoring, and multi-coordinator cross-attestation.",
             "mainEntityOfPage": {
               "@type": "WebPage",
               "@id": "https://wattcoin.ee/blog/probe-system.html"
@@ -377,8 +377,8 @@
         </div>
         <h1>How the Peer Probe System <span>Prevents Cheating</span></h1>
         <p>
-          Understanding Wattcoin's multi-layered computational attestation — from proof hashes and timing ratios to
-          hardware identity verification and trust penalties.
+          Understanding Wattcoin's multi-layered computational attestation — from VDF proof-of-time and fixed-duration
+          benchmarks to hardware identity verification and trust penalties.
         </p>
       </div>
     </div>
@@ -412,28 +412,25 @@
         <h2>Probe Types</h2>
         <p>
           A probe is a deterministic computational workload matched to the miner's declared hardware capability. There
-          are currently five types:
+          are currently four types:
         </p>
         <ul>
           <li>
-            <strong>CPU probe</strong> — an integer hash-chain loop with a known iteration count. Both the coordinator
-            and the worker independently compute the same function; the coordinator compares the resulting proof hash
-            against its own computation. A mismatch is conclusive evidence of tampering.
+            <strong>CPU probe</strong> — a fixed-duration integer hash-chain loop (1000 ms). The worker runs for the
+            full duration and counts iterations. The coordinator computes throughput as
+            <code>iterations / vdfTimingMs</code> and verifies the proof hash against its own computation. A mismatch is
+            conclusive evidence of tampering.
           </li>
           <li>
-            <strong>Memory probe</strong> — a pointer-chase across a large array with a fixed number of random walks.
-            Memory latency is measured directly. The coordinator re-computes the walk in software and verifies the final
-            proof hash.
+            <strong>Memory probe</strong> — a fixed-duration pointer-chase across a large array (1000 ms). The worker
+            walks pointers for the full duration and counts iterations. Memory latency is derived from the iteration
+            count and verified against the declared hardware spec.
           </li>
           <li>
-            <strong>GPU probe</strong> — a WebGL pixel shader that renders a deterministic pattern using an integer
-            XOR-shift algorithm. The coordinator pre-computes the expected pixel hash in pure JavaScript before issuing
-            the probe; the worker's GLSL output must match exactly.
-          </li>
-          <li>
-            <strong>GPU PoW probe</strong> — a DirectX compute shader searches for a nonce where the XOR-shift hash
-            meets a difficulty target. Each GPU in a multi-card rig searches a unique nonce space partitioned by device
-            index. The coordinator verifies the nonce server-side without needing a GPU itself.
+            <strong>GPU PoW probe</strong> — a native binary computes a nonce search where the XOR-shift hash must meet
+            a difficulty target. Each GPU in a multi-card rig searches a unique nonce space partitioned by device index.
+            The proof is self-authenticating — the nonce itself proves work was done — and the coordinator verifies
+            server-side without needing a GPU.
           </li>
           <li>
             <strong>ASIC probe</strong> — the coordinator issues a cryptographic liveness challenge (random prevHash)
@@ -486,10 +483,17 @@
           prior work.
         </p>
 
-        <h2>Timing Ratio Checks</h2>
+        <h2>VDF Proof-of-Time</h2>
         <p>
-          For CPU and memory probes, the coordinator computes an <strong>expected wall-clock time</strong> based on the
-          worker's declared hardware spec and its own benchmark history:
+          Every peer probe is paired with a <strong>Verifiable Delay Function (VDF)</strong> — a cryptographic proof
+          that a minimum amount of sequential computation time has elapsed. The VDF replaces the coordinator's wall
+          clock as the authoritative timing source, making it impossible for a worker to lie about how long a probe
+          took.
+        </p>
+        <p>
+          The worker starts the VDF computation <em>before</em> the benchmark workload so both run in parallel. The VDF
+          runs in the main process while CPU, memory, GPU, or ASIC work runs in the renderer or hardware driver. Total
+          probe time = <code>max(benchmark, VDF)</code>.
         </p>
         <p
           style="
@@ -501,16 +505,20 @@
             border-radius: 8px;
           "
         >
-          expectedMs = iterations / effectiveCpuOpsPerSec × 1000<br />
-          ratio = probeWallClockMs / expectedMs
+          challenge = SHA-256(probeId ‖ workerId ‖ chainIndex)<br />
+          proof = 2000 sequential squarings, 512-bit discriminant<br />
+          verify ≈ 1–2 ms &nbsp;|&nbsp; solve ≈ 1 s &nbsp;|&nbsp; cannot be parallelized
         </p>
         <p>
-          The probe is flagged if the timing ratio falls outside the expected range — overly fast results (suggesting
-          outsourced computation) or overly slow results (suggesting throttled or substituted hardware). The
-          <code>effectiveCpuOpsPerSec</code> uses <em>the maximum of</em> the declared ops/sec and the worker's own
-          historical mean, preventing a miner from claiming artificially low speed to hide outsourcing. The current
-          <strong>load percent</strong> is included alongside every timing issue (<code>load=85%</code>) as diagnostic
-          context, helping distinguish genuine hardware throttling from contention caused by mining threads.
+          The VDF input binds the proof to a specific probe, worker, and chain position — preventing pre-computation or
+          replay across probes. Without a valid VDF proof, the probe fails with <code>vdf_missing</code>. The
+          coordinator uses the worker's measured VDF timing (<code>vdfTimingMs</code>) as the authoritative time for
+          energy accumulation and throughput calculations.
+        </p>
+        <p>
+          For CPU and memory probes, the coordinator computes throughput as <code>iterations / vdfTimingMs</code>.
+          Because the VDF proves that at least the stated time elapsed, a worker cannot inflate its ops/sec by
+          fabricating iteration counts — the math does not work if the denominator is cryptographically enforced.
         </p>
 
         <h2>Trust Score — How Probes Drive Mining Power</h2>
@@ -542,7 +550,7 @@
         <ul>
           <li><strong>+1</strong> for 25 consecutive verified probes with no issues</li>
           <li><strong>−1</strong> per failed probe (mismatch or timing violation)</li>
-          <li><strong>−3</strong> per proof/pixel hash mismatch (strong evidence of cheating)</li>
+          <li><strong>−3</strong> per proof mismatch (strong evidence of cheating)</li>
           <li><strong>−1</strong> additional if the last 50 probes have a failure rate above 30 %</li>
           <li><strong>−20</strong> for a hardware identity mismatch (detected at benchmark time)</li>
         </ul>
@@ -556,8 +564,8 @@
         </p>
         <p>
           Connections are maintained via persistent WebSocket channels. If a coordinator goes offline, only that slot is
-          replaced leaves the other two connections intact. This design makes the probe stream resilient — a miner
-          receives probes from multiple coordinators at random intervals averaging one every ~10 seconds.
+          replaced, leaving the other connections intact. This design makes the probe stream resilient — a miner
+          receives probes from multiple coordinators at random intervals throughout each round.
         </p>
 
         <h2>Network Outlier Detection</h2>
@@ -572,8 +580,8 @@
         <h2>How Protections Work Together</h2>
         <h4>Computational proof verification</h4>
         <p>
-          The coordinator independently re-computes CPU and memory proofs and pre-computes GPU pixel hashes, so any
-          fabricated result is detected immediately.
+          The coordinator independently re-computes CPU and memory proofs and cryptographically verifies GPU-PoW nonces
+          and ASIC X11 shares, so any fabricated result is detected immediately.
         </p>
         <h4>Multi-channel hardware attestation</h4>
         <p>
@@ -594,10 +602,10 @@
         <h2>Summary</h2>
         <p>
           The peer probe system is a multi-layered attestation framework that makes it prohibitively expensive to cheat
-          at Proof-of-Energy mining. Computational proof verification, OS-level hardware identity checks, timing ratio
-          analysis, multi-coordinator cross-attestation, network outlier detection, and sliding-window trust scoring
-          each address a different attack vector. No single layer is perfect, but together they raise the cost of
-          cheating well beyond any possible reward.
+          at Proof-of-Energy mining. VDF proof-of-time, computational proof verification, OS-level hardware identity
+          checks, multi-coordinator cross-attestation, network outlier detection, and sliding-window trust scoring each
+          address a different attack vector. No single layer is perfect, but together they raise the cost of cheating
+          well beyond any possible reward.
         </p>
 
         <div class="info-callout">
@@ -612,7 +620,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.445 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.449 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

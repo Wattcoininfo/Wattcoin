@@ -513,7 +513,7 @@ function createHandlers(deps) {
           }
           try {
             console.warn(
-              `[PeerProbe] submit body probeWallClockMs=${typeof result.probeWallClockMs === 'number' ? Math.round(result.probeWallClockMs) : '?'} id=${result.id} N=${result._probeIterations || '?'} intDateMs=${typeof result._intDateMs === 'number' ? Math.round(result._intDateMs) : '?'} warmupTotal=${typeof result._warmupTotalMs === 'number' ? Math.round(result._warmupTotalMs) : '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
+              `[PeerProbe] submit body probeWallClockMs=${typeof result.probeWallClockMs === 'number' ? Math.round(result.probeWallClockMs) : '?'} id=${result.id} N=${result.iterations || '?'} intDateMs=${typeof result._intDateMs === 'number' ? Math.round(result._intDateMs) : '?'} warmupTotal=${typeof result._warmupTotalMs === 'number' ? Math.round(result._warmupTotalMs) : '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
             );
             const body = {
               probeId: result.id || '',
@@ -524,6 +524,16 @@ function createHandlers(deps) {
               hardwareSpec: hardwareSpec,
               loadPercent: hwAuthority.currentLoadPercent,
               version: getAppDisplayVersion(),
+              vdfSteps: typeof result.vdfSteps === 'number' ? result.vdfSteps : undefined,
+              vdfDiscriminantSize:
+                typeof result.vdfDiscriminantSize === 'number' ? result.vdfDiscriminantSize : undefined,
+              vdfInput: typeof result.vdfInput === 'string' ? result.vdfInput : undefined,
+              vdfOutput: typeof result.vdfOutput === 'string' ? result.vdfOutput : undefined,
+              vdfProof: typeof result.vdfProof === 'string' ? result.vdfProof : undefined,
+              vdfTimingMs: typeof result.vdfTimingMs === 'number' ? result.vdfTimingMs : undefined,
+              iterations: typeof result.iterations === 'number' ? result.iterations : undefined,
+              shares: Array.isArray(result.shares) ? result.shares : undefined,
+              shareCount: typeof result.shareCount === 'number' ? result.shareCount : undefined,
             };
             let verdict;
             const wsConn = _probeConns.find((c) => c.peerUrl === peerUrl);
@@ -752,6 +762,15 @@ function createHandlers(deps) {
         probeWallClockMs: typeof msg.probeWallClockMs === 'number' ? msg.probeWallClockMs : undefined,
         loadPercent: typeof msg.loadPercent === 'number' ? msg.loadPercent : undefined,
         version: msg.version || '',
+        vdfSteps: typeof msg.vdfSteps === 'number' ? msg.vdfSteps : undefined,
+        vdfDiscriminantSize: typeof msg.vdfDiscriminantSize === 'number' ? msg.vdfDiscriminantSize : undefined,
+        vdfInput: typeof msg.vdfInput === 'string' ? msg.vdfInput : undefined,
+        vdfOutput: typeof msg.vdfOutput === 'string' ? msg.vdfOutput : undefined,
+        vdfProof: typeof msg.vdfProof === 'string' ? msg.vdfProof : undefined,
+        vdfTimingMs: typeof msg.vdfTimingMs === 'number' ? msg.vdfTimingMs : undefined,
+        iterations: typeof msg.iterations === 'number' ? msg.iterations : undefined,
+        shares: Array.isArray(msg.shares) ? msg.shares : undefined,
+        shareCount: typeof msg.shareCount === 'number' ? msg.shareCount : undefined,
       };
       const hardwareSpec = msg.hardwareSpec || null;
       const probeRoundId = getCurrentNetworkRoundId();

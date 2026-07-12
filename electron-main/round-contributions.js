@@ -1,7 +1,8 @@
 'use strict';
 
 const { getGpuTdpW, getExpectedCpuSpeedOps } = require('./hardware-tables.cjs');
-const { PROBE_INTERVAL_MS, PROBE_CPU_ITERS } = require('./backend-benchmark');
+const { PROBE_INTERVAL_MS } = require('./backend-benchmark');
+const { estimateVdfTimingMs } = require('./vdf');
 
 const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
 
@@ -72,7 +73,7 @@ function createRoundContributions(deps) {
       for (const receipt of receiptsForClaimedIndex.values()) {
         if (receipt.hwPowerW <= 0) continue;
         let cap = receipt.hwPowerW;
-        if (receipt.type === 'gpu' && Array.isArray(receipt.gpuModels) && receipt.gpuModels.length > 0) {
+        if (receipt.type === 'gpu-pow' && Array.isArray(receipt.gpuModels) && receipt.gpuModels.length > 0) {
           const model = receipt.gpuModels[0];
           if (model) {
             try {
@@ -95,17 +96,20 @@ function createRoundContributions(deps) {
         }
         if (receipt.wallClockMs > 10) {
           try {
-            if (receipt.type === 'gpu') {
-              const product = receipt.hwPowerW * receipt.wallClockMs;
-              const MAX_GPU_PROBE_PRODUCT = 120_000;
-              if (product > MAX_GPU_PROBE_PRODUCT) {
-                const powerFromTiming = Math.round(MAX_GPU_PROBE_PRODUCT / receipt.wallClockMs);
-                if (powerFromTiming > 0 && powerFromTiming < cap) cap = powerFromTiming;
+            // Use VDF-derived timing when the receipt has a valid VDF proof.
+            // This replaces the coordinator's wall clock as the authoritative timing source.
+            let effectiveTimingMs = receipt.wallClockMs;
+            if (receipt.vdfSteps > 0 && receipt.vdfDiscriminantSize > 0) {
+              const vdfMs = estimateVdfTimingMs(receipt.vdfSteps, receipt.vdfDiscriminantSize);
+              if (vdfMs > 0) effectiveTimingMs = vdfMs;
+            }
+            if (receipt.type === 'cpu') {
+              const cpuIters = receipt.iterations || 0;
+              if (cpuIters > 0) {
+                const measuredCpuOpsPerSec = (cpuIters / effectiveTimingMs) * 1000;
+                const timingCap = Math.round(measuredCpuOpsPerSec / 10);
+                if (timingCap > 0 && timingCap < cap) cap = timingCap;
               }
-            } else if (receipt.type === 'cpu') {
-              const measuredCpuOpsPerSec = (PROBE_CPU_ITERS / receipt.wallClockMs) * 1000;
-              const timingCap = Math.round(measuredCpuOpsPerSec / 10);
-              if (timingCap > 0 && timingCap < cap) cap = timingCap;
             }
           } catch (_) {
             /* ignore timing cap failure */

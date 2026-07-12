@@ -45,7 +45,6 @@ async function run() {
     assert.strictEqual(profile.minCpuOpsPerSec, 100_000);
     assert.strictEqual(profile.minMemoryMBps, 400);
     assert.strictEqual(profile.spotCheckProbability, 0.05);
-    assert.strictEqual(profile.requireGpuProof, false);
   });
 
   await test('normalizeRemoteProfile caps maxCapW at conservativeCapW minimum', () => {
@@ -83,11 +82,6 @@ async function run() {
   await test('normalizeRemoteProfile match returns true when no regexes set', () => {
     const profile = normalizeRemoteProfile({ id: 'any' });
     assert.ok(profile.match({ deviceType: 'whatever', cpu: 'any', gpu: 'anything' }));
-  });
-
-  await test('normalizeRemoteProfile captures requireGpuProof flag', () => {
-    const profile = normalizeRemoteProfile({ id: 'p1', requireGpuProof: true });
-    assert.strictEqual(profile.requireGpuProof, true);
   });
 
   // ─── buildAttestationMessage ────────────────────────────────────────────────

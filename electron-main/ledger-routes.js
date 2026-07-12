@@ -104,6 +104,16 @@ function createLedgerRequestHandler(ctx) {
           probeWallClockMs: body && typeof body.probeWallClockMs === 'number' ? body.probeWallClockMs : undefined,
           loadPercent: body && typeof body.loadPercent === 'number' ? body.loadPercent : undefined,
           version: body && typeof body.version === 'string' ? body.version : '',
+          vdfSteps: body && typeof body.vdfSteps === 'number' ? body.vdfSteps : undefined,
+          vdfDiscriminantSize:
+            body && typeof body.vdfDiscriminantSize === 'number' ? body.vdfDiscriminantSize : undefined,
+          vdfInput: body && typeof body.vdfInput === 'string' ? body.vdfInput : undefined,
+          vdfOutput: body && typeof body.vdfOutput === 'string' ? body.vdfOutput : undefined,
+          vdfProof: body && typeof body.vdfProof === 'string' ? body.vdfProof : undefined,
+          vdfTimingMs: body && typeof body.vdfTimingMs === 'number' ? body.vdfTimingMs : undefined,
+          iterations: body && typeof body.iterations === 'number' ? body.iterations : undefined,
+          shares: body && Array.isArray(body.shares) ? body.shares : undefined,
+          shareCount: body && typeof body.shareCount === 'number' ? body.shareCount : undefined,
         };
         const hardwareSpec = body && typeof body.hardwareSpec === 'object' ? body.hardwareSpec : null;
         const probeRoundId = getCurrentNetworkRoundId();
