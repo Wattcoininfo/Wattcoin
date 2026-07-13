@@ -46,7 +46,7 @@ function nftTx(id, nonce = 0) {
   return { id, type: 'nft_mint', from, to, nftId: `NFT-${id}`, nonce, timestamp, sig };
 }
 
-// ── Test 1: Same-fee ordering divergence ─────────────────────────────────────
+// ── Test 1: Same-fee ordering is deterministic (fix for divergence) ───────────
 
 function testSameFeeOrderingDivergence() {
   const poolA = new Mempool();
@@ -65,26 +65,15 @@ function testSameFeeOrderingDivergence() {
   const orderA = poolA.getTxs().map((t) => t.id);
   const orderB = poolB.getTxs().map((t) => t.id);
 
-  // JS Array.sort is stable: equal-fee txs retain insertion order.
-  // Peers with different insertion orders therefore get different block proposals.
+  // Same-fee txs are now sorted by txid hash, so both peers produce the
+  // same deterministic order regardless of insertion order.
   assert.deepStrictEqual(
     orderA,
-    ['fee-tx-1', 'fee-tx-2', 'fee-tx-3'],
-    'pool A should return txs in insertion order when all fees are equal',
-  );
-  assert.deepStrictEqual(
     orderB,
-    ['fee-tx-3', 'fee-tx-2', 'fee-tx-1'],
-    'pool B should return txs in its own insertion order',
-  );
-  assert.notDeepStrictEqual(
-    orderA,
-    orderB,
-    'RISK CONFIRMED: same-fee txs in different insertion order produce different block ' +
-      'proposals → different block hashes → BFT vote fragmentation across peers',
+    'same-fee txs must produce identical order across peers regardless of insertion order',
   );
 
-  console.log('[PASS] mempool: same-fee ordering divergence confirmed', { orderA, orderB });
+  console.log('[PASS] mempool: same-fee ordering is deterministic across peers', { orderA, orderB });
 }
 
 // ── Test 2: txs survive indefinitely (no time-based eviction) ────────────────

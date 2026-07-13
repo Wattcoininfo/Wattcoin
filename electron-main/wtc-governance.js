@@ -726,13 +726,13 @@ class GovernanceStore {
             console.warn(
               `[GovernanceStore] Block records ${pipId} as 'passed' at height ${block.height} ` +
                 `(for=${blockFor}), but local tally is for=${localFor} < threshold=${threshold}. ` +
-                `Verify this proposal's gossip coverage — result may be forged.`,
+                `Result may be forged — accepting for chain sync.`,
             );
           } else if (outcome === 'rejected' && localFor >= threshold) {
             console.warn(
               `[GovernanceStore] Block records ${pipId} as 'rejected' at height ${block.height} ` +
                 `(for=${blockFor}), but local tally is for=${localFor} >= threshold=${threshold}. ` +
-                `This block may have been reorged or the governance_result is forged.`,
+                `Result may be forged — accepting for chain sync.`,
             );
           }
         }
@@ -809,6 +809,10 @@ class GovernanceStore {
     if (!vote) return false;
     if (tx.governanceData.outcome === 'passed' && vote.vote !== 'for') return false;
 
+    const threshold = this._getPassThreshold();
+    if (tx.governanceData.outcome === 'passed' && (p.voteTallies.for || 0) < threshold) return false;
+    if (tx.governanceData.outcome === 'rejected' && (p.voteTallies.for || 0) >= threshold) return false;
+
     const sigFields = {
       id: tx.id,
       type: tx.type,
@@ -830,6 +834,33 @@ class GovernanceStore {
     } catch (_) {
       return false;
     }
+  }
+
+  /**
+   * Consensus-level check: reject a governance_result tx in a block when the
+   * claimed outcome is inconsistent with local vote tallies.
+   * Returns null if valid, or a rejection reason string.
+   *
+   * Only enforced when the node has vote data for the proposal (i.e. not
+   * during initial chain sync from genesis where votes haven't been seen yet).
+   */
+  validateGovernanceResultInBlock(tx) {
+    if (!tx || !tx.governanceData) return null;
+    const { pipId, outcome } = tx.governanceData;
+    const p = this._proposals[pipId];
+    if (!p) return null;
+    if (p.status !== STATUS_ACTIVE) return null;
+    if (Object.keys(p.votes).length === 0) return null;
+
+    const threshold = this._getPassThreshold();
+    const localFor = p.voteTallies.for || 0;
+    if (outcome === 'passed' && localFor < threshold) {
+      return `governance_result claims '${outcome}' but local tally for=${localFor} < threshold=${threshold}`;
+    }
+    if (outcome === 'rejected' && localFor >= threshold) {
+      return `governance_result claims '${outcome}' but local tally for=${localFor} >= threshold=${threshold}`;
+    }
+    return null;
   }
 }
 

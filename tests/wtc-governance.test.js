@@ -422,7 +422,7 @@ async function run() {
       const store = makeStore(
         dir,
         makeNftStoreMock({
-          [kp.address]: [{ nftId: 'vhpn-vt-1', metadata: { tier: 'gold', shares: 50 } }],
+          [kp.address]: [{ nftId: 'vhpn-vt-1', metadata: { tier: 'gold', shares: 80 } }],
         }),
       );
       const now = Date.now();
@@ -441,7 +441,7 @@ async function run() {
       silenceLogs(() => {
         store.addVote('pip-validate', {
           voter: kp.address,
-          power: 5,
+          power: 80,
           nftTier: 'gold',
           nftId: 'vhpn-vt-1',
           vote: 'for',
@@ -449,6 +449,7 @@ async function run() {
           timestamp: now + 1000,
         });
       });
+      // totalPower=80, threshold=Math.floor(80/2)+1=41, voteTallies.for=80 >= 41
       const tx = makeGovernanceResultTx({
         pipId: 'pip-validate',
         outcome: 'passed',

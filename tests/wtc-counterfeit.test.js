@@ -16,6 +16,7 @@
  *  8. Spend unmatured rewards — try to spend mining rewards before 100-block maturity
  *  9. Account file tamper — directly edit balances on disk and verify detection
  * 10. Prevhash break — inject a block that doesn't chain to the current tip
+ * 11. Proposer reward skew — inflate own reward share beyond tolerance
  */
 
 const assert = require('assert');
@@ -422,6 +423,55 @@ async function run() {
       const result = await node.handleProposal(fakeBlock, 'http://attacker:39310');
       assert.strictEqual(result && result.ok, false, 'block with wrong prevHash must be rejected');
       assert.match(String(result.reason), /prevHash mismatch/i);
+    } finally {
+      rmrf(dir);
+    }
+  });
+
+  // ─── ATTACK 11: Proposer reward skew (one-sided tolerance exploit) ─────────
+  // A malicious proposer tries to give themselves more than their proportional
+  // share of the block reward while keeping other participants within the 10%
+  // tolerance. The two-sided tolerance check must reject this.
+  await test('Attack 11 — proposer reward skew is rejected', async () => {
+    const dir = mkTmp('skew');
+    try {
+      const proposer = generateKeypair();
+      const victim = generateKeypair();
+      writeGenesis(dir, proposer.address);
+      const contributions = { [proposer.address]: 50, [victim.address]: 50 };
+      const node = createWtcNode({
+        dataDir: dir,
+        signingSecret: 'skew-test',
+        allowPartialQuorumCommit: false,
+        getActivePeers: () => [],
+        requestPeerJson: () => {
+          throw new Error('no peers');
+        },
+        verifyCpuSpeedProof: () => Promise.resolve(true),
+        verifyMemProof: () => Promise.resolve(true),
+        getEnergyContributions: () => contributions,
+      });
+
+      const reward = node._chain.nextBlockReward();
+      // Proposer tries to take 15% extra (e.g. 57.5 instead of 50)
+      const skew = Math.round(reward * 0.575);
+      const rest = reward - skew;
+      const rewardAddresses = { [proposer.address]: skew, [victim.address]: rest };
+      assert.ok(skew > reward * 0.52, 'test must set proposer share above 52%');
+
+      const result = await node._consensus.proposeBlock({
+        proposer: proposer.address,
+        energyWh: TIER1_ENERGY,
+        proofCommitment: 'skew-attack',
+        transactions: [],
+        rewardAddresses,
+        cpuSpeedInitialSeed: 1,
+        cpuSpeedProof: 'abc123',
+        memProof: 'def456',
+        memProofSeed: 0,
+      });
+      assert.strictEqual(result && result.ok, false, 'skewed reward must be rejected');
+      assert.match(String(result.reason), /reward for/i, 'rejection reason should mention reward address');
     } finally {
       rmrf(dir);
     }

@@ -493,8 +493,10 @@ class Consensus {
             const actualAmt = Number((block.rewardAddresses || {})[addr]) || 0;
             // Allow small rounding differences (0.001 tokens) and a 10%
             // tolerance for in-flight contributions the peer may have missed.
+            // Two-sided: a proposer must not inflate their own reward above
+            // the witnessed proportion either.
             const tolerance = Math.max(0.001, expectedAmt * 0.1);
-            if (actualAmt < expectedAmt - tolerance) {
+            if (actualAmt < expectedAmt - tolerance || actualAmt > expectedAmt + tolerance) {
               return `reward for ${addr}: got ${actualAmt}, expected ~${expectedAmt} based on witnessed contributions`;
             }
           }
@@ -590,6 +592,14 @@ class Consensus {
           const sortedKeys = Object.keys(sigFields).sort();
           const sigInput = JSON.stringify(sigFields, sortedKeys);
           if (!wtcVerify(txHash(sigInput), tx.sig, tx.from)) return `tx ${i} signature mismatch`;
+
+          // Enforce quorum: reject blocks where governance_result claims an
+          // outcome inconsistent with local vote tallies.
+          if (this._governance && tx.governanceData) {
+            const govErr = this._governance.validateGovernanceResultInBlock(tx);
+            if (govErr) return `tx ${i}: ${govErr}`;
+          }
+
           continue;
         }
         // Governance wallet transfers include governanceTransferRef in the

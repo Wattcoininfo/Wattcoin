@@ -274,7 +274,13 @@ class Mempool {
    * Used by the block proposer to choose which transactions to include.
    */
   getTxs(maxCount = 500) {
-    return [...this._txs.values()].sort((a, b) => (b.fee || 0) - (a.fee || 0)).slice(0, maxCount);
+    return [...this._txs.values()]
+      .sort((a, b) => {
+        const feeDiff = (b.fee || 0) - (a.fee || 0);
+        if (feeDiff !== 0) return feeDiff;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+      })
+      .slice(0, maxCount);
   }
 
   // ─── Factory ──────────────────────────────────────────────────────────────
