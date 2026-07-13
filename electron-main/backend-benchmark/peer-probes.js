@@ -25,7 +25,13 @@ const {
   getWorkerRtt,
 } = require('./worker-state');
 const { PROBE_TIMEOUT_MS } = require('./local-probes');
-const { vdfVerify, deriveVdfInput, estimateVdfTimingMs } = require('../vdf');
+const {
+  vdfVerify,
+  deriveVdfInput,
+  estimateVdfTimingMs,
+  DEFAULT_VDF_DIFFICULTY,
+  DEFAULT_VDF_DISCRIMINANT_BITS,
+} = require('../vdf');
 
 // --- Peer probe API (coordinator side) ----------------------------------------
 // When this node acts as a ledger coordinator it issues probes TO other workers.
@@ -77,12 +83,32 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
     issuedAt: now,
     params:
       type === 'cpu'
-        ? { seed, durationMs: PROBE_CPU_DURATION_MS }
+        ? {
+            seed,
+            durationMs: PROBE_CPU_DURATION_MS,
+            vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
+            vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
+          }
         : type === 'memory'
-          ? { arraySeed: seed, durationMs: PROBE_MEM_DURATION_MS, entries: PROBE_MEM_ENTRIES }
+          ? {
+              arraySeed: seed,
+              durationMs: PROBE_MEM_DURATION_MS,
+              entries: PROBE_MEM_ENTRIES,
+              vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
+              vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
+            }
           : type === 'gpu-pow'
-            ? { seed, difficulty: PROBE_GPU_POW_DIFFICULTY }
-            : /* asic */ { minShares: 3 },
+            ? {
+                seed,
+                difficulty: PROBE_GPU_POW_DIFFICULTY,
+                vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
+                vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
+              }
+            : /* asic */ {
+                minShares: 3,
+                vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
+                vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
+              },
   };
 
   // ASIC liveness challenge: generate a random 32-byte prevHash that the worker
@@ -181,30 +207,44 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   if (!result.vdfProof || !result.vdfOutput || !(result.vdfSteps > 0)) {
     issues.push('vdf_missing');
   } else {
-    const currentChain = workerChainState.get(entry.workerId) || { chainIndex: 0 };
-    vdfChainIndex = currentChain.chainIndex;
-    const vdfChallenge = deriveVdfInput(result.id, entry.workerId, vdfChainIndex);
-    vdfVerified = vdfVerify({
-      challenge: vdfChallenge,
-      difficulty: result.vdfSteps,
-      discriminantSizeBits: result.vdfDiscriminantSize || 512,
-      proof: result.vdfProof,
-    });
-    if (!vdfVerified) {
-      issues.push('vdf_invalid');
+    // Enforce coordinator-specified VDF difficulty — worker must use the exact
+    // difficulty and discriminant size the coordinator issued in the probe.
+    const requiredDifficulty = entry.probe.params.vdfDifficulty || DEFAULT_VDF_DIFFICULTY;
+    const requiredDiscriminant = entry.probe.params.vdfDiscriminantSize || DEFAULT_VDF_DISCRIMINANT_BITS;
+    if (result.vdfSteps !== requiredDifficulty) {
+      issues.push(
+        `vdf difficulty mismatch: worker used ${result.vdfSteps}, coordinator required ${requiredDifficulty}`,
+      );
+    } else if ((result.vdfDiscriminantSize || 512) !== requiredDiscriminant) {
+      issues.push(
+        `vdf discriminant mismatch: worker used ${result.vdfDiscriminantSize || 512}, coordinator required ${requiredDiscriminant}`,
+      );
     } else {
-      // Worker's measured VDF elapsed time is the authoritative timing source.
-      const measuredMs = typeof result.vdfTimingMs === 'number' && result.vdfTimingMs > 0 ? result.vdfTimingMs : 0;
-      const estimatedMs = estimateVdfTimingMs(result.vdfSteps, result.vdfDiscriminantSize || 512);
-      if (measuredMs > 0) {
-        // Sanity check: measured time must be at least 20% of the theoretical
-        // minimum (squarings take real CPU time — nothing is instant).
-        if (measuredMs < estimatedMs * 0.2) {
-          issues.push(`vdf measured time ${measuredMs}ms suspiciously below estimate ${Math.round(estimatedMs)}ms`);
-        }
-        vdfTimingMs = measuredMs;
+      const currentChain = workerChainState.get(entry.workerId) || { chainIndex: 0 };
+      vdfChainIndex = currentChain.chainIndex;
+      const vdfChallenge = deriveVdfInput(result.id, entry.workerId, vdfChainIndex);
+      vdfVerified = vdfVerify({
+        challenge: vdfChallenge,
+        difficulty: result.vdfSteps,
+        discriminantSizeBits: result.vdfDiscriminantSize || 512,
+        proof: result.vdfProof,
+      });
+      if (!vdfVerified) {
+        issues.push('vdf_invalid');
       } else {
-        issues.push('vdf_missing');
+        // Worker's measured VDF elapsed time is the authoritative timing source.
+        const measuredMs = typeof result.vdfTimingMs === 'number' && result.vdfTimingMs > 0 ? result.vdfTimingMs : 0;
+        const estimatedMs = estimateVdfTimingMs(result.vdfSteps, result.vdfDiscriminantSize || 512);
+        if (measuredMs > 0) {
+          // Sanity check: measured time must be at least 60% of the theoretical
+          // minimum (squarings take real CPU time — nothing is instant).
+          if (measuredMs < estimatedMs * 0.6) {
+            issues.push(`vdf measured time ${measuredMs}ms suspiciously below estimate ${Math.round(estimatedMs)}ms`);
+          }
+          vdfTimingMs = measuredMs;
+        } else {
+          issues.push('vdf_missing');
+        }
       }
     }
   }
@@ -329,7 +369,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       const asicTimingMs = vdfTimingMs > 0 ? vdfTimingMs : wallClockMs;
       if (proofValid && expectedTHs > 0 && shares.length > 0) {
         const expectedMs = ((shares.length * STRATUM_DIFFICULTY * 4294967296) / (expectedTHs * 1e12)) * 1000;
-        if (asicTimingMs > 0 && asicTimingMs < expectedMs * 0.1) {
+        if (asicTimingMs > 0 && asicTimingMs < expectedMs * 0.6) {
           issues.push(
             `asic peer-probe suspiciously fast: ${Math.round(asicTimingMs)}ms for ${shares.length} shares ` +
               `(expected ~${Math.round(expectedMs)}ms at ${expectedTHs.toFixed(4)} TH/s, diff=${STRATUM_DIFFICULTY})`,

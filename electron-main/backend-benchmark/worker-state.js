@@ -8,7 +8,7 @@ function appendWorkerHwSample(samples, newValue) {
   if (!isFinite(newValue) || newValue <= 0) return samples;
   if (samples.length >= WORKER_HW_ENROLL_COUNT) {
     const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-    if (newValue > mean * 3.0 || newValue < mean / 3.0) return samples;
+    if (newValue > mean * 1.4 || newValue < mean / 1.4) return samples;
   }
   const updated = [...samples, newValue];
   return updated.length > WORKER_HW_HISTORY_MAX ? updated.slice(updated.length - WORKER_HW_HISTORY_MAX) : updated;

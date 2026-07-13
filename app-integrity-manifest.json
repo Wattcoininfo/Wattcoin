@@ -7,7 +7,7 @@
   "local-stratum.js": "39925b02f2493435182815aefb2c26f99d80ddddd0d6635b0ba05c9a529f4279",
   "cpu-load-worker.js": "f4d8829518ac4ffc31b9b95386a3d9c5db16c1c9519209275e683e68886cfe56",
   "ddr-load-worker.js": "cdc43afa5df21c2bc58e3078fa5c061cba0194c067b335c979955cb88cb4f656",
-  "probe-attestation.js": "4cfe784f46bbdf555cfc1c609dab578830708535a8ee65a763fc9da4da54d780",
+  "probe-attestation.js": "c0d789584798507d6133b8cba33819c817306e706ec31f056038efb81a2ded9b",
   "wtc-node.js": "e93369a34f2a2357cbffaa40194322509249cf5e5aa00f1bbf3a58e80640f0c7",
   "wtc-consensus.js": "2184b9ff9d0524847bee0d7ddc497ee2d0ece8a7ad7d2a1a6714c94b6380bbf3",
   "wtc-chain.js": "0a97b81fda90ba790b471958fa65d089ef669cd3a4dd7a0acff046b2ca46c212",

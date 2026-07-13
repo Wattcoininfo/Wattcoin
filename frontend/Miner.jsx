@@ -1793,8 +1793,8 @@ export default function Miner({
               if (vdfInputRes && vdfInputRes.ok) {
                 return window.wattcoinHardware.invoke('wattcoin-vdf-evaluate', {
                   challenge: vdfInputRes.challenge,
-                  difficulty: 2000,
-                  discriminantSizeBits: 512,
+                  difficulty: probe.params.vdfDifficulty || 2000,
+                  discriminantSizeBits: probe.params.vdfDiscriminantSize || 512,
                 });
               }
               return null;

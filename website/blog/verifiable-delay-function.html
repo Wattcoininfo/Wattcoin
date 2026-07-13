@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Verifiable Delay Function — Wattcoin's Cryptographic Clock | Wattcoin Blog</title>
+    <meta
+      name="description"
+      content="How Wattcoin uses Wesolowski VDFs to prove elapsed computation time, prevent probe replay attacks, and replace wall-clock timing with cryptographic certainty."
+    />
+    <link rel="canonical" href="https://wattcoin.ee/blog/verifiable-delay-function.html" />
+    <meta
+      property="og:title"
+      content="The Verifiable Delay Function — Wattcoin's Cryptographic Clock | Wattcoin Blog"
+    />
+    <meta
+      property="og:description"
+      content="How Wattcoin uses Wesolowski VDFs to prove elapsed computation time, prevent probe replay attacks, and replace wall-clock timing with cryptographic certainty."
+    />
+    <meta property="og:url" content="https://wattcoin.ee/blog/verifiable-delay-function.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Wattcoin" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Wattcoin Foundation" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="The Verifiable Delay Function — Wattcoin's Cryptographic Clock | Wattcoin Blog"
+    />
+    <meta
+      name="twitter:description"
+      content="How Wattcoin uses Wesolowski VDFs to prove elapsed computation time, prevent probe replay attacks, and replace wall-clock timing with cryptographic certainty."
+    />
+    <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/assets/icons/icon-256.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://wattcoin.ee/blog/verifiable-delay-function.html#article",
+            "headline": "The Verifiable Delay Function — Wattcoin's Cryptographic Clock",
+            "url": "https://wattcoin.ee/blog/verifiable-delay-function.html",
+            "datePublished": "2026-07-13",
+            "author": {
+              "@type": "Organization",
+              "name": "Wattcoin Foundation"
+            },
+            "publisher": {
+              "@id": "https://wattcoin.ee/#organization"
+            },
+            "description": "How Wattcoin uses Wesolowski VDFs to prove elapsed computation time, prevent probe replay attacks, and replace wall-clock timing with cryptographic certainty.",
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://wattcoin.ee/blog/verifiable-delay-function.html"
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://wattcoin.ee/blog/verifiable-delay-function.html#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://wattcoin.ee/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": "https://wattcoin.ee/blog.html"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "The Verifiable Delay Function — Wattcoin's Cryptographic Clock",
+                "item": "https://wattcoin.ee/blog/verifiable-delay-function.html"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: #060e06;
+        background-image:
+          linear-gradient(rgba(26, 58, 26, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(26, 58, 26, 0.12) 1px, transparent 1px);
+        background-size: 60px 60px;
+        color: #e8f5e8;
+        font-family: Georgia, serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: #4ade80;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: rgba(6, 14, 6, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #1a2a1a;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        padding: 0 24px;
+      }
+      .nav-logo {
+        font-family: 'Playfair Display', serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: #e8f5e8;
+        text-decoration: none;
+      }
+      .nav-logo:hover {
+        text-decoration: none;
+      }
+      .nav-logo span {
+        color: #4ade80;
+      }
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #6b9a6b;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: #4ade80;
+      }
+      .nav-links a.nav-blog {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .nav-links a.nav-wallet {
+        color: #fbbf24;
+      }
+      .nav-links a.nav-wallet:hover {
+        color: #fde68a;
+      }
+
+      @media (max-width: 860px) {
+        nav {
+          height: auto;
+          min-height: 56px;
+          padding: 10px 16px;
+          flex-wrap: wrap;
+          gap: 8px 0;
+        }
+        .nav-links {
+          width: 100%;
+          gap: 6px 10px;
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+      }
+
+      .post-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 60px;
+      }
+      .post-card {
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        border-radius: 10px;
+        padding: 18px 22px;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        transition: border-color 0.2s;
+      }
+      .post-card:hover {
+        border-color: #4ade8050;
+      }
+      .post-card-num {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #4ade80;
+        min-width: 28px;
+        text-align: center;
+      }
+      .post-card h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 16px;
+        font-weight: 700;
+        color: #d7ffd9;
+      }
+      .post-card p {
+        font-size: 13px;
+        color: #6b8f6b;
+        line-height: 1.5;
+        margin-top: 3px;
+      }
+
+      .blog-post {
+        padding: 60px 0;
+      }
+      .blog-post h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(24px, 3.5vw, 32px);
+        font-weight: 900;
+        color: #e8f5e8;
+        margin-bottom: 20px;
+        letter-spacing: -0.02em;
+      }
+      .blog-post h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 20px;
+        font-weight: 700;
+        color: #d7ffd9;
+        margin: 28px 0 12px;
+      }
+      .blog-post h4 {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        color: #4ade80;
+        letter-spacing: 0.06em;
+        margin: 18px 0 6px;
+        text-transform: uppercase;
+      }
+      .blog-post p {
+        font-size: 16px;
+        color: #9ac79f;
+        line-height: 1.85;
+        margin-bottom: 16px;
+      }
+      .blog-post p strong {
+        color: #e8f5e8;
+      }
+      .blog-post ul,
+      .blog-post ol {
+        font-size: 15px;
+        color: #9ac79f;
+        line-height: 1.8;
+        margin: 0 0 16px 24px;
+      }
+      .blog-post li {
+        margin-bottom: 6px;
+      }
+      .blog-post li strong {
+        color: #e8f5e8;
+      }
+      .blog-post code {
+        font-family: 'DM Mono', monospace;
+        font-size: 14px;
+        color: #4ade80;
+        background: #0a1a0a;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .blog-post .meta {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link {
+        display: inline-block;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link:hover {
+        color: #4ade80;
+      }
+
+      .viz-box {
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        color: #4ade80;
+        background: #0a1a0a;
+        padding: 16px 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        line-height: 1.7;
+        overflow-x: auto;
+      }
+      .info-callout {
+        background: #0a1a0a;
+        border-left: 3px solid #4ade80;
+        border-radius: 0 8px 8px 0;
+        padding: 16px 20px;
+        margin: 20px 0;
+        font-size: 14px;
+        color: #b7f5bc;
+        line-height: 1.7;
+      }
+      .info-callout strong {
+        color: #4ade80;
+      }
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: 14px;
+      }
+      .comparison-table th {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #4ade80;
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid #1a3a1a;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .comparison-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #0e1e0e;
+        color: #9ac79f;
+      }
+      .comparison-table tr:hover td {
+        background: #0a1a0a;
+      }
+      .tag-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .tag {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        padding: 3px 10px;
+        border-radius: 99px;
+        border: 1px solid #4ade8050;
+        color: #4ade80;
+        letter-spacing: 0.06em;
+      }
+
+      footer {
+        padding: 40px;
+        text-align: center;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        border-top: 1px solid #1e3a1e;
+      }
+      footer a {
+        color: #7aaa7a;
+      }
+      footer a:hover {
+        color: #4ade80;
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          padding: 0 16px;
+        }
+        .blog-post {
+          padding: 40px 0;
+        }
+        .post-card {
+          flex-direction: column;
+          text-align: center;
+        }
+        .viz-box {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="nav-logo">Watt<span>coin</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/wattcoin-whitepaper.html" class="nav-whitepaper">Whitepaper</a></li>
+        <li><a href="/blog.html" class="nav-blog">Blog</a></li>
+        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
+      </ul>
+    </nav>
+    <div style="padding-top: 100px">
+      <div class="container">
+        <article class="blog-post" id="verifiable-delay-function">
+          <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
+          <div class="tag-row">
+            <span class="tag">Protocol</span>
+            <span class="tag">Cryptography</span>
+            <span class="tag">Security</span>
+          </div>
+          <h1>The Verifiable Delay Function — Wattcoin's Cryptographic Clock</h1>
+          <div class="meta">July 13, 2026 &nbsp;&mdash;&nbsp; 8 min read</div>
+
+          <h2>The Timing Problem</h2>
+          <p>
+            In any system where compensation depends on how long work takes, the obvious question arises:
+            <em>how do you prove how much time elapsed?</em> A miner could claim a probe took 1000 ms when it actually
+            took 200 ms, inflating their measured throughput by 5&times;.
+          </p>
+          <p>
+            Na&iuml;ve solutions don't work. The coordinator could measure wall-clock time, but network round-trip
+            latency adds noise. The worker could self-report its timing, but a dishonest worker would simply lie.
+            Hardware clocks can be manipulated. Even cryptographic hash functions — the backbone of Proof-of-Work — can
+            be parallelized, so they prove <em>total</em> computation, not <em>elapsed</em> time.
+          </p>
+          <p>
+            Wattcoin solves this with a <strong>Verifiable Delay Function (VDF)</strong> — a cryptographic primitive
+            that takes a minimum amount of sequential time to compute, yet can be verified almost instantly. The VDF
+            acts as a cryptographic clock: it proves that at least a certain amount of real time has passed, and no
+            amount of parallelism, caching, or pre-computation can speed it up.
+          </p>
+
+          <h2>What Is a VDF?</h2>
+          <p>A Verifiable Delay Function is a function that satisfies three properties:</p>
+          <ol>
+            <li>
+              <strong>Sequential computation.</strong> The function requires a specified number of sequential steps.
+              Each step depends on the output of the previous step, so parallelism provides no advantage. A computer
+              with 1000 cores computes it at the same speed as a single core.
+            </li>
+            <li>
+              <strong>Efficient verification.</strong> Anyone can verify the output is correct in a fraction of the time
+              it took to compute. A proof that took 1 second to produce can be verified in roughly 1 millisecond.
+            </li>
+            <li>
+              <strong>Deterministic output.</strong> Given the same input and parameters, the VDF always produces the
+              same proof. There is no randomness in the output — the proof is a mathematical certificate of elapsed
+              computation.
+            </li>
+          </ol>
+          <p>
+            The VDF used in Wattcoin is the <strong>Wesolowski VDF scheme</strong>, implemented via the
+            <code>crypto-vdf</code> library (Rust/GMP backend). It is based on repeated squaring in a class group of
+            imaginary quadratic fields — a mathematical structure where squaring is easy but computing square roots is
+            believed to be hard.
+          </p>
+
+          <h2>How Wattcoin Uses VDFs</h2>
+          <p>
+            Every peer probe in Wattcoin is paired with a VDF computation. The VDF serves two critical roles:
+            <strong>proving elapsed time</strong> and <strong>binding the probe to a specific context</strong>.
+          </p>
+
+          <h3>Step 1: Challenge Derivation</h3>
+          <p>
+            When the coordinator issues a probe, it includes a unique <code>probeId</code>. The worker independently
+            derives a 32-byte VDF challenge using SHA-256:
+          </p>
+          <div class="viz-box">
+            challenge = SHA-256("wtc-vdf-v1" &verbar; probeId &verbar; workerId &verbar; chainIndex)
+          </div>
+          <p>
+            This challenge is <strong>deterministic</strong> — given the same probe ID, worker ID, and chain index,
+            every node on the network computes the same challenge. But it is also <strong>unique per context</strong> —
+            changing any of the three inputs produces a completely different challenge. This prevents pre-computation: a
+            worker cannot solve a VDF for a probe that hasn't been issued yet, because the challenge depends on the
+            probe ID.
+          </p>
+
+          <h3>Step 2: Parallel Computation</h3>
+          <p>The worker starts the VDF computation <em>before</em> the benchmark workload. Both run in parallel:</p>
+          <div class="viz-box">
+            Worker receives probe<br />
+            &nbsp;&nbsp;|<br />
+            &nbsp;&nbsp;+--&gt; VDF solve (main process, ~1s)
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br />
+            &nbsp;&nbsp;+--&gt; Benchmark (renderer/hardware, ~1s)<br />
+            &nbsp;&nbsp;|<br />
+            &nbsp;&nbsp;v<br />
+            Total probe time = max(benchmark, VDF)
+          </div>
+          <p>
+            The VDF runs in the Electron main process while CPU, memory, GPU, or ASIC work runs in the renderer or
+            hardware driver. Because they execute on different cores (or even different processes), they don't interfere
+            with each other. Total probe time is the maximum of the two, not the sum.
+          </p>
+
+          <h3>Step 3: Proof Submission</h3>
+          <p>When both computations finish, the worker submits the probe result along with the VDF proof:</p>
+          <ul>
+            <li><code>vdfProof</code> — the hex-encoded Wesolowski proof (~600 bytes)</li>
+            <li><code>vdfOutput</code> — SHA-256 hash of the proof (compact identifier for receipts)</li>
+            <li><code>vdfSteps</code> — the difficulty parameter (number of sequential squarings)</li>
+            <li><code>vdfDiscriminantSize</code> — the bit-length of the discriminant (default 512)</li>
+            <li><code>vdfTimingMs</code> — the worker's self-reported wall-clock time for the VDF computation</li>
+          </ul>
+
+          <h3>Step 4: Coordinator Verification</h3>
+          <p>The coordinator independently verifies the VDF proof. This is the core security check:</p>
+          <ol>
+            <li>
+              <strong>Reconstruct the challenge.</strong> The coordinator computes
+              <code>deriveVdfInput(probeId, workerId, chainIndex)</code> using the same inputs. If the worker submitted
+              a challenge for a different probe, worker, or chain position, verification fails.
+            </li>
+            <li>
+              <strong>Verify the proof.</strong> The coordinator calls
+              <code>vdfVerify({ challenge, difficulty, discriminantSizeBits, proof })</code>. This runs the Rust/GMP
+              verification in ~1 ms. If the proof is invalid — wrong challenge, wrong difficulty, or forged —
+              verification returns <code>false</code>.
+            </li>
+            <li>
+              <strong>Sanity-check timing.</strong> The worker's self-reported <code>vdfTimingMs</code> must be at least
+              <strong>60%</strong> of the theoretical minimum time for those parameters. If a worker claims the VDF
+              solved in 100 ms when the math requires at least 600 ms, the timing is flagged as suspicious.
+            </li>
+            <li>
+              <strong>Use VDF timing as authoritative.</strong> The verified <code>vdfTimingMs</code> replaces the
+              coordinator's wall-clock time for all throughput and energy calculations. This eliminates network RTT
+              inflation and makes the timing cryptographically grounded.
+            </li>
+          </ol>
+
+          <h2>Why VDF Timing Replaces Wall Clock</h2>
+          <p>
+            Without VDFs, the coordinator would measure how long a probe took by recording the timestamp when it issued
+            the probe and subtracting it from the timestamp when the result arrived. This includes:
+          </p>
+          <ul>
+            <li>Network round-trip time (varies from 10 ms to 500+ ms)</li>
+            <li>WebSocket serialization overhead</li>
+            <li>Operating system scheduling delays</li>
+            <li>Clock skew between machines</li>
+          </ul>
+          <p>
+            These factors add noise and can be manipulated. A worker on a slow connection appears slower than it is, and
+            a worker that deliberately delays submission can appear to have taken longer.
+          </p>
+          <p>
+            The VDF eliminates all of these problems. The worker's self-reported <code>vdfTimingMs</code> is the time it
+            actually took to solve the VDF — but this value is only trusted if the proof verifies correctly and the
+            timing passes the sanity check. A worker that lies about its VDF timing either:
+          </p>
+          <ul>
+            <li>Reports a time that's too low &rarr; caught by the 60% sanity threshold</li>
+            <li>
+              Reports a time that's too high &rarr; doesn't help, because the proof's mathematical properties cap the
+              maximum speed
+            </li>
+            <li>Reports a fake proof &rarr; caught immediately by <code>vdfVerify()</code></li>
+          </ul>
+          <p>
+            The result: the coordinator gets a timing measurement that is independent of network conditions and
+            cryptographically bounded to within a reasonable range of the true elapsed time.
+          </p>
+
+          <h2>Anti-Replay: Why Each VDF Is Unique</h2>
+          <p>
+            A subtle but critical property of the VDF system is that each proof is bound to a specific context. The
+            challenge derivation formula ensures that:
+          </p>
+          <ul>
+            <li>
+              <strong>Same probe, different worker</strong> &rarr; different challenge (because <code>workerId</code>
+              changes)
+            </li>
+            <li>
+              <strong>Same worker, different probe</strong> &rarr; different challenge (because <code>probeId</code>
+              changes)
+            </li>
+            <li>
+              <strong>Same probe and worker, different chain position</strong> &rarr; different challenge (because
+              <code>chainIndex</code> changes)
+            </li>
+          </ul>
+          <p>
+            This means a worker cannot pre-compute VDF proofs. The challenge for the next probe is unknown until the
+            coordinator issues it. And even if a worker somehow obtained a valid VDF proof from a previous probe, it
+            could not reuse it — the challenge would be different.
+          </p>
+
+          <h2>Discriminant Sizes and Difficulty</h2>
+          <p>The VDF has two tunable parameters that control the security-vs-performance tradeoff:</p>
+          <table class="comparison-table">
+            <thead>
+              <tr>
+                <th>Discriminant Bits</th>
+                <th>Est. Solve Time</th>
+                <th>Est. Verify Time</th>
+                <th>Use Case</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>256</td>
+                <td>~500 ms</td>
+                <td>~50 ms</td>
+                <td>Fast probes on low-power hardware</td>
+              </tr>
+              <tr>
+                <td>512</td>
+                <td>~1000 ms</td>
+                <td>~135 ms</td>
+                <td>Default for all peer probes</td>
+              </tr>
+              <tr>
+                <td>1024</td>
+                <td>~3000 ms</td>
+                <td>~400 ms</td>
+                <td>Higher-security attestations</td>
+              </tr>
+              <tr>
+                <td>2048</td>
+                <td>~12000 ms</td>
+                <td>~1500 ms</td>
+                <td>Maximum security, rarely used</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            The default configuration uses <strong>512-bit discriminants</strong> with
+            <strong>2000 sequential squarings</strong> (difficulty). This provides roughly 1 second of verifiable
+            computation on a modern CPU, with verification completing in about 135 ms. The discriminant sizes are
+            pre-computed and cached in memory for fast access.
+          </p>
+
+          <h2>VDF in the Signed Receipt</h2>
+          <p>
+            After the coordinator verifies the VDF proof, the VDF fields are included in the signed probe receipt. This
+            receipt is the worker's cryptographic attestation of their energy expenditure:
+          </p>
+          <div class="viz-box">
+            {<br />
+            &nbsp;&nbsp;"version": 2,<br />
+            &nbsp;&nbsp;"probeId": "...",<br />
+            &nbsp;&nbsp;"workerId": "...",<br />
+            &nbsp;&nbsp;"wallClockMs": 1023,<br />
+            &nbsp;&nbsp;"iterations": 48291034,<br />
+            &nbsp;&nbsp;"vdfSteps": 2000,<br />
+            &nbsp;&nbsp;"vdfDiscriminantSize": 512,<br />
+            &nbsp;&nbsp;"vdfInput": "a1b2c3...",<br />
+            &nbsp;&nbsp;"vdfOutput": "d4e5f6...",<br />
+            &nbsp;&nbsp;"vdfProof": "012345...",<br />
+            &nbsp;&nbsp;...<br />
+            }
+          </div>
+          <p>
+            The VDF fields are part of the signed payload, so any tampering with VDF data invalidates the secp256k1
+            signature. The receipt version was bumped from 1 to 2 when VDF support was added, and old v1 receipts remain
+            backward-compatible (VDF fields are simply absent).
+          </p>
+
+          <h2>What VDFs Don't Protect Against</h2>
+          <p>
+            VDFs are powerful but not a complete solution on their own. They prove elapsed time, but they don't prove
+            <em>what work was done during that time</em>. A worker could solve a VDF correctly but submit fabricated
+            benchmark results. This is why the probe system layers multiple protections:
+          </p>
+          <ul>
+            <li>
+              <strong>Computational proof verification</strong> — the coordinator independently re-computes CPU and
+              memory proofs and cryptographically verifies GPU nonces and ASIC shares. A fabricated benchmark is
+              detected even if the VDF is valid.
+            </li>
+            <li>
+              <strong>Hardware identity attestation</strong> — OS-level CPU model, DXGI GPU model from the native
+              binary, and device type cross-checks prevent claiming hardware that isn't installed.
+            </li>
+            <li>
+              <strong>Multi-coordinator cross-attestation</strong> — every miner connects to multiple coordinators that
+              independently issue probes. A single malicious coordinator cannot unilaterally validate fake results.
+            </li>
+            <li>
+              <strong>Trust scoring</strong> — probe results feed into a sliding-window trust score that scales mining
+              power from 20% to 100%. Failed probes penalize the score, and sustained failure rates trigger additional
+              penalties.
+            </li>
+          </ul>
+          <p>
+            The VDF is the <em>timing layer</em> of this stack. It ensures that the time component of every measurement
+            is trustworthy. The other layers ensure that the computation component is trustworthy. Together, they make
+            Proof-of-Energy mining resistant to the full spectrum of timing and computation attacks.
+          </p>
+
+          <h2>Summary</h2>
+          <p>
+            Wattcoin's VDF implementation uses Wesolowski VDFs with 512-bit discriminants and 2000 sequential squarings
+            to create a cryptographic clock that cannot be parallelized, pre-computed, or replayed. Every peer probe
+            derives a unique challenge bound to the probe ID, worker ID, and chain position. The coordinator verifies
+            the proof in ~1 ms and uses the VDF-measured timing as the authoritative source for throughput and energy
+            calculations. The VDF fields are included in signed receipts, making any tampering detectable. While VDFs
+            alone don't prevent all cheating, they provide the timing foundation that makes the rest of the probe
+            system's guarantees possible.
+          </p>
+
+          <div class="info-callout">
+            <strong>Want to learn more?</strong> Read the
+            <a href="/blog/probe-system.html">peer probe system deep dive</a> to see how VDFs fit into the full
+            attestation framework, or check the
+            <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer"
+              >open-source code on GitHub</a
+            >
+            for the VDF implementation in <code>electron-main/vdf.js</code>.
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <footer>
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.451 &nbsp;&mdash;&nbsp;
+      <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
+      <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer">Github</a>
+      &nbsp;&mdash;&nbsp; JULY 2026 <br /><span id="page-visit-count" style="font-size: 10px; color: #3a5a3a"></span>
+    </footer>
+    <script>
+      (function () {
+        'use strict';
+        var BASE = '/counter-api/?page=';
+        function fmt(n) {
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+          return n;
+        }
+        var counted = sessionStorage.getItem('wtc_pg_vdf');
+        var method = counted ? 'GET' : 'POST';
+        if (!counted) sessionStorage.setItem('wtc_pg_vdf', '1');
+        fetch(BASE + 'blog-vdf', { method: method })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('page-visit-count');
+            if (el && d.ok) el.textContent = fmt(d.count);
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>

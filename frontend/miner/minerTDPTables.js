@@ -755,7 +755,7 @@ export const gpuTDPTable = {
   'NVIDIA GeForce RTX 5070 Ti': 300,
   'NVIDIA GeForce RTX 5070': 250,
   'NVIDIA GeForce RTX 5060 Ti': 180,
-  'NVIDIA GeForce RTX 5060': 150,
+  'NVIDIA GeForce RTX 5060': 145,
   // ── NVIDIA GeForce RTX 40 Series ──────────────────────────────────────
   'NVIDIA GeForce RTX 4090': 450,
   'NVIDIA GeForce RTX 4080 SUPER': 320,
@@ -849,7 +849,7 @@ export const gpuTDPTable = {
   'AMD Radeon RX 6650 XT': 180,
   'AMD Radeon RX 6600 XT': 160,
   'AMD Radeon RX 6600': 132,
-  'AMD Radeon RX 6500 XT': 107,
+  'AMD Radeon RX 6500 XT': 113,
   'AMD Radeon RX 6400': 53,
   // ── AMD Radeon RX 5000 Series (RDNA 1) ───────────────────────────────
   'AMD Radeon RX 5700 XT': 225,
@@ -876,7 +876,7 @@ export const gpuTDPTable = {
   'Intel Arc A750': 225,
   'Intel Arc A580': 185,
   'Intel Arc A380': 75,
-  'Intel Arc A310': 30,
+  'Intel Arc A310': 75,
   'Intel Arc B580': 190,
   'Intel Arc B570': 150,
   // ── NVIDIA GeForce GTX 700 Series (Kepler) ────────────────────────────
@@ -973,16 +973,34 @@ export const gpuPowerTable = [
 ];
 
 export const asicPowerTable = [
+  // Bitmain — S23 series (3nm, 2025-2026)
+  { regex: /Antminer.*S23\s*Hyd\s*3U|Antminer.*U3S23H/i, power: 11020 },
+  { regex: /Antminer.*S23\s*E\s*U2H|Antminer.*S23e\s*U2H/i, power: 8650 },
+  { regex: /Antminer.*S23\s*Hyd/i, power: 5510 },
+  { regex: /Antminer.*S23\s*Imm/i, power: 5304 },
+  { regex: /Antminer.*S23/i, power: 3498 },
+  // Bitmain — S21 series (5nm, 2024-2025)
+  { regex: /Antminer.*S21\s*XP\s*Hyd/i, power: 5676 },
+  { regex: /Antminer.*S21\s*XP\s*Imm/i, power: 4050 },
   { regex: /Antminer.*S21\s*XP/i, power: 3650 },
+  { regex: /Antminer.*S21\s*Pro/i, power: 3510 },
+  { regex: /Antminer.*S21\+\s*Hyd/i, power: 4785 },
+  { regex: /Antminer.*S21\+/i, power: 3564 },
   { regex: /Antminer.*S21/i, power: 3500 },
+  // Bitmain — T21
   { regex: /Antminer.*T21/i, power: 3610 },
+  // Bitmain — S19 series
+  { regex: /Antminer.*S19\s*XP\s*Hyd/i, power: 5323 },
   { regex: /Antminer.*S19\s*XP/i, power: 3010 },
+  { regex: /Antminer.*S19\s*Pro\+\s*Hyd/i, power: 5360 },
   { regex: /Antminer.*S19\s*Pro\+/i, power: 5000 },
   { regex: /Antminer.*S19\s*Pro/i, power: 3250 },
+  { regex: /Antminer.*S19\s*K\s*Pro/i, power: 2760 },
   { regex: /Antminer.*S19j\s*Pro\+/i, power: 3220 },
   { regex: /Antminer.*S19j\s*Pro/i, power: 3050 },
   { regex: /Antminer.*S19j/i, power: 3100 },
   { regex: /Antminer.*S19/i, power: 3250 },
+  // Bitmain — older models
   { regex: /Antminer.*T19/i, power: 3150 },
   { regex: /Antminer.*S17\+/i, power: 2920 },
   { regex: /Antminer.*S17\s*Pro/i, power: 2090 },
@@ -990,11 +1008,38 @@ export const asicPowerTable = [
   { regex: /Antminer.*T17/i, power: 2200 },
   { regex: /Antminer.*S15/i, power: 1590 },
   { regex: /Antminer.*T15/i, power: 1540 },
+  { regex: /Antminer.*D3/i, power: 1350 },
   { regex: /Antminer.*S9[kji]|S9\s*\(/i, power: 1400 },
   { regex: /Antminer.*S9/i, power: 1350 },
-  { regex: /Whatsminer.*M66/i, power: 5500 },
-  { regex: /Whatsminer.*M60S/i, power: 3500 },
-  { regex: /Whatsminer.*M60/i, power: 3306 },
+  // MicroBT — M79 series (hydro, 2025-2026)
+  { regex: /Whatsminer.*M79S/i, power: 20000 },
+  { regex: /Whatsminer.*M79/i, power: 14500 },
+  // MicroBT — M78 series (immersion, 2025-2026)
+  { regex: /Whatsminer.*M78S/i, power: 7000 },
+  { regex: /Whatsminer.*M78/i, power: 7000 },
+  // MicroBT — M76 series (immersion, 2025-2026)
+  { regex: /Whatsminer.*M76S\+/i, power: 5200 },
+  { regex: /Whatsminer.*M76S/i, power: 5200 },
+  { regex: /Whatsminer.*M76/i, power: 5200 },
+  // MicroBT — M73 series (hydro, 2025-2026)
+  { regex: /Whatsminer.*M73S\+/i, power: 7200 },
+  { regex: /Whatsminer.*M73S/i, power: 7200 },
+  { regex: /Whatsminer.*M73/i, power: 7200 },
+  // MicroBT — M72 series (air, 2025-2026)
+  { regex: /Whatsminer.*M72S/i, power: 4000 },
+  { regex: /Whatsminer.*M72/i, power: 4030 },
+  // MicroBT — M70 series (air, 2025-2026)
+  { regex: /Whatsminer.*M70S\+/i, power: 3275 },
+  { regex: /Whatsminer.*M70S/i, power: 3267 },
+  { regex: /Whatsminer.*M70/i, power: 3263 },
+  // MicroBT — M66 series (air, 2023)
+  { regex: /Whatsminer.*M66S/i, power: 5364 },
+  { regex: /Whatsminer.*M66/i, power: 5550 },
+  // MicroBT — M60 series (air, 2023)
+  { regex: /Whatsminer.*M60S\+/i, power: 3816 },
+  { regex: /Whatsminer.*M60S/i, power: 3441 },
+  { regex: /Whatsminer.*M60/i, power: 3184 },
+  // MicroBT — older models
   { regex: /Whatsminer.*M56/i, power: 5500 },
   { regex: /Whatsminer.*M50S\+\+/i, power: 3470 },
   { regex: /Whatsminer.*M50S/i, power: 3500 },
@@ -1008,10 +1053,28 @@ export const asicPowerTable = [
   { regex: /Whatsminer.*M21S/i, power: 3360 },
   { regex: /Whatsminer.*M20S/i, power: 3400 },
   { regex: /Whatsminer.*M20/i, power: 2800 },
+  // Canaan — Avalon
+  { regex: /Avalon.*A16\s*XP/i, power: 3850 },
+  { regex: /Avalon.*A16(?!.*XP)/i, power: 3900 },
+  { regex: /Avalon.*A15\s*Pro/i, power: 3662 },
+  { regex: /Avalon.*A15(?!6)/i, power: 3647 },
+  { regex: /Avalon.*A1566/i, power: 3420 },
   { regex: /Avalon.*A1466I/i, power: 3320 },
   { regex: /Avalon.*A1366I/i, power: 3570 },
   { regex: /Avalon.*A1266/i, power: 3420 },
   { regex: /Avalon.*A1166\s*Pro/i, power: 3400 },
   { regex: /Avalon.*A1166/i, power: 3250 },
   { regex: /Avalon.*A1066/i, power: 3200 },
+  // Bitdeer — SealMiner A3
+  { regex: /Sealminer.*A3\s*Pro\s*Hyd/i, power: 8250 },
+  { regex: /Sealminer.*A3\s*Hyd/i, power: 6750 },
+  { regex: /Sealminer.*A3\s*Pro/i, power: 3625 },
+  { regex: /Sealminer.*A3(?!.*Pro)/i, power: 3640 },
+  // Bitdeer — SealMiner A2
+  { regex: /Sealminer.*A2\s*Pro\s*Hyd/i, power: 7450 },
+  { regex: /Sealminer.*A2\s*Pro/i, power: 3790 },
+  { regex: /Sealminer.*A2/i, power: 3729 },
+  // Auradine — Teraflux
+  { regex: /Auradine.*AH3880/i, power: 8700 },
+  { regex: /Auradine.*AI3680/i, power: 6840 },
 ];

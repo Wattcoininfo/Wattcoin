@@ -257,31 +257,75 @@ function getAsicPowerW(model) {
   const m = model;
 
   // ── Bitmain Antminer ────────────────────────────────────────────────────────
-  if (/Antminer.*S21\s*XP/i.test(m))         return 3650;
-  if (/Antminer.*S21/i.test(m))               return 3500;
-  if (/Antminer.*T21/i.test(m))               return 3610;
-  if (/Antminer.*S19\s*XP/i.test(m))          return 3010;
-  if (/Antminer.*S19\s*Pro\+/i.test(m))       return 5000;
-  if (/Antminer.*S19\s*Pro/i.test(m))         return 3250;
-  if (/Antminer.*S19j\s*Pro\+/i.test(m))      return 3220;
-  if (/Antminer.*S19j\s*Pro/i.test(m))        return 3050;
-  if (/Antminer.*S19j/i.test(m))              return 3100;
-  if (/Antminer.*S19/i.test(m))               return 3250;
-  if (/Antminer.*T19/i.test(m))               return 3150;
-  if (/Antminer.*S17\+/i.test(m))             return 2920;
-  if (/Antminer.*S17\s*Pro/i.test(m))         return 2090;
-  if (/Antminer.*T17\+/i.test(m))             return 2800;
-  if (/Antminer.*T17/i.test(m))               return 2200;
-  if (/Antminer.*S15/i.test(m))               return 1590;
-  if (/Antminer.*T15/i.test(m))               return 1540;
-  if (/Antminer.*D3/i.test(m))                return 1350;
-  if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))  return 1400;
-  if (/Antminer.*S9/i.test(m))                return 1350;
+  // S23 series (3nm, 2025-2026)
+  if (/Antminer.*S23\s*Hyd\s*3U|Antminer.*U3S23H/i.test(m))  return 11020;
+  if (/Antminer.*S23\s*E\s*U2H|Antminer.*S23e\s*U2H/i.test(m))  return 8650;
+  if (/Antminer.*S23\s*Hyd/i.test(m))                          return 5510;
+  if (/Antminer.*S23\s*Imm/i.test(m))                          return 5304;
+  if (/Antminer.*S23/i.test(m))                                return 3498;
+  // S21 series (5nm, 2024-2025)
+  if (/Antminer.*S21\s*XP\s*Hyd/i.test(m))                    return 5676;
+  if (/Antminer.*S21\s*XP\s*Imm/i.test(m))                    return 4050;
+  if (/Antminer.*S21\s*XP/i.test(m))                           return 3650;
+  if (/Antminer.*S21\s*Pro/i.test(m))                          return 3510;
+  if (/Antminer.*S21\+\s*Hyd/i.test(m))                       return 4785;
+  if (/Antminer.*S21\+/i.test(m))                              return 3564;
+  if (/Antminer.*S21/i.test(m))                                return 3500;
+  // T21
+  if (/Antminer.*T21/i.test(m))                                return 3610;
+  // S19 series
+  if (/Antminer.*S19\s*XP\s*Hyd/i.test(m))                    return 5323;
+  if (/Antminer.*S19\s*XP/i.test(m))                           return 3010;
+  if (/Antminer.*S19\s*Pro\+\s*Hyd/i.test(m))                 return 5360;
+  if (/Antminer.*S19\s*Pro\+/i.test(m))                        return 3250;
+  if (/Antminer.*S19\s*Pro/i.test(m))                          return 3250;
+  if (/Antminer.*S19\s*K\s*Pro/i.test(m))                      return 2760;
+  if (/Antminer.*S19j\s*Pro\+/i.test(m))                       return 3220;
+  if (/Antminer.*S19j\s*Pro/i.test(m))                         return 3050;
+  if (/Antminer.*S19j/i.test(m))                               return 3100;
+  if (/Antminer.*S19/i.test(m))                                return 3250;
+  // Older models
+  if (/Antminer.*T19/i.test(m))                                return 3150;
+  if (/Antminer.*S17\+/i.test(m))                              return 2920;
+  if (/Antminer.*S17\s*Pro/i.test(m))                          return 2090;
+  if (/Antminer.*T17\+/i.test(m))                              return 2800;
+  if (/Antminer.*T17/i.test(m))                                return 2200;
+  if (/Antminer.*S15/i.test(m))                                return 1590;
+  if (/Antminer.*T15/i.test(m))                                return 1540;
+  if (/Antminer.*D3/i.test(m))                                 return 1350;
+  if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))                   return 1400;
+  if (/Antminer.*S9/i.test(m))                                 return 1350;
 
   // ── MicroBT Whatsminer ─────────────────────────────────────────────────────
-  if (/Whatsminer.*M66/i.test(m))             return 5500;
-  if (/Whatsminer.*M60S/i.test(m))            return 3500;
-  if (/Whatsminer.*M60/i.test(m))             return 3306;
+  // M79 series (hydro, 2025-2026)
+  if (/Whatsminer.*M79S/i.test(m))            return 20000;
+  if (/Whatsminer.*M79/i.test(m))             return 14500;
+  // M78 series (immersion, 2025-2026)
+  if (/Whatsminer.*M78S/i.test(m))            return 7000;
+  if (/Whatsminer.*M78/i.test(m))             return 7000;
+  // M76 series (immersion, 2025-2026)
+  if (/Whatsminer.*M76S\+/i.test(m))          return 5200;
+  if (/Whatsminer.*M76S/i.test(m))            return 5200;
+  if (/Whatsminer.*M76/i.test(m))             return 5200;
+  // M73 series (hydro, 2025-2026)
+  if (/Whatsminer.*M73S\+/i.test(m))          return 7200;
+  if (/Whatsminer.*M73S/i.test(m))            return 7200;
+  if (/Whatsminer.*M73/i.test(m))             return 7200;
+  // M72 series (air, 2025-2026)
+  if (/Whatsminer.*M72S/i.test(m))            return 4000;
+  if (/Whatsminer.*M72/i.test(m))             return 4030;
+  // M70 series (air, 2025-2026)
+  if (/Whatsminer.*M70S\+/i.test(m))          return 3275;
+  if (/Whatsminer.*M70S/i.test(m))            return 3267;
+  if (/Whatsminer.*M70/i.test(m))             return 3263;
+  // M66 series (air, 2023)
+  if (/Whatsminer.*M66S/i.test(m))            return 5364;
+  if (/Whatsminer.*M66/i.test(m))             return 5550;
+  // M60 series (air, 2023)
+  if (/Whatsminer.*M60S\+/i.test(m))          return 3816;
+  if (/Whatsminer.*M60S/i.test(m))            return 3441;
+  if (/Whatsminer.*M60/i.test(m))             return 3184;
+  // Older models
   if (/Whatsminer.*M56/i.test(m))             return 5500;
   if (/Whatsminer.*M50S\+\+/i.test(m))        return 3470;
   if (/Whatsminer.*M50S/i.test(m))            return 3500;
@@ -297,12 +341,30 @@ function getAsicPowerW(model) {
   if (/Whatsminer.*M20/i.test(m))             return 2800;
 
   // ── Canaan Avalon ──────────────────────────────────────────────────────────
+  if (/Avalon.*A16\s*XP/i.test(m))            return 3850;
+  if (/Avalon.*A16(?!.*XP)/i.test(m))         return 3900;
+  if (/Avalon.*A15\s*Pro/i.test(m))           return 3662;
+  if (/Avalon.*A15(?!6)/i.test(m))            return 3647;
+  if (/Avalon.*A1566/i.test(m))               return 3420;
   if (/Avalon.*A1466I/i.test(m))              return 3320;
   if (/Avalon.*A1366I/i.test(m))              return 3570;
   if (/Avalon.*A1266/i.test(m))               return 3420;
   if (/Avalon.*A1166\s*Pro/i.test(m))         return 3400;
   if (/Avalon.*A1166/i.test(m))               return 3250;
   if (/Avalon.*A1066/i.test(m))               return 3200;
+
+  // ── Bitdeer SealMiner ─────────────────────────────────────────────────────
+  if (/Sealminer.*A3\s*Pro\s*Hyd/i.test(m))  return 8250;
+  if (/Sealminer.*A3\s*Hyd/i.test(m))        return 6750;
+  if (/Sealminer.*A3\s*Pro/i.test(m))         return 3625;
+  if (/Sealminer.*A3(?!.*Pro)/i.test(m))      return 3640;
+  if (/Sealminer.*A2\s*Pro\s*Hyd/i.test(m))  return 7450;
+  if (/Sealminer.*A2\s*Pro/i.test(m))         return 3790;
+  if (/Sealminer.*A2/i.test(m))               return 3729;
+
+  // ── Auradine Teraflux ────────────────────────────────────────────────────
+  if (/Auradine.*AH3880/i.test(m))            return 8700;
+  if (/Auradine.*AI3680/i.test(m))            return 6840;
 
   return 0; // unknown — caller should fall back to defaults
 }
@@ -315,31 +377,75 @@ function getAsicHashrateTHs(model) {
   const m = model;
 
   // ── Bitmain Antminer ────────────────────────────────────────────────────────
-  if (/Antminer.*S21\s*XP/i.test(m))         return 270;
-  if (/Antminer.*S21/i.test(m))               return 200;
-  if (/Antminer.*T21/i.test(m))               return 190;
-  if (/Antminer.*S19\s*XP/i.test(m))          return 141;
-  if (/Antminer.*S19\s*Pro\+/i.test(m))       return 120;
-  if (/Antminer.*S19\s*Pro/i.test(m))         return 110;
-  if (/Antminer.*S19j\s*Pro\+/i.test(m))      return 122;
-  if (/Antminer.*S19j\s*Pro/i.test(m))        return 100;
-  if (/Antminer.*S19j/i.test(m))              return 90;
-  if (/Antminer.*S19/i.test(m))               return 95;
-  if (/Antminer.*T19/i.test(m))               return 84;
-  if (/Antminer.*S17\+/i.test(m))             return 73;
-  if (/Antminer.*S17\s*Pro/i.test(m))         return 53;
-  if (/Antminer.*T17\+/i.test(m))             return 64;
-  if (/Antminer.*T17/i.test(m))               return 56;
-  if (/Antminer.*S15/i.test(m))               return 28;
-  if (/Antminer.*T15/i.test(m))               return 23;
-  if (/Antminer.*D3/i.test(m))                return 0.0193;
-  if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))  return 14;
-  if (/Antminer.*S9/i.test(m))                return 13.5;
+  // S23 series
+  if (/Antminer.*S23\s*Hyd\s*3U|Antminer.*U3S23H/i.test(m))  return 1160;
+  if (/Antminer.*S23\s*E\s*U2H|Antminer.*S23e\s*U2H/i.test(m))  return 865;
+  if (/Antminer.*S23\s*Hyd/i.test(m))                          return 580;
+  if (/Antminer.*S23\s*Imm/i.test(m))                          return 442;
+  if (/Antminer.*S23/i.test(m))                                return 318;
+  // S21 series
+  if (/Antminer.*S21\s*XP\s*Hyd/i.test(m))                    return 473;
+  if (/Antminer.*S21\s*XP\s*Imm/i.test(m))                    return 300;
+  if (/Antminer.*S21\s*XP/i.test(m))                           return 270;
+  if (/Antminer.*S21\s*Pro/i.test(m))                          return 234;
+  if (/Antminer.*S21\+\s*Hyd/i.test(m))                       return 319;
+  if (/Antminer.*S21\+/i.test(m))                              return 216;
+  if (/Antminer.*S21/i.test(m))                                return 200;
+  // T21
+  if (/Antminer.*T21/i.test(m))                                return 234;
+  // S19 series
+  if (/Antminer.*S19\s*XP\s*Hyd/i.test(m))                    return 444;
+  if (/Antminer.*S19\s*XP/i.test(m))                           return 141;
+  if (/Antminer.*S19\s*Pro\+\s*Hyd/i.test(m))                 return 440;
+  if (/Antminer.*S19\s*Pro\+/i.test(m))                        return 120;
+  if (/Antminer.*S19\s*Pro/i.test(m))                          return 110;
+  if (/Antminer.*S19\s*K\s*Pro/i.test(m))                      return 120;
+  if (/Antminer.*S19j\s*Pro\+/i.test(m))                       return 122;
+  if (/Antminer.*S19j\s*Pro/i.test(m))                         return 100;
+  if (/Antminer.*S19j/i.test(m))                               return 90;
+  if (/Antminer.*S19/i.test(m))                                return 95;
+  // Older models
+  if (/Antminer.*T19/i.test(m))                                return 84;
+  if (/Antminer.*S17\+/i.test(m))                              return 73;
+  if (/Antminer.*S17\s*Pro/i.test(m))                          return 53;
+  if (/Antminer.*T17\+/i.test(m))                              return 64;
+  if (/Antminer.*T17/i.test(m))                                return 56;
+  if (/Antminer.*S15/i.test(m))                                return 28;
+  if (/Antminer.*T15/i.test(m))                                return 23;
+  if (/Antminer.*D3/i.test(m))                                 return 0.0193;
+  if (/Antminer.*S9[kji]|S9\s*\(/i.test(m))                   return 14;
+  if (/Antminer.*S9/i.test(m))                                 return 13.5;
 
   // ── MicroBT Whatsminer ─────────────────────────────────────────────────────
-  if (/Whatsminer.*M66/i.test(m))             return 290;
-  if (/Whatsminer.*M60S/i.test(m))            return 190;
-  if (/Whatsminer.*M60/i.test(m))             return 186;
+  // M79 series (hydro, 2025-2026)
+  if (/Whatsminer.*M79S/i.test(m))            return 1350;
+  if (/Whatsminer.*M79/i.test(m))             return 920;
+  // M78 series (immersion, 2025-2026)
+  if (/Whatsminer.*M78S/i.test(m))            return 472;
+  if (/Whatsminer.*M78/i.test(m))             return 440;
+  // M76 series (immersion, 2025-2026)
+  if (/Whatsminer.*M76S\+/i.test(m))          return 390;
+  if (/Whatsminer.*M76S/i.test(m))            return 362;
+  if (/Whatsminer.*M76/i.test(m))             return 336;
+  // M73 series (hydro, 2025-2026)
+  if (/Whatsminer.*M73S\+/i.test(m))          return 540;
+  if (/Whatsminer.*M73S/i.test(m))            return 500;
+  if (/Whatsminer.*M73/i.test(m))             return 470;
+  // M72 series (air, 2025-2026)
+  if (/Whatsminer.*M72S/i.test(m))            return 300;
+  if (/Whatsminer.*M72/i.test(m))             return 278;
+  // M70 series (air, 2025-2026)
+  if (/Whatsminer.*M70S\+/i.test(m))          return 262;
+  if (/Whatsminer.*M70S/i.test(m))            return 242;
+  if (/Whatsminer.*M70/i.test(m))             return 225;
+  // M66 series (air, 2023)
+  if (/Whatsminer.*M66S/i.test(m))            return 298;
+  if (/Whatsminer.*M66/i.test(m))             return 260;
+  // M60 series (air, 2023)
+  if (/Whatsminer.*M60S\+/i.test(m))          return 212;
+  if (/Whatsminer.*M60S/i.test(m))            return 186;
+  if (/Whatsminer.*M60/i.test(m))             return 160;
+  // Older models
   if (/Whatsminer.*M56/i.test(m))             return 230;
   if (/Whatsminer.*M50S\+\+/i.test(m))        return 126;
   if (/Whatsminer.*M50S/i.test(m))            return 114;
@@ -355,12 +461,30 @@ function getAsicHashrateTHs(model) {
   if (/Whatsminer.*M20/i.test(m))             return 64;
 
   // ── Canaan Avalon ──────────────────────────────────────────────────────────
+  if (/Avalon.*A16\s*XP/i.test(m))            return 300;
+  if (/Avalon.*A16(?!.*XP)/i.test(m))         return 282;
+  if (/Avalon.*A15\s*Pro/i.test(m))           return 218;
+  if (/Avalon.*A15(?!6)/i.test(m))            return 194;
+  if (/Avalon.*A1566/i.test(m))               return 185;
   if (/Avalon.*A1466I/i.test(m))              return 150;
   if (/Avalon.*A1366I/i.test(m))              return 130;
   if (/Avalon.*A1266/i.test(m))               return 90;
   if (/Avalon.*A1166\s*Pro/i.test(m))         return 81;
   if (/Avalon.*A1166/i.test(m))               return 70;
   if (/Avalon.*A1066/i.test(m))               return 50;
+
+  // ── Bitdeer SealMiner ─────────────────────────────────────────────────────
+  if (/Sealminer.*A3\s*Pro\s*Hyd/i.test(m))  return 660;
+  if (/Sealminer.*A3\s*Hyd/i.test(m))        return 500;
+  if (/Sealminer.*A3\s*Pro/i.test(m))         return 290;
+  if (/Sealminer.*A3(?!.*Pro)/i.test(m))      return 260;
+  if (/Sealminer.*A2\s*Pro\s*Hyd/i.test(m))  return 500;
+  if (/Sealminer.*A2\s*Pro/i.test(m))         return 255;
+  if (/Sealminer.*A2/i.test(m))               return 226;
+
+  // ── Auradine Teraflux ────────────────────────────────────────────────────
+  if (/Auradine.*AH3880/i.test(m))            return 600;
+  if (/Auradine.*AI3680/i.test(m))            return 360;
 
   return 0; // unknown — caller should fall back to defaults
 }
@@ -372,14 +496,33 @@ function getAsicHashrateTHs(model) {
 // lie about which GPU is installed.
 function getGpuTdpW(model) {
   if (!model) return 0;
-  const m = model;
+  // Normalize: extract the most useful GPU name from OS/driver strings.
+  // Common formats:
+  //   "GA102 [GeForce RTX 3080]"        → prefer bracket content
+  //   "NVIDIA GeForce RTX 3080 [GA102]" → strip brackets
+  //   "NVIDIA GeForce RTX 4080 Laptop GPU Laptop GPU" → strip suffixes
+  //   "10de:2206 (rev a1)"              → no match possible
+  let m = model;
+  // If brackets contain a known brand keyword, prefer that content
+  const bracketMatch = m.match(/\[([^\]]+)\]/);
+  if (bracketMatch && /\bGeForce|Radeon|Arc\b/i.test(bracketMatch[1])) {
+    m = bracketMatch[1];
+  } else {
+    // Strip brackets and their content
+    m = m.replace(/\[[^\]]*\]/g, ' ');
+  }
+  m = m
+    .replace(/\b[0-9a-f]{4}:[0-9a-f]{4}\b/gi, ' ') // strip PCI device IDs
+    .replace(/\brev\b\s+\S+/gi, ' ')       // strip "rev a1"
+    .replace(/\s+/g, ' ')
+    .trim();
   // ── NVIDIA RTX 50 series (Blackwell) ──────────────────────────────────────
   if (/GeForce.*RTX 5090/i.test(m))                   return 575;
   if (/GeForce.*RTX 5080/i.test(m))                   return 360;
   if (/GeForce.*RTX 5070 Ti/i.test(m))                return 300;
   if (/GeForce.*RTX 5070/i.test(m))                   return 250;
   if (/GeForce.*RTX 5060 Ti/i.test(m))                return 180;
-  if (/GeForce.*RTX 5060/i.test(m))                   return 150;
+  if (/GeForce.*RTX 5060/i.test(m))                   return 145;
   // ── NVIDIA RTX 40 series ─────────────────────────────────────────────────
   if (/GeForce.*RTX 4090/i.test(m))                   return 450;
   if (/GeForce.*RTX 4080 (SUPER|S)/i.test(m))         return 320;
@@ -388,9 +531,9 @@ function getGpuTdpW(model) {
   if (/GeForce.*RTX 4070 Ti/i.test(m))                return 285;
   if (/GeForce.*RTX 4070 SUPER/i.test(m))             return 220;
   if (/GeForce.*RTX 4070/i.test(m))                   return 200;
-  if (/GeForce.*RTX 4060 Ti/i.test(m))                return 165;
+  if (/GeForce.*RTX 4060 Ti/i.test(m))                return 160;
   if (/GeForce.*RTX 4060/i.test(m))                   return 115;
-  if (/GeForce.*RTX 4050/i.test(m))                   return 50;
+  if (/GeForce.*RTX 4050/i.test(m))                   return 115;
   // ── NVIDIA RTX 30 series ─────────────────────────────────────────────────
   if (/GeForce.*RTX 3090 Ti/i.test(m))                return 450;
   if (/GeForce.*RTX 3090/i.test(m))                   return 350;
@@ -405,13 +548,53 @@ function getGpuTdpW(model) {
   if (/GeForce.*GTX 1660 Ti/i.test(m))                return 120;
   if (/GeForce.*GTX 1660 SUPER/i.test(m))             return 125;
   if (/GeForce.*GTX 1660/i.test(m))                   return 120;
+  if (/GeForce.*GTX 1650 SUPER/i.test(m))             return 100;
   if (/GeForce.*GTX 1650/i.test(m))                   return 75;
+  if (/GeForce.*GTX 1630/i.test(m))                   return 75;
   if (/GeForce.*GTX 1080 Ti/i.test(m))                return 250;
   if (/GeForce.*GTX 1080/i.test(m))                   return 180;
   if (/GeForce.*GTX 1070 Ti/i.test(m))                return 180;
   if (/GeForce.*GTX 1070/i.test(m))                   return 150;
   if (/GeForce.*GTX 1060/i.test(m))                   return 120;
   if (/GeForce.*GTX 1050 Ti/i.test(m))                return 75;
+  if (/GeForce.*GTX 1050/i.test(m))                   return 75;
+  if (/GeForce.*GTX 1030/i.test(m))                   return 30;
+  // ── NVIDIA RTX 20 series ─────────────────────────────────────────────────
+  if (/GeForce.*RTX 2080 Ti/i.test(m))                return 250;
+  if (/GeForce.*RTX 2080 SUPER/i.test(m))             return 250;
+  if (/GeForce.*RTX 2080/i.test(m))                   return 215;
+  if (/GeForce.*RTX 2070 SUPER/i.test(m))             return 215;
+  if (/GeForce.*RTX 2070/i.test(m))                   return 175;
+  if (/GeForce.*RTX 2060 SUPER/i.test(m))             return 175;
+  if (/GeForce.*RTX 2060/i.test(m))                   return 160;
+  // ── NVIDIA GTX 9 series ──────────────────────────────────────────────────
+  if (/GeForce.*GTX 980 Ti/i.test(m))                 return 250;
+  if (/GeForce.*GTX 980/i.test(m))                    return 165;
+  if (/GeForce.*GTX 970/i.test(m))                    return 145;
+  if (/GeForce.*GTX 960/i.test(m))                    return 120;
+  if (/GeForce.*GTX 950/i.test(m))                    return 90;
+  // ── NVIDIA GTX 7 series ──────────────────────────────────────────────────
+  if (/GeForce.*GTX 780 Ti/i.test(m))                 return 250;
+  if (/GeForce.*GTX 780/i.test(m))                    return 250;
+  if (/GeForce.*GTX 770/i.test(m))                    return 230;
+  if (/GeForce.*GTX 760/i.test(m))                    return 170;
+  if (/GeForce.*GTX 750 Ti/i.test(m))                 return 60;
+  if (/GeForce.*GTX 750/i.test(m))                    return 55;
+  // ── NVIDIA GTX 6 series ──────────────────────────────────────────────────
+  if (/GeForce.*GTX 690/i.test(m))                    return 300;
+  if (/GeForce.*GTX 680/i.test(m))                    return 195;
+  if (/GeForce.*GTX 670/i.test(m))                    return 170;
+  if (/GeForce.*GTX 660 Ti/i.test(m))                 return 150;
+  if (/GeForce.*GTX 660/i.test(m))                    return 140;
+  if (/GeForce.*GTX 650 Ti/i.test(m))                 return 110;
+  if (/GeForce.*GTX 650/i.test(m))                    return 64;
+  // ── NVIDIA GTX 5 series ──────────────────────────────────────────────────
+  if (/GeForce.*GTX 590/i.test(m))                    return 365;
+  if (/GeForce.*GTX 580/i.test(m))                    return 244;
+  if (/GeForce.*GTX 570/i.test(m))                    return 219;
+  if (/GeForce.*GTX 560 Ti/i.test(m))                 return 170;
+  if (/GeForce.*GTX 560/i.test(m))                    return 150;
+  if (/GeForce.*GTX 550 Ti/i.test(m))                 return 116;
   // ── AMD RX 9000 series (RDNA 4) ──────────────────────────────────────────
   if (/Radeon.*RX 9070 XT/i.test(m))                  return 304;
   if (/Radeon.*RX 9070/i.test(m))                     return 220;
@@ -423,6 +606,7 @@ function getGpuTdpW(model) {
   if (/Radeon.*RX 7700 XT/i.test(m))                  return 245;
   if (/Radeon.*RX 7600 XT/i.test(m))                  return 190;
   if (/Radeon.*RX 7600/i.test(m))                     return 165;
+  if (/Radeon.*RX 7500 XT/i.test(m))                  return 100;
   // ── AMD RX 6000 series ───────────────────────────────────────────────────
   if (/Radeon.*RX 6950 XT/i.test(m))                  return 335;
   if (/Radeon.*RX 6900 XT/i.test(m))                  return 300;
@@ -434,30 +618,87 @@ function getGpuTdpW(model) {
   if (/Radeon.*RX 6650 XT/i.test(m))                  return 180;
   if (/Radeon.*RX 6600 XT/i.test(m))                  return 160;
   if (/Radeon.*RX 6600/i.test(m))                     return 132;
-  if (/Radeon.*RX 6500 XT/i.test(m))                  return 107;
+  if (/Radeon.*RX 6500 XT/i.test(m))                  return 113;
   if (/Radeon.*RX 6400/i.test(m))                     return 53;
   // ── AMD RX 5000 series ───────────────────────────────────────────────────
   if (/Radeon.*RX 5700 XT/i.test(m))                  return 225;
   if (/Radeon.*RX 5700/i.test(m))                     return 180;
   if (/Radeon.*RX 5600 XT/i.test(m))                  return 150;
   if (/Radeon.*RX 5500 XT/i.test(m))                  return 130;
+  if (/Radeon.*RX 5500/i.test(m))                     return 130;
   // ── AMD RX 500 series (Polaris Refresh) ──────────────────────────────────
   if (/Radeon.*RX 590/i.test(m))                      return 225;
   if (/Radeon.*RX 580/i.test(m))                      return 185;
   if (/Radeon.*RX 570/i.test(m))                      return 150;
-  if (/Radeon.*RX 560/i.test(m))                      return 75;
+  if (/Radeon.*RX 560/i.test(m))                      return 80;
   if (/Radeon.*RX 550/i.test(m))                      return 50;
   // ── AMD RX 400 series (Polaris) ──────────────────────────────────────────
   if (/Radeon.*RX 480/i.test(m))                      return 150;
   if (/Radeon.*RX 470/i.test(m))                      return 120;
   if (/Radeon.*RX 460/i.test(m))                      return 75;
+  // ── AMD Vega / Radeon VII ────────────────────────────────────────────────
+  if (/Radeon.*Vega 64/i.test(m))                     return 295;
+  if (/Radeon.*Vega 56/i.test(m))                     return 210;
+  if (/Radeon VII/i.test(m))                          return 300;
+  // ── AMD R9 / R7 / R5 (GCN 1-3) ──────────────────────────────────────────
+  if (/Radeon.*R9 Fury X/i.test(m))                   return 275;
+  if (/Radeon.*R9 Fury/i.test(m))                     return 275;
+  if (/Radeon.*R9 Nano/i.test(m))                     return 175;
+  if (/Radeon.*R9 390X/i.test(m))                     return 275;
+  if (/Radeon.*R9 390/i.test(m))                      return 275;
+  if (/Radeon.*R9 380X/i.test(m))                     return 190;
+  if (/Radeon.*R9 380/i.test(m))                      return 190;
+  if (/Radeon.*R9 290X/i.test(m))                     return 290;
+  if (/Radeon.*R9 290/i.test(m))                      return 275;
+  if (/Radeon.*R9 285/i.test(m))                      return 190;
+  if (/Radeon.*R9 280X/i.test(m))                     return 250;
+  if (/Radeon.*R9 280/i.test(m))                      return 200;
+  if (/Radeon.*R9 270X/i.test(m))                     return 180;
+  if (/Radeon.*R9 270/i.test(m))                      return 150;
+  if (/Radeon.*R7 370/i.test(m))                      return 110;
+  if (/Radeon.*R7 360/i.test(m))                      return 80;
+  if (/Radeon.*R7 265/i.test(m))                      return 150;
+  if (/Radeon.*R7 260X/i.test(m))                     return 95;
+  if (/Radeon.*R5 230/i.test(m))                      return 19;
+  // ── AMD HD 7000 series (GCN 1) ──────────────────────────────────────────
+  if (/Radeon.*HD 7990/i.test(m))                     return 375;
+  if (/Radeon.*HD 7970/i.test(m))                     return 250;
+  if (/Radeon.*HD 7950/i.test(m))                     return 200;
+  if (/Radeon.*HD 7870/i.test(m))                     return 175;
+  if (/Radeon.*HD 7850/i.test(m))                     return 130;
+  if (/Radeon.*HD 7790/i.test(m))                     return 100;
+  if (/Radeon.*HD 7770/i.test(m))                     return 80;
+  if (/Radeon.*HD 7750/i.test(m))                     return 55;
+  // ── AMD Radeon PRO Workstation ──────────────────────────────────────────
+  if (/Radeon.*PRO W7900/i.test(m))                   return 295;
+  if (/Radeon.*PRO W7800/i.test(m))                   return 260;
+  if (/Radeon.*PRO W6800/i.test(m))                   return 250;
+  if (/Radeon.*PRO W6600/i.test(m))                   return 130;
+  if (/Radeon.*PRO W6400/i.test(m))                   return 50;
   // ── Intel Arc ────────────────────────────────────────────────────────────
   if (/Intel.*Arc.*A770/i.test(m))                    return 225;
   if (/Intel.*Arc.*A750/i.test(m))                    return 225;
-  if (/Intel.*Arc.*A580/i.test(m))                    return 175;
+  if (/Intel.*Arc.*A580/i.test(m))                    return 185;
   if (/Intel.*Arc.*A380/i.test(m))                    return 75;
+  if (/Intel.*Arc.*A310/i.test(m))                    return 75;
   if (/Intel.*Arc.*B580/i.test(m))                    return 190;
   if (/Intel.*Arc.*B570/i.test(m))                    return 150;
+  // ── NVIDIA RTX Ada Workstation ──────────────────────────────────────────
+  if (/RTX.*6000 Ada/i.test(m))                       return 300;
+  if (/RTX.*5000 Ada/i.test(m))                       return 250;
+  if (/RTX.*4500 Ada/i.test(m))                       return 210;
+  if (/RTX.*4000 Ada/i.test(m))                       return 130;
+  if (/RTX.*2000 Ada/i.test(m))                       return 70;
+  // ── NVIDIA RTX A-series Workstation ─────────────────────────────────────
+  if (/RTX.*A6000/i.test(m))                          return 300;
+  if (/RTX.*A5000/i.test(m))                          return 230;
+  if (/RTX.*A4000/i.test(m))                          return 140;
+  if (/RTX.*A2000/i.test(m))                          return 70;
+  // ── NVIDIA Quadro RTX ───────────────────────────────────────────────────
+  if (/Quadro.*RTX 8000/i.test(m))                    return 295;
+  if (/Quadro.*RTX 6000/i.test(m))                    return 295;
+  if (/Quadro.*RTX 5000/i.test(m))                    return 230;
+  if (/Quadro.*RTX 4000/i.test(m))                    return 160;
   // ── Intel integrated (fallback — low TDP) ───────────────────────────────
   if (/Intel.*UHD Graphics/i.test(m))                 return 15;
   if (/Intel.*Iris.*Xe/i.test(m))                     return 15;
@@ -495,6 +736,9 @@ function getCpuTdpW(cpuModel) {
   if (/Ryzen AI 9 HX 370/i.test(m)) return 28;
   if (/Ryzen AI 9 365/i.test(m)) return 28;
   if (/Ryzen AI 7 PRO 360/i.test(m)) return 28;
+  if (/Ryzen AI 7 350/i.test(m)) return 28;
+  // Intel Core Ultra 200V (Lunar Lake) — 17W PBP
+  if (/Ultra [579][\s-]2[0-9]{2}V$/i.test(m)) return 17;
 
   // ── Intel Y-series (very low TDP, 4.5-7W) ──────────────────────────────────
   if (/m[357]-7Y3[0-2]|m5-6Y57|m7-6Y75|i[57]-7Y75|i5-7Y54/i.test(m)) return 4.5;

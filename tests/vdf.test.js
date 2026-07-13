@@ -260,7 +260,7 @@ async function run() {
     assert.strictEqual(normalized.vdfProof, 'deadbeef');
   });
 
-  await test('normalizeProbeReceipt omits VDF fields when not present', () => {
+  await test('normalizeProbeReceipt defaults VDF fields when not present', () => {
     const receipt = {
       version: 1,
       probeId: 'probe-1',
@@ -275,11 +275,11 @@ async function run() {
       hwPowerW: 100,
     };
     const normalized = normalizeProbeReceipt(receipt, { includeSignature: false });
-    assert.strictEqual(normalized.vdfSteps, undefined);
-    assert.strictEqual(normalized.vdfDiscriminantSize, undefined);
-    assert.strictEqual(normalized.vdfInput, undefined);
-    assert.strictEqual(normalized.vdfOutput, undefined);
-    assert.strictEqual(normalized.vdfProof, undefined);
+    assert.strictEqual(normalized.vdfSteps, 0);
+    assert.strictEqual(normalized.vdfDiscriminantSize, 0);
+    assert.strictEqual(normalized.vdfInput, '');
+    assert.strictEqual(normalized.vdfOutput, '');
+    assert.strictEqual(normalized.vdfProof, '');
   });
 
   await test('normalizeProbeReceipt handles v1 receipt gracefully (backward compat)', () => {
@@ -299,7 +299,8 @@ async function run() {
     const normalized = normalizeProbeReceipt(receipt, { includeSignature: false });
     assert.strictEqual(normalized.version, 2); // bumped to current
     assert.strictEqual(normalized.probeId, 'probe-old');
-    assert.strictEqual(normalized.vdfSteps, undefined);
+    assert.strictEqual(normalized.vdfSteps, 0);
+    assert.strictEqual(normalized.vdfDiscriminantSize, 0);
   });
 
   await test('getProbeReceiptSigningPayload includes VDF fields', () => {

@@ -50,16 +50,12 @@ function normalizeProbeReceipt(receipt, { includeSignature = true } = {}) {
   if (gpuModels.length > 0) normalized.gpuModels = gpuModels;
   if (receipt.cpuModel) normalized.cpuModel = String(receipt.cpuModel).trim();
   if (receipt.asicModel) normalized.asicModel = String(receipt.asicModel).trim();
-  // VDF fields (version 2+) — optional for backward compatibility.
-  if (receipt.vdfSteps > 0) {
-    normalized.vdfSteps = Math.max(0, Math.floor(toSafeNumber(receipt.vdfSteps)));
-  }
-  if (receipt.vdfDiscriminantSize > 0) {
-    normalized.vdfDiscriminantSize = Math.max(0, Math.floor(toSafeNumber(receipt.vdfDiscriminantSize)));
-  }
-  if (receipt.vdfInput) normalized.vdfInput = String(receipt.vdfInput).trim();
-  if (receipt.vdfOutput) normalized.vdfOutput = String(receipt.vdfOutput).trim();
-  if (receipt.vdfProof) normalized.vdfProof = String(receipt.vdfProof).trim();
+  // VDF fields (version 2+) — mandatory for all receipts.
+  normalized.vdfSteps = Math.max(0, Math.floor(toSafeNumber(receipt.vdfSteps)));
+  normalized.vdfDiscriminantSize = Math.max(0, Math.floor(toSafeNumber(receipt.vdfDiscriminantSize)));
+  normalized.vdfInput = String(receipt.vdfInput || '').trim();
+  normalized.vdfOutput = String(receipt.vdfOutput || '').trim();
+  normalized.vdfProof = String(receipt.vdfProof || '').trim();
   if (includeSignature) {
     normalized.signature = normalizeProbeReceiptSignature(receipt.signature || receipt.sig || '');
   }
