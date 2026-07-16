@@ -1,4 +1,5 @@
 ﻿const fs = require('fs');
+const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
 
@@ -210,42 +211,49 @@ function createRoundLedger(options = {}) {
     }
   }
 
-  function save() {
-    ensureDir();
-    const sig = computeLedgerSig(state);
-    const toWrite = sig ? { ...state, _sig: sig } : state;
-    const serialized = JSON.stringify(toWrite, null, 2);
-    const backupPath = filePath + '.bak';
-    // Backup the current file before overwriting.
-    if (fs.existsSync(filePath)) {
-      try {
-        fs.copyFileSync(filePath, backupPath);
-      } catch (_) {
-        // Best effort; continue even if backup fails.
-      }
-    }
-    const fd = fs.openSync(tempFilePath, 'w');
-    try {
-      fs.writeSync(fd, serialized, null, 'utf8');
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
+  let _savePending = false;
+  let _saveTimer = null;
 
+  async function _doSave() {
+    _savePending = false;
+    _saveTimer = null;
     try {
-      fs.renameSync(tempFilePath, filePath);
-    } catch (err) {
-      if (err && (err.code === 'EEXIST' || err.code === 'EPERM')) {
-        try {
-          fs.rmSync(filePath, { force: true });
-        } catch (_) {
-          // Best effort fallback before retrying rename.
-        }
-        fs.renameSync(tempFilePath, filePath);
-      } else {
-        throw err;
+      ensureDir();
+      const sig = computeLedgerSig(state);
+      const toWrite = sig ? { ...state, _sig: sig } : state;
+      const serialized = JSON.stringify(toWrite, null, 2);
+      const backupPath = filePath + '.bak';
+      try {
+        await fsp.copyFile(filePath, backupPath);
+      } catch (_) {}
+      const fd = await fsp.open(tempFilePath, 'w');
+      try {
+        await fd.writeFile(serialized, null, 'utf8');
+        await fd.sync();
+      } finally {
+        await fd.close();
       }
+      try {
+        await fsp.rename(tempFilePath, filePath);
+      } catch (err) {
+        if (err && (err.code === 'EEXIST' || err.code === 'EPERM')) {
+          try {
+            await fsp.rm(filePath, { force: true });
+          } catch (_) {}
+          await fsp.rename(tempFilePath, filePath);
+        } else {
+          throw err;
+        }
+      }
+    } catch (_) {
+      if (process.env.WATTCOIN_DEBUG) console.warn('[RoundLedger] Save failed:', String(_.message || _).slice(0, 80));
     }
+  }
+
+  function save() {
+    if (_savePending) return;
+    _savePending = true;
+    _saveTimer = setTimeout(_doSave, 200);
   }
 
   function ensureBalance(address) {
@@ -394,6 +402,7 @@ function createRoundLedger(options = {}) {
       id: nextRoundId,
       startedAtMs: Number(startedAtMs) || Date.now(),
       contributionsWh: {},
+      contributionUpdatedAtMs: {},
       contributionMessage: {},
       contributionSignature: {},
     };
@@ -505,6 +514,9 @@ function createRoundLedger(options = {}) {
       id: state.nextRoundId,
       startedAtMs: Date.now(),
       contributionsWh: {},
+      contributionUpdatedAtMs: {},
+      contributionMessage: {},
+      contributionSignature: {},
     };
 
     save();

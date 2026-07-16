@@ -2,18 +2,43 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
 const DEBUG_LOG = path.join(os.tmpdir(), 'wattcoin-gpu-debug.log');
+let _debugBuf = '';
+let _debugFlushPending = false;
 function debugLog(...args) {
   try {
-    fs.appendFileSync(
-      DEBUG_LOG,
+    _debugBuf +=
       new Date().toISOString() +
-        ' ' +
-        args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') +
-        '\n',
-    );
+      ' ' +
+      args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ') +
+      '\n';
+    if (!_debugFlushPending && _debugBuf.length > 4096) {
+      _debugFlushPending = true;
+      const chunk = _debugBuf;
+      _debugBuf = '';
+      fs.promises
+        .appendFile(DEBUG_LOG, chunk)
+        .catch(() => {})
+        .finally(() => {
+          _debugFlushPending = false;
+        });
+    }
   } catch (_) {
     /* ignore file-log failures on worker machines */
+  }
+}
+function _flushDebugLog() {
+  if (_debugBuf.length > 0) {
+    const chunk = _debugBuf;
+    _debugBuf = '';
+    _debugFlushPending = true;
+    fs.promises
+      .appendFile(DEBUG_LOG, chunk)
+      .catch(() => {})
+      .finally(() => {
+        _debugFlushPending = false;
+      });
   }
 }
 
@@ -29,6 +54,13 @@ const GPU_BINARY_NAME = 'gpu-miner.exe';
 
 // Track recent GPU-PoW activity to account for probe time in GPU duty.
 let lastPowActivity = { ts: 0, elapsedMs: 0, devices: 0 };
+
+// ── Coordinator seed state ────────────────────────────────────────────────
+// Tracks the current coordinator-issued seed and cumulative proof data
+// across all GPU devices for the current seed period.
+let _activeGpuSeed = null;
+let _gpuSeedProofs = new Map(); // deviceIndex → { startState, totalOps, burnMs }
+let _onGpuSeedProof = null; // callback: (proof) => void
 
 // Aggregated telemetry (merged from per-GPU processes)
 let gpuTelemetry = {
@@ -47,6 +79,58 @@ let gpuTelemetry = {
   lastPowTs: 0,
   lastPowElapsedMs: 0,
 };
+
+// ── GPU coordinator seed management ────────────────────────────────────────
+// Sends the coordinator seed to all GPU processes.
+function _broadcastGpuSeed() {
+  if (!_activeGpuSeed) return;
+  for (const [, state] of gpuStates) {
+    if (!state.process || !state.process.stdin.writable) continue;
+    try {
+      const payload = JSON.stringify({ token: true, seed: _activeGpuSeed }) + '\n';
+      state.process.stdin.write(payload, 'utf8');
+    } catch (_) {
+      /* pipe may be closed */
+    }
+  }
+}
+
+// Called when the coordinator issues a new seed via GPU peer probe.
+function setGpuCoordinatorSeed(seed) {
+  if (seed === _activeGpuSeed) return;
+  _activeGpuSeed = seed;
+  _broadcastGpuSeed();
+}
+
+// Returns the current coordinator-issued GPU seed.
+function getGpuCoordinatorSeed() {
+  return _activeGpuSeed;
+}
+
+// Returns and clears GPU seed proof data from all devices.
+function drainGpuSeedProofs() {
+  const entries = [];
+  for (const [k, v] of _gpuSeedProofs) entries.push([k, v]);
+  _gpuSeedProofs.clear();
+  return new Map(entries);
+}
+
+// Register callback for when a GPU device submits a seed proof.
+function onGpuSeedProof(callback) {
+  _onGpuSeedProof = callback;
+}
+
+// Returns true when every active GPU device has fresh telemetry.
+// Used to gate GPU energy contribution.
+function hasValidGpuTelemetry() {
+  if (gpuStates.size === 0) return false;
+  const now = Date.now();
+  for (const [deviceIndex] of gpuStates) {
+    const state = gpuStates.get(deviceIndex);
+    if (!state || !state.telemetry || now - (state.telemetry.ts || 0) > 5000) return false;
+  }
+  return true;
+}
 
 function findGpuBinary() {
   const isPackaged = !!process.resourcesPath;
@@ -125,7 +209,7 @@ function spawnGpuProcess(deviceIndex, adapterIndex) {
   });
 
   process.on('exit', (code) => {
-    if (process.env.WATTCOIN_DEBUG) {
+    if (process.env?.WATTCOIN_DEBUG) {
       console.warn(`[GpuLoad:${deviceIndex}] process exited code=${code}`);
     }
     const reason = code === 0 ? 'gpu process exited unexpectedly' : `gpu process crashed (code ${code})`;
@@ -209,9 +293,27 @@ function handleMessage(state, msg) {
       break;
 
     case 'status':
-      state.telemetry.duty = msg.duty || 0;
       state.telemetry.status = msg.run ? 'running' : 'idle';
       state.telemetry.ts = Date.now();
+      mergeTelemetry();
+      break;
+
+    case 'token':
+      // Native binary seed proof — coordinator-issued seed work proof.
+      if (msg.state) {
+        const proof = {
+          seed: String(msg.seed || ''),
+          startState: String(msg.startState || ''),
+          endState: String(msg.state || ''),
+          totalOps: Number(msg.ops) || 0,
+          burnMs: Number(msg.burnMs) || 0,
+          intermediateProof: String(msg.proof || ''),
+        };
+        _gpuSeedProofs.set(deviceIndex, proof);
+        state.telemetry.duty = targetPercent / 100;
+        state.telemetry.status = 'running';
+        if (typeof _onGpuSeedProof === 'function') _onGpuSeedProof(proof);
+      }
       mergeTelemetry();
       break;
 
@@ -438,7 +540,8 @@ async function ensureGpu(numGpus) {
 async function startGpuLoad(percent, gpuCountPer) {
   if (!(await ensureGpu(gpuCountPer))) return false;
   try {
-    const results = await broadcastCommand({ start: true, loadPercent: clampPercent(percent) });
+    const p = clampPercent(percent);
+    const results = await broadcastCommand({ start: true, loadPercent: p });
     return results.some((r) => r && r.t === 'ok');
   } catch (_) {
     return false;
@@ -448,7 +551,8 @@ async function startGpuLoad(percent, gpuCountPer) {
 async function setGpuLoad(percent) {
   if (gpuStates.size === 0) return false;
   try {
-    const results = await broadcastCommand({ set: true, loadPercent: clampPercent(percent) });
+    const p = clampPercent(percent);
+    const results = await broadcastCommand({ set: true, loadPercent: p });
     return results.some((r) => r && r.t === 'ok');
   } catch (_) {
     return false;
@@ -583,6 +687,7 @@ function stopGpuHardwareLoad() {
 
 function shutdownGpu() {
   stopRampUp();
+  _gpuSeedProofs.clear();
   for (const [, state] of gpuStates) {
     try {
       const payload = JSON.stringify({ quit: true }) + '\n';
@@ -603,6 +708,19 @@ function shutdownGpu() {
   }, 500);
 }
 
+// ── GPU token log accessors ────────────────────────────────────────────────
+function getGpuTokenLog() {
+  return [];
+}
+
+function flushGpuTokenLog() {
+  // No-op — token logs are replaced by coordinator seed proofs.
+}
+
+function getGpuMeasuredOpsPerMs() {
+  return gpuTelemetry.benchScore || 1000;
+}
+
 module.exports = {
   ensureGpu,
   getGpuInfo,
@@ -616,4 +734,12 @@ module.exports = {
   stopGpuLoad,
   clampPercent,
   findGpuBinary,
+  hasValidGpuTelemetry,
+  setGpuCoordinatorSeed,
+  getGpuCoordinatorSeed,
+  drainGpuSeedProofs,
+  onGpuSeedProof,
+  getGpuTokenLog,
+  flushGpuTokenLog,
+  getGpuMeasuredOpsPerMs,
 };

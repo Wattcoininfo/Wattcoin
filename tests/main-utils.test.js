@@ -1066,7 +1066,9 @@ describe('formatBackupTimestampForFilename', () => {
 
   it('uses current date when none provided', () => {
     const result = formatBackupTimestampForFilename();
-    const expectedPrefix = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const expectedPrefix = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
     assert.ok(result.startsWith(expectedPrefix));
   });
 

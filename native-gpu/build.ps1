@@ -56,7 +56,7 @@ $outExe = Join-Path $outDir "gpu-miner.exe"
 $compileCmd = @"
 call "$vcvars" > nul
 rc.exe /nologo /fo"$SrcDir\version.res" "$SrcDir\version.rc"
-cl.exe /nologo /O2 /MT /GL- /EHsc /Fe"$outExe" "$SrcDir\main.cpp" "$SrcDir\gen\shaders.c" "$SrcDir\gen\shaders_d3d9.c" "$SrcDir\version.res" user32.lib d3d10_1.lib
+cl.exe /nologo /O2 /MT /GL- /EHsc /Fe"$outExe" "$SrcDir\main.cpp" "$SrcDir\gen\shaders.c" "$SrcDir\gen\shaders_d3d9.c" "$SrcDir\version.res" user32.lib d3d10_1.lib bcrypt.lib
 "@
 Write-Host "Compiling main.cpp with MSVC..."
 cmd /c $compileCmd

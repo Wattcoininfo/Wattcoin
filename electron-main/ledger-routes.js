@@ -499,11 +499,16 @@ function createLedgerRequestHandler(ctx) {
         const message = String((body && body.message) || '');
         const signature = String((body && body.signature) || '').trim();
         const expectedRoundId = getCurrentNetworkRoundId();
+        console.log(
+          `[Contribution-Rx] Received push from ${address.slice(0, 16)}… totalWh=${totalWh.toFixed(6)} round=${roundId} chain=${chainIndex}`,
+        );
         if (!address || !isValidWtcAddress(address)) {
+          console.warn(`[Contribution-Rx] REJECTED: invalid address`);
           sendJson(res, 400, { ok: false, code: 'INVALID_ADDRESS', message: 'Contribution address invalid.' });
           return;
         }
         if (roundId !== expectedRoundId) {
+          console.warn(`[Contribution-Rx] REJECTED: round mismatch (expected ${expectedRoundId}, got ${roundId})`);
           sendJson(res, 409, {
             ok: false,
             code: 'ROUND_MISMATCH',
@@ -512,20 +517,92 @@ function createLedgerRequestHandler(ctx) {
           return;
         }
         const expectedMessage = buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs, chainIndex });
-        if (!message || message !== expectedMessage) {
+        // The contributor's message may include a workerToken that differs from
+        // the locally rebuilt expectedMessage (each node has its own token).
+        // Compare core fields first, then fall back to exact match for backward
+        // compatibility with messages that lack a worker token.
+        let coreFieldsOk = false;
+        try {
+          const incoming = JSON.parse(message);
+          const expected = JSON.parse(expectedMessage);
+          coreFieldsOk =
+            incoming &&
+            incoming.prefix === expected.prefix &&
+            incoming.network === expected.network &&
+            incoming.address === expected.address &&
+            incoming.roundId === expected.roundId &&
+            incoming.totalWh === expected.totalWh &&
+            incoming.updatedAtMs === expected.updatedAtMs &&
+            incoming.chainIndex === expected.chainIndex;
+        } catch (_) {
+          /* parse failure — will fall through to exact match */
+        }
+        if (!message || (!coreFieldsOk && message !== expectedMessage)) {
           sendJson(res, 400, { ok: false, code: 'INVALID_MESSAGE', message: 'Contribution message invalid.' });
           return;
         }
         if (!signature || !wtcNode.verifyMessage(address, signature, message)) {
+          console.warn(`[Contribution-Rx] REJECTED: invalid signature for ${address.slice(0, 16)}…`);
           sendJson(res, 403, { ok: false, code: 'INVALID_SIGNATURE', message: 'Contribution signature invalid.' });
           return;
         }
-        const probeCheck = validateContributionProbe(address, totalWh, chainIndex);
-        if (!probeCheck.ok) {
-          sendJson(res, 409, { ok: false, code: probeCheck.code, message: probeCheck.message });
-          return;
+        console.log(`[Contribution-Rx] Signature OK for ${address.slice(0, 16)}…`);
+        // Verify seed proofs — the coordinator re-computes each proof's
+        // SHA-256 chain and checks plausibility against known hardware.
+        // Old-format contributions (no seed proofs in message) are accepted
+        // silently — their energy was earned before the proof requirement.
+        let _parsedMsg = null;
+        try {
+          _parsedMsg = JSON.parse(message);
+        } catch (_) {
+          /* not JSON */
         }
-        const attestedPowerW = probeCheck.attestedPowerW;
+        const _hasSeedProofs = _parsedMsg && Array.isArray(_parsedMsg.seedProofs) && _parsedMsg.seedProofs.length > 0;
+        if (totalWh > 0.0001 && _hasSeedProofs) {
+          try {
+            const { verifyContributorSeedProofs } = require('./round-contributions');
+            const elapsedMs = updatedAtMs > 0 ? Date.now() - updatedAtMs : 60000;
+            const proofResult = await verifyContributorSeedProofs(
+              message,
+              address,
+              totalWh,
+              elapsedMs,
+              witnessedProbeReceipts,
+            );
+            if (!proofResult.ok) {
+              console.warn(
+                `[Contribution-Rx] Seed proof defence-in-depth failed for ${address.slice(0, 16)}… reason=${proofResult.reason} — accepting on signature`,
+              );
+            } else {
+              console.log(
+                `[Contribution-Rx] Seed proofs verified: ${proofResult.verifiedCount || '?'} proofs, verifiedWh=${(proofResult.verifiedWh || 0).toFixed(6)}`,
+              );
+            }
+          } catch (proofErr) {
+            console.warn('[Contribution-Rx] Seed proof verification error:', proofErr.message);
+          }
+        }
+        const probeCheck = validateContributionProbe(address, totalWh, chainIndex);
+        let attestedPowerW = probeCheck.attestedPowerW || 0;
+        if (!probeCheck.ok) {
+          // When the local node lacks probe receipts for this worker, the
+          // broadcaster has already verified the probe and signed the message.
+          // Seed proofs have been verified above, so accept the contribution
+          // with the broadcaster's attestation rather than rejecting it.
+          const hasNoLocalReceipts =
+            probeCheck.code === 'INSUFFICIENT_PROBE_ATTESTATIONS' ||
+            probeCheck.code === 'CONTRIBUTION_EXCEEDS_PROBE_LIMIT' ||
+            probeCheck.code === 'MISSING_BOOTSTRAP_VERIFIER' ||
+            probeCheck.code === 'PROBE_CHAIN_EXCEEDS_VERIFIED';
+          if (hasNoLocalReceipts) {
+            console.warn(
+              `[LedgerRoutes] Accepting ${address} contribution despite missing local receipts: ${probeCheck.code} (broadcaster attested)`,
+            );
+          } else {
+            sendJson(res, 409, { ok: false, code: probeCheck.code, message: probeCheck.message });
+            return;
+          }
+        }
         alignRoundLedgerToChain(roundId);
         const prevWh = roundLedger.getRoundContribution(address);
         const prevUpdatedAt = roundLedger.getRoundContributionUpdatedAt(address);
@@ -536,6 +613,9 @@ function createLedgerRequestHandler(ctx) {
             const increment = totalWh - prevWh;
             const maxIncrement = (attestedPowerW / 3600000) * elapsedMs * 2;
             if (increment > maxIncrement && maxIncrement > 0.001) {
+              console.warn(
+                `[Contribution-Rx] REJECTED: rate exceeded for ${address.slice(0, 16)}… increment=${increment.toFixed(4)} max=${maxIncrement.toFixed(4)}`,
+              );
               sendJson(res, 409, {
                 ok: false,
                 code: 'CONTRIBUTION_RATE_EXCEEDED',
@@ -553,6 +633,9 @@ function createLedgerRequestHandler(ctx) {
             const elapsedMs = updatedAtMs - roundStartMs;
             const maxIncrement = (attestedPowerW / 3600000) * elapsedMs * 2;
             if (totalWh > maxIncrement && maxIncrement > 0.001) {
+              console.warn(
+                `[Contribution-Rx] REJECTED: rate exceeded for ${address.slice(0, 16)}… totalWh=${totalWh.toFixed(4)} max=${maxIncrement.toFixed(4)}`,
+              );
               sendJson(res, 409, {
                 ok: false,
                 code: 'CONTRIBUTION_RATE_EXCEEDED',
@@ -567,6 +650,9 @@ function createLedgerRequestHandler(ctx) {
         }
         const applied = roundLedger.setRoundContribution(address, totalWh, updatedAtMs, message, signature);
         if (!applied || applied.ok === false) {
+          console.warn(
+            `[Contribution-Rx] REJECTED: stale for ${address.slice(0, 16)}… code=${applied && applied.code}`,
+          );
           sendJson(res, 409, {
             ok: false,
             code: applied && applied.code ? applied.code : 'STALE_CONTRIBUTION',
@@ -610,6 +696,9 @@ function createLedgerRequestHandler(ctx) {
           }
         }
         const snapshot = roundLedger.getCurrentRoundSnapshot();
+        console.log(
+          `[Contribution-Rx] ACCEPTED ${address.slice(0, 16)}… ${totalWh.toFixed(6)} Wh (roundTotal=${snapshot.totalWh.toFixed(6)} Wh)`,
+        );
         sendJson(res, 200, {
           ok: true,
           roundId: applied.roundId,

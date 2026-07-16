@@ -120,7 +120,7 @@ class NftStore {
       const raw = JSON.parse(fs.readFileSync(this._file, 'utf8'));
       const { _sig: savedSig, ...data } = raw;
       if (savedSig !== this._hmac(data)) {
-        console.warn('[NftStore] HMAC mismatch — wtc-nfts.json has been tampered');
+        console.warn('[NftStore] HMAC mismatch - wtc-nfts.json has been tampered');
         throw new Error('[NftStore] HMAC mismatch — wtc-nfts.json has been tampered');
       }
       this._tokens = data.tokens || {};
@@ -195,7 +195,7 @@ class NftStore {
         this._tokens[tx.nftId] = { owner: tx.to, metadata, mintedAtHeight: block.height };
         this._bumpNonce(tx.from);
         changed = true;
-        console.log(`[NftStore] minted ${tx.nftId} (${metadata.name || tx.nftId}) → ${tx.to.slice(0, 16)}...`);
+        console.log(`[NftStore] minted ${tx.nftId} (${metadata.name || tx.nftId}) -> ${tx.to.slice(0, 16)}...`);
       } else if (tx.type === 'nft_transfer') {
         if (!tx.nftId || !tx.from || !tx.to) {
           console.warn(`[NftStore] nft_transfer ${tx.id || '?'} skipped: missing fields`);
@@ -214,7 +214,7 @@ class NftStore {
         token.owner = tx.to;
         this._bumpNonce(tx.from);
         changed = true;
-        console.log(`[NftStore] transferred ${tx.nftId} → ${tx.to.slice(0, 16)}...`);
+        console.log(`[NftStore] transferred ${tx.nftId} -> ${tx.to.slice(0, 16)}...`);
       }
     }
 

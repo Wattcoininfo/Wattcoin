@@ -230,7 +230,7 @@ function getPersonalReference(samples, tableValue, historyMaxSamples, historyEnr
 }
 
 function isPowerCpuOutlier(address, powerW, cpuOps, networkMiningStats) {
-  if (networkMiningStats.size < 3) return false;
+  if (!networkMiningStats || networkMiningStats.size < 3) return false;
   let sumRatio = 0,
     count = 0;
   for (const [addr, stats] of networkMiningStats) {
@@ -341,7 +341,7 @@ function hardwareModelsMatch(osModel, declaredModel) {
   const normalize = (s) =>
     String(s || '')
       .normalize('NFKC')
-      .replace(/G--|�,�|-/g, ' ')
+      .replace(/G--|\u2212|\u2013|\u2014/g, ' ')
       .replace(/([a-z])tm\b/gi, '$1')
       .replace(/\b(tm|trademark|registered)\b/gi, ' ')
       .replace(/\(R\)|\(TM\)/gi, '')

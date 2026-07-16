@@ -53,7 +53,7 @@ let _declaredAsicModel = '';
 const _asicLivenessState = new Map();
 let _asicLivenessInterval = null;
 const ASIC_LIVENESS_CHECK_MS = 30000;
-const ASIC_IDLE_THRESHOLD = 2;
+const ASIC_IDLE_THRESHOLD = 1; // 1 missed check (30 s) → mark inactive
 const FINGERPRINT_FILE_NAME = 'fingerprint.json';
 
 function getWalletDataDir() {
@@ -75,6 +75,7 @@ function registerBenchmarkIpcHandlers(deps) {
     verifyAsicLiveness,
     verifyAsicFirmware,
     recordMinerStats,
+    networkMiningStats,
     saveHwAuthState,
     _closeBgProbeWs,
     _connectBgProbeWs,
@@ -118,6 +119,10 @@ function registerBenchmarkIpcHandlers(deps) {
     if (_gpuCount > 0) {
       ensureGpu(_gpuCount).catch(() => {});
     }
+    // Stop CPU/memory load workers before the benchmark so the SHA-256
+    // measurement runs on a clean main thread without competing for cores.
+    // The load is restarted at the previous level afterwards.
+    if (_prevPct > 0) setHardwareLoadPercent(0);
     let result = await runBackendBenchmark(benchRequest);
     if (_prevPct > 0) setHardwareLoadPercent(_prevPct);
     if (result && result.ok) {
@@ -302,6 +307,19 @@ function registerBenchmarkIpcHandlers(deps) {
         hwAuthority.benchmarkMemCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
       } else if (referenceMem === 0) {
         hwAuthority.benchmarkMemCalibration = Math.min(hwAuthority.benchmarkMemCalibration, 0.8);
+      }
+      if (result.sha256OpsPerMs > 0) {
+        const prev = Number(hwAuthority.sha256OpsPerMs) || 0;
+        if (prev <= 0) {
+          hwAuthority.sha256OpsPerMs = Math.round(result.sha256OpsPerMs);
+          console.log(
+            `[Benchmark] SHA-256 initial: ${Math.round(result.sha256OpsPerMs)} ops/ms (${result.sha256TotalOps} ops in ${result.sha256ElapsedMs}ms)`,
+          );
+        } else {
+          console.log(
+            `[Benchmark] SHA-256 bench=${Math.round(result.sha256OpsPerMs)} ops/ms (keeping calibrated=${prev} ops/ms)`,
+          );
+        }
       }
 
       saveBenchmarkHistory(benchmarkHistory);
@@ -668,7 +686,7 @@ function registerBenchmarkIpcHandlers(deps) {
         !isBaseline &&
         measuredCpu > 0 &&
         declaredUnitPowerW > 0 &&
-        isPowerCpuOutlier(_minerAddrForStats, declaredUnitPowerW, measuredCpu);
+        isPowerCpuOutlier(_minerAddrForStats, declaredUnitPowerW, measuredCpu, networkMiningStats);
 
       if (benchmarkHistory.cpuSamples.length === 0) {
         hwAuthority.trustScore = Math.min(hwAuthority.trustScore, 50);

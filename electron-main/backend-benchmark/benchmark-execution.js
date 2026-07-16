@@ -326,6 +326,47 @@ function getBenchmarkCapabilities() {
   };
 }
 
+// ── SHA-256 Mining Benchmark ──────────────────────────────────────────────
+// Measures actual SHA-256 throughput matching the worker's burnCpuOps pattern:
+//   state = SHA-256(state ‖ LE32(step) ‖ seed) per iteration
+// This is NOT raw integer math — it includes Buffer.alloc, Buffer.copy,
+// crypto.createHash overhead that matches real mining performance.
+const SHA256_BENCH_DURATION_MS = 3000;
+const SHA256_BENCH_YIELD_MS = 50;
+async function runSha256Benchmark(seed) {
+  const seedBuf = seed ? Buffer.from(String(seed).slice(0, 64).padEnd(64, '0'), 'hex') : crypto.randomBytes(32);
+  const state = crypto.createHash('sha256').update(seedBuf).digest();
+  const samples = [];
+  let totalOps = 0;
+  let totalElapsed = 0;
+  const runs = 3;
+  for (let r = 0; r < runs; r++) {
+    let s = Buffer.from(state);
+    const deadline = performance.now() + SHA256_BENCH_DURATION_MS;
+    let ops = 0;
+    while (performance.now() < deadline) {
+      const batchEnd = performance.now() + SHA256_BENCH_YIELD_MS;
+      while (performance.now() < batchEnd) {
+        const input = Buffer.alloc(68);
+        s.copy(input, 0);
+        input.writeUInt32LE(ops >>> 0, 32);
+        seedBuf.copy(input, 36);
+        s = crypto.createHash('sha256').update(input).digest();
+        ops++;
+      }
+      await new Promise((r) => setImmediate(r));
+    }
+    const elapsed = Math.max(1, performance.now() - (deadline - SHA256_BENCH_DURATION_MS));
+    const sampleOpsPerMs = ops / elapsed;
+    samples.push(sampleOpsPerMs);
+    totalOps += ops;
+    totalElapsed += elapsed;
+    if (r + 1 < runs) await new Promise((r) => setImmediate(r));
+  }
+  const opsPerMs = totalOps / totalElapsed;
+  return { opsPerMs, totalOps, elapsedMs: Math.round(totalElapsed), samples };
+}
+
 async function runBackendBenchmark(_request = {}) {
   const request = _request || {};
   const walletAddress = typeof request.walletAddress === 'string' ? request.walletAddress.trim() : '';
@@ -337,6 +378,7 @@ async function runBackendBenchmark(_request = {}) {
       : CPU_SPEED_DEFAULT_RUNS;
     const cpuSpeed = await runCpuSpeedBenchmark(cpuMem.challengeSeed, cpuSpeedRuns);
     const randMem = await runRandomMemoryBenchmark(walletAddress, cpuMem.challengeSeed);
+    const sha256Bench = await runSha256Benchmark(cpuMem.challengeSeed);
 
     const [cpuSpeedProofVerified, memProofVerified] = await Promise.all([
       verifyCpuSpeedProof(cpuSpeed.initialSeed, cpuSpeed.proof),
@@ -368,6 +410,9 @@ async function runBackendBenchmark(_request = {}) {
       memProof: randMem.proof,
       memProofSeed: cpuMem.challengeSeed,
       memProofVerified,
+      sha256OpsPerMs: sha256Bench.opsPerMs,
+      sha256TotalOps: sha256Bench.totalOps,
+      sha256ElapsedMs: sha256Bench.elapsedMs,
     };
   } catch (error) {
     return {
@@ -518,6 +563,7 @@ module.exports = {
   runCpuAndMemoryBenchmark,
   runRandomMemoryBenchmark,
   cpuSpeedStep,
+  runSha256Benchmark,
   runCpuSpeedBenchmark,
   verifyCpuSpeedProof,
   verifyMemProof,

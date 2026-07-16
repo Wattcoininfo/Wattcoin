@@ -1,5 +1,6 @@
 const { parentPort } = require('worker_threads');
 const { performance } = require('perf_hooks');
+const crypto = require('crypto');
 
 let targetPercent = 0;
 let running = true;
@@ -9,6 +10,20 @@ let statsLastReportAt = performance.now();
 let statsOps = 0;
 let statsBurnMs = 0;
 let statsTotalMs = 0;
+
+// ── Coordinator seed state ────────────────────────────────────────────────
+// The coordinator issues a seed via peer probe.  The worker mines with that
+// seed and accumulates total ops for the seed period.  When the next seed
+// arrives, the worker submits a proof of work.
+const BURN_PROOF_STEP = 256;
+let activeSeed = null;
+let seedStartTs = 0;
+let seedTotalOps = 0;
+let seedTotalBurnMs = 0;
+let seedStartState = null;
+let seedLastState = null;
+let seedAbsoluteStep = 0;
+let seedIntermediates = [];
 
 function clampPercent(value) {
   const n = Number(value);
@@ -21,45 +36,107 @@ function sleepMs(ms) {
   Atomics.wait(sleepArray, 0, 0, Math.round(ms));
 }
 
-// Work-bounded burn: execute exactly `ops` multiply-mod iterations.
-// The elapsed wall-clock time varies with current CPU frequency (boost/throttle),
-// so measuring it gives real calibration data for opsPerMs.
-function burnCpuOps(ops) {
-  let x = 1;
+// Work-bounded burn: execute `ops` iterations of iterated SHA-256.
+//   state = SHA-256(burnStartState ‖ LE32(i) ‖ seed) for i in 0..ops
+// burnStartState = SHA-256(chainState ‖ seed) binds the burn to the seed.
+// Intermediate states are recorded every BURN_PROOF_STEP iterations for proof.
+// Returns { burnResult (Buffer), proof (Buffer) }.
+function burnCpuOps(ops, seed) {
+  const seedBuf = seed ? Buffer.from(seed, 'hex') : Buffer.alloc(32);
+
+  let state;
+  if (!seedStartState) {
+    // First call for this seed: store the chain state (prevState) and
+    // derive the burn start state: SHA-256(chainState ‖ seed).
+    seedStartState = Buffer.alloc(32);
+    seedStartTs = Date.now();
+    const startInput = Buffer.alloc(64);
+    seedStartState.copy(startInput, 0);
+    seedBuf.copy(startInput, 32);
+    state = crypto.createHash('sha256').update(startInput).digest();
+  } else {
+    // Subsequent calls: continue from the last running state.
+    state = seedLastState;
+  }
+
   const n = ops | 0;
   for (let i = 0; i < n; i++) {
-    x = (x * 48271) % 2147483647;
+    const absStep = seedAbsoluteStep + i;
+    const input = Buffer.alloc(68);
+    state.copy(input, 0);
+    input.writeUInt32LE(absStep >>> 0, 32);
+    seedBuf.copy(input, 36);
+    state = crypto.createHash('sha256').update(input).digest();
+    if (absStep % BURN_PROOF_STEP === 0) {
+      seedIntermediates.push(state);
+    }
   }
-  return x; // prevent dead-code elimination
+
+  seedAbsoluteStep += n;
+  seedLastState = state;
+
+  // Proof = SHA-256(concatenated intermediate states)
+  const proof =
+    seedIntermediates.length > 0
+      ? crypto.createHash('sha256').update(Buffer.concat(seedIntermediates)).digest()
+      : crypto.createHash('sha256').update(Buffer.alloc(0)).digest();
+
+  return { burnResult: state, proof };
 }
 
-// EMA of ops per ms at current CPU frequency.  Seed conservatively; calibrates
-// to the actual clock within a handful of cycles via the EMA update below.
-let opsPerMs = 1_000_000;
+// EMA of ops per ms at current CPU frequency.
+let opsPerMs = 1_000;
 
 // Target busy-phase duration at 100% load.  Scales proportionally at lower %.
-// Longer windows reduce visible Task Manager oscillation on laptops/Win10 while
-// still reacting quickly to slider changes.
 const TARGET_BURST_MS = 120;
 const MIN_BURN_MS = 8;
 
-// ---------------------------------------------------------------------------
+// ── Seed proof submission ─────────────────────────────────────────────────
+// When a new seed arrives, submit proof of work done with the previous seed.
+function submitSeedProof(prevSeed) {
+  if (!prevSeed || seedTotalOps < 1000) return;
+
+  try {
+    parentPort.postMessage({
+      type: 'seed-proof',
+      seed: prevSeed,
+      startState: seedStartState ? seedStartState.toString('hex') : '',
+      endState: seedLastState ? seedLastState.toString('hex') : '',
+      totalOps: seedTotalOps,
+      burnMs: Math.round(seedTotalBurnMs * 100) / 100,
+      intermediateProof:
+        seedIntermediates.length > 0
+          ? crypto.createHash('sha256').update(Buffer.concat(seedIntermediates)).digest('hex')
+          : '',
+    });
+  } catch (_) {
+    /* ignore post failures */
+  }
+}
+
+// ── Seed management ───────────────────────────────────────────────────────
+// Called when coordinator issues a new seed.  Submit proof of previous work,
+// then reset accumulators for the new seed.
+function setActiveSeed(newSeed) {
+  if (newSeed === activeSeed) return;
+  const prevSeed = activeSeed;
+
+  // Submit proof of work done with previous seed BEFORE resetting accumulators
+  if (prevSeed) {
+    submitSeedProof(prevSeed);
+  }
+
+  activeSeed = newSeed;
+  seedStartTs = 0;
+  seedTotalOps = 0;
+  seedTotalBurnMs = 0;
+  seedStartState = null;
+  seedLastState = null;
+  seedAbsoluteStep = 0;
+  seedIntermediates = [];
+}
+
 // Rolling-window proportional feedback controller
-//
-// process.cpuUsage() on Windows uses GetProcessTimes() — it returns the WHOLE
-// process CPU time across all threads, not per-thread.  With N workers burning
-// in parallel each worker sees ~N× the CPU time it actually consumed, making idle
-// N× too long and actual duty-cycle f/N instead of f.
-//
-// This controller avoids that bias entirely: it only uses wall-clock time, but
-// measures the ACTUAL duty cycle achieved over the last WINDOW cycles and applies
-// a proportional correction to each upcoming sleep.  Preemption spikes are single-
-// cycle outliers that the window averages away; thermal/boost shifts update
-// opsPerMs continuously so op-count stays correct every cycle.
-//
-// Convergence: with WINDOW=16 and gain=1.2, correction is smoother (less oscillation)
-// and typically settles within ~1-2 seconds after start/target change.
-// ---------------------------------------------------------------------------
 const WINDOW = 16;
 const burnBuf = new Float64Array(WINDOW);
 const totalBuf = new Float64Array(WINDOW);
@@ -89,6 +166,16 @@ function loop() {
         burnMs: statsBurnMs,
         totalMs: statsTotalMs,
         targetPercent,
+        opsPerMs,
+        // Seed proof data for coordinator verification
+        seedProof: activeSeed
+          ? {
+              seed: activeSeed,
+              totalOps: seedTotalOps,
+              burnMs: Math.round(seedTotalBurnMs * 100) / 100,
+              startState: seedStartState ? seedStartState.toString('hex') : '',
+            }
+          : null,
       });
     } catch (_) {
       // Ignore telemetry post failures.
@@ -106,17 +193,19 @@ function loop() {
 
     // Burn phase — wall-clock timed
     const t0 = performance.now();
-    burnCpuOps(ops);
+    const { burnResult } = burnCpuOps(ops, activeSeed);
     const wallBurnMs = Math.max(0.1, performance.now() - t0);
     statsOps += ops;
+    seedTotalOps += ops;
+    seedTotalBurnMs += wallBurnMs;
 
-    // Update frequency EMA (wall time reflects boost/throttle accurately per-thread)
+    // Update frequency EMA
     opsPerMs = 0.85 * opsPerMs + 0.15 * (ops / wallBurnMs);
 
-    // Nominal idle for this cycle, ignoring history: busy/(busy+idle) = f
+    // Nominal idle for this cycle
     const nominalIdle = ((1 - f) / f) * wallBurnMs;
 
-    // Proportional correction: compare measured duty over the last n cycles to f.
+    // Proportional correction
     let idleMs = nominalIdle;
     const n = wFull ? WINDOW : wIdx;
     if (n >= 4) {
@@ -127,14 +216,12 @@ function loop() {
         sumTotal += totalBuf[i];
       }
       const measuredDuty = sumBurn / sumTotal;
-      const error = f - measuredDuty; // positive = under-shooting target
+      const error = f - measuredDuty;
       const avgCycle = sumTotal / n;
-      // Reduce idle when under-shooting, increase when over-shooting.
-      // Gain 1.2: smoother correction for laptop schedulers and core parking.
       idleMs = Math.max(0, nominalIdle - error * avgCycle * 1.2);
     }
 
-    // Sleep and measure actual sleep (timer imprecision captured in totalBuf)
+    // Sleep and measure actual sleep
     const sleepT0 = performance.now();
     if (Math.round(idleMs) >= 1) sleepMs(Math.round(idleMs));
     const actualSleep = Math.max(0, performance.now() - sleepT0);
@@ -148,7 +235,7 @@ function loop() {
     if (wIdx === 0) wFull = true;
   } else {
     sleepMs(50); // quiescent: wait for a new target
-    resetWindow(); // discard history so restart doesn't inherit stale data
+    resetWindow();
     statsTotalMs += 50;
   }
 
@@ -162,10 +249,15 @@ parentPort.on('message', (message) => {
   if (message.type === 'set-target') {
     const prev = targetPercent;
     targetPercent = clampPercent(message.percent);
-    // Reset window on target change so stale history doesn't slow convergence
     if (targetPercent !== prev) resetWindow();
+  } else if (message.type === 'set-seed') {
+    setActiveSeed(message.seed || null);
   } else if (message.type === 'stop') {
     running = false;
+    // Submit proof of any in-progress work before exiting
+    if (activeSeed && seedTotalOps >= 1000) {
+      submitSeedProof(activeSeed);
+    }
     process.exit(0);
   }
 });

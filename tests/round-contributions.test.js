@@ -52,7 +52,7 @@ function createMockDeps(overrides = {}) {
     getActivePeers: () => ['http://peer:3933'],
     getCurrentBlockHeight: () => 1000,
     getCurrentNetworkRoundId: () => 42,
-    requestPeerJson: () => null,
+    requestPeerJson: () => Promise.resolve(null),
     normalizePeerUrl: (url) => url,
     getLocalProbeChain: () => ({ chainIndex: 5 }),
     rewardForHeight: () => 50,
@@ -80,7 +80,7 @@ function createMockDeps(overrides = {}) {
 }
 
 async function run() {
-  const { createRoundContributions } = require('../electron-main/round-contributions');
+  const { createRoundContributions, verifyContributorSeedProofs } = require('../electron-main/round-contributions');
 
   await test('createRoundContributions is a function', () => {
     assert.strictEqual(typeof createRoundContributions, 'function');
@@ -130,6 +130,63 @@ async function run() {
     });
     const parsed = JSON.parse(msg);
     assert.strictEqual(parsed.address, '');
+  });
+
+  // -- buildRoundContributionMessage with seedProofs ----------------------------
+  await test('buildRoundContributionMessage includes seedProofs when provided', () => {
+    const rc = createRoundContributions(createMockDeps());
+    const proofs = [
+      { seed: 'aa', startState: 'bb', endState: 'cc', totalOps: 1000, burnMs: 5.5, intermediateProof: 'dd' },
+    ];
+    const msg = rc.buildRoundContributionMessage({
+      address: 'addr1',
+      roundId: 1,
+      totalWh: 10,
+      updatedAtMs: 100,
+      chainIndex: 0,
+      seedProofs: proofs,
+    });
+    const parsed = JSON.parse(msg);
+    assert.ok(Array.isArray(parsed.seedProofs));
+    assert.strictEqual(parsed.seedProofs.length, 1);
+    assert.strictEqual(parsed.seedProofs[0].totalOps, 1000);
+  });
+
+  await test('buildRoundContributionMessage omits seedProofs when not provided', () => {
+    const rc = createRoundContributions(createMockDeps());
+    const msg = rc.buildRoundContributionMessage({
+      address: 'addr1',
+      roundId: 1,
+      totalWh: 10,
+      updatedAtMs: 100,
+      chainIndex: 0,
+    });
+    const parsed = JSON.parse(msg);
+    assert.strictEqual(parsed.seedProofs, undefined);
+  });
+
+  await test('buildRoundContributionMessage includes seedProofs with correct structure', () => {
+    const rc = createRoundContributions(createMockDeps());
+    const proofs = [
+      { seed: 'aa', startState: 'bb', endState: 'cc', totalOps: 1000, burnMs: 5.5, intermediateProof: 'dd' },
+      { seed: 'ee', startState: 'ff', endState: '00', totalOps: 2000, burnMs: 10, intermediateProof: '11' },
+    ];
+    const msg = rc.buildRoundContributionMessage({
+      address: 'addr1',
+      roundId: 1,
+      totalWh: 10,
+      updatedAtMs: 100,
+      chainIndex: 0,
+      seedProofs: proofs,
+    });
+    const parsed = JSON.parse(msg);
+    assert.strictEqual(parsed.seedProofs.length, 2);
+    assert.strictEqual(parsed.seedProofs[0].seed, 'aa');
+    assert.strictEqual(parsed.seedProofs[0].startState, 'bb');
+    assert.strictEqual(parsed.seedProofs[0].endState, 'cc');
+    assert.strictEqual(parsed.seedProofs[0].intermediateProof, 'dd');
+    assert.strictEqual(parsed.seedProofs[1].seed, 'ee');
+    assert.strictEqual(parsed.seedProofs[1].totalOps, 2000);
   });
 
   // -- buildRewardMapFromRoundSnapshot -----------------------------------------
@@ -195,8 +252,6 @@ async function run() {
   });
 
   // -- validateContributionProbe -----------------------------------------------
-  // (requires witnessedProbeReceipts to be populated - complex setup)
-
   await test('validateContributionProbe returns insufficient attestations when no receipts', () => {
     const rc = createRoundContributions(
       createMockDeps({
@@ -294,6 +349,35 @@ async function run() {
     );
     const result = await rc.settleLocalLedgerRound({ blockHash: 'abc', minedAddress: 'addr1' });
     assert.strictEqual(result.ok, true);
+  });
+
+  // -- verifyContributorSeedProofs (standalone) --------------------------------
+  await test('verifyContributorSeedProofs is exported and is a function', () => {
+    assert.strictEqual(typeof verifyContributorSeedProofs, 'function');
+  });
+
+  await test('verifyContributorSeedProofs rejects malformed JSON string', async () => {
+    const result = await verifyContributorSeedProofs('{bad json', 'addr1', 10, 60000, new Map());
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.reason, 'invalid_message_format');
+  });
+
+  await test('verifyContributorSeedProofs rejects message without seedProofs array', async () => {
+    const result = await verifyContributorSeedProofs({ address: 'addr1' }, 'addr1', 10, 60000, new Map());
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.reason, 'no_seed_proofs');
+  });
+
+  await test('verifyContributorSeedProofs accepts message with no seedProofs and zero claimed energy', async () => {
+    const result = await verifyContributorSeedProofs({ address: 'addr1' }, 'addr1', 0, 60000, new Map());
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.verifiedWh, 0);
+  });
+
+  await test('verifyContributorSeedProofs rejects message with no seedProofs but positive claimed energy', async () => {
+    const result = await verifyContributorSeedProofs({ address: 'addr1' }, 'addr1', 5.0, 60000, new Map());
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.reason, 'no_seed_proofs');
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);

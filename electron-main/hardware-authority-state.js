@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const fsp = fs.promises;
 const path = require('path');
 const crypto = require('crypto');
 
@@ -66,6 +67,9 @@ function createHandlers(deps) {
       if (typeof data.lastHwResetAtMs === 'number') hwAuthority.lastHwResetAtMs = data.lastHwResetAtMs;
       if (typeof data.lastSearchCacheClearAtMs === 'number')
         hwAuthority.lastSearchCacheClearAtMs = data.lastSearchCacheClearAtMs;
+      if (typeof data.sha256OpsPerMs === 'number' && data.sha256OpsPerMs > 0)
+        hwAuthority.sha256OpsPerMs = data.sha256OpsPerMs;
+      if (typeof data.gpuOpsPerMs === 'number' && data.gpuOpsPerMs > 0) hwAuthority.gpuOpsPerMs = data.gpuOpsPerMs;
       if (hwAuthority.hwHoldUntilMs > 0 && hwAuthority.hwHoldUntilMs <= Date.now() && hwAuthority.trustScore === 0) {
         hwAuthority.trustScore = 25;
         hwAuthority.hwHoldUntilMs = 0;
@@ -86,6 +90,10 @@ function createHandlers(deps) {
                 if (typeof backup.lastHwResetAtMs === 'number') hwAuthority.lastHwResetAtMs = backup.lastHwResetAtMs;
                 if (typeof backup.lastSearchCacheClearAtMs === 'number')
                   hwAuthority.lastSearchCacheClearAtMs = backup.lastSearchCacheClearAtMs;
+                if (typeof backup.sha256OpsPerMs === 'number' && backup.sha256OpsPerMs > 0)
+                  hwAuthority.sha256OpsPerMs = backup.sha256OpsPerMs;
+                if (typeof backup.gpuOpsPerMs === 'number' && backup.gpuOpsPerMs > 0)
+                  hwAuthority.gpuOpsPerMs = backup.gpuOpsPerMs;
                 saveHwAuthState();
                 console.log('[hwAuth] Trust state recovered from encrypted attestation backup.');
                 recovered = true;
@@ -102,18 +110,25 @@ function createHandlers(deps) {
     }
   }
 
-  function saveHwAuthState() {
+  let _savePending = false;
+  let _saveTimer = null;
+
+  async function _doSaveHwAuthState() {
+    _savePending = false;
+    _saveTimer = null;
     try {
       const p = getHwAuthStatePath();
-      fs.mkdirSync(path.dirname(p), { recursive: true });
+      await fsp.mkdir(path.dirname(p), { recursive: true });
       const data = {
         trustScore: hwAuthority.trustScore,
         hwHoldUntilMs: hwAuthority.hwHoldUntilMs,
         lastHwResetAtMs: hwAuthority.lastHwResetAtMs,
         lastSearchCacheClearAtMs: hwAuthority.lastSearchCacheClearAtMs,
+        sha256OpsPerMs: hwAuthority.sha256OpsPerMs,
+        gpuOpsPerMs: hwAuthority.gpuOpsPerMs,
         trustResetEpoch: TRUST_RESET_EPOCH,
       };
-      fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
+      await fsp.writeFile(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
     } catch (_) {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
@@ -125,16 +140,27 @@ function createHandlers(deps) {
           hwHoldUntilMs: hwAuthority.hwHoldUntilMs,
           lastHwResetAtMs: hwAuthority.lastHwResetAtMs,
           lastSearchCacheClearAtMs: hwAuthority.lastSearchCacheClearAtMs,
+          sha256OpsPerMs: hwAuthority.sha256OpsPerMs,
+          gpuOpsPerMs: hwAuthority.gpuOpsPerMs,
         });
         const encrypted = safeStorage.encryptString(backupJson).toString('base64');
         const atPath = getAttestationDbFilePath();
-        const atRaw = fs.existsSync(atPath) ? JSON.parse(fs.readFileSync(atPath, 'utf8')) : {};
+        let atRaw = {};
+        try {
+          atRaw = JSON.parse(await fsp.readFile(atPath, 'utf8'));
+        } catch (_) {}
         atRaw.encryptedTrustBackup = encrypted;
-        fs.writeFileSync(atPath, JSON.stringify(atRaw, null, 2), 'utf8');
+        await fsp.writeFile(atPath, JSON.stringify(atRaw, null, 2), 'utf8');
       } catch (_) {
         if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     }
+  }
+
+  function saveHwAuthState() {
+    if (_savePending) return;
+    _savePending = true;
+    _saveTimer = setTimeout(_doSaveHwAuthState, 200);
   }
 
   return {

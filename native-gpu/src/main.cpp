@@ -12,6 +12,10 @@
 #include <mmsystem.h>
 #pragma comment(lib, "winmm.lib")
 
+// ── SHA-256 for hash-chain tokens ──────────────────────────────────────────
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
+
 // ── DXGI adapter enumeration (shared across D3D10/11/12) ──────────────────
 #include <dxgi1_6.h>
 #pragma comment(lib, "dxgi.lib")
@@ -78,6 +82,21 @@ static int (*g_dispatch_pow)(uint32_t seed, uint32_t difficulty, uint32_t startN
 static GpuInfo   g_info;
 static int       g_gpuReady; // set after select_gpu() succeeds
 
+// ── GPU hash-chain token state ─────────────────────────────────────────────
+// Matches the CPU worker protocol: sha256(prevState ‖ LE32(ops) ‖
+// burnResult(32) ‖ seed).  The iterated SHA-256 burn and hash run on the
+// CPU; the chain proves the binary was running at regular intervals.
+static uint32_t g_tokenFrameOps = 0; // must be set by JS via start/set tokenOps
+static uint8_t  g_tokenState[32];
+static uint8_t  g_tokenPrevState[32];
+static uint8_t  g_tokenPersistentState[32]; // 32-byte chain state for iterated burn
+static uint8_t  g_tokenSeed[32];
+static int      g_tokenSeedActive = 0;
+static BCRYPT_ALG_HANDLE g_hBcryptAlg = NULL;
+
+// Burn proof constants (must match token-verification.js)
+#define BURN_PROOF_STEP 256
+
 static void debug_out(const char *msg) {
     HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
     DWORD w;
@@ -93,6 +112,119 @@ static double now_ms(void) {
     QueryPerformanceFrequency(&f);
     QueryPerformanceCounter(&c);
     return (double)c.QuadPart * 1000.0 / (double)f.QuadPart;
+}
+
+// ── Hash-chain token helpers ────────────────────────────────────────────────
+static void hex_encode(const uint8_t *data, size_t len, char *out) {
+    static const char h[] = "0123456789abcdef";
+    for (size_t i = 0; i < len; i++) {
+        out[i*2]   = h[(data[i] >> 4) & 0xf];
+        out[i*2+1] = h[data[i] & 0xf];
+    }
+    out[len*2] = 0;
+}
+
+static int hex_decode(const char *hex, uint8_t *out, size_t maxLen) {
+    size_t len = strlen(hex);
+    if (len % 2 != 0 || len/2 > maxLen) return -1;
+    for (size_t i = 0; i < len; i += 2) {
+        uint8_t c1 = (uint8_t)hex[i], c2 = (uint8_t)hex[i+1];
+        if      (c1 >= '0' && c1 <= '9') c1 -= '0';
+        else if (c1 >= 'a' && c1 <= 'f') c1 = c1 - 'a' + 10;
+        else if (c1 >= 'A' && c1 <= 'F') c1 = c1 - 'A' + 10;
+        else return -1;
+        if      (c2 >= '0' && c2 <= '9') c2 -= '0';
+        else if (c2 >= 'a' && c2 <= 'f') c2 = c2 - 'a' + 10;
+        else if (c2 >= 'A' && c2 <= 'F') c2 = c2 - 'A' + 10;
+        else return -1;
+        out[i/2] = (c1 << 4) | c2;
+    }
+    return 0;
+}
+
+static int gpu_sha256(const uint8_t *data, size_t len, uint8_t out[32]) {
+    if (!g_hBcryptAlg) return -1;
+    BCRYPT_HASH_HANDLE h = NULL;
+    NTSTATUS s = BCryptCreateHash(g_hBcryptAlg, &h, NULL, 0, NULL, 0, 0);
+    if (s != 0) return -1;
+    s = BCryptHashData(h, (PUCHAR)data, (ULONG)len, 0);
+    if (s != 0) { BCryptDestroyHash(h); return -1; }
+    s = BCryptFinishHash(h, out, 32, 0);
+    BCryptDestroyHash(h);
+    return s == 0 ? 0 : -1;
+}
+
+static int gpu_burn_sha256(uint32_t ops, uint8_t outBurnResult[32], uint8_t outProof[32]) {
+    if (!g_hBcryptAlg) return -1;
+    // Start state = SHA-256(persistentState ‖ seed)
+    uint8_t startInput[64];
+    memcpy(startInput, g_tokenPersistentState, 32);
+    memcpy(startInput + 32, g_tokenSeed, 32);
+    uint8_t state[32];
+    if (gpu_sha256(startInput, 64, state) != 0) return -1;
+
+    // Intermediate states for proof
+    uint8_t intermediates[32 * 256]; // up to 256 intermediates (256 * BURN_PROOF_STEP = 65536 max ops)
+    int numIntermediates = 0;
+
+    for (uint32_t i = 0; i < ops; i++) {
+        // input = state(32) ‖ LE32(i) ‖ seed(32)
+        uint8_t input[68];
+        memcpy(input, state, 32);
+        input[32] = (uint8_t)(i);
+        input[33] = (uint8_t)(i >> 8);
+        input[34] = (uint8_t)(i >> 16);
+        input[35] = (uint8_t)(i >> 24);
+        memcpy(input + 36, g_tokenSeed, 32);
+        if (gpu_sha256(input, 68, state) != 0) return -1;
+        if (i % BURN_PROOF_STEP == 0 && numIntermediates < 256) {
+            memcpy(intermediates + numIntermediates * 32, state, 32);
+            numIntermediates++;
+        }
+    }
+
+    memcpy(outBurnResult, state, 32);
+
+    // Compute proof = SHA-256(concat(intermediates))
+    if (numIntermediates > 0) {
+        if (gpu_sha256(intermediates, (size_t)numIntermediates * 32, outProof) != 0) return -1;
+    } else {
+        uint8_t empty = 0;
+        if (gpu_sha256(&empty, 0, outProof) != 0) return -1;
+    }
+
+    // Advance persistent state
+    memcpy(g_tokenPersistentState, state, 32);
+    return 0;
+}
+
+static void gpu_emit_token(void) {
+    if (!g_tokenSeedActive || !g_hBcryptAlg) return;
+    uint8_t burnResult[32], proof[32];
+    double t0 = now_ms();
+    if (gpu_burn_sha256(g_tokenFrameOps, burnResult, proof) != 0) return;
+    double burnMs = now_ms() - t0;
+    // Build hash input: prevState(32) ‖ LE32(ops) ‖ burnResult(32) ‖ seed(32)
+    uint8_t input[100];
+    memcpy(input, g_tokenState, 32);
+    uint32_t ops = g_tokenFrameOps;
+    input[32] = (uint8_t)(ops);
+    input[33] = (uint8_t)(ops >> 8);
+    input[34] = (uint8_t)(ops >> 16);
+    input[35] = (uint8_t)(ops >> 24);
+    memcpy(input + 36, burnResult, 32);
+    memcpy(input + 68, g_tokenSeed, 32);
+    uint8_t newHash[32];
+    if (gpu_sha256(input, 100, newHash) != 0) return;
+    memcpy(g_tokenPrevState, g_tokenState, 32);
+    memcpy(g_tokenState, newHash, 32);
+    char sh[65], sd[65], br[65], pf[65];
+    hex_encode(newHash, 32, sh);
+    hex_encode(g_tokenSeed, 32, sd);
+    hex_encode(burnResult, 32, br);
+    hex_encode(proof, 32, pf);
+    json_out("{\"t\":\"token\",\"state\":\"%s\",\"burnResult\":\"%s\",\"ops\":%lu,\"seed\":\"%s\",\"ts\":%.0f,\"burnMs\":%.1f,\"proof\":\"%s\"}",
+             sh, br, (unsigned long)ops, sd, now_ms(), burnMs, pf);
 }
 
 static void json_out(const char *fmt, ...) {
@@ -1226,13 +1358,43 @@ static int select_gpu(void) {
 // ── JSON command handling ─────────────────────────────────────────────────
 static void handle_cmd(const char *line) {
     if (strcmp(line, "quit") == 0) exit(0);
-    if (strstr(line, "\"start\"") || strstr(line, "\"set\"")) {
+    if (strstr(line, "\"token\"")) {
+        const char *p = strstr(line, "\"seed\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (p) {
+                p++;
+                while (*p == ' ') p++;
+                if (*p == '"') p++;
+                const char *end = strchr(p, '"');
+                if (!end) end = p + strlen(p);
+                size_t sl = end - p;
+                if (sl > 0 && sl <= 64) {
+                    char sh[65] = {0};
+                    memcpy(sh, p, sl);
+                    hex_decode(sh, g_tokenSeed, 32);
+                    g_tokenSeedActive = 1;
+                }
+            }
+        }
+    } else if (strstr(line, "\"start\"") || strstr(line, "\"set\"")) {
         double pct = g_loadFrac * 100.0;
         const char *p = strstr(line, "\"loadPercent\"");
         if (p) { p = strchr(p, ':'); if (p) pct = atof(p + 1); }
         g_loadFrac = (pct < 0 ? 0 : (pct > 100 ? 100 : pct)) / 100.0;
+        // Parse tokenOps: load-proportional ops count for hash-chain tokens.
+        // JS side computes this from load fraction × opsPerMs baseline.
+        // REFUSE if not provided — no silent fallback to a weak default.
+        uint32_t tOps = 0;
+        p = strstr(line, "\"tokenOps\"");
+        if (p) { p = strchr(p, ':'); if (p) tOps = (uint32_t)atol(p + 1); }
+        if (tOps < 1000) {
+            json_out("{\"t\":\"error\",\"error\":\"tokenOps_required\",\"message\":\"start/set requires tokenOps >= 1000. JS must compute from load fraction.\"}");
+            return;
+        }
+        g_tokenFrameOps = tOps;
         g_running = 1;
-        json_out("{\"t\":\"ok\",\"loadPct\":%d}", (int)(g_loadFrac * 100));
+        json_out("{\"t\":\"ok\",\"loadPct\":%d,\"tokenOps\":%lu}", (int)(g_loadFrac * 100), (unsigned long)g_tokenFrameOps);
     } else if (strstr(line, "\"stop\"")) {
         g_running = 0;
         g_measDuty = 0;
@@ -1366,6 +1528,15 @@ int main(int argc, char *argv[]) {
     }
     g_gpuReady = 1;
 
+    // Initialize hash-chain token state
+    BCryptOpenAlgorithmProvider(&g_hBcryptAlg, BCRYPT_SHA256_ALGORITHM, NULL, 0);
+    {
+        uint8_t initRand[64];
+        BCryptGenRandom(NULL, initRand, 64, BCRYPT_USE_SYSTEM_RANDOM_RNG);
+        memcpy(g_tokenState, initRand, 32);
+        memcpy(g_tokenPersistentState, initRand + 32, 32);
+    }
+
     // Signal ready — must be after select_gpu() so g_info is populated
     json_out("{\"t\":\"ready\",\"ver\":3,\"backend\":\"%s\",\"adapter\":\"%s\",\"discrete\":%d,\"vramMb\":%llu,\"vendorId\":%u,\"deviceId\":%u}",
              g_info.backendStr, g_info.adapterName, g_info.isDiscrete,
@@ -1408,6 +1579,7 @@ int main(int argc, char *argv[]) {
             lastDispatchTime = t0;
             snprintf(buf, sizeof(buf), "[gpu] main_loop dispatch_load_enter frac=%.3f t=%.0f\n", g_loadFrac, t0); ods_out(buf);
             g_dispatch_load(2048, 2048, 256, t0 * 0.001);
+            gpu_emit_token();
             double burnMs = now_ms() - t0;
             if (burnMs < 0.2) burnMs = 0.2;
 

@@ -5,6 +5,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHwAuthSig) {
+  let _benchHistCache = null;
+  let _benchHistCachePath = '';
+
   function loadHwFingerprint() {
     try {
       const raw = fs.readFileSync(getHwFingerprintPath(), 'utf8');
@@ -45,7 +48,9 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
   function loadBenchmarkHistory() {
     const empty = { cpuSamples: [], memSamples: [], gpuSamples: [], jitterSamples: [] };
     try {
-      const raw = fs.readFileSync(getBenchmarkHistoryPath(), 'utf8');
+      const filePath = getBenchmarkHistoryPath();
+      if (_benchHistCache && _benchHistCachePath === filePath) return _benchHistCache;
+      const raw = fs.readFileSync(filePath, 'utf8');
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return empty;
       const { sig, ...data } = parsed;
@@ -56,7 +61,7 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
           return empty;
         }
       }
-      return {
+      const result = {
         cpuSamples: Array.isArray(data.cpuSamples)
           ? data.cpuSamples.map(Number).filter((v) => isFinite(v) && v > 0)
           : [],
@@ -70,6 +75,9 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
           ? data.jitterSamples.map(Number).filter((v) => isFinite(v) && v >= 0)
           : [],
       };
+      _benchHistCache = result;
+      _benchHistCachePath = filePath;
+      return result;
     } catch (_) {
       return empty;
     }
@@ -86,6 +94,7 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
       };
       fs.mkdirSync(path.dirname(p), { recursive: true });
       fs.writeFileSync(p, JSON.stringify({ ...data, sig: computeHwAuthSig(data) }), 'utf8');
+      _benchHistCache = null;
     } catch (_) {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }
@@ -94,6 +103,7 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
   function clearBenchmarkHistory() {
     try {
       fs.unlinkSync(getBenchmarkHistoryPath());
+      _benchHistCache = null;
     } catch (_) {
       if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
     }

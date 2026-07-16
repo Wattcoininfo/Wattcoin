@@ -3,18 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ASIC Mining and Wattcoin — How ASICs Work on PoE | Wattcoin Blog</title>
+    <title>SHA-256 Proof-of-Energy | Wattcoin Blog</title>
     <meta
       name="description"
-      content="How ASICs work with Proof-of-Energy — model-specific power lookup, no hash-rate obsolescence, and why the ASIC era is over."
+      content="How Wattcoin uses SHA-256 hash burning to prove energy expenditure — seed proofs, peer verification, and the mining loop explained."
     />
-    <link rel="canonical" href="https://wattcoin.ee/blog/asic-mining-wattcoin.html" />
-    <meta property="og:title" content="ASIC Mining and Wattcoin — How ASICs Work on PoE" />
+    <link rel="canonical" href="https://wattcoin.ee/blog/sha256-proof-of-energy.html" />
+    <meta property="og:title" content="SHA-256 Proof-of-Energy" />
     <meta
       property="og:description"
-      content="How ASICs work with Proof-of-Energy — model-specific power lookup, no hash-rate obsolescence, and why the ASIC era is over."
+      content="How Wattcoin uses SHA-256 hash burning to prove energy expenditure — seed proofs, peer verification, and the mining loop explained."
     />
-    <meta property="og:url" content="https://wattcoin.ee/blog/asic-mining-wattcoin.html" />
+    <meta property="og:url" content="https://wattcoin.ee/blog/sha256-proof-of-energy.html" />
     <meta property="og:type" content="article" />
     <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <meta property="og:image:width" content="1024" />
@@ -24,10 +24,10 @@
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Wattcoin Foundation" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="ASIC Mining and Wattcoin — How ASICs Work on PoE | Wattcoin Blog" />
+    <meta name="twitter:title" content="SHA-256 Proof-of-Energy | Wattcoin Blog" />
     <meta
       name="twitter:description"
-      content="How ASICs work with Proof-of-Energy — model-specific power lookup, no hash-rate obsolescence, and why the ASIC era is over."
+      content="How Wattcoin uses SHA-256 hash burning to prove energy expenditure — seed proofs, peer verification, and the mining loop explained."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
@@ -42,10 +42,10 @@
         "@graph": [
           {
             "@type": "Article",
-            "@id": "https://wattcoin.ee/blog/asic-mining-wattcoin.html#article",
-            "headline": "ASIC Mining and Wattcoin — How ASICs Work on PoE",
-            "url": "https://wattcoin.ee/blog/asic-mining-wattcoin.html",
-            "datePublished": "2026-05-31",
+            "@id": "https://wattcoin.ee/blog/sha256-proof-of-energy.html#article",
+            "headline": "SHA-256 Proof-of-Energy",
+            "url": "https://wattcoin.ee/blog/sha256-proof-of-energy.html",
+            "datePublished": "2026-07-16",
             "author": {
               "@type": "Organization",
               "name": "Wattcoin Foundation"
@@ -53,15 +53,15 @@
             "publisher": {
               "@id": "https://wattcoin.ee/#organization"
             },
-            "description": "How ASICs work with Proof-of-Energy — model-specific power lookup, no hash-rate obsolescence, and why the ASIC era is over.",
+            "description": "How Wattcoin uses SHA-256 hash burning to prove energy expenditure — seed proofs, peer verification, and the mining loop explained.",
             "mainEntityOfPage": {
               "@type": "WebPage",
-              "@id": "https://wattcoin.ee/blog/asic-mining-wattcoin.html"
+              "@id": "https://wattcoin.ee/blog/sha256-proof-of-energy.html"
             }
           },
           {
             "@type": "BreadcrumbList",
-            "@id": "https://wattcoin.ee/blog/asic-mining-wattcoin.html#breadcrumb",
+            "@id": "https://wattcoin.ee/blog/sha256-proof-of-energy.html#breadcrumb",
             "itemListElement": [
               {
                 "@type": "ListItem",
@@ -78,8 +78,8 @@
               {
                 "@type": "ListItem",
                 "position": 3,
-                "name": "ASIC Mining and Wattcoin — How ASICs Work on PoE",
-                "item": "https://wattcoin.ee/blog/asic-mining-wattcoin.html"
+                "name": "SHA-256 Proof-of-Energy",
+                "item": "https://wattcoin.ee/blog/sha256-proof-of-energy.html"
               }
             ]
           }
@@ -235,45 +235,6 @@
         line-height: 1.7;
       }
 
-      .post-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 60px;
-      }
-      .post-card {
-        background: #0d1a0d;
-        border: 1px solid #1e3a1e;
-        border-radius: 10px;
-        padding: 18px 22px;
-        display: flex;
-        gap: 16px;
-        align-items: center;
-        transition: border-color 0.2s;
-      }
-      .post-card:hover {
-        border-color: #4ade8050;
-      }
-      .post-card-num {
-        font-family: 'DM Mono', monospace;
-        font-size: 11px;
-        color: #4ade80;
-        min-width: 28px;
-        text-align: center;
-      }
-      .post-card h3 {
-        font-family: 'Playfair Display', serif;
-        font-size: 16px;
-        font-weight: 700;
-        color: #d7ffd9;
-      }
-      .post-card p {
-        font-size: 13px;
-        color: #6b8f6b;
-        line-height: 1.5;
-        margin-top: 3px;
-      }
-
       .blog-post {
         padding: 60px 0;
       }
@@ -394,10 +355,6 @@
       .comparison-table td:first-child {
         color: #7aaa7a;
       }
-      .comparison-table .wtc-row td {
-        color: #4ade80;
-        font-weight: 500;
-      }
       .step-list {
         counter-reset: step;
         list-style: none;
@@ -468,10 +425,6 @@
         .blog-post {
           padding: 40px 0;
         }
-        .post-card {
-          flex-direction: column;
-          text-align: center;
-        }
         .viz-box {
           padding: 16px;
         }
@@ -482,6 +435,33 @@
         .comparison-table td {
           padding: 6px 8px;
         }
+      }
+      .faq-item {
+        margin: 24px 0;
+        padding: 20px 24px;
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        border-radius: 10px;
+      }
+      .faq-item h3 {
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        color: #4ade80;
+        margin-bottom: 8px;
+      }
+      .faq-item p {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #cce5cc;
+      }
+      code {
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        background: #0d1a0d;
+        border: 1px solid #1e3a1e;
+        border-radius: 4px;
+        padding: 2px 6px;
+        color: #4ade80;
       }
     </style>
   </head>
@@ -497,151 +477,240 @@
     </nav>
     <div style="padding-top: 100px">
       <div class="container">
-        <article class="blog-post" id="asic-mining-and-wattcoin">
+        <article class="blog-post" id="sha256-proof-of-energy">
           <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
           <div class="tag-row">
             <span class="tag">Mining</span>
-            <span class="tag">ASIC</span>
-            <span class="tag">Hardware</span>
+            <span class="tag">SHA-256</span>
+            <span class="tag">Proof-of-Energy</span>
           </div>
-          <h1>ASIC Mining and Wattcoin — How ASICs Work on PoE</h1>
-          <div class="meta">May 31, 2026 &nbsp;&mdash;&nbsp; 5 min read</div>
+          <h1>SHA-256 Proof-of-Energy</h1>
+          <div class="meta">July 16, 2026 &nbsp;&mdash;&nbsp; 8 min read</div>
 
           <p>
-            Application-Specific Integrated Circuits (ASICs) have dominated cryptocurrency mining for over a decade.
-            From Bitcoin's SHA-256 to Litecoin's Scrypt, ASICs concentrated mining power in the hands of those with
-            access to fabrication and cheap electricity. On Wattcoin, ASICs are <strong>fully supported</strong> — the
-            miner detects Antminer, Whatsminer, Jasminer, Elphapex, Volcminer, NMMiner, and other ASIC hardware (via the
-            "Scan Network" button) and treats them as whole-device mining units.
+            Bitcoin uses SHA-256 to secure its blockchain — miners hash repeatedly until they find a value below a
+            difficulty target. The computation is <strong>purposeless by design</strong>: the only output is proof that
+            you spent electricity. Wattcoin takes the same SHA-256 primitive and repurposes it.
+            <strong>Every hash burned is a measurement of energy consumed</strong>, not a lottery ticket.
           </p>
 
-          <h3>How ASICs Work on Wattcoin</h3>
+          <h3>What is SHA-256?</h3>
 
           <p>
-            The Wattcoin miner classifies ASICs as <strong>whole-device mining units</strong> — unlike desktop PCs where
-            power is decomposed into CPU + GPU + memory components, each ASIC is treated as one unit. You declare the
-            ASIC model during benchmark (e.g. Antminer S21) and its rated power is looked up from the hardware table —
-            up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
-            <strong>Only verified ASIC models</strong> listed in the supported hardware database can be used. The
-            protocol estimates energy contribution as follows:
+            SHA-256 is a cryptographic hash function that takes any input and produces a fixed 256-bit (32-byte) output.
+            It is deterministic — the same input always yields the same output — and one-way: you cannot reverse the
+            output to recover the input. These properties make it ideal for tamper-proof computation verification.
           </p>
+
+          <p>
+            In Wattcoin, SHA-256 is the <strong>computational engine</strong> behind energy proof generation. Workers
+            burn through SHA-256 iterations in continuous loops, and the resulting state transitions serve as verifiable
+            evidence of work performed.
+          </p>
+
+          <h3>The Mining Loop</h3>
+
+          <p>
+            Wattcoin mining is a continuous cycle of three phases: <strong>seed assignment</strong>,
+            <strong>hash burning</strong>, and <strong>peer probe verification</strong>.
+          </p>
+
+          <ol class="step-list">
+            <li>
+              <strong>Seed assignment</strong> &mdash; The coordinator assigns a unique 32-bit seed to the worker. This
+              seed is the starting point for all SHA-256 computation in this interval. It changes with each probe cycle,
+              preventing precomputation or reuse of old work.
+            </li>
+            <li>
+              <strong>SHA-256 hash burning</strong> &mdash; The worker feeds the seed into a tight SHA-256 loop, hashing
+              continuously for the duration between probes (up to 60 seconds). Each iteration produces a new 256-bit
+              state. The worker tracks the starting state, ending state, total operations count, and elapsed wall-clock
+              time.
+            </li>
+            <li>
+              <strong>Proof generation</strong> &mdash; When the interval ends, the worker packages the results into a
+              <em>seed proof</em>: the start state, end state, total operations, burn duration in milliseconds, and an
+              optional intermediate proof for cross-verification.
+            </li>
+            <li>
+              <strong>Peer probe verification</strong> &mdash; A peer challenges the worker with a probe. The worker
+              runs a deterministic benchmark, submits the result, and the verifier re-executes the same computation to
+              confirm correctness. Only after the probe passes are the accumulated seed proofs counted toward energy
+              contribution.
+            </li>
+            <li>
+              <strong>Contribution flush</strong> &mdash; The verified seed proofs are converted to watt-hours using the
+              hardware's known power draw from specification tables, then broadcast to the P2P network as a signed
+              contribution to the current mining round.
+            </li>
+          </ol>
+
+          <h3>From Hashes to Watt-Hours</h3>
+
+          <p>The core formula is straightforward:</p>
 
           <div class="viz-box">
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>Energy (Wh) = Active ASICs &times; ASIC Power (W) &times; Time (h)</div>
+              <div>Energy (Wh) = Hardware Power (W) &times; Duty Cycle (%) &times; Time (h)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Each active ASIC contributes at its full rated power — no partial load
+                // Verified hardware power &times; configured load &times; measured burn duration
               </div>
             </div>
           </div>
 
           <p>
-            An Antminer S21 draws <strong>3500 W</strong> — roughly <strong>8x the power</strong> of a high-end GPU rig,
-            earning rewards proportionally faster. The key difference from PoW: hash rate does not determine rewards.
-            However, the ASIC must compute real X11 hashes and submit valid stratum shares to prove liveness as part of
-            the attestation process.
+            The SHA-256 loop serves two purposes here. First, it <strong>consumes real electricity</strong> — the CPU or
+            GPU is actively computing, drawing power from the wall. Second, it produces a
+            <strong>verifiable state transition</strong> that peers can independently recompute to confirm the worker
+            actually did the work.
           </p>
-
-          <h3>ASIC Advantage Reversed</h3>
 
           <p>
-            In Proof-of-Work, ASICs win by computing more hashes per watt. On Proof-of-Energy, the ASIC must still
-            compute real X11 hashes and submit valid shares to prove it is alive and hashing — but hash rate does not
-            determine rewards. The ASIC contributes energy through its power draw, and the reward is proportional to
-            that energy contribution, not to how fast it can hash.
+            The hardware power draw comes from known specification tables — each CPU model and GPU model has a
+            documented TDP (thermal design power). The duty cycle is the miner's configured load percentage. The burn
+            duration is measured by the worker's clock and bounded by the probe interval.
           </p>
 
-          <div class="viz-box">
-            <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>PoW: Reward &#x221D; Hash Rate / Network Hash Rate</div>
-              <div>PoE: Reward &#x221D; Energy (Wh) / Network Energy (Wh)</div>
-              <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // ASICs optimized the top formula. PoE uses the bottom one — power is all that matters.
-              </div>
-            </div>
-          </div>
+          <h3>Seed Proofs: The Evidence</h3>
 
-          <h3>No Obsolescence</h3>
-
-          <p>
-            The ASIC arms race in PoW was brutal: each new fabrication node made previous-generation hardware obsolete
-            within 18–24 months, creating massive e-waste. On Wattcoin, an ASIC's mining capability does not depend on
-            its hash rate. Every ASIC model is looked up by its model name with its specific power rating. An older S9
-            (1350 W) contributes less than a modern S21 (3500 W) simply because it draws less power. However, the S9 is
-            still fully productive — there is no hash-rate obsolescence penalty.
-          </p>
+          <p>A seed proof is a compact record of SHA-256 computation:</p>
 
           <table class="comparison-table">
             <thead>
               <tr>
-                <th></th>
-                <th>PoW (Bitcoin)</th>
-                <th>PoE (Wattcoin)</th>
+                <th>Field</th>
+                <th>Description</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>Hardware advantage</td>
-                <td>Newest ASIC dominates</td>
-                <td>Model-specific power matters</td>
+                <td>startState</td>
+                <td>The SHA-256 hash of the assigned seed — the initial state</td>
               </tr>
               <tr>
-                <td>Obsolescence cycle</td>
-                <td>18–24 months</td>
-                <td>Never — old units still draw power</td>
+                <td>endState</td>
+                <td>The final SHA-256 hash after N iterations — deterministic given startState and N</td>
               </tr>
               <tr>
-                <td>Capital barrier</td>
-                <td>High (latest fab nodes)</td>
-                <td>Any ASIC works at any age</td>
+                <td>totalOps</td>
+                <td>Number of SHA-256 iterations performed in this proof</td>
               </tr>
               <tr>
-                <td>Hash logic mattering for rewards</td>
-                <td>Yes — higher hash rate = more rewards</td>
-                <td>No — hash verified for liveness, not for rewards</td>
+                <td>burnMs</td>
+                <td>Wall-clock time the worker spent hashing, in milliseconds</td>
               </tr>
               <tr>
-                <td>E-waste per coin</td>
-                <td>Massive</td>
-                <td>Minimal — old hardware stays useful</td>
+                <td>intermediateProof</td>
+                <td>A mid-chain hash value for cross-verification without re-running the full chain</td>
               </tr>
             </tbody>
           </table>
 
-          <h3>Getting Started</h3>
+          <p>
+            Any peer can verify a seed proof by re-running the SHA-256 chain from <code>startState</code> for
+            <code>totalOps</code> iterations and checking that the result matches <code>endState</code>. This is
+            <strong>deterministic and fast</strong> — verification takes milliseconds regardless of how long the
+            original computation took.
+          </p>
 
-          <ol class="step-list">
+          <h3>Why SHA-256 and Not Something Else?</h3>
+
+          <p>
+            SHA-256 is universally supported, hardware-accelerated on modern CPUs and GPUs, and has well-understood
+            performance characteristics. This makes it ideal for energy estimation: the relationship between hash rate
+            and power consumption is predictable and measurable for every hardware model.
+          </p>
+
+          <ul>
             <li>
-              <strong>Plug in and scan</strong><br />
-              Connect your ASIC to power and network. In the Wattcoin Miner, click <strong>"Scan Network"</strong> to
-              auto-detect supported models (Antminer, Whatsminer, Jasminer, Elphapex, Volcminer, NMMiner, and
-              cgminer-compatible ASICs).
+              <strong>CPU miners</strong> run a single-threaded SHA-256 chain. The iteration count and wall-clock time
+              directly reflect the CPU's single-core throughput.
             </li>
             <li>
-              <strong>Configure in the miner app</strong><br />
-              The miner lists detected ASICs as whole-device mining units. Declare your ASIC model during benchmark to
-              set the power estimate — all ASICs on this host use that model's power rating.
+              <strong>GPU miners</strong> run a parallel SHA-256 grid across compute units. Each device produces a nonce
+              proof that is verified against a difficulty target.
             </li>
             <li>
-              <strong>Start mining</strong><br />
-              The app auto-configures each ASIC to connect to a built-in local stratum pool and starts verifying
-              liveness via hash challenges and share submission. The protocol credits your energy contribution
-              proportionally — no external pool setup needed.
+              <strong>Memory miners</strong> run the same SHA-256 hash chain as CPU, alongside memory walks that stress
+              DRAM bandwidth. The SHA-256 output serves as the verifiable seed proof, while the pointer-chasing pattern
+              ensures real memory subsystem load.
             </li>
-          </ol>
+          </ul>
+
+          <p>
+            Each hardware type has its own power profile in the specification tables. The protocol does not care which
+            hardware you use — it measures energy, not speed.
+          </p>
+
+          <h3>Peer Verification</h3>
+
+          <p>
+            Energy claims are not taken on trust. Every worker is periodically challenged by a peer through the
+            <strong>probe system</strong>. A probe issues a time-bounded computational task — a VDF (Verifiable Delay
+            Function) proof-of-time combined with a hardware-specific benchmark. The verifier re-executes the same
+            computation and checks the result.
+          </p>
+
+          <p>
+            If the probe passes, the worker's accumulated seed proofs from that interval are flushed to the round ledger
+            as verified energy contribution. If the probe fails — proof mismatch, suspiciously fast timing, or hardware
+            liveness check failure — the energy is discarded and the worker's trust score is penalized.
+          </p>
 
           <div class="info-callout">
-            <strong>Key takeaway:</strong> ASICs are first-class citizens on Wattcoin. Their high power draw makes them
-            powerful mining machines — but their hash rate speed does not affect rewards. Each ASIC's hashing is
-            verified through challenges and share submission to prove liveness, then it contributes energy at its rated
-            power. The arms race becomes a race toward cheaper power, not newer silicon.
+            <strong>Key takeaway:</strong> SHA-256 in Wattcoin is not a puzzle to solve — it is a measuring instrument.
+            Every hash burned is a verifiable unit of energy expenditure, confirmed by peer re-execution and converted
+            to watt-hours using known hardware specifications.
           </div>
 
           <p>
-            <a href="/wattcoin-whitepaper.html"
-              >Read the whitepaper for the complete Proof-of-Energy specification &rarr;</a
-            >
+            <a href="/blog/proof-of-energy-consensus.html">Read more about Proof-of-Energy consensus &rarr;</a> or
+            <a href="/wattcoin-whitepaper.html">the full whitepaper &rarr;</a> for the complete technical specification.
           </p>
+
+          <h2 style="margin-top: 48px">Frequently Asked Questions</h2>
+
+          <div class="faq-item">
+            <h3>How does SHA-256 prove energy consumption?</h3>
+            <p>
+              SHA-256 computation requires transistors to switch, which consumes electricity. By running a known
+              computation for a measured duration on known hardware, the energy consumed can be estimated from the
+              hardware's power draw specification. The SHA-256 output serves as proof that the computation actually
+              happened — peers can re-run the same chain and verify the result matches.
+            </p>
+          </div>
+
+          <div class="faq-item">
+            <h3>Can someone fake the SHA-256 computation?</h3>
+            <p>
+              No. The seed proof is a deterministic state transition — given a starting state and iteration count, there
+              is exactly one valid ending state. A peer can verify the proof by re-computing the SHA-256 chain in
+              milliseconds. Faking the proof would require producing the correct final hash without actually performing
+              the computation, which is computationally infeasible.
+            </p>
+          </div>
+
+          <div class="faq-item">
+            <h3>Why not just count hash rate like Bitcoin?</h3>
+            <p>
+              Bitcoin rewards the fastest hasher. Wattcoin rewards the most energy spent. Hash rate is a proxy for
+              energy, but an imperfect one — different hardware architectures achieve vastly different hash rates at the
+              same power draw. By measuring energy directly through verified computation time on known hardware,
+              Wattcoin eliminates the ASIC arms race and makes every watt of electricity count equally.
+            </p>
+          </div>
+
+          <div class="faq-item">
+            <h3>What prevents someone from claiming more energy than they actually used?</h3>
+            <p>
+              Three layers of protection. First, the hardware specification tables cap the claimed power draw to known
+              TDP values — you cannot claim 500W from a CPU rated at 65W. Second, the duty-cycle configuration limits
+              the percentage of time the hardware is assumed to be active. Third, peer probes verify that the worker is
+              actually performing the claimed computation in real time — a VDF proof-of-time proves sequential time
+              elapsed, and the benchmark proof proves the hardware executed the work.
+            </p>
+          </div>
+
           <a href="/blog.html" class="back-link" style="display: inline-block; margin-top: 32px"
             >&larr; Back to all posts</a
           >
@@ -666,10 +735,10 @@
           if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
           return n;
         }
-        var counted = sessionStorage.getItem('wtc_pg_asic-mining-wattcoin');
+        var counted = sessionStorage.getItem('wtc_pg_sha256-proof-of-energy');
         var method = counted ? 'GET' : 'POST';
-        if (!counted) sessionStorage.setItem('wtc_pg_asic-mining-wattcoin', '1');
-        fetch(BASE + 'blog-asic-mining-wattcoin', { method: method })
+        if (!counted) sessionStorage.setItem('wtc_pg_sha256-proof-of-energy', '1');
+        fetch(BASE + 'blog-sha256-proof-of-energy', { method: method })
           .then(function (r) {
             return r.json();
           })

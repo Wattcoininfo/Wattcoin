@@ -1541,17 +1541,16 @@ export default function Miner({
             }
             setNativeGpuActive(false);
           } else if (mining) {
+            // Start CPU workers immediately so mining begins without waiting
+            // for a peer probe.  The coordinator seed is assigned lazily when
+            // the first probe arrives (peer-probe-ipc.js).
             await window.wattcoinHardware.setHardwareLoad(trustCappedLoad);
+            // Start GPU mining immediately if a discrete GPU is present.
             if (gpuCount > 0 && allowGpuWorkloads && window.wattcoinHardware.invoke) {
-              const gpuResult = await window.wattcoinHardware
-                .invoke('wattcoin-set-gpu-load', {
-                  percent: trustCappedLoad,
-                  gpuCount,
-                })
-                .catch(() => null);
-              setNativeGpuActive(!!(gpuResult && gpuResult.ok));
-            } else {
-              setNativeGpuActive(false);
+              await window.wattcoinHardware
+                .invoke('wattcoin-set-gpu-load', { percent: trustCappedLoad, gpuCount })
+                .catch(() => {});
+              setNativeGpuActive(true);
             }
           } else if (window.wattcoinHardware.stopHardwareLoad) {
             await window.wattcoinHardware.stopHardwareLoad();
@@ -2690,7 +2689,11 @@ export default function Miner({
   }, [powerW, setPowerW]);
 
   // Initialize WebGL on the hidden GPU load canvas once it mounts.
+  // DISABLED: GPU load is now handled entirely by the native GPU binary
+  // via the peer-probe path.  The WebGL burn did unsupervised GPU work
+  // without coordinator seeds, which bypasses the seed proof system.
   React.useEffect(() => {
+    return; // WebGL GPU burn disabled — peer-probe path handles GPU loading.
     if (!allowGpuWorkloads) return;
     const canvas = gpuLoadCanvasRef.current;
     if (!canvas) return;

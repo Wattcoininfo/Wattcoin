@@ -67,6 +67,7 @@ function requestExternalResponse(url, timeoutMs = AUTO_PUBLIC_IP_LOOKUP_TIMEOUT_
       url,
       {
         timeout: timeoutMs,
+        agent: false,
         headers: {
           'User-Agent': 'wattcoin-miner/1.0 (public-ip-detect)',
           Accept: 'text/plain',

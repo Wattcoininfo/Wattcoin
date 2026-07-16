@@ -46,7 +46,7 @@ try {
       getBenchmarkCapabilities: () => ipcRenderer.invoke('wattcoin-get-benchmark-capabilities'),
       isHardwareRecognized: (opts) => ipcRenderer.invoke('wattcoin-is-hardware-recognized', opts || {}),
       runBackendBenchmark: (request) => ipcRenderer.invoke('wattcoin-run-backend-benchmark', request || {}),
-      setHardwareLoad: (percent) => ipcRenderer.invoke('wattcoin-set-hardware-load', percent),
+      setHardwareLoad: (percent, opts) => ipcRenderer.invoke('wattcoin-set-hardware-load', percent, opts || {}),
       stopHardwareLoad: () => ipcRenderer.invoke('wattcoin-stop-hardware-load'),
       getHardwareLoadState: () => ipcRenderer.invoke('wattcoin-get-hardware-load-state'),
       exportWalletBackup: (options) => ipcRenderer.invoke('wattcoin-export-wallet-backup', options || {}),

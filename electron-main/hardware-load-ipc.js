@@ -15,12 +15,20 @@ function registerHardwareLoadIpcHandlers(
     runGpuPowProbe,
   },
 ) {
-  ipcMain.handle('wattcoin-set-hardware-load', (_, percent) => {
+  ipcMain.handle('wattcoin-set-hardware-load', (_, percent, opts) => {
     const pct = Number(percent);
     if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
       return { ok: false, error: 'percent must be a finite number between 0 and 100' };
     }
     try {
+      // storeOnly: record the target percent without spawning workers or starting
+      // load.  The peer-probe path is responsible for actual CPU/GPU loading so
+      // that hardware only starts when a coordinator-issued seed arrives.
+      if (opts && opts.storeOnly) {
+        hwAuthority.currentLoadPercent = pct;
+        setProbeLoadPercent(pct);
+        return { ok: true, appliedPercent: pct, storeOnly: true, ...getHardwareLoadState() };
+      }
       const appliedPercent = setHardwareLoadPercent(pct);
       hwAuthority.currentLoadPercent = typeof appliedPercent === 'number' ? appliedPercent : pct;
       setProbeLoadPercent(hwAuthority.currentLoadPercent);

@@ -75,7 +75,18 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
       : crypto.randomBytes(4).readUInt32BE(0) & 0x7fffffff || 1;
   const seed = (rawSeed & 0x7fffffff) | 1;
   const types = ['cpu', 'memory', ...(gpuPowCapable ? ['gpu-pow'] : []), ...(hasAsic ? ['asic'] : [])];
-  const type = types[Math.floor(Math.random() * types.length)];
+  const isNewWorker = !workerChainState.has(workerId);
+  let type;
+  if (isNewWorker) {
+    type = 'cpu';
+  } else if (gpuPowCapable) {
+    // CPU + GPU + memory: 45% CPU, 45% GPU, 10% memory
+    const r = Math.random();
+    type = r < 0.45 ? 'cpu' : r < 0.9 ? 'gpu-pow' : 'memory';
+  } else {
+    // CPU + memory only: 90% CPU, 10% memory
+    type = Math.random() < 0.9 ? 'cpu' : 'memory';
+  }
 
   const probe = {
     id: `peer-${now.toString(36)}-${seed.toString(16)}`,

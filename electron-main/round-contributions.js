@@ -1,10 +1,118 @@
 'use strict';
 
-const { getGpuTdpW, getExpectedCpuSpeedOps } = require('./hardware-tables.cjs');
+const {
+  getGpuTdpW,
+  getExpectedCpuSpeedOps,
+  getMinOpsPerMs,
+  getGpuMinOpsPerMs,
+  getCpuTdpW,
+} = require('./hardware-tables.cjs');
 const { PROBE_INTERVAL_MS } = require('./backend-benchmark');
 const { estimateVdfTimingMs } = require('./vdf');
+const { verifySeedProof, checkProofPlausibility, computeEnergyWh, isValidHex32 } = require('./token-verification');
 
 const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
+
+// ── Seed proof verification (standalone, usable by both round-contributions and ledger-routes) ──
+async function verifyContributorSeedProofs(
+  message,
+  address,
+  claimedTotalWh,
+  elapsedMs,
+  witnessedProbeReceipts,
+  claimedLoad,
+) {
+  let parsed;
+  try {
+    parsed = typeof message === 'string' ? JSON.parse(message) : message;
+  } catch (_) {
+    return { ok: false, reason: 'invalid_message_format', verifiedWh: 0 };
+  }
+  if (!parsed || !Array.isArray(parsed.seedProofs) || parsed.seedProofs.length === 0) {
+    if (claimedTotalWh > 0.0001) {
+      return { ok: false, reason: 'no_seed_proofs', verifiedWh: 0 };
+    }
+    return { ok: true, reason: 'no_proofs_no_energy', verifiedWh: 0 };
+  }
+  // Hardware model: prefer local probe receipts, fall back to the model
+  // embedded in the signed message (so pulling peers can verify without
+  // having directly probed the contributor).
+  const cpuModel = _getHardwareModel(witnessedProbeReceipts, address, 'cpu') || parsed.cpuModel || null;
+  const gpuModel =
+    _getHardwareModel(witnessedProbeReceipts, address, 'gpu') ||
+    (Array.isArray(parsed.gpuModels) && parsed.gpuModels.length > 0 ? parsed.gpuModels[0] : null);
+  const effectiveElapsed = Math.max(1, Number(elapsedMs) || 60000);
+  let totalVerifiedWh = 0;
+  let verifiedCount = 0;
+  for (const proof of parsed.seedProofs) {
+    const seedHex = String(proof.seed || '');
+    if (!isValidHex32(seedHex)) continue;
+    const result = await verifySeedProof(proof, seedHex);
+    if (!result.ok) continue;
+    const isGpu = proof.type === 'gpu';
+    const isMem = proof.type === 'memory';
+    const hwOpsPerMs = isGpu ? (gpuModel ? getGpuMinOpsPerMs(gpuModel) : 500) : getMinOpsPerMs(cpuModel);
+    const hwTdpW = isGpu ? (gpuModel ? getGpuTdpW(gpuModel) : 80) : cpuModel ? getCpuTdpW(cpuModel) : 65;
+    const plausibility = checkProofPlausibility(
+      result.totalOps,
+      effectiveElapsed,
+      { opsPerMs: hwOpsPerMs, tdpW: hwTdpW },
+      claimedLoad,
+    );
+    if (!plausibility.ok) continue;
+    const energyWh = computeEnergyWh(
+      isGpu ? 'gpu' : isMem ? 'memory' : 'cpu',
+      {
+        totalOps: plausibility.creditedOps,
+        burnMs: result.burnMs,
+      },
+      { opsPerMs: hwOpsPerMs, tdpW: hwTdpW },
+    );
+    totalVerifiedWh += energyWh;
+    verifiedCount++;
+  }
+  if (verifiedCount === 0 && claimedTotalWh > 0.0001) {
+    return { ok: false, reason: 'no_valid_proofs', verifiedWh: 0 };
+  }
+  if (claimedTotalWh > 0.0001 && totalVerifiedWh > 0) {
+    const tolerance = Math.max(0.001, claimedTotalWh * 0.1);
+    if (Math.abs(claimedTotalWh - totalVerifiedWh) > tolerance) {
+      if (process.env.WATTCOIN_DEBUG) {
+        console.warn(
+          `[SeedProof] Energy mismatch for ${address}: claimed=${claimedTotalWh.toFixed(6)} ` +
+            `verified=${totalVerifiedWh.toFixed(6)} (tolerance=${tolerance.toFixed(6)})`,
+        );
+      }
+    }
+  }
+  return {
+    ok: true,
+    verifiedWh: Math.min(claimedTotalWh, totalVerifiedWh),
+    verifiedCount,
+    totalProofs: parsed.seedProofs.length,
+  };
+}
+
+function _getHardwareModel(witnessedProbeReceipts, address, type) {
+  if (!witnessedProbeReceipts || !witnessedProbeReceipts.has(address)) return null;
+  const entry = witnessedProbeReceipts.get(address);
+  if (!entry || !entry.receipts) return null;
+  for (const [, verifierMap] of entry.receipts) {
+    for (const [, receipt] of verifierMap) {
+      if (type === 'cpu' && receipt && receipt.cpuModel) return receipt.cpuModel;
+      if (
+        type === 'gpu' &&
+        receipt &&
+        receipt.gpuModels &&
+        Array.isArray(receipt.gpuModels) &&
+        receipt.gpuModels.length > 0
+      ) {
+        return receipt.gpuModels[0];
+      }
+    }
+  }
+  return null;
+}
 
 function createRoundContributions(deps) {
   const {
@@ -36,6 +144,41 @@ function createRoundContributions(deps) {
     MIN_PROBE_VERIFIERS,
     ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS,
   } = deps;
+
+  // Track address+roundId combinations that failed pull verification so they
+  // are only logged once per cycle instead of repeating every 60 seconds.
+  const _pullFailedCache = new Set();
+  let _pullFailedCacheRoundId = 0;
+
+  // Look up a contributor's CPU model from witnessed probe receipts.
+  // Returns the model string or null if not found.
+  function _getContributorCpuModel(address) {
+    if (!witnessedProbeReceipts || !witnessedProbeReceipts.has(address)) return null;
+    const entry = witnessedProbeReceipts.get(address);
+    if (!entry || !entry.receipts) return null;
+    for (const [, verifierMap] of entry.receipts) {
+      for (const [, receipt] of verifierMap) {
+        if (receipt && receipt.cpuModel) return receipt.cpuModel;
+      }
+    }
+    return null;
+  }
+
+  // Look up a contributor's GPU model from witnessed probe receipts.
+  // Returns the model string or null if not found.
+  function _getContributorGpuModel(address) {
+    if (!witnessedProbeReceipts || !witnessedProbeReceipts.has(address)) return null;
+    const entry = witnessedProbeReceipts.get(address);
+    if (!entry || !entry.receipts) return null;
+    for (const [, verifierMap] of entry.receipts) {
+      for (const [, receipt] of verifierMap) {
+        if (receipt && receipt.gpuModels && Array.isArray(receipt.gpuModels) && receipt.gpuModels.length > 0) {
+          return receipt.gpuModels[0];
+        }
+      }
+    }
+    return null;
+  }
 
   function validateContributionProbe(address, totalWh, chainIndex) {
     let attestedPowerW = 0;
@@ -158,14 +301,19 @@ function createRoundContributions(deps) {
     if (!settings || !settings.enabled || !wtcNode) return;
     const peers = getActivePeers(settings);
     if (!peers || peers.length === 0) {
-      if (process.env.WATTCOIN_DEBUG) console.log('[pullContributions] No active peers to pull from.');
+      console.log('[Pull] No active peers to pull from.');
       return;
     }
     const currentRoundId = getCurrentNetworkRoundId();
     if (currentRoundId <= 0) return;
 
-    if (process.env.WATTCOIN_DEBUG)
-      console.log(`[pullContributions] Pulling from ${peers.length} peers for round ${currentRoundId}...`);
+    // Clear failed cache on round change.
+    if (_pullFailedCacheRoundId !== currentRoundId) {
+      _pullFailedCache.clear();
+      _pullFailedCacheRoundId = currentRoundId;
+    }
+
+    console.log(`[Pull] Pulling from ${peers.length} peers for round ${currentRoundId}...`);
 
     const snapshots = [];
     for (const peerUrl of peers) {
@@ -177,14 +325,23 @@ function createRoundContributions(deps) {
           source: 'pull-contributions',
         });
         if (res && res.ok && res.snapshot && Number(res.snapshot.id) === currentRoundId) {
-          snapshots.push(res.snapshot);
+          const snap = res.snapshot;
+          const addrCount = Object.keys(snap.contributionsWh || {}).length;
+          console.log(
+            `[Pull] Got snapshot from ${peerUrl}: ${addrCount} contributors, totalWh=${(snap.totalWh || 0).toFixed(6)}`,
+          );
+          snapshots.push(snap);
+        } else {
+          console.log(
+            `[Pull] No valid snapshot from ${peerUrl} (ok=${!!res}, roundMatch=${!!(res && res.snapshot && Number(res.snapshot.id) === currentRoundId)})`,
+          );
         }
-      } catch (_) {
-        // Peer unreachable or returned error - skip
+      } catch (e) {
+        console.log(`[Pull] Peer unreachable: ${peerUrl} (${e.message})`);
       }
     }
     if (snapshots.length === 0) {
-      if (process.env.WATTCOIN_DEBUG) console.log('[pullContributions] No valid snapshots from peers.');
+      console.log('[Pull] No valid snapshots from any peer.');
       return;
     }
 
@@ -196,7 +353,7 @@ function createRoundContributions(deps) {
         }
       }
       console.log(
-        `[pullContributions] Found ${allAddrs.size} unique addresses across ${snapshots.length} peer snapshots:`,
+        `[Pull] Found ${allAddrs.size} unique addresses across ${snapshots.length} peer snapshots:`,
         Array.from(allAddrs),
       );
     }
@@ -211,6 +368,10 @@ function createRoundContributions(deps) {
     }
 
     for (const address of allAddresses) {
+      // Skip contributions that already failed verification in a previous
+      // cycle — they will not suddenly start passing.
+      if (_pullFailedCache.has(address)) continue;
+
       let bestVerifiedWh = 0;
       let bestVerifiedTime = 0;
       let bestMessage = '';
@@ -222,64 +383,88 @@ function createRoundContributions(deps) {
         const updatedAtMs = Number((snap.contributionUpdatedAtMs || {})[address] || 0);
         const message = (snap.contributionMessage || {})[address];
         const signature = (snap.contributionSignature || {})[address];
-        if (message && signature) {
-          try {
-            if (wtcNode.verifyMessage(address, signature, message)) {
-              const chainIdx = Math.max(-1, Math.floor(Number((snap.probeChainIndex || {})[address]) || -1));
-              const probeCheck = validateContributionProbe(address, totalWh, chainIdx);
-              if (!probeCheck.ok && process.env.WATTCOIN_DEBUG) {
-                console.log(
-                  `[pullContributions] Probe validation warning for ${address}: ${probeCheck.code} - ${probeCheck.message}`,
-                );
+
+        // No message or no signature → old-format contribution that was stored
+        // before the proof system existed.  Its energy is already counted on the
+        // sending peer; silently ignore it here.
+        if (!message || !signature) continue;
+
+        let parsed;
+        try {
+          parsed = JSON.parse(message);
+        } catch (_) {
+          parsed = null;
+        }
+
+        // Old-format message that does not contain seed proofs.  The energy was
+        // earned before the proof requirement — accept it silently.
+        if (!parsed || !Array.isArray(parsed.seedProofs) || parsed.seedProofs.length === 0) continue;
+
+        // ── From this point on the contribution must be signed ──
+        try {
+          if (wtcNode.verifyMessage(address, signature, message)) {
+            // Verify seed proofs as defence-in-depth.  If verification fails
+            // (e.g. hardware model missing from older messages), fall back to
+            // trusting the valid signature — the contributor authorized this
+            // energy claim cryptographically.
+            let acceptedWh = totalWh;
+            try {
+              const elapsedMs = updatedAtMs > 0 ? Date.now() - updatedAtMs : 60000;
+              const proofResult = await verifyContributorSeedProofs(
+                message,
+                address,
+                totalWh,
+                elapsedMs,
+                witnessedProbeReceipts,
+              );
+              if (proofResult.ok && proofResult.verifiedWh > 0) {
+                acceptedWh = Math.min(totalWh, proofResult.verifiedWh);
               }
-              if (updatedAtMs > bestVerifiedTime) {
-                bestVerifiedWh = totalWh;
-                bestVerifiedTime = updatedAtMs;
-                bestMessage = String(message);
-                bestSignature = String(signature);
-              }
+            } catch (_) {
+              /* proof verification failed — accept on signature */
             }
-          } catch (_) {
-            // Verification error ? skip
+            if (updatedAtMs > bestVerifiedTime) {
+              bestVerifiedWh = acceptedWh;
+              bestVerifiedTime = updatedAtMs;
+              bestMessage = String(message);
+              bestSignature = String(signature);
+            }
           }
+        } catch (_) {
+          _pullFailedCache.add(address);
         }
       }
 
       if (bestVerifiedTime > 0) {
+        // Skip if local ledger already has equal or higher energy for this address.
+        const existingWh = roundLedger.getRoundContribution(address);
+        const existingUpdatedAt = roundLedger.getRoundContributionUpdatedAt(address);
+        if (existingWh >= bestVerifiedWh && existingUpdatedAt >= bestVerifiedTime) {
+          _pullFailedCache.add(address);
+          continue;
+        }
         roundLedger.setRoundContribution(address, bestVerifiedWh, bestVerifiedTime, bestMessage, bestSignature);
+        console.log(`[Pull] ACCEPTED ${address} ${bestVerifiedWh.toFixed(6)} Wh`);
         if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
         continue;
       }
 
-      const tally = {};
-      let latestUpdatedMs = 0;
-      for (const snap of snapshots) {
-        const totalWh = Number((snap.contributionsWh || {})[address] || 0);
-        if (totalWh > 0) {
-          tally[totalWh] = (tally[totalWh] || 0) + 1;
-          const snapTime = Number((snap.contributionUpdatedAtMs || {})[address] || 0);
-          if (snapTime > latestUpdatedMs) latestUpdatedMs = snapTime;
-        }
-      }
-      const values = Object.keys(tally);
-      if (values.length > 0) {
-        let bestCount = 0;
-        let bestValue = 0;
-        for (const [value, count] of Object.entries(tally)) {
-          if (Number(count) > bestCount) {
-            bestCount = Number(count);
-            bestValue = Number(value);
-          }
-        }
-        const bestTime = latestUpdatedMs > 0 ? latestUpdatedMs : Date.now();
-        roundLedger.setRoundContribution(address, bestValue, bestTime);
-        if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
-      }
+      // No signed+verified contribution found for this address.
+      _pullFailedCache.add(address);
     }
   }
 
-  function buildRoundContributionMessage({ address, roundId, totalWh, updatedAtMs, chainIndex }) {
-    return JSON.stringify({
+  function buildRoundContributionMessage({
+    address,
+    roundId,
+    totalWh,
+    updatedAtMs,
+    chainIndex,
+    seedProofs,
+    cpuModel,
+    gpuModels,
+  }) {
+    const msg = {
       prefix: ROUND_CONTRIBUTION_MESSAGE_PREFIX,
       network: getActiveNetwork(),
       address: String(address || '').trim(),
@@ -287,7 +472,21 @@ function createRoundContributions(deps) {
       totalWh: Number(Math.max(0, Number(totalWh) || 0).toFixed(8)),
       updatedAtMs: Math.max(0, Math.floor(Number(updatedAtMs) || 0)),
       chainIndex: Math.max(0, Math.floor(Number(chainIndex) || 0)),
-    });
+    };
+    if (cpuModel) msg.cpuModel = String(cpuModel);
+    if (Array.isArray(gpuModels) && gpuModels.length > 0) msg.gpuModels = gpuModels.map(String);
+    if (Array.isArray(seedProofs) && seedProofs.length > 0) {
+      msg.seedProofs = seedProofs.map((p) => ({
+        type: String(p.type || 'cpu'),
+        seed: String(p.seed || ''),
+        startState: String(p.startState || ''),
+        endState: String(p.endState || ''),
+        totalOps: Math.max(0, Math.floor(Number(p.totalOps) || 0)),
+        burnMs: Math.max(0, Number(p.burnMs) || 0),
+        intermediateProof: String(p.intermediateProof || ''),
+      }));
+    }
+    return JSON.stringify(msg);
   }
 
   function buildRewardMapFromRoundSnapshot(roundSnapshot, fallbackAddress = '') {
@@ -318,7 +517,7 @@ function createRoundContributions(deps) {
     return rewardMap;
   }
 
-  function broadcastRoundContributionToPeers({ address, roundId, totalWh }) {
+  function broadcastRoundContributionToPeers({ address, roundId, totalWh, seedProofs }) {
     const wtcNode = getWtcNode();
     const normalizedAddress = String(address || '').trim();
     if (!normalizedAddress || !wtcNode || typeof wtcNode.signMessage !== 'function') return;
@@ -339,6 +538,7 @@ function createRoundContributions(deps) {
       totalWh,
       updatedAtMs,
       chainIndex,
+      seedProofs,
     });
 
     let signature = '';
@@ -363,32 +563,86 @@ function createRoundContributions(deps) {
     }
   }
 
-  function _flushPendingContribution(chainIndex) {
+  function _flushPendingContribution(chainIndex, seedProofs, hwModels) {
     const wtcNode = getWtcNode();
     const wh = _pendingContributionWh.current;
+    const hasProofs = Array.isArray(seedProofs) && seedProofs.length > 0;
+    console.log(
+      `[Flush] Entry: pendingWh=${wh.toFixed(6)} chainIndex=${chainIndex} proofs=${seedProofs ? seedProofs.length : 0}`,
+    );
     if (wh <= 0.0001) {
+      console.log(`[Flush] Skipped: energy too low (${wh.toFixed(8)} Wh)`);
       _pendingContributionWh.current = 0;
       return;
     }
-    console.warn(`[Flush] wh=${wh.toFixed(6)} chainIdx=${chainIndex}`);
+    if (!hasProofs) {
+      console.warn(`[Flush] Skipped: no seed proofs — energy (${wh.toFixed(6)} Wh) not added to ledger`);
+      _pendingContributionWh.current = 0;
+      return;
+    }
     _pendingContributionWh.current = 0;
     try {
       const addr = walletAddressCache.address;
-      if (!addr) return;
+      if (!addr) {
+        console.warn(`[Flush] skipped: no wallet address (wh=${wh.toFixed(6)})`);
+        return;
+      }
       alignRoundLedgerToChain();
       const added = roundLedger.addContribution(addr, wh);
       if (added && added.ok && added.acceptedWh > 0) {
         if (wtcNode && wtcNode._consensus) wtcNode._consensus._hadContributionsBefore = true;
         const snap = roundLedger.getCurrentRoundSnapshot();
-        broadcastRoundContributionToPeers({
-          address: addr,
-          roundId: snap.id,
-          totalWh: added.addressRoundWh,
-        });
+        // Store the signed message in the ledger so pull-based peers can
+        // verify the contribution when they fetch the snapshot via GET.
+        const totalWh = added.addressRoundWh;
+        const updatedAtMs = Date.now();
+        const _localChainIdx = Math.max(
+          0,
+          Math.floor(Number((getLocalProbeChain && getLocalProbeChain().chainIndex) || 0)),
+        );
+        const effectiveChainIndex =
+          hwAuthority.peerProbeChainIndex > 0 ? hwAuthority.peerProbeChainIndex : _localChainIdx;
+        try {
+          const message = buildRoundContributionMessage({
+            address: addr,
+            roundId: snap.id,
+            totalWh,
+            updatedAtMs,
+            chainIndex: effectiveChainIndex,
+            seedProofs,
+            cpuModel: hwModels && hwModels.cpuModel,
+            gpuModels: hwModels && hwModels.gpuModels,
+          });
+          if (wtcNode && typeof wtcNode.signMessage === 'function') {
+            const signed = wtcNode.signMessage(addr, message);
+            const sig = String((signed && signed.signature) || '').trim();
+            if (sig) {
+              roundLedger.setRoundContribution(addr, totalWh, updatedAtMs, message, sig);
+            }
+          }
+        } catch (msgErr) {
+          console.warn(`[Flush] failed to store signed message: ${(msgErr && msgErr.message) || msgErr}`);
+        }
+        const hasProofs = Array.isArray(seedProofs) && seedProofs.length > 0;
+        console.log(
+          `[Flush] ${wh.toFixed(6)} Wh accepted (total=${totalWh.toFixed(6)} proofs=${hasProofs ? seedProofs.length : 0} round=${snap.id})`,
+        );
+        if (hasProofs) {
+          broadcastRoundContributionToPeers({
+            address: addr,
+            roundId: snap.id,
+            totalWh,
+            seedProofs,
+          });
+        } else {
+          console.warn(`[Flush] skipped broadcast: no seed proofs to send`);
+        }
       } else if (wh > 0) {
+        console.warn(`[Flush] ${wh.toFixed(6)} Wh rejected by ledger`);
         _pendingContributionWh.current = wh;
       }
-    } catch (_) {
+    } catch (e) {
+      console.warn(`[Flush] failed: ${(e && e.message) || e}`);
       _pendingContributionWh.current = wh;
     }
   }
@@ -400,13 +654,27 @@ function createRoundContributions(deps) {
     const peers = getActivePeers(settings);
     if (!peers || peers.length === 0) return;
     const payload = { receipt };
+    const RECEIPT_MAX_RETRIES = 2;
+    const RECEIPT_RETRY_DELAY_MS = 3000;
     for (const peerUrl of peers) {
-      requestPeerJson(peerUrl, 'POST', '/api/v1/probe/receipt', payload, undefined, {
-        trackReachability: false,
-        suppressPeerDiscovery: true,
-        source: 'probe-receipt',
-        timeoutMs: 5000,
-      }).catch(() => {});
+      const normalizedUrl = normalizePeerUrl(peerUrl);
+      if (!normalizedUrl) continue;
+      function attemptSend(retryCount) {
+        requestPeerJson(normalizedUrl, 'POST', '/api/v1/probe/receipt', payload, undefined, {
+          trackReachability: false,
+          suppressPeerDiscovery: true,
+          source: 'probe-receipt',
+          timeoutMs: 5000,
+        }).catch((e) => {
+          if (retryCount < RECEIPT_MAX_RETRIES) {
+            console.warn(
+              `[ReceiptBroadcast] retry ${normalizedUrl} (${retryCount}/${RECEIPT_MAX_RETRIES}): ${(e && e.message) || e}`,
+            );
+            setTimeout(() => attemptSend(retryCount + 1), RECEIPT_RETRY_DELAY_MS * retryCount);
+          }
+        });
+      }
+      attemptSend(0);
     }
   }
 
@@ -425,18 +693,57 @@ function createRoundContributions(deps) {
       return;
     }
 
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY_MS = 5000;
+
+    function attemptSend(retryCount, fallbackPayload) {
+      const latest = pendingRoundContributionBroadcasts.get(key);
+      const sendPayload = (latest && latest.payload) || fallbackPayload;
+      if (!sendPayload) return;
+      requestPeerJson(normalizedPeerUrl, 'POST', '/api/v1/round/contribution', sendPayload, undefined, {
+        trackReachability: false,
+        suppressPeerDiscovery: true,
+        source: 'round-contribution',
+      })
+        .then(() => {
+          console.log(`[Broadcast] contribution sent to ${normalizedPeerUrl}`);
+        })
+        .catch((e) => {
+          if (retryCount < MAX_RETRIES) {
+            console.warn(
+              `[Broadcast] retry ${normalizedPeerUrl} (${retryCount}/${MAX_RETRIES}): ${(e && e.message) || e}`,
+            );
+            setTimeout(() => attemptSend(retryCount + 1, sendPayload), RETRY_DELAY_MS * retryCount);
+          } else {
+            console.warn(`[Broadcast] gave up ${normalizedPeerUrl} after ${MAX_RETRIES} retries`);
+          }
+        });
+    }
+
     const entry = {
       peerUrl: normalizedPeerUrl,
       payload,
       timer: setTimeout(() => {
         const latest = pendingRoundContributionBroadcasts.get(key);
+        if (!latest || !latest.payload) {
+          pendingRoundContributionBroadcasts.delete(key);
+          return;
+        }
         pendingRoundContributionBroadcasts.delete(key);
-        if (!latest || !latest.payload) return;
         requestPeerJson(latest.peerUrl, 'POST', '/api/v1/round/contribution', latest.payload, undefined, {
           trackReachability: false,
           suppressPeerDiscovery: true,
           source: 'round-contribution',
-        }).catch(() => {});
+        })
+          .then(() => {
+            console.log(`[Broadcast] contribution sent to ${normalizedPeerUrl}`);
+          })
+          .catch((e) => {
+            console.warn(
+              `[Broadcast] failed ${normalizedPeerUrl} (attempt 0/${MAX_RETRIES}): ${(e && e.message) || e}`,
+            );
+            attemptSend(1, latest.payload);
+          });
       }, ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS),
     };
     pendingRoundContributionBroadcasts.set(key, entry);
@@ -582,4 +889,4 @@ function createRoundContributions(deps) {
   };
 }
 
-module.exports = { createRoundContributions };
+module.exports = { createRoundContributions, verifyContributorSeedProofs };

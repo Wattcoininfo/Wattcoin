@@ -255,17 +255,21 @@ async function setupNginxProxy(conn) {
 }
 
 async function setupApacheProxy(conn) {
-  // For shared hosting (no root): deploy PHP proxy + .htaccess rewrite
+  // For shared hosting (no root): deploy PHP proxy + .htaccess rewrite.
+  // Only appends the seed-registry rules if not already present — never
+  // overwrites the existing .htaccess (which may contain index.php routing
+  // or other rules).
   try {
-    const htaccess = [
-      'Options -Indexes',
-      'RewriteEngine On',
-      'RewriteBase /api/',
-      'RewriteRule ^seed-registry seed-registry-proxy.php [L,QSA]',
-      'RewriteCond %{REQUEST_FILENAME} !-f',
-      'RewriteRule ^ index.php [L,QSA]',
+    const check = await runCommand(conn, 'grep -c seed-registry-proxy htdocs/api/.htaccess 2>/dev/null || echo 0');
+    if (parseInt(check.trim(), 10) > 0) {
+      console.log('[deploy-seed-registry] Apache .htaccess already contains seed-registry rule, skipping.');
+      return;
+    }
+    const snippet = [
+      'RewriteRule ^seed-registry$ seed-registry-proxy.php [L,QSA]',
+      'RewriteRule ^seed-registry/(.*)$ seed-registry-proxy.php/$1 [L,QSA]',
     ].join('\n');
-    await runCommand(conn, `cat > htdocs/api/.htaccess << 'HTA'\n${htaccess}\nHTA`);
+    await runCommand(conn, `cat >> htdocs/api/.htaccess << 'HTA'\n${snippet}\nHTA`);
     console.log(
       '[deploy-seed-registry] Apache proxy configured (PHP proxy + .htaccess): /api/seed-registry -> http://127.0.0.1:4901',
     );

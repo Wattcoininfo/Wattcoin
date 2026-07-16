@@ -20,6 +20,7 @@ async function test(name, fn) {
 async function run() {
   const { registerLedgerIpcHandlers, _nodeHasGovernanceNfts } = require('../electron-main/ledger-ipc');
 
+  // Section 1: Basic exports
   await test('registerLedgerIpcHandlers is a function', () => {
     assert.strictEqual(typeof registerLedgerIpcHandlers, 'function');
   });
@@ -28,7 +29,7 @@ async function run() {
     assert.strictEqual(typeof _nodeHasGovernanceNfts, 'function');
   });
 
-  // -- _nodeHasGovernanceNfts --------------------------------------------------
+  // Section 2: _nodeHasGovernanceNfts
   await test('_nodeHasGovernanceNfts returns false when wtcNode is null', () => {
     assert.strictEqual(_nodeHasGovernanceNfts(null), false);
   });
@@ -60,27 +61,17 @@ async function run() {
     assert.strictEqual(_nodeHasGovernanceNfts(mockNode), true);
   });
 
-  await test('_nodeHasGovernanceNfts is safe when wtcNode has no getAddresses method', () => {
-    // When wtcNode is not null but lacks getAddresses, the function will throw
-    // because it's a programming error to pass a malformed node. This test
-    // verifies the null-check path works (tested above).
-  });
-
-  // -- registerLedgerIpcHandlers (smoke test only - needs Electron runtime) ----
-  await test('registerLedgerIpcHandlers accepts deps without throwing', () => {
-    const ipcMain = {
-      handle: () => {},
-    };
-    // Should not throw with valid but minimal deps
-    registerLedgerIpcHandlers({
-      ipcMain,
+  // Section 3: registerLedgerIpcHandlers smoke test
+  function buildDeps(overrides = {}) {
+    return {
+      ipcMain: { handle: () => {} },
       roundLedger: {
         isTampered: () => false,
         addContribution: () => ({ ok: true }),
         getCurrentRoundSnapshot: () => ({}),
         getRoundContribution: () => 0,
       },
-      wtcNode: null,
+      getWtcNode: () => null,
       hwAuthority: {
         hwChangedBlocked: false,
         hwHoldUntilMs: 0,
@@ -126,7 +117,26 @@ async function run() {
       _gpuDutySamples: { current: [] },
       _prevRawGpuDuty: { current: -1 },
       _physicalCoreCount: { current: 0 },
-    });
+      ...overrides,
+    };
+  }
+
+  await test('registerLedgerIpcHandlers accepts valid deps without throwing', () => {
+    registerLedgerIpcHandlers(buildDeps());
+  });
+
+  // Section 4: Contribution handler captures
+  let capturedHandlers = {};
+  const fakeIpcMain = {
+    handle: (channel, handler) => {
+      capturedHandlers[channel] = handler;
+    },
+  };
+
+  await test('registerLedgerIpcHandlers captures the contribution handler', () => {
+    capturedHandlers = {};
+    registerLedgerIpcHandlers(buildDeps({ ipcMain: fakeIpcMain }));
+    assert.ok(capturedHandlers['wattcoin-ledger-add-contribution'], 'handler should have been captured');
   });
 
   console.log(`\n${passed + failed} tests, ${passed} passed, ${failed} failed`);

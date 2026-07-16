@@ -305,7 +305,7 @@ class GovernanceStore {
       if (stored && stored.data && stored.hmac) {
         const expected = crypto.createHmac('sha256', this._secret).update(stored.data).digest('hex');
         if (expected !== stored.hmac) {
-          console.warn('[GovernanceStore] HMAC mismatch — ignoring stored file');
+          console.warn('[GovernanceStore] HMAC mismatch - ignoring stored file');
           return;
         }
         const parsed = JSON.parse(stored.data);
@@ -694,7 +694,7 @@ class GovernanceStore {
       const { pipId, outcome, voteTallies } = tx.governanceData;
       const p = this._proposals[pipId];
       if (!p) {
-        console.warn(`[GovernanceStore] block recorded unknown proposal ${pipId} — creating record`);
+        console.warn(`[GovernanceStore] block recorded unknown proposal ${pipId} - creating record`);
         this._proposals[pipId] = {
           pipId,
           title: tx.governanceData.title || '',

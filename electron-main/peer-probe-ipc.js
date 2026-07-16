@@ -1,6 +1,7 @@
 'use strict';
 
 const { WebSocket } = require('ws');
+const crypto = require('crypto');
 
 function createHandlers(deps) {
   const {
@@ -34,6 +35,14 @@ function createHandlers(deps) {
     _PROBE_PUSH_INTERVAL_MAX_MS,
     _pendingContributionWhRef,
     _probePushTimerRef,
+    seedManager,
+    getLocalCpuModel,
+    getLocalGpuModel,
+    setHardwareLoadPercent,
+    startGpuLoad,
+    getHardwareLoadState,
+    getGpuLoadState,
+    consumeMemBurnMs,
   } = deps;
 
   // -- State ------------------------------------------------------------------
@@ -57,6 +66,7 @@ function createHandlers(deps) {
   let _allowGpuWorkloads = false;
   let _gpuPowCapable = false;
   const _BG_WS_RECONNECT_MAX_MS = 60_000;
+  let _lastCpuSeedAssignedAt = 0;
 
   // -- Internal helpers -------------------------------------------------------
 
@@ -463,6 +473,44 @@ function createHandlers(deps) {
         _probeInProgress = true;
         _probeInProgressId = cached.probe.id;
         _probeInProgressEpoch = _probeEpoch;
+
+        // Load hardware on first probe of each type and assign coordinator seed.
+        const probeType = cached.probe && cached.probe.type;
+        const probeSeed = cached.probe && cached.probe.params && cached.probe.params.seed;
+        if (probeType === 'cpu') {
+          const hwState = typeof getHardwareLoadState === 'function' ? getHardwareLoadState() : null;
+          if (!hwState || !hwState.cpuWorkers || hwState.cpuWorkers === 0) {
+            const loadPercent = hwAuthority.currentLoadPercent || 100;
+            if (typeof setHardwareLoadPercent === 'function') {
+              setHardwareLoadPercent(loadPercent);
+              console.log(`[PeerProbe] CPU probe arrived - loading CPU workers at ${loadPercent}%`);
+            }
+          }
+          if (probeSeed != null && typeof seedManager !== 'undefined' && seedManager) {
+            const hexSeed = crypto.createHash('sha256').update(String(probeSeed)).digest('hex');
+            seedManager.setCpuSeed && seedManager.setCpuSeed(hexSeed);
+            const now = Date.now();
+            const intervalMs = _lastCpuSeedAssignedAt > 0 ? now - _lastCpuSeedAssignedAt : 0;
+            _lastCpuSeedAssignedAt = now;
+            console.log(
+              `[PeerProbe] Assigned coordinator CPU seed from probe: ${hexSeed}${intervalMs > 0 ? ` (interval=${intervalMs}ms)` : ''}`,
+            );
+          }
+        } else if (probeType === 'gpu-pow') {
+          {
+            const loadPercent = hwAuthority.currentLoadPercent || 100;
+            if (typeof startGpuLoad === 'function') {
+              startGpuLoad(loadPercent);
+              console.log(`[PeerProbe] GPU probe arrived - loading GPU at ${loadPercent}%`);
+            }
+          }
+          if (probeSeed != null && typeof seedManager !== 'undefined' && seedManager) {
+            const hexSeed = crypto.createHash('sha256').update(String(probeSeed)).digest('hex');
+            seedManager.setGpuSeed && seedManager.setGpuSeed(hexSeed);
+            console.log(`[PeerProbe] Assigned coordinator GPU seed from probe: ${hexSeed}`);
+          }
+        }
+
         _clearProbeTimeoutTimer();
         _probeTimeoutTimer = setTimeout(() => {
           if (_probeInProgress && _probeInProgressId === cached.probe.id) {
@@ -512,6 +560,8 @@ function createHandlers(deps) {
             return { ok: false, transient: false, issues: ['stale probe: coordinator disconnected'] };
           }
           try {
+            const _submittedAt = Date.now();
+            result._submittedAt = _submittedAt;
             console.warn(
               `[PeerProbe] submit body probeWallClockMs=${typeof result.probeWallClockMs === 'number' ? Math.round(result.probeWallClockMs) : '?'} id=${result.id} N=${result.iterations || '?'} intDateMs=${typeof result._intDateMs === 'number' ? Math.round(result._intDateMs) : '?'} warmupTotal=${typeof result._warmupTotalMs === 'number' ? Math.round(result._warmupTotalMs) : '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
             );
@@ -564,6 +614,7 @@ function createHandlers(deps) {
               }
             }
             if (verdict && verdict.ok) {
+              const _verdictAt = Date.now();
               hwAuthority.peerProbeVerifiedForRound = true;
               const receipt = verdict.receipt;
               if (receipt && receipt.verifierAddress && receipt.workerId) {
@@ -595,7 +646,126 @@ function createHandlers(deps) {
                 trustScoreBefore,
                 trustScoreAfter: hwAuthority.trustScore,
               });
-              _flushPendingContribution(hwAuthority.peerProbeChainIndex);
+              // Collect seed proofs and compute verified energy.
+              let collectedProofs = [];
+              if (typeof seedManager !== 'undefined' && seedManager) {
+                try {
+                  const cpuModel = typeof getLocalCpuModel === 'function' ? getLocalCpuModel() : null;
+                  const gpuModel = typeof getLocalGpuModel === 'function' ? getLocalGpuModel() : null;
+                  const cpuProofs = seedManager.collectCpuProofs();
+                  const gpuProofs = seedManager.collectGpuProofs();
+                  const memProofs = seedManager.collectMemProofs();
+                  collectedProofs = [...cpuProofs, ...gpuProofs, ...memProofs];
+                  const seedInfo =
+                    typeof seedManager.getLastSeedInfo === 'function' ? seedManager.getLastSeedInfo() : null;
+                  const proofDurationMs = Math.max(1000, (seedInfo && seedInfo.durationMs) || 60000);
+                  const claimedLoad = Math.min(1, Math.max(0.1, (hwAuthority.currentLoadPercent || 100) / 100));
+                  const _proofStart = Date.now();
+                  const proofResult = await seedManager.verifyCpuProofs(
+                    cpuProofs,
+                    proofDurationMs,
+                    cpuModel,
+                    claimedLoad,
+                  );
+                  const gpuProofResult = await seedManager.verifyGpuProofs(
+                    gpuProofs,
+                    proofDurationMs,
+                    gpuModel,
+                    claimedLoad,
+                  );
+                  const memProofResult = await seedManager.verifyMemProofs(
+                    memProofs,
+                    proofDurationMs,
+                    cpuModel,
+                    claimedLoad,
+                  );
+                  const _proofElapsed = Date.now() - _proofStart;
+                  const totalEnergyWh =
+                    proofResult.totalEnergyWh + gpuProofResult.totalEnergyWh + memProofResult.totalEnergyWh;
+                  _pendingContributionWhRef.current = totalEnergyWh;
+                  const _submitToVerdictMs = _verdictAt - (result._submittedAt || _verdictAt);
+                  const cpuTotalOps = cpuProofs.reduce((sum, p) => sum + (Number(p.totalOps) || 0), 0);
+                  const cpuTotalBurnMs = cpuProofs.reduce((sum, p) => sum + (Number(p.burnMs) || 0), 0);
+                  const measuredOpsPerMs = cpuTotalBurnMs > 0 ? cpuTotalOps / cpuTotalBurnMs : 0;
+                  const benchOpsPerMs = Number(hwAuthority.sha256OpsPerMs) || 0;
+                  if (measuredOpsPerMs > 0 && benchOpsPerMs > 0 && cpuProofs.length > 0) {
+                    const CALIBRATION_ALPHA = 0.15;
+                    const CLAMP_MIN = benchOpsPerMs * 0.5;
+                    const CLAMP_MAX = benchOpsPerMs * 1.5;
+                    const clamped = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, measuredOpsPerMs));
+                    const calibrated = benchOpsPerMs * (1 - CALIBRATION_ALPHA) + clamped * CALIBRATION_ALPHA;
+                    if (Math.abs(calibrated - benchOpsPerMs) > 0.5) {
+                      hwAuthority.sha256OpsPerMs = Math.round(calibrated);
+                      saveHwAuthState();
+                      console.log(
+                        `[PeerProbe] sha256OpsPerMs calibrated: ${Math.round(benchOpsPerMs)} -> ${Math.round(hwAuthority.sha256OpsPerMs)} (measured=${Math.round(measuredOpsPerMs)})`,
+                      );
+                    }
+                  }
+                  const gpuTotalOps = gpuProofs.reduce((sum, p) => sum + (Number(p.totalOps) || 0), 0);
+                  const gpuTotalBurnMs = gpuProofs.reduce((sum, p) => sum + (Number(p.burnMs) || 0), 0);
+                  const gpuMeasuredOpsPerMs = gpuTotalBurnMs > 0 ? gpuTotalOps / gpuTotalBurnMs : 0;
+                  const gpuBenchOpsPerMs = Number(hwAuthority.gpuOpsPerMs) || 0;
+                  if (gpuMeasuredOpsPerMs > 0 && gpuProofs.length > 0) {
+                    if (gpuBenchOpsPerMs === 0) {
+                      hwAuthority.gpuOpsPerMs = Math.round(gpuMeasuredOpsPerMs);
+                      saveHwAuthState();
+                      console.log(`[PeerProbe] gpuOpsPerMs initialized: ${hwAuthority.gpuOpsPerMs}`);
+                    } else {
+                      const CALIBRATION_ALPHA = 0.15;
+                      const CLAMP_MIN = gpuBenchOpsPerMs * 0.5;
+                      const CLAMP_MAX = gpuBenchOpsPerMs * 1.5;
+                      const clamped = Math.max(CLAMP_MIN, Math.min(CLAMP_MAX, gpuMeasuredOpsPerMs));
+                      const calibrated = gpuBenchOpsPerMs * (1 - CALIBRATION_ALPHA) + clamped * CALIBRATION_ALPHA;
+                      if (Math.abs(calibrated - gpuBenchOpsPerMs) > 0.5) {
+                        hwAuthority.gpuOpsPerMs = Math.round(calibrated);
+                        saveHwAuthState();
+                        console.log(
+                          `[PeerProbe] gpuOpsPerMs calibrated: ${Math.round(gpuBenchOpsPerMs)} -> ${Math.round(hwAuthority.gpuOpsPerMs)} (measured=${Math.round(gpuMeasuredOpsPerMs)})`,
+                        );
+                      }
+                    }
+                  }
+                  console.log(
+                    `[PeerProbe] Proof verify: cpu=${cpuProofs.length} gpu=${gpuProofs.length} mem=${memProofs.length} ` +
+                      `cpuOk=${proofResult.proofs}/${proofResult.total || cpuProofs.length} ` +
+                      `gpuOk=${gpuProofResult.proofs}/${gpuProofResult.total || gpuProofs.length} ` +
+                      `memOk=${memProofResult.proofs}/${memProofResult.total || memProofs.length} ` +
+                      `energyWh=${totalEnergyWh.toFixed(6)} ` +
+                      `totalOps=${cpuTotalOps} burnMs=${Math.round(cpuTotalBurnMs)} ` +
+                      `measuredOpsPerMs=${Math.round(measuredOpsPerMs)} benchOpsPerMs=${Math.round(hwAuthority.sha256OpsPerMs) || 'unset'} ` +
+                      `load=${(claimedLoad * 100).toFixed(0)}% ` +
+                      `proofDur=${proofDurationMs}ms ` +
+                      `verifyMs=${_proofElapsed} submitToVerdictMs=${_submitToVerdictMs}`,
+                  );
+                  if (totalEnergyWh > 0) {
+                    console.log(
+                      `[PeerProbe] Seed proofs verified: ${proofResult.proofs + gpuProofResult.proofs + memProofResult.proofs} proofs, ` +
+                        `${totalEnergyWh.toFixed(6)} Wh computed` +
+                        (memProofResult.totalEnergyWh > 0
+                          ? ` (mem: ${memProofResult.totalEnergyWh.toFixed(6)} Wh)`
+                          : ''),
+                    );
+                  }
+                } catch (e) {
+                  console.warn('[PeerProbe] Seed proof verification failed:', e.message);
+                }
+              }
+              console.log(
+                `[PeerProbe] About to flush: pendingWh=${_pendingContributionWhRef.current.toFixed(6)} ` +
+                  `chain=${hwAuthority.peerProbeChainIndex} proofs=${collectedProofs.length} ` +
+                  `seedManagerDefined=${typeof seedManager !== 'undefined' && !!seedManager}`,
+              );
+              const _flushAt = Date.now();
+              const _cpuModel = typeof getLocalCpuModel === 'function' ? getLocalCpuModel() : null;
+              const _gpuModel = typeof getLocalGpuModel === 'function' ? getLocalGpuModel() : null;
+              const _hwModels = { cpuModel: _cpuModel, gpuModels: _gpuModel ? [_gpuModel] : [] };
+              _flushPendingContribution(hwAuthority.peerProbeChainIndex, collectedProofs, _hwModels);
+              console.log(
+                `[PeerProbe] Probe OK total=${Date.now() - _submittedAt}ms ` +
+                  `(submit=${_verdictAt - _submittedAt}ms proofs=${_flushAt - _verdictAt}ms flush=${Date.now() - _flushAt}ms) ` +
+                  `chain=${hwAuthority.peerProbeChainIndex}`,
+              );
             } else {
               const trustScoreBefore = hwAuthority.trustScore;
               const issues = Array.isArray(verdict && verdict.issues) ? verdict.issues : [];
@@ -646,6 +816,8 @@ function createHandlers(deps) {
                     hwAuthority.probeResultWindow = [];
                   }
                 }
+                _pendingContributionWhRef.current = 0;
+                if (typeof consumeMemBurnMs === 'function') consumeMemBurnMs();
               }
               saveHwAuthState();
               verdict = Object.assign({}, verdict, {

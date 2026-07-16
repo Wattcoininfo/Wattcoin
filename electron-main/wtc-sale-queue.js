@@ -668,7 +668,7 @@ function _syncServerOrders() {
     const _reqHeaders = { 'User-Agent': 'wattcoin-miner/1.0' };
     if (_serverApiKey) _reqHeaders['X-Api-Key'] = _serverApiKey;
     const _doGet = (getUrl, redirectsLeft) => {
-      const req = https.get(getUrl, { timeout: 10_000, headers: _reqHeaders }, (res) => {
+      const req = https.get(getUrl, { timeout: 10_000, agent: false, headers: _reqHeaders }, (res) => {
         // Follow redirects (301/302/307/308)
         if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
           res.resume(); // drain response
@@ -1304,30 +1304,34 @@ async function _fetchUsdcTransfers() {
 
 function _fetchUsdcTransfersOnce(url) {
   return new Promise((resolve) => {
-    const req = https.get(url, { timeout: 10_000, headers: { 'User-Agent': 'wattcoin-miner/1.0' } }, (res) => {
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => {
-        try {
-          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          if (body.status === '1' && Array.isArray(body.result)) {
-            resolve({ ok: true, pollResult: 'ok', transfers: body.result });
-          } else if (body.status === '0' && body.message === 'No transactions found') {
-            resolve({ ok: true, pollResult: 'ok', transfers: [] });
-          } else {
-            const msg = body.message || body.status || 'NOTOK';
-            const detail = typeof body.result === 'string' ? body.result : '';
-            const pollResult = `notok:${msg}`;
-            console.warn(`[${_ts()}] [SaleQueue] Etherscan response:`, msg, detail);
+    const req = https.get(
+      url,
+      { timeout: 10_000, agent: false, headers: { 'User-Agent': 'wattcoin-miner/1.0' } },
+      (res) => {
+        const chunks = [];
+        res.on('data', (c) => chunks.push(c));
+        res.on('end', () => {
+          try {
+            const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            if (body.status === '1' && Array.isArray(body.result)) {
+              resolve({ ok: true, pollResult: 'ok', transfers: body.result });
+            } else if (body.status === '0' && body.message === 'No transactions found') {
+              resolve({ ok: true, pollResult: 'ok', transfers: [] });
+            } else {
+              const msg = body.message || body.status || 'NOTOK';
+              const detail = typeof body.result === 'string' ? body.result : '';
+              const pollResult = `notok:${msg}`;
+              console.warn(`[${_ts()}] [SaleQueue] Etherscan response:`, msg, detail);
+              resolve({ ok: false, pollResult, transfers: null });
+            }
+          } catch (e) {
+            const pollResult = `error:${e && e.message ? e.message : 'parse error'}`;
+            console.warn(`[${_ts()}] [SaleQueue] Etherscan parse error:`, e && e.message);
             resolve({ ok: false, pollResult, transfers: null });
           }
-        } catch (e) {
-          const pollResult = `error:${e && e.message ? e.message : 'parse error'}`;
-          console.warn(`[${_ts()}] [SaleQueue] Etherscan parse error:`, e && e.message);
-          resolve({ ok: false, pollResult, transfers: null });
-        }
-      });
-    });
+        });
+      },
+    );
     req.on('error', (e) => {
       const pollResult = `error:${e && e.message ? e.message : 'request error'}`;
       console.warn(`[${_ts()}] [SaleQueue] Etherscan request error:`, e && e.message);

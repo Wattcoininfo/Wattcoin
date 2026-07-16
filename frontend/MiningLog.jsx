@@ -128,7 +128,8 @@ function MiningLog({
 
   const getProbeStatus = (entry) => {
     if (entry.timedOut) return { label: 'TIMEOUT', bg: '#2d2a1a', color: '#fbbf24', border: '#92400e' };
-    if (entry.ok) return { label: 'PASS', bg: '#0f2a12', color: '#4ade80', border: '#166534' };
+    const allPassed = !!entry.ok && !!entry.vdfVerified && (!entry.issues || entry.issues.length === 0);
+    if (allPassed) return { label: 'PASS', bg: '#0f2a12', color: '#4ade80', border: '#166534' };
     return { label: 'FAIL', bg: '#2d1a1a', color: '#f87171', border: '#7f1d1d' };
   };
 
@@ -136,7 +137,7 @@ function MiningLog({
     const status = getProbeStatus(entry);
     const typeColor = TYPE_COLOR[entry.type] || '#94a3b8';
     const typeLabel = TYPE_LABEL[entry.type] || (entry.type || '?').toUpperCase();
-    const isAttested = entry.role === 'attested';
+    const isAttested = entry.role === 'attested' && status.label === 'PASS';
     const roleBg = isAttested ? '#1e1a2d' : '#0d1a0d';
     const roleBorder = isAttested ? '#4c1d95' : status.border;
     const probeId = typeof entry.id === 'string' ? entry.id : '';
@@ -180,6 +181,19 @@ function MiningLog({
               {typeof entry.version === 'string' && entry.version && (
                 <span style={{ color: '#6b7280', fontSize: 11 }}>{entry.version}</span>
               )}
+              <span
+                style={{
+                  background: status.bg,
+                  color: status.color,
+                  border: `1px solid ${status.border}`,
+                  borderRadius: 3,
+                  padding: '0 4px',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                {status.label}
+              </span>
               {typeof entry.loadPercent === 'number' && (
                 <span style={{ color: '#5b8d5b', fontSize: 11 }}>load {entry.loadPercent}%</span>
               )}
@@ -211,21 +225,6 @@ function MiningLog({
           >
             {typeLabel}
           </span>
-          {/* Status badge */}
-          <span
-            style={{
-              background: status.bg,
-              color: status.color,
-              border: `1px solid ${status.border}`,
-              borderRadius: 4,
-              padding: '1px 7px',
-              fontWeight: 700,
-              fontSize: 11,
-              letterSpacing: '0.06em',
-            }}
-          >
-            {status.label}
-          </span>
           {/* Role / source badge */}
           <span
             style={{
@@ -243,7 +242,6 @@ function MiningLog({
           {typeof entry.wallClockMs === 'number' && (
             <span style={{ color: '#64748b', fontSize: 11 }}>{Math.round(entry.wallClockMs)} ms</span>
           )}
-          {entry.vdfVerified && <span style={{ color: '#8b5cf6', fontSize: 9, fontWeight: 600 }}>VDF</span>}
           {typeof entry.rttMs === 'number' && (
             <span style={{ color: '#475569', fontSize: 10 }}>net {Math.round(entry.rttMs)}ms</span>
           )}

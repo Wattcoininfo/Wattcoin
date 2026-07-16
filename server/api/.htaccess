@@ -1,5 +1,7 @@
 Options -Indexes
 RewriteEngine On
 RewriteBase /api/
+RewriteRule ^seed-registry$ seed-registry-proxy.php [L,QSA]
+RewriteRule ^seed-registry/(.*)$ seed-registry-proxy.php/$1 [L,QSA]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.php [L,QSA]

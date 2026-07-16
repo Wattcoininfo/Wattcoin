@@ -46,6 +46,13 @@ const {
   getHardwareLoadState,
   configurePhysicalCores,
   getMeasuredCpuDuty,
+  getMeasuredOpsPerMs,
+  setCoordinatorSeed,
+  getCoordinatorSeed,
+  drainSeedProofs,
+  consumeMemBurnMs,
+  setDdrCoordinatorSeed,
+  drainDdrSeedProofs,
 } = require('./electron-main/hardware-load-controller');
 const {
   ensureGpu,
@@ -56,6 +63,10 @@ const {
   shutdownGpu,
   runGpuPowProbe,
   findGpuBinary,
+  setGpuCoordinatorSeed,
+  getGpuCoordinatorSeed,
+  drainGpuSeedProofs,
+  startGpuLoad,
 } = require('./electron-main/gpu-load-controller');
 const si = require('systeminformation');
 const { createRoundLedger } = require('./electron-main/round-ledger');
@@ -73,6 +84,7 @@ const { createLedgerRequestHandler } = require('./electron-main/ledger-routes');
 const { createPeerNetworking } = require('./electron-main/peer-networking');
 const { createIntegrityVerifier } = require('./electron-main/integrity');
 const { createRoundContributions } = require('./electron-main/round-contributions');
+const { createSeedAssignmentManager, generateSeed } = require('./electron-main/seed-assignment-manager');
 const { createWtcChainSync } = require('./electron-main/wtc-chain-sync');
 const { createPeerDiscovery } = require('./electron-main/peer-discovery');
 const { createWalletSyncStateManager } = require('./electron-main/wallet-sync-state');
@@ -227,6 +239,8 @@ let hwAuthority = {
   benchmarkOpsCalibration: 1.0,
   benchmarkMemCalibration: 1.0,
   benchmarkGpuCalibration: 1.0,
+  sha256OpsPerMs: 0,
+  gpuOpsPerMs: 0,
   consecutiveCleanBenchmarks: 0,
   peerProbeVerifiedForRound: false,
   peerProbeChainIndex: 0,
@@ -273,6 +287,7 @@ const hwAuthStateDeps = {
   safeStorage,
   networkMiningStats: new Map(),
 };
+const networkMiningStats = hwAuthStateDeps.networkMiningStats;
 const { recordMinerStats, computeHwAuthSig, loadHwAuthState, saveHwAuthState } =
   createHwAuthorityState(hwAuthStateDeps);
 
@@ -589,6 +604,7 @@ const roundContributions = createRoundContributions({
   MIN_PROBE_VERIFIERS,
   REVERSE_TUNNEL_LIVE_THRESHOLD_MS,
   ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS,
+  getMeasuredOpsPerMs,
 });
 
 const wtcChainSync = createWtcChainSync({
@@ -646,6 +662,19 @@ const _PROBE_PUSH_INTERVAL_MAX_MS = 60_000;
 // and are skipped until the first mining-status message or a 5s timeout.
 const _workerIsMining = new Map(); // workerId ? boolean | null | undefined
 
+const seedManager = createSeedAssignmentManager({
+  getCpuCoordinatorSeed: () => getCoordinatorSeed(),
+  setCpuCoordinatorSeed: (seed) => setCoordinatorSeed(seed),
+  getGpuCoordinatorSeed: () => getGpuCoordinatorSeed(),
+  setGpuCoordinatorSeed: (seed) => setGpuCoordinatorSeed(seed),
+  getMemSeedProofs: () => drainDdrSeedProofs(),
+  setMemCoordinatorSeed: (seed) => setDdrCoordinatorSeed(seed),
+  getCpuSeedProofs: () => drainSeedProofs(),
+  getGpuSeedProofs: () => drainGpuSeedProofs(),
+  hwAuthority,
+  console,
+});
+
 const { createHandlers: createPeerProbeIpc } = require('./electron-main/peer-probe-ipc');
 const peerProbeIpc = createPeerProbeIpc({
   getLedgerNetworkSettings: (settings) => ledgerNetwork.getLedgerNetworkSettings(settings),
@@ -661,7 +690,8 @@ const peerProbeIpc = createPeerProbeIpc({
   normalizePeerUrl,
   peerReachabilityCache,
   requestPeerJson,
-  _flushPendingContribution: (chainIndex) => roundContributions._flushPendingContribution(chainIndex),
+  _flushPendingContribution: (chainIndex, seedProofs) =>
+    roundContributions._flushPendingContribution(chainIndex, seedProofs),
   getAppDisplayVersion,
   recordPeerAttestation: (verifierAddress, workerId) => peerNetworking.recordPeerAttestation(verifierAddress, workerId),
   broadcastProbeReceiptToPeers: (receipt) => roundContributions.broadcastProbeReceiptToPeers(receipt),
@@ -679,6 +709,21 @@ const peerProbeIpc = createPeerProbeIpc({
   _PROBE_PUSH_INTERVAL_MAX_MS,
   _pendingContributionWhRef,
   _probePushTimerRef,
+  seedManager,
+  getLocalCpuModel: () => ((os.cpus()[0] && os.cpus()[0].model) || '').trim() || null,
+  getLocalGpuModel: () => {
+    try {
+      const info = getGpuInfo && getGpuInfo();
+      return (info && info.model) || null;
+    } catch (_) {
+      return null;
+    }
+  },
+  setHardwareLoadPercent,
+  startGpuLoad,
+  getHardwareLoadState,
+  getGpuLoadState,
+  consumeMemBurnMs,
 });
 const { registerIpcHandlers, _connectBgProbeWs, _closeBgProbeWs, _scheduleBgProbeWsReconnect } = peerProbeIpc;
 
@@ -1022,6 +1067,7 @@ registerBenchmarkIpcHandlers({
   verifyAsicLiveness: asicMgmt.verifyAsicLiveness,
   verifyAsicFirmware: asicMgmt.verifyAsicFirmware,
   recordMinerStats,
+  networkMiningStats,
   saveHwAuthState,
   _closeBgProbeWs,
   _connectBgProbeWs,
@@ -1327,6 +1373,8 @@ function alignRoundLedgerToChain(roundId = getCurrentNetworkRoundId()) {
     if (prevRoundId && prevRoundId !== roundId) {
       // Purge witnessed probe receipts from prior round.
       witnessedProbeReceipts.clear();
+      // Reset pending energy so old-round energy is not flushed into the new round.
+      _pendingContributionWhRef.current = 0;
     }
     return result;
   } catch (_) {
@@ -1382,6 +1430,9 @@ const ledgerRequestHandler = createLedgerRequestHandler({
   validateContributionProbe: (...args) => roundContributions.validateContributionProbe(...args),
   alignRoundLedgerToChain,
   buildRoundContributionMessage: (msg) => roundContributions.buildRoundContributionMessage(msg),
+  verifyWorkerToken: (tok) => roundContributions.verifyWorkerToken(tok),
+  verifyWorkerTokenLog: (...args) => roundContributions.verifyWorkerTokenLog(...args),
+  verifyGpuTokenLog: (...args) => roundContributions.verifyGpuTokenLog(...args),
   isValidWtcAddress,
   opsState,
   getWtcNode: () => wtcNode,
@@ -1435,7 +1486,7 @@ registerLedgerIpcHandlers({
   settleLocalLedgerRound: (p) => roundContributions.settleLocalLedgerRound(p),
   broadcastRoundContributionToPeers: (p) => roundContributions.broadcastRoundContributionToPeers(p),
   alignRoundLedgerToChain,
-  _flushPendingContribution: (i) => roundContributions._flushPendingContribution(i),
+  _flushPendingContribution: (i, proofs) => roundContributions._flushPendingContribution(i, proofs),
   PROBE_INTERVAL_MS,
   ENABLE_POWER_PROOF_COMMITMENT,
   getGpuTdpW,
@@ -1449,6 +1500,7 @@ registerLedgerIpcHandlers({
   hasOnlinePeers: (s) => peerDiscovery.hasOnlinePeers(s),
   getLocalLedgerBalances: (a) => roundContributions.getLocalLedgerBalances(a),
   loadBenchmarkHistory,
+  getMeasuredOpsPerMs,
   _pendingContributionWh: _pendingContributionWhRef,
   _contributionPerSecond: _contributionPerSecondRef,
   _contributionSecondStart: _contributionSecondStartRef,
@@ -1573,22 +1625,43 @@ app.whenReady().then(() => {
       try {
         const logical = Math.max(1, os.cpus().length || 1);
         let physical = Math.max(0, Number(cpu && cpu.physicalCores) || 0);
-        // Some Windows/laptop environments occasionally report physicalCores=1
-        // despite multiple logical cores. That under-provisions workers and can make
-        // a 20% target look like ~0-1% total system load. Use HT-style fallback.
-        if (logical >= 4 && physical === 1) {
+        // Some Windows/laptop environments misreport physicalCores as equal to
+        // or greater than logicalCores despite Hyper-Threading/SMT.
+        // When physical > logical it is always wrong — fall back to logical/2
+        // (correct for HT/SMT).  When physical === logical the CPU may genuinely
+        // have no HT (physical count is correct) or it may be a misreport on an
+        // HT chip.  We must NOT halve it in the non-HT case because that would
+        // under-provision workers and halve the calibrated power, making every
+        // load percentage draw only half the intended energy.
+        if (logical >= 4 && physical > logical) {
+          console.log(
+            `[Main] si.cpu() reported physicalCores=${physical} but logicalCores=${logical}` +
+              ` — assuming HT/SMT and using ${Math.floor(logical / 2)} workers`,
+          );
+          physical = Math.max(1, Math.floor(logical / 2));
+        } else if (logical >= 4 && physical === 1) {
           physical = Math.max(1, Math.floor(logical / 2));
         }
         if (physical <= 0) {
           physical = logical;
         }
+        console.log(`[Main] CPU cores: ${physical} physical, ${logical} logical`);
         configurePhysicalCores(physical);
         _physicalCoreCountRef.current = physical;
       } catch (_) {
         if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
       }
     })
-    .catch(() => {}); // best-effort; controller falls back to logical core count
+    .catch(() => {
+      // si.cpu() failed — set physical core estimate so workers don't default
+      // to logical cores (which doubles worker count on HT/SMT CPUs).
+      try {
+        const logical = Math.max(1, os.cpus().length || 1);
+        const estimated = Math.max(1, Math.floor(logical / 2));
+        configurePhysicalCores(estimated);
+        _physicalCoreCountRef.current = estimated;
+      } catch (_) {}
+    });
 
   // Ensure device identity is available before loading attestation state (the
   // fallback encryption layer relies on the device-identity secret).
@@ -1725,10 +1798,9 @@ app.whenReady().then(() => {
   startWalletSyncStateLoop();
   startOpsMetricsLoop();
 
-  // Pull current round contributions from peers so a fresh install
-  // recovers mid-round contributions that were broadcast before data loss.
-  // Also re-pull periodically to pick up contributions from newly-connected peers
-  // that were not available at startup or whose broadcasts did not reach us.
+  // Pull current round contributions from peers once at startup so a fresh
+  // install recovers mid-round contributions that were broadcast before data loss.
+  // After startup, only push-based broadcast is used for new contributions.
   setTimeout(async () => {
     try {
       await roundContributions.pullContributionsFromPeers();
@@ -1740,17 +1812,6 @@ app.whenReady().then(() => {
       /* retry on next interval */
     }
   }, 10000);
-  setInterval(async () => {
-    try {
-      await roundContributions.pullContributionsFromPeers();
-      if (roundLedger.isTampered && roundLedger.isTampered()) {
-        roundLedger.clearTamperedFlag();
-        console.warn('[RoundLedger] Tampered flag cleared - peer data restored.');
-      }
-    } catch (_) {
-      /* retry */
-    }
-  }, 60000);
 
   initQueues({ getWtcNode: () => wtcNode, saleQueue, stakingQueue, getDataDir });
 

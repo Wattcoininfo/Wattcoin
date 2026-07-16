@@ -842,4 +842,145 @@ function getCpuTdpW(cpuModel) {
   return 0; // unknown
 }
 
-module.exports = { getExpectedCpuSpeedOps, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW, getCpuTdpW };
+// ── Minimum ops/ms floor per CPU model ───────────────────────────────────────
+// Conservative lower bound on actual Node.js SHA-256 throughput (iterations per
+// millisecond) as measured by crypto.createHash('sha256').update(buffer).digest()
+// with Buffer.alloc/copy overhead matching the worker's burnCpuOps pattern.
+// These values are FALLBACKS used only until the runtime SHA-256 benchmark
+// completes (~9 s on startup).  The runtime benchmark overrides these with
+// per-machine measured values stored on hwAuthority.sha256OpsPerMs.
+//
+// Reference: Intel Ivy Bridge (i5-3470) measures ~83 ops/ms (12 μs/op).
+// CPUs with SHA-NI (Intel 5th gen+, AMD Zen+) are ~1.5-3x faster for raw
+// SHA-256, but the per-call overhead (Buffer.alloc + copy + createHash) dominates
+// for the 68-byte input pattern, limiting real-world improvement to ~1.5-2x.
+function getMinOpsPerMs(cpuModel) {
+  if (!cpuModel) return 40;
+  const m = cpuModel;
+
+  // Intel Core Ultra 200S (Arrow Lake Desktop) — SHA-NI, ~2.5x Ivy Bridge
+  if (/Core.*Ultra [579].*2[0-9]{2}K/i.test(m)) return 180;
+  // Intel Core Ultra 100H/U (Meteor Lake Mobile) — SHA-NI
+  if (/Core.*Ultra [579].*1[0-9]{2}[HU]/i.test(m)) return 150;
+  // Intel 13th/14th Gen — SHA-NI, ~2x Ivy Bridge
+  if (/Core.*i[3579]-1[34]/.test(m)) return 160;
+  // Intel 12th Gen — SHA-NI
+  if (/Core.*i[3579]-12/.test(m)) return 150;
+  // Intel 10th/11th Gen — SHA-NI
+  if (/Core.*i[3579]-1[01]/.test(m)) return 140;
+  // Intel 8th/9th Gen — SHA-NI
+  if (/Core.*i[3579]-[89]/.test(m)) return 130;
+  // Intel 7th Gen (Kaby Lake) — SHA-NI
+  if (/Core.*i[3579]-7[0-9]{3}/.test(m)) return 100;
+  // Intel 6th Gen (Skylake) — SHA-NI
+  if (/Core.*i[3579]-6[0-9]{3}/.test(m)) return 100;
+  // Intel 5th Gen (Broadwell) — SHA-NI
+  if (/Core.*i[57]-5[0-9]{3}/.test(m)) return 95;
+  // Intel 4th Gen (Haswell) — no SHA-NI, ~same as Ivy Bridge
+  if (/Core.*i[3579]-4[0-9]{3}/.test(m)) return 75;
+  // Intel 3rd Gen (Ivy Bridge) — measured: 83 ops/ms, floor: 80
+  if (/Core.*i[3579]-3[0-9]{3}/.test(m)) return 80;
+  // Intel 2nd Gen (Sandy Bridge) — no SHA-NI, slightly slower than Ivy Bridge
+  if (/Core.*i[3579]-2[0-9]{3}/.test(m)) return 60;
+  // AMD Ryzen 9000 (Zen 5) — SHA-NI, ~2.5x Ivy Bridge
+  if (/Ryzen.*[79].*9[0-9]{3}/i.test(m)) return 180;
+  if (/Ryzen.*5.*9[0-9]{3}/i.test(m)) return 150;
+  // AMD Ryzen 7000 (Zen 4) — SHA-NI
+  if (/Ryzen.*[79].*7[0-9]{3}/i.test(m)) return 160;
+  if (/Ryzen.*5.*7[0-9]{3}/i.test(m)) return 140;
+  // AMD Ryzen 5000 (Zen 3) — SHA-NI
+  if (/Ryzen.*[579].*5[0-9]{3}/i.test(m)) return 140;
+  if (/Ryzen.*3.*5[0-9]{3}/i.test(m)) return 110;
+  // AMD Ryzen 3000 (Zen 2) — SHA-NI
+  if (/Ryzen.*[579].*3[0-9]{3}/i.test(m)) return 120;
+  if (/Ryzen.*3.*3[0-9]{3}/i.test(m)) return 100;
+  // AMD Ryzen 2000 (Zen+) — SHA-NI
+  if (/Ryzen.*[3579].*2[0-9]{3}/i.test(m)) return 90;
+  // AMD Threadripper
+  if (/Threadripper/.test(m)) return 120;
+  // Apple Silicon — ARM SHA2 acceleration, ~2x Ivy Bridge
+  if (/M[1-4]/.test(m)) return 150;
+  // Xeon / EPYC
+  if (/Xeon|EPYC/.test(m)) return 120;
+  // Pentium / Celeron / Atom — no SHA-NI, slower
+  if (/Pentium|Celeron|Atom/.test(m)) return 50;
+  // Unrecognized CPU model — cannot verify, no energy credits
+  return 0;
+}
+
+// ── Minimum GPU ops/ms floor per GPU model ────────────────────────────────────
+// Conservative lower bound on GPU SHA-256 burn throughput (iterations per millisecond).
+// Used by the plausibility check to prevent a patched worker from reporting
+// artificially low ops to make low-effort proofs pass validation.
+// GPUs are massively parallel but SHA-256 burn is sequential per chain;
+// throughput depends on how many independent chains the binary runs in parallel.
+function getGpuMinOpsPerMs(gpuModel) {
+  if (!gpuModel) return 500;
+  const m = gpuModel;
+
+  // NVIDIA RTX 40/50 series — high SHA-256 throughput via parallel chains
+  if (/RTX.*50[89]0/i.test(m)) return 2000;
+  if (/RTX.*5070/i.test(m)) return 1800;
+  if (/RTX.*5060/i.test(m)) return 1500;
+  if (/RTX.*4090/i.test(m)) return 2000;
+  if (/RTX.*4080/i.test(m)) return 1800;
+  if (/RTX.*4070/i.test(m)) return 1500;
+  if (/RTX.*4060/i.test(m)) return 1200;
+  if (/RTX.*4050/i.test(m)) return 1000;
+
+  // NVIDIA RTX 30 series
+  if (/RTX.*30[89]0/i.test(m)) return 1500;
+  if (/RTX.*3070/i.test(m)) return 1300;
+  if (/RTX.*3060/i.test(m)) return 1000;
+  if (/RTX.*3050/i.test(m)) return 800;
+
+  // NVIDIA RTX 20 series
+  if (/RTX.*20[89]0/i.test(m)) return 1200;
+  if (/RTX.*2070/i.test(m)) return 1000;
+  if (/RTX.*2060/i.test(m)) return 800;
+
+  // NVIDIA GTX 16 series
+  if (/GTX.*16[67]0/i.test(m)) return 700;
+  if (/GTX.*1650/i.test(m)) return 500;
+
+  // NVIDIA GTX 10 series
+  if (/GTX.*10[89]0/i.test(m)) return 900;
+  if (/GTX.*1070/i.test(m)) return 700;
+  if (/GTX.*1060/i.test(m)) return 600;
+  if (/GTX.*1050/i.test(m)) return 400;
+
+  // AMD RX 9000 series (RDNA 4)
+  if (/RX.*9070/i.test(m)) return 1500;
+
+  // AMD RX 7000 series (RDNA 3)
+  if (/RX.*79[0-9]{2}/i.test(m)) return 1500;
+  if (/RX.*7800/i.test(m)) return 1300;
+  if (/RX.*7700/i.test(m)) return 1100;
+  if (/RX.*7600/i.test(m)) return 900;
+
+  // AMD RX 6000 series (RDNA 2)
+  if (/RX.*69[0-9]{2}/i.test(m)) return 1300;
+  if (/RX.*6800/i.test(m)) return 1100;
+  if (/RX.*6700/i.test(m)) return 900;
+  if (/RX.*6600/i.test(m)) return 700;
+  if (/RX.*6500/i.test(m)) return 500;
+
+  // AMD RX 5000 series (RDNA 1)
+  if (/RX.*5700/i.test(m)) return 800;
+  if (/RX.*5600/i.test(m)) return 700;
+  if (/RX.*5500/i.test(m)) return 500;
+
+  // Intel Arc
+  if (/Arc.*A[7B]70/i.test(m)) return 1000;
+  if (/Arc.*A[7B]50/i.test(m)) return 900;
+  if (/Arc.*B580/i.test(m)) return 900;
+  if (/Arc.*B570/i.test(m)) return 800;
+  if (/Arc.*A580/i.test(m)) return 800;
+  if (/Arc.*A[3B]80/i.test(m)) return 600;
+  if (/Arc.*A310/i.test(m)) return 400;
+
+  // Unrecognized GPU model — cannot verify, no energy credits
+  return 0;
+}
+
+module.exports = { getExpectedCpuSpeedOps, getMinOpsPerMs, getGpuMinOpsPerMs, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW, getCpuTdpW };

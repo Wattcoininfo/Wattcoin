@@ -1900,12 +1900,12 @@ class WtcNode {
   _executeGovernanceTransfer({ transferTo, transferAmount, outcome, pipId }) {
     if (outcome !== 'passed' || !transferTo || !transferAmount) return null;
     if (!pipId) {
-      console.warn('[Governance] No pipId provided for treasury transfer — cannot execute');
+      console.warn('[Governance] No pipId provided for treasury transfer - cannot execute');
       return null;
     }
     const govKey = this._wallet.keys.find((k) => k.address === GOVERNANCE_WALLET_ADDRESS);
     if (!govKey) {
-      console.warn('[Governance] Governance wallet key not found — cannot execute treasury transfer');
+      console.warn('[Governance] Governance wallet key not found - cannot execute treasury transfer');
       return null;
     }
     try {

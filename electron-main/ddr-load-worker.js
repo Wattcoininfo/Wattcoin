@@ -14,6 +14,11 @@
 //   Because Atomics.wait is precise to ~1 ms on Windows, the formula works for
 //   any DDR speed without pre-calibration.
 //
+// SHA-256 seed proof generation:
+//   In addition to memory walks, the worker runs an iterated SHA-256 hash chain
+//   using the coordinator-assigned seed.  This produces verifiable seed proofs
+//   (same format as the CPU worker) for energy accounting.
+//
 // Target communication via SharedArrayBuffer (workerData.sharedBuf):
 //   Atomics.wait blocks the thread at the OS level — no JavaScript event loop
 //   runs while sleeping, so postMessage is silently dropped.  Instead, the
@@ -23,9 +28,9 @@
 
 'use strict';
 
-const { workerData } = require('worker_threads');
+const { workerData, parentPort } = require('worker_threads');
 const { performance } = require('perf_hooks');
-const { parentPort } = require('worker_threads');
+const crypto = require('crypto');
 
 // sharedInt[0]: sleep semaphore -- Atomics.wait here; controller calls Atomics.notify to wake early
 // sharedInt[1]: target percent (0-100) written atomically by the controller
@@ -41,6 +46,19 @@ let statsLastReportAt = performance.now();
 let statsBytesTouched = 0;
 let statsBurnMs = 0;
 let statsTotalMs = 0;
+
+// ── Coordinator seed state ────────────────────────────────────────────────
+// Same pattern as cpu-load-worker: iterated SHA-256 hash chain with seed
+// proof submission on seed change.
+const BURN_PROOF_STEP = 256;
+let activeSeed = null;
+let seedStartTs = 0;
+let seedTotalOps = 0;
+let seedTotalBurnMs = 0;
+let seedStartState = null;
+let seedLastState = null;
+let seedAbsoluteStep = 0;
+let seedIntermediates = [];
 
 function sleepMs(ms) {
   const rounded = Math.max(0, Math.round(ms));
@@ -68,6 +86,84 @@ function walkChunk() {
   cursor = end >= len ? 0 : end;
 }
 
+// ── SHA-256 hash burning (same as cpu-load-worker) ────────────────────────
+function burnMemOps(ops, seed) {
+  const seedBuf = seed ? Buffer.from(seed, 'hex') : Buffer.alloc(32);
+
+  let state;
+  if (!seedStartState) {
+    seedStartState = Buffer.alloc(32);
+    seedStartTs = Date.now();
+    const startInput = Buffer.alloc(64);
+    seedStartState.copy(startInput, 0);
+    seedBuf.copy(startInput, 32);
+    state = crypto.createHash('sha256').update(startInput).digest();
+  } else {
+    state = seedLastState;
+  }
+
+  const n = ops | 0;
+  for (let i = 0; i < n; i++) {
+    const absStep = seedAbsoluteStep + i;
+    const input = Buffer.alloc(68);
+    state.copy(input, 0);
+    input.writeUInt32LE(absStep >>> 0, 32);
+    seedBuf.copy(input, 36);
+    state = crypto.createHash('sha256').update(input).digest();
+    if (absStep % BURN_PROOF_STEP === 0) {
+      seedIntermediates.push(state);
+    }
+  }
+
+  seedAbsoluteStep += n;
+  seedLastState = state;
+
+  const proof =
+    seedIntermediates.length > 0
+      ? crypto.createHash('sha256').update(Buffer.concat(seedIntermediates)).digest()
+      : crypto.createHash('sha256').update(Buffer.alloc(0)).digest();
+
+  return { burnResult: state, proof };
+}
+
+// ── Seed proof submission ─────────────────────────────────────────────────
+function submitSeedProof(prevSeed) {
+  if (!prevSeed || seedTotalOps < 1000) return;
+  try {
+    parentPort.postMessage({
+      type: 'seed-proof',
+      seed: prevSeed,
+      startState: seedStartState ? seedStartState.toString('hex') : '',
+      endState: seedLastState ? seedLastState.toString('hex') : '',
+      totalOps: seedTotalOps,
+      burnMs: Math.round(seedTotalBurnMs * 100) / 100,
+      intermediateProof:
+        seedIntermediates.length > 0
+          ? crypto.createHash('sha256').update(Buffer.concat(seedIntermediates)).digest('hex')
+          : '',
+    });
+  } catch (_) {
+    /* ignore post failures */
+  }
+}
+
+// ── Seed management ───────────────────────────────────────────────────────
+function setActiveSeed(newSeed) {
+  if (newSeed === activeSeed) return;
+  const prevSeed = activeSeed;
+  if (prevSeed) {
+    submitSeedProof(prevSeed);
+  }
+  activeSeed = newSeed;
+  seedStartTs = 0;
+  seedTotalOps = 0;
+  seedTotalBurnMs = 0;
+  seedStartState = null;
+  seedLastState = null;
+  seedAbsoluteStep = 0;
+  seedIntermediates = [];
+}
+
 function maybeReportStats(targetPercent) {
   const nowMs = performance.now();
   const elapsedMs = nowMs - statsLastReportAt;
@@ -83,6 +179,14 @@ function maybeReportStats(targetPercent) {
       burnMs: statsBurnMs,
       totalMs: statsTotalMs,
       targetPercent,
+      seedProof: activeSeed
+        ? {
+            seed: activeSeed,
+            totalOps: seedTotalOps,
+            burnMs: Math.round(seedTotalBurnMs * 100) / 100,
+            startState: seedStartState ? seedStartState.toString('hex') : '',
+          }
+        : null,
     });
   } catch (_) {
     // Ignore telemetry post failures.
@@ -93,12 +197,7 @@ function maybeReportStats(targetPercent) {
   statsTotalMs = 0;
 }
 
-// ---------------------------------------------------------------------------
-// Rolling-window proportional feedback controller (same design as cpu-load-worker).
-// Measures actual duty cycle over the last WINDOW cycles and applies a proportional
-// correction to each idle sleep.  Immune to process.cpuUsage() process-wide bias,
-// OS timer imprecision, and per-cycle preemption spikes (averaged out by the window).
-// ---------------------------------------------------------------------------
+// ── Rolling-window proportional feedback controller ──────────────────────
 const WINDOW = 16;
 const burnBuf = new Float64Array(WINDOW);
 const totalBuf = new Float64Array(WINDOW);
@@ -109,6 +208,10 @@ function resetWindow() {
   wIdx = 0;
   wFull = false;
 }
+
+// SHA-256 ops per ms estimate (updated from measured throughput)
+let memOpsPerMs = 500;
+const TARGET_BURST_MS = 80;
 
 function loop() {
   let lastTarget = -1;
@@ -134,11 +237,25 @@ function loop() {
 
     const f = Math.max(0.01, Math.min(1, targetPercent / 100));
 
-    // Walk chunk and measure wall time
+    // Walk chunk (DRAM stress) and measure wall time
     const t0 = performance.now();
     walkChunk();
     const wallChunkMs = Math.max(0.1, performance.now() - t0);
     statsBurnMs += wallChunkMs;
+
+    // SHA-256 hash burning (seed proof generation)
+    if (activeSeed) {
+      const desiredOps = Math.max(1000, Math.round(TARGET_BURST_MS * f * memOpsPerMs));
+      const hashT0 = performance.now();
+      const { burnResult } = burnMemOps(desiredOps, activeSeed);
+      const hashWallMs = Math.max(0.1, performance.now() - hashT0);
+      seedTotalOps += desiredOps;
+      seedTotalBurnMs += hashWallMs;
+      // Update ops/ms EMA
+      if (hashWallMs > 0) {
+        memOpsPerMs = 0.85 * memOpsPerMs + 0.15 * (desiredOps / hashWallMs);
+      }
+    }
 
     // Nominal idle: busy/(busy+idle) = f
     const nominalIdle = ((1 - f) / f) * wallChunkMs;
@@ -173,5 +290,17 @@ function loop() {
     maybeReportStats(targetPercent);
   }
 }
+
+parentPort.on('message', (message) => {
+  if (!message || typeof message !== 'object') return;
+  if (message.type === 'set-seed') {
+    setActiveSeed(message.seed || null);
+  } else if (message.type === 'stop') {
+    if (activeSeed && seedTotalOps >= 1000) {
+      submitSeedProof(activeSeed);
+    }
+    process.exit(0);
+  }
+});
 
 loop();

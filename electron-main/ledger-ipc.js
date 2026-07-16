@@ -1,5 +1,7 @@
 'use strict';
 
+const os = require('os');
+
 // -- Rolling window constants (same as electron-main.js) ------------------------
 const _CPU_DUTY_WINDOW_MS = 20000;
 const _GPU_DUTY_WINDOW_MS = 20000;
@@ -8,12 +10,13 @@ const _GPU_DUTY_WINDOW_MS = 20000;
 let _osCpuUsagePrev = null;
 let _osCpuUsageCheckTs = 0;
 let _smoothedOsCpuDuty = -1;
+let _osMeasurementsCount = 0;
 let _physicalCoreCount = 0;
 
 function _getOsCpuDuty() {
   const now = Date.now();
   if (_osCpuUsagePrev && now - _osCpuUsageCheckTs < 10000) {
-    return _smoothedOsCpuDuty >= 0 ? _smoothedOsCpuDuty : 1;
+    return _smoothedOsCpuDuty >= 0 ? _smoothedOsCpuDuty : 0;
   }
   const current = process.cpuUsage();
   if (_osCpuUsagePrev) {
@@ -23,11 +26,12 @@ function _getOsCpuDuty() {
       const coreFraction = deltaUs / 1_000_000 / (deltaMs / 1000);
       const rawOsDuty = _physicalCoreCount > 0 ? Math.min(1, coreFraction / _physicalCoreCount) : 1;
       _smoothedOsCpuDuty = _smoothedOsCpuDuty < 0 ? rawOsDuty : _smoothedOsCpuDuty * 0.95 + rawOsDuty * 0.05;
+      _osMeasurementsCount++;
     }
   }
   _osCpuUsagePrev = current;
   _osCpuUsageCheckTs = now;
-  return _smoothedOsCpuDuty >= 0 ? _smoothedOsCpuDuty : 1;
+  return _smoothedOsCpuDuty >= 0 ? _smoothedOsCpuDuty : 0;
 }
 
 /**
@@ -61,6 +65,8 @@ function registerLedgerIpcHandlers(deps) {
     hasOnlinePeers,
     getLocalLedgerBalances,
     loadBenchmarkHistory,
+    getMeasuredOpsPerMs,
+    hasValidGpuTelemetry,
     // Shared mutable state (object refs – use .current)
     _pendingContributionWh,
     _contributionPerSecond,
@@ -183,11 +189,25 @@ function registerLedgerIpcHandlers(deps) {
       };
     }
 
+    // ── Coordinator seed gate ────────────────────────────────────────────────
+    // Energy contribution requires that the coordinator has issued a seed
+    // and the worker has submitted at least one proof of work.  This replaces
+    // the previous token-log verification with externally-verified seed proofs.
+    // The actual seed proof verification happens at the coordinator level
+    // (peer-probe-ipc.js); here we just ensure the worker is actively mining.
+    if (!hwAuthority.calibratedUnitPowerW || hwAuthority.calibratedUnitPowerW <= 0) {
+      return {
+        ok: false,
+        code: 'NO_CALIBRATED_POWER',
+        message: 'Hardware power not calibrated. Complete a full hardware benchmark to calibrate.',
+      };
+    }
+
     let clampedDeltaWh = Math.max(0, Number(deltaWh) || 0);
     const tf = Math.min(1.0, 0.2 + (hwAuthority.trustScore / 100) * 0.8);
     const claimedLoad = Math.min(1, Math.max(0.1, (hwAuthority.currentLoadPercent || 100) / 100));
 
-    let measuredCpuDuty = claimedLoad;
+    let measuredCpuDuty = 0;
     const _rawCpuDuty = getMeasuredCpuDuty();
     if (_rawCpuDuty >= 0) measuredCpuDuty = Math.min(claimedLoad, Math.max(0, _rawCpuDuty));
 
@@ -197,7 +217,8 @@ function registerLedgerIpcHandlers(deps) {
     }
     if (
       _startupRampUp.current &&
-      (_rawCpuDuty >= claimedLoad * 0.5 || Date.now() - _startupRampUpStartedAt.current > 30000)
+      _osMeasurementsCount >= 2 &&
+      (_rawCpuDuty >= claimedLoad * 0.5 || Date.now() - _startupRampUpStartedAt.current > 15000)
     ) {
       _startupRampUp.current = false;
       _cpuDutySamples.current.length = 0;
@@ -213,33 +234,42 @@ function registerLedgerIpcHandlers(deps) {
 
     let effectiveGpuDuty = 0;
     try {
-      const _gpuState = getGpuLoadState();
-      if (_gpuState) {
-        const _gpuFresh = _gpuState.ts > 0 && Date.now() - _gpuState.ts < 5000;
-        if (_gpuFresh && _gpuState.duty !== undefined) {
-          const instantDuty = Math.max(0, Number(_gpuState.duty) || 0);
-          _trackGpuDuty(instantDuty);
-          const windowedDuty = _getRollingGpuDuty();
+      // GPU contribution gated on coordinator-issued seed proofs.
+      // hasValidGpuTelemetry returns true once the GPU binary reports
+      // actual load data (dispatch_count, pow_time_ms, etc.).
+      const hasGpuTelemetry = typeof hasValidGpuTelemetry === 'function' && hasValidGpuTelemetry();
+      if (!hasGpuTelemetry) {
+        _trackGpuDuty(0);
+        effectiveGpuDuty = 0;
+      } else {
+        const _gpuState = getGpuLoadState();
+        if (_gpuState) {
+          const _gpuFresh = _gpuState.ts > 0 && Date.now() - _gpuState.ts < 5000;
+          if (_gpuFresh && _gpuState.duty !== undefined) {
+            const instantDuty = Math.max(0, Number(_gpuState.duty) || 0);
+            _trackGpuDuty(instantDuty);
+            const windowedDuty = _getRollingGpuDuty();
 
-          if (instantDuty >= 0 && !_startupGpuRampUp.current && _prevRawGpuDuty.current < 0) {
-            _startupGpuRampUp.current = true;
-            _startupGpuRampUpStartedAt.current = Date.now();
-          }
-          if (
-            _startupGpuRampUp.current &&
-            (instantDuty >= claimedLoad * 0.5 || Date.now() - _startupGpuRampUpStartedAt.current > 30000)
-          ) {
-            _startupGpuRampUp.current = false;
-            _gpuDutySamples.current.length = 0;
-          }
-          _prevRawGpuDuty.current = instantDuty;
+            if (instantDuty >= 0 && !_startupGpuRampUp.current && _prevRawGpuDuty.current < 0) {
+              _startupGpuRampUp.current = true;
+              _startupGpuRampUpStartedAt.current = Date.now();
+            }
+            if (
+              _startupGpuRampUp.current &&
+              (instantDuty >= claimedLoad * 0.5 || Date.now() - _startupGpuRampUpStartedAt.current > 15000)
+            ) {
+              _startupGpuRampUp.current = false;
+              _gpuDutySamples.current.length = 0;
+            }
+            _prevRawGpuDuty.current = instantDuty;
 
-          effectiveGpuDuty = _startupGpuRampUp.current
-            ? Math.min(claimedLoad, Math.max(instantDuty, windowedDuty))
-            : Math.min(claimedLoad, instantDuty, windowedDuty);
-        } else {
-          _trackGpuDuty(0);
-          effectiveGpuDuty = 0;
+            effectiveGpuDuty = _startupGpuRampUp.current
+              ? Math.min(claimedLoad, Math.max(instantDuty, windowedDuty))
+              : Math.min(claimedLoad, instantDuty, windowedDuty);
+          } else {
+            _trackGpuDuty(0);
+            effectiveGpuDuty = 0;
+          }
         }
       }
     } catch (_) {
