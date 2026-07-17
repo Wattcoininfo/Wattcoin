@@ -41,7 +41,7 @@ function createHandlers(deps) {
     setHardwareLoadPercent,
     startGpuLoad,
     getHardwareLoadState,
-    getGpuLoadState,
+    _getGpuLoadState,
     consumeMemBurnMs,
   } = deps;
 

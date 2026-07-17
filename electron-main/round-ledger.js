@@ -225,7 +225,9 @@ function createRoundLedger(options = {}) {
       const backupPath = filePath + '.bak';
       try {
         await fsp.copyFile(filePath, backupPath);
-      } catch (_) {}
+      } catch (_) {
+        /* no prior file to back up */
+      }
       const fd = await fsp.open(tempFilePath, 'w');
       try {
         await fd.writeFile(serialized, null, 'utf8');
@@ -239,7 +241,9 @@ function createRoundLedger(options = {}) {
         if (err && (err.code === 'EEXIST' || err.code === 'EPERM')) {
           try {
             await fsp.rm(filePath, { force: true });
-          } catch (_) {}
+          } catch (_) {
+            /* best-effort removal */
+          }
           await fsp.rename(tempFilePath, filePath);
         } else {
           throw err;

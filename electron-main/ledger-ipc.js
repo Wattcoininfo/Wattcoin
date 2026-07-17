@@ -1,7 +1,5 @@
 'use strict';
 
-const os = require('os');
-
 // -- Rolling window constants (same as electron-main.js) ------------------------
 const _CPU_DUTY_WINDOW_MS = 20000;
 const _GPU_DUTY_WINDOW_MS = 20000;
@@ -65,7 +63,6 @@ function registerLedgerIpcHandlers(deps) {
     hasOnlinePeers,
     getLocalLedgerBalances,
     loadBenchmarkHistory,
-    getMeasuredOpsPerMs,
     hasValidGpuTelemetry,
     // Shared mutable state (object refs – use .current)
     _pendingContributionWh,

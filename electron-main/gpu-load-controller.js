@@ -2,7 +2,6 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
-const crypto = require('crypto');
 const DEBUG_LOG = path.join(os.tmpdir(), 'wattcoin-gpu-debug.log');
 let _debugBuf = '';
 let _debugFlushPending = false;

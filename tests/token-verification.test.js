@@ -133,7 +133,7 @@ async function run() {
     const cs = crypto.randomBytes(32).toString('hex');
     const seed = crypto.randomBytes(32).toString('hex');
     const ops = 1000;
-    const { burnResult, proof } = computeBurn(Buffer.from(cs, 'hex'), ops, seed);
+    const { proof } = computeBurn(Buffer.from(cs, 'hex'), ops, seed);
     const tamperedBr = crypto.randomBytes(32).toString('hex');
     const r = verifyBurnProof(cs, ops, seed, tamperedBr, proof);
     assert.strictEqual(r.ok, false);

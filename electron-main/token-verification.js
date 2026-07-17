@@ -1,7 +1,6 @@
 'use strict';
 
 const crypto = require('crypto');
-const { getExpectedCpuSpeedOps, getMinOpsPerMs } = require('./hardware-tables.cjs');
 
 // ── Burn proof constants ──────────────────────────────────────────────────
 const BURN_PROOF_STEP = 256;
@@ -171,7 +170,7 @@ function checkProofPlausibility(totalOps, elapsedMs, hardwareSpec, claimedLoad) 
     return { ok: false, reason: 'no_hardware_spec', creditedOps: 0 };
   }
 
-  const load = Math.max(0, Math.min(1, Number(claimedLoad) || 1));
+  const _load = Math.max(0, Math.min(1, Number(claimedLoad) || 1));
   const effectiveOpsPerMs = Math.max(1, Number(hardwareSpec.opsPerMs) || 1);
 
   // expectedOps = burn time × benchmarked throughput (measured at current load).

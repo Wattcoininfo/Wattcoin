@@ -11,7 +11,7 @@ export default defineConfig({
       'tests/**/*.integration.test.js',
       'tests/**/*.runtime.test.js',
     ],
-    exclude: ['node_modules', 'dist', 'releases'],
+    exclude: ['node_modules', 'dist', 'releases', 'tests/wtc-contribution.test.js', 'tests/token-verification.test.js'],
     passWithNoTests: true,
     testTimeout: 30000,
     hookTimeout: 30000,

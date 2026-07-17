@@ -517,7 +517,7 @@ function createRoundContributions(deps) {
     return rewardMap;
   }
 
-  function broadcastRoundContributionToPeers({ address, roundId, totalWh, seedProofs }) {
+  function broadcastRoundContributionToPeers({ address, roundId, totalWh, seedProofs, hwModels }) {
     const wtcNode = getWtcNode();
     const normalizedAddress = String(address || '').trim();
     if (!normalizedAddress || !wtcNode || typeof wtcNode.signMessage !== 'function') return;
@@ -539,6 +539,8 @@ function createRoundContributions(deps) {
       updatedAtMs,
       chainIndex,
       seedProofs,
+      cpuModel: hwModels && hwModels.cpuModel,
+      gpuModels: hwModels && hwModels.gpuModels,
     });
 
     let signature = '';
@@ -633,6 +635,7 @@ function createRoundContributions(deps) {
             roundId: snap.id,
             totalWh,
             seedProofs,
+            hwModels,
           });
         } else {
           console.warn(`[Flush] skipped broadcast: no seed proofs to send`);
@@ -659,7 +662,7 @@ function createRoundContributions(deps) {
     for (const peerUrl of peers) {
       const normalizedUrl = normalizePeerUrl(peerUrl);
       if (!normalizedUrl) continue;
-      function attemptSend(retryCount) {
+      const attemptSend = (retryCount) => {
         requestPeerJson(normalizedUrl, 'POST', '/api/v1/probe/receipt', payload, undefined, {
           trackReachability: false,
           suppressPeerDiscovery: true,
@@ -673,7 +676,7 @@ function createRoundContributions(deps) {
             setTimeout(() => attemptSend(retryCount + 1), RECEIPT_RETRY_DELAY_MS * retryCount);
           }
         });
-      }
+      };
       attemptSend(0);
     }
   }

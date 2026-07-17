@@ -52,7 +52,6 @@ let statsTotalMs = 0;
 // proof submission on seed change.
 const BURN_PROOF_STEP = 256;
 let activeSeed = null;
-let seedStartTs = 0;
 let seedTotalOps = 0;
 let seedTotalBurnMs = 0;
 let seedStartState = null;
@@ -93,7 +92,6 @@ function burnMemOps(ops, seed) {
   let state;
   if (!seedStartState) {
     seedStartState = Buffer.alloc(32);
-    seedStartTs = Date.now();
     const startInput = Buffer.alloc(64);
     seedStartState.copy(startInput, 0);
     seedBuf.copy(startInput, 32);
@@ -155,7 +153,6 @@ function setActiveSeed(newSeed) {
     submitSeedProof(prevSeed);
   }
   activeSeed = newSeed;
-  seedStartTs = 0;
   seedTotalOps = 0;
   seedTotalBurnMs = 0;
   seedStartState = null;
@@ -247,7 +244,7 @@ function loop() {
     if (activeSeed) {
       const desiredOps = Math.max(1000, Math.round(TARGET_BURST_MS * f * memOpsPerMs));
       const hashT0 = performance.now();
-      const { burnResult } = burnMemOps(desiredOps, activeSeed);
+      burnMemOps(desiredOps, activeSeed);
       const hashWallMs = Math.max(0.1, performance.now() - hashT0);
       seedTotalOps += desiredOps;
       seedTotalBurnMs += hashWallMs;

@@ -148,7 +148,9 @@ function createHandlers(deps) {
         let atRaw = {};
         try {
           atRaw = JSON.parse(await fsp.readFile(atPath, 'utf8'));
-        } catch (_) {}
+        } catch (_) {
+          /* no prior attestation db — will create */
+        }
         atRaw.encryptedTrustBackup = encrypted;
         await fsp.writeFile(atPath, JSON.stringify(atRaw, null, 2), 'utf8');
       } catch (_) {

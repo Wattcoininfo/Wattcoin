@@ -2693,66 +2693,7 @@ export default function Miner({
   // via the peer-probe path.  The WebGL burn did unsupervised GPU work
   // without coordinator seeds, which bypasses the seed proof system.
   React.useEffect(() => {
-    return; // WebGL GPU burn disabled — peer-probe path handles GPU loading.
-    if (!allowGpuWorkloads) return;
-    const canvas = gpuLoadCanvasRef.current;
-    if (!canvas) return;
-    const state = gpuLoadGlStateRef.current;
-    if (state.initialized) return;
-    try {
-      // WebGL2 required: readPixels on a WebGL2 context guarantees the GPU pipeline
-      // drains synchronously, giving an accurate measuredFrameMs for duty-cycle pacing.
-      // WebGL1 readPixels does NOT reliably stall the pipeline on ANGLE/D3D paths,
-      // causing measuredFrameMs to floor at 0.5 ms and the duty cycle to be wrong.
-      const gl = canvas.getContext('webgl2');
-      if (!gl) return;
-      const vSrc = `#version 300 es\n        in vec2 p;\n        void main() { gl_Position = vec4(p, 0.0, 1.0); }\n      `;
-      // Heavy MAD loop — same workload class as GPU-PoW native binary.
-      const fSrc = `#version 300 es\n        precision highp float;\n        uniform float u;\n        out vec4 fragColor;\n        void main() {\n          vec4 v = vec4(gl_FragCoord.xy / 2048.0, u, 1.0 - u);\n          for (int i = 0; i < 256; i++) {\n            v.x = v.x * v.y + v.z * 0.00013;\n            v.y = v.y * v.z + v.w * 0.00017;\n            v.z = v.z * v.w + v.x * 0.00019;\n            v.w = v.w * v.x + v.y * 0.00023;\n          }\n          fragColor = v;\n        }\n      `;
-      const vs = gl.createShader(gl.VERTEX_SHADER);
-      gl.shaderSource(vs, vSrc);
-      gl.compileShader(vs);
-      const fs = gl.createShader(gl.FRAGMENT_SHADER);
-      gl.shaderSource(fs, fSrc);
-      gl.compileShader(fs);
-      const prog = gl.createProgram();
-      gl.attachShader(prog, vs);
-      gl.attachShader(prog, fs);
-      gl.linkProgram(prog);
-      gl.useProgram(prog);
-      const buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-      const vao = gl.createVertexArray();
-      gl.bindVertexArray(vao);
-      const pLoc = gl.getAttribLocation(prog, 'p');
-      gl.enableVertexAttribArray(pLoc);
-      gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
-      const seedLoc = gl.getUniformLocation(prog, 'u');
-      // Calibrate GPU frame time. WebGL2 readPixels blocks until GPU pipeline drains.
-      const syncBuf = new Uint8Array(4);
-      for (let i = 0; i < 3; i++) {
-        // warmup: JIT + shader compile
-        gl.uniform1f(seedLoc, i * 0.001);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncBuf);
-      }
-      const tCalib = performance.now();
-      for (let i = 0; i < 5; i++) {
-        gl.uniform1f(seedLoc, 0.5 + i * 0.001);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      }
-      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, syncBuf);
-      const measuredFrameMs = Math.max(0.5, (performance.now() - tCalib) / 5);
-      state.gl = gl;
-      state.prog = prog;
-      state.seedLoc = seedLoc;
-      state.syncBuf = syncBuf;
-      state.measuredFrameMs = measuredFrameMs;
-      state.initialized = true;
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
-    }
+    // WebGL GPU burn disabled — peer-probe path handles GPU loading.
   }, [allowGpuWorkloads]);
 
   // GPU load loop: render heavy WebGL frames while mining is active (loads GPU like CPU workers load CPU).

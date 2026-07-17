@@ -84,7 +84,7 @@ const { createLedgerRequestHandler } = require('./electron-main/ledger-routes');
 const { createPeerNetworking } = require('./electron-main/peer-networking');
 const { createIntegrityVerifier } = require('./electron-main/integrity');
 const { createRoundContributions } = require('./electron-main/round-contributions');
-const { createSeedAssignmentManager, generateSeed } = require('./electron-main/seed-assignment-manager');
+const { createSeedAssignmentManager } = require('./electron-main/seed-assignment-manager');
 const { createWtcChainSync } = require('./electron-main/wtc-chain-sync');
 const { createPeerDiscovery } = require('./electron-main/peer-discovery');
 const { createWalletSyncStateManager } = require('./electron-main/wallet-sync-state');
@@ -690,8 +690,8 @@ const peerProbeIpc = createPeerProbeIpc({
   normalizePeerUrl,
   peerReachabilityCache,
   requestPeerJson,
-  _flushPendingContribution: (chainIndex, seedProofs) =>
-    roundContributions._flushPendingContribution(chainIndex, seedProofs),
+  _flushPendingContribution: (chainIndex, seedProofs, hwModels) =>
+    roundContributions._flushPendingContribution(chainIndex, seedProofs, hwModels),
   getAppDisplayVersion,
   recordPeerAttestation: (verifierAddress, workerId) => peerNetworking.recordPeerAttestation(verifierAddress, workerId),
   broadcastProbeReceiptToPeers: (receipt) => roundContributions.broadcastProbeReceiptToPeers(receipt),
@@ -1660,7 +1660,9 @@ app.whenReady().then(() => {
         const estimated = Math.max(1, Math.floor(logical / 2));
         configurePhysicalCores(estimated);
         _physicalCoreCountRef.current = estimated;
-      } catch (_) {}
+      } catch (_) {
+        /* si.cpu() unavailable */
+      }
     });
 
   // Ensure device identity is available before loading attestation state (the

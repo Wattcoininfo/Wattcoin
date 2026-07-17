@@ -242,7 +242,7 @@ async function run() {
 
     for (let i = 0; i < 3; i++) {
       const seed = `seed${i}`;
-      const { newState, burnResultHex } = fullTokenEmit(chainState, 1000, seed);
+      const { newState } = fullTokenEmit(chainState, 1000, seed);
       states.push(newState.toString('hex'));
       chainState = newState;
     }

@@ -2,8 +2,6 @@
 
 const crypto = require('crypto');
 const {
-  verifyBurnProof,
-  verifyBurnMs,
   verifySeedProof,
   checkProofPlausibility,
   computeEnergyWh,
@@ -12,16 +10,16 @@ const {
 } = require('./token-verification');
 const { getMinOpsPerMs, getGpuMinOpsPerMs, getCpuTdpW, getGpuTdpW } = require('./hardware-tables.cjs');
 
-const SEED_HEX_LENGTH = 64;
+const _SEED_HEX_LENGTH = 64;
 
 function generateSeed() {
   return crypto.randomBytes(32).toString('hex');
 }
 
 function createSeedAssignmentManager({
-  getCpuCoordinatorSeed,
+  _getCpuCoordinatorSeed,
   setCpuCoordinatorSeed,
-  getGpuCoordinatorSeed,
+  _getGpuCoordinatorSeed,
   setGpuCoordinatorSeed,
   getMemSeedProofs,
   setMemCoordinatorSeed,

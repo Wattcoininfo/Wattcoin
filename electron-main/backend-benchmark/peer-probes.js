@@ -74,7 +74,6 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
       ? deriveProbeSeed(workerChain.chainHead, workerChain.chainIndex) || 1
       : crypto.randomBytes(4).readUInt32BE(0) & 0x7fffffff || 1;
   const seed = (rawSeed & 0x7fffffff) | 1;
-  const types = ['cpu', 'memory', ...(gpuPowCapable ? ['gpu-pow'] : []), ...(hasAsic ? ['asic'] : [])];
   const isNewWorker = !workerChainState.has(workerId);
   let type;
   if (isNewWorker) {

@@ -17,7 +17,6 @@ let statsTotalMs = 0;
 // arrives, the worker submits a proof of work.
 const BURN_PROOF_STEP = 256;
 let activeSeed = null;
-let seedStartTs = 0;
 let seedTotalOps = 0;
 let seedTotalBurnMs = 0;
 let seedStartState = null;
@@ -49,7 +48,6 @@ function burnCpuOps(ops, seed) {
     // First call for this seed: store the chain state (prevState) and
     // derive the burn start state: SHA-256(chainState ‖ seed).
     seedStartState = Buffer.alloc(32);
-    seedStartTs = Date.now();
     const startInput = Buffer.alloc(64);
     seedStartState.copy(startInput, 0);
     seedBuf.copy(startInput, 32);
@@ -127,7 +125,6 @@ function setActiveSeed(newSeed) {
   }
 
   activeSeed = newSeed;
-  seedStartTs = 0;
   seedTotalOps = 0;
   seedTotalBurnMs = 0;
   seedStartState = null;
@@ -193,7 +190,7 @@ function loop() {
 
     // Burn phase — wall-clock timed
     const t0 = performance.now();
-    const { burnResult } = burnCpuOps(ops, activeSeed);
+    burnCpuOps(ops, activeSeed);
     const wallBurnMs = Math.max(0.1, performance.now() - t0);
     statsOps += ops;
     seedTotalOps += ops;
