@@ -604,7 +604,6 @@ function registerBusinessIpcHandlers(deps) {
         if (!b) continue;
         let proofType = 'cpu';
         if (b.gpuProof) proofType = 'gpu';
-        else if (b.memProof) proofType = 'memory';
         blocks.push({
           height: b.height,
           hash: b.hash,
@@ -663,7 +662,6 @@ function registerBusinessIpcHandlers(deps) {
           energyWh: b.energyWh,
           proofCommitment: b.proofCommitment || '',
           hasCpuProof: !!b.cpuSpeedProof,
-          hasMemProof: !!b.memProof,
           hasGpuProof: !!b.gpuProof,
         });
       }

@@ -113,8 +113,6 @@ function registerMiningIpcHandlers(
             probesAnswered: Math.max(0, Math.floor(Number(proofData && proofData.probesAnswered) || 0)),
             cpuSpeedInitialSeed: Number(proofData && proofData.cpuSpeedInitialSeed) || 0,
             cpuSpeedProof: String((proofData && proofData.cpuSpeedProof) || ''),
-            memProof: String((proofData && proofData.memProof) || ''),
-            memProofSeed: Number(proofData && proofData.memProofSeed) || 0,
             gpuProof: String((proofData && proofData.gpuProof) || ''),
             gpuProofSeed: Number(proofData && proofData.gpuProofSeed) || 0,
           },

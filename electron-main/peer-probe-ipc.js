@@ -42,7 +42,6 @@ function createHandlers(deps) {
     startGpuLoad,
     getHardwareLoadState,
     _getGpuLoadState,
-    consumeMemBurnMs,
   } = deps;
 
   // -- State ------------------------------------------------------------------
@@ -646,7 +645,6 @@ function createHandlers(deps) {
                 trustScoreBefore,
                 trustScoreAfter: hwAuthority.trustScore,
               });
-              // Collect seed proofs and compute verified energy.
               let collectedProofs = [];
               if (typeof seedManager !== 'undefined' && seedManager) {
                 try {
@@ -654,8 +652,7 @@ function createHandlers(deps) {
                   const gpuModel = typeof getLocalGpuModel === 'function' ? getLocalGpuModel() : null;
                   const cpuProofs = seedManager.collectCpuProofs();
                   const gpuProofs = seedManager.collectGpuProofs();
-                  const memProofs = seedManager.collectMemProofs();
-                  collectedProofs = [...cpuProofs, ...gpuProofs, ...memProofs];
+                  collectedProofs = [...cpuProofs, ...gpuProofs];
                   const seedInfo =
                     typeof seedManager.getLastSeedInfo === 'function' ? seedManager.getLastSeedInfo() : null;
                   const proofDurationMs = Math.max(1000, (seedInfo && seedInfo.durationMs) || 60000);
@@ -673,16 +670,10 @@ function createHandlers(deps) {
                     gpuModel,
                     claimedLoad,
                   );
-                  const memProofResult = await seedManager.verifyMemProofs(
-                    memProofs,
-                    proofDurationMs,
-                    cpuModel,
-                    claimedLoad,
-                  );
                   const _proofElapsed = Date.now() - _proofStart;
-                  const totalEnergyWh =
-                    proofResult.totalEnergyWh + gpuProofResult.totalEnergyWh + memProofResult.totalEnergyWh;
+                  const totalEnergyWh = proofResult.totalEnergyWh + gpuProofResult.totalEnergyWh;
                   _pendingContributionWhRef.current = totalEnergyWh;
+                  verdict.energyWh = totalEnergyWh;
                   const _submitToVerdictMs = _verdictAt - (result._submittedAt || _verdictAt);
                   const cpuTotalOps = cpuProofs.reduce((sum, p) => sum + (Number(p.totalOps) || 0), 0);
                   const cpuTotalBurnMs = cpuProofs.reduce((sum, p) => sum + (Number(p.burnMs) || 0), 0);
@@ -727,10 +718,9 @@ function createHandlers(deps) {
                     }
                   }
                   console.log(
-                    `[PeerProbe] Proof verify: cpu=${cpuProofs.length} gpu=${gpuProofs.length} mem=${memProofs.length} ` +
+                    `[PeerProbe] Proof verify: cpu=${cpuProofs.length} gpu=${gpuProofs.length} ` +
                       `cpuOk=${proofResult.proofs}/${proofResult.total || cpuProofs.length} ` +
                       `gpuOk=${gpuProofResult.proofs}/${gpuProofResult.total || gpuProofs.length} ` +
-                      `memOk=${memProofResult.proofs}/${memProofResult.total || memProofs.length} ` +
                       `energyWh=${totalEnergyWh.toFixed(6)} ` +
                       `totalOps=${cpuTotalOps} burnMs=${Math.round(cpuTotalBurnMs)} ` +
                       `measuredOpsPerMs=${Math.round(measuredOpsPerMs)} benchOpsPerMs=${Math.round(hwAuthority.sha256OpsPerMs) || 'unset'} ` +
@@ -740,11 +730,8 @@ function createHandlers(deps) {
                   );
                   if (totalEnergyWh > 0) {
                     console.log(
-                      `[PeerProbe] Seed proofs verified: ${proofResult.proofs + gpuProofResult.proofs + memProofResult.proofs} proofs, ` +
-                        `${totalEnergyWh.toFixed(6)} Wh computed` +
-                        (memProofResult.totalEnergyWh > 0
-                          ? ` (mem: ${memProofResult.totalEnergyWh.toFixed(6)} Wh)`
-                          : ''),
+                      `[PeerProbe] Seed proofs verified: ${proofResult.proofs + gpuProofResult.proofs} proofs, ` +
+                        `${totalEnergyWh.toFixed(6)} Wh computed`,
                     );
                   }
                 } catch (e) {
@@ -817,7 +804,6 @@ function createHandlers(deps) {
                   }
                 }
                 _pendingContributionWhRef.current = 0;
-                if (typeof consumeMemBurnMs === 'function') consumeMemBurnMs();
               }
               saveHwAuthState();
               verdict = Object.assign({}, verdict, {

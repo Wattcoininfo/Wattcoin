@@ -610,10 +610,9 @@ export default function AppTabs() {
         proofIssues: Array.isArray(minedInfo && minedInfo.proofIssues) ? minedInfo.proofIssues : [],
         proofCommitment: minedInfo && minedInfo.proofCommitment ? String(minedInfo.proofCommitment) : null,
         rewardCoins: Number(minedInfo && minedInfo.reward) || 0,
-        // Item 1: coordinator-side CPU/mem proof re-verification fields.
+        // Item 1: coordinator-side CPU proof re-verification fields.
         cpuSpeedInitialSeed: Number(minedInfo && minedInfo.cpuSpeedInitialSeed) || 0,
         cpuSpeedProof: String((minedInfo && minedInfo.cpuSpeedProof) || ''),
-        memProof: String((minedInfo && minedInfo.memProof) || ''),
         // Item 4: whether a peer probe was verified during this round.
         peerProbeVerified: !!(minedInfo && minedInfo.peerProbeVerified),
         // Item 5: signed receipt from the coordinator's peer probe.
@@ -960,13 +959,9 @@ export default function AppTabs() {
                     if (previousFingerprint.cpuModel) parts.push(`CPU ${previousFingerprint.cpuModel}`);
                     if (Array.isArray(previousFingerprint.gpuModels) && previousFingerprint.gpuModels.length > 0)
                       parts.push(`GPU ${previousFingerprint.gpuModels.join(', ')}`);
-                    if (
-                      previousFingerprint.memType ||
-                      previousFingerprint.memSpeedMhz ||
-                      previousFingerprint.memSticks
-                    ) {
+                    if (previousFingerprint.memType || previousFingerprint.memSticks) {
                       parts.push(
-                        `Memory ${previousFingerprint.memType || 'unknown'} ${previousFingerprint.memSpeedMhz || 0} MHz x${previousFingerprint.memSticks || 0}`,
+                        `Memory ${previousFingerprint.memType || 'unknown'} x${previousFingerprint.memSticks || 0}`,
                       );
                     }
                   }

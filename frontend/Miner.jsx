@@ -80,7 +80,6 @@ import {
   runCpuProbe,
   runCpuProbeForDuration,
   runGpuPowBenchmark,
-  getExpectedMemBandwidthMBps,
   getExpectedGpuScore,
   getExpectedCpuSpeedOps,
   getGpuVramInfo,
@@ -157,11 +156,9 @@ export default function Miner({
     lastTrustDelta: null,
     lastTrustChangeTime: null,
     lastAvgCpuPct: null,
-    lastAvgMemPct: null,
     lastAvgGpuPct: null,
     lastWasBaseline: false,
     cpuPenaltyPct: -1,
-    memPenaltyPct: -1,
     gpuPenaltyPct: -1,
   });
   const [loadPercent, setLoadPercent] = React.useState(() => {
@@ -187,14 +184,12 @@ export default function Miner({
   const lastSliderCommitAtMsRef = React.useRef(0);
   // Drift-detection baselines — set on startup/slider-stop, compared on every subsequent run.
   const benchmarkRefCpuOpsRef = React.useRef(null);
-  const benchmarkRefMemBwRef = React.useRef(null);
-  const benchmarkRefMemLatencyRef = React.useRef(null);
   const benchmarkRefGpuScoreRef = React.useRef(null);
   const benchmarkRefJitterRef = React.useRef(null);
 
   // Holds the most recent benchmark proof data for inclusion in the next mineBlock call.
-  // Fields: cpuSpeedProof, cpuSpeedInitialSeed, memProof, challengeSeed, cpuOpsPerSec,
-  //         memoryMBps, jitterRatio, score, issues, benchmarkTs.
+  // Fields: cpuSpeedProof, cpuSpeedInitialSeed, challengeSeed, cpuOpsPerSec,
+  //         jitterRatio, score, issues, benchmarkTs.
   const benchmarkProofRef = React.useRef(null);
   // Item 4: set to true when a peer probe was successfully verified in the current round.
   // Reset when a block is mined so each round is independently assessed.
@@ -261,9 +256,6 @@ export default function Miner({
       gpus: [],
       gpuDetailsList: [],
       memory: 'Unknown',
-      memTotalGB: 0,
-      memSpeedMhz: 0,
-      memSticks: 1,
       osName: 'Unknown',
       source: '',
     };
@@ -288,8 +280,6 @@ export default function Miner({
   // Ops-based TDP calibration: ratio of measured cpuSpeedOpsPerSec to expected ops/s
   // for the declared CPU model.  Stays 1.0 when unknown; <1.0 when throttled.
   const [benchmarkOpsCalibration, setBenchmarkOpsCalibration] = React.useState(1.0);
-  // Memory bandwidth calibration: ratio of measured sequential bandwidth to expected.
-  const [benchmarkMemCalibration, setBenchmarkMemCalibration] = React.useState(1.0);
   // GPU ALU-score calibration: ratio of measured WebGL score to expected for declared GPU.
   const [benchmarkGpuCalibration, setBenchmarkGpuCalibration] = React.useState(1.0);
   const consecutiveUnderestimateRef = React.useRef(0);
@@ -620,7 +610,7 @@ export default function Miner({
           issues.push('fingerprint persistence check failed');
         }
 
-        // Backend benchmark workload (CPU, memory, GPU provider metric).
+        // Backend benchmark workload (CPU, GPU provider metric).
         const backendBench =
           window.wattcoinHardware && window.wattcoinHardware.runBackendBenchmark
             ? await window.wattcoinHardware
@@ -630,9 +620,6 @@ export default function Miner({
                   phaseCount: 4,
                   phaseDurationMs: extended ? 200 : 100,
                   cpuSpeedRuns: reason === 'startup' || reason === 'slider-stop' ? 3 : 2,
-                  memBytes: 128 * 1024 * 1024, // 128 MB — exceeds L3 cache on virtually all consumer
-                  // CPUs (Intel max ~36 MB, standard AMD max ~64 MB),
-                  // ensuring DRAM bandwidth is measured, not L3 cache.
                   // Hardware description strings for main-process authoritative calibration.
                   // Main uses its own copy of the lookup tables (hardware-tables.cjs) so these
                   // cannot be spoofed to inflate the calibration ratio.
@@ -642,9 +629,6 @@ export default function Miner({
                   declaredCpuModel: hardware.cpu ? hardware.cpu.split(' (')[0] : '',
                   declaredGpuModel: hardware.gpu || '',
                   declaredDeviceType: hardware.deviceType || '',
-                  declaredMemType: hardware.memory || '',
-                  declaredMemSpeedMhz: hardware.memSpeedMhz || 0,
-                  declaredMemSticks: hardware.memSticks || 1,
                   // Declared calibrated TDP so main can establish the per-tick energy ceiling.
                   // Main applies its own calibration factor on top so declaring a wrong model
                   // is penalised by the benchmark-measured ops ratio.
@@ -664,7 +648,6 @@ export default function Miner({
         }
         const challengeSeed = Number(backendBench.challengeSeed) || 0;
         const cpuOpsPerSec = Math.max(0, Number(backendBench.cpuOpsPerSec) || 0);
-        const memoryMBps = Math.max(0, Number(backendBench.memoryMBps) || 0);
         const jitterRatio = Math.max(0, Number(backendBench.jitterRatio) || 0);
         let cpuSpeedOpsPerSec = Math.max(0, Number(backendBench.cpuSpeedOpsPerSec) || 0);
         // Renderer-side calibration: runCpuProbe executes in the same V8 isolate and
@@ -684,7 +667,6 @@ export default function Miner({
           /* renderer calibration is non-fatal */
         }
         const _cpuSamples = Array.isArray(backendBench.cpuSamples) ? backendBench.cpuSamples : [cpuOpsPerSec];
-        const memLatencyNs = Math.max(0, Number(backendBench.memLatencyNs) || 0);
 
         // Item 2: measurement-derived hardware tiers — independent of declared hardware names.
         // Power credit is anchored to what was actually measured, not what was declared.
@@ -699,27 +681,11 @@ export default function Miner({
                 : cpuSpeedOpsPerSec < 6e8
                   ? 4
                   : 5;
-        // Memory latency tier: lower ns = faster RAM = higher tier.
-        const memLatencyTier =
-          memLatencyNs <= 0
-            ? 1
-            : memLatencyNs < 40
-              ? 5 // DDR5 / HBM
-              : memLatencyNs < 70
-                ? 4 // DDR4-3600+
-                : memLatencyNs < 100
-                  ? 3 // DDR4-2400
-                  : memLatencyNs < 150
-                    ? 2 // DDR3 / slow DDR4
-                    : 1; // very slow / virtual
 
         // Proof integrity: Node re-runs the same computation and confirms the hash matches.
         // A false value means the Node process itself is corrupted/patched — treat as fatal.
         if (backendBench.cpuSpeedProofVerified === false) {
           issues.push('cpu speed proof failed verification — benchmark integrity compromised');
-        }
-        if (backendBench.memProofVerified === false) {
-          issues.push('memory proof failed verification — benchmark integrity compromised');
         }
         if (jitterRatio > 0.45) {
           issues.push('high benchmark jitter detected');
@@ -731,9 +697,6 @@ export default function Miner({
         const minExpectedCpu = logicalCores * 50_000;
         if (cpuOpsPerSec < minExpectedCpu) {
           issues.push('cpu throughput below expected envelope');
-        }
-        if (memoryMBps < 500) {
-          issues.push('memory bandwidth below expected envelope');
         }
 
         // Hardware-specific ops/s validation: compare measured CPU speed against the
@@ -825,34 +788,6 @@ export default function Miner({
             : 1.0;
         setBenchmarkOpsCalibration(newOpsCalibration);
 
-        // Memory bandwidth calibration: compare measured sequential bandwidth to expected for
-        // the declared memory type + speed.  Flags impossible values (e.g. DDR5-6000 speed but
-        // DDR3-tier bandwidth) and scales the memory TDP contribution accordingly.
-        const _randomMemBandwidthMBps = Math.max(0, Number(backendBench.randomMemBandwidthMBps) || 0);
-        // memLatencyNs already declared above (used for tier computation).
-        const expectedMemBwMBps = getExpectedMemBandwidthMBps(
-          hardware.memory,
-          hardware.memSpeedMhz || 0,
-          hardware.memSticks || 1,
-        );
-        let memBwRatio = 1.0;
-        if (expectedMemBwMBps > 0 && memoryMBps > 0) {
-          memBwRatio = memoryMBps / expectedMemBwMBps;
-          if (memBwRatio > 3.0) {
-            issues.push(
-              `memory bandwidth ${Math.round(memoryMBps / 1024)} GB/s exceeds expected ${Math.round(expectedMemBwMBps / 1024)} GB/s for declared spec`,
-            );
-          }
-          if (memBwRatio < 0.25) {
-            issues.push(
-              `memory bandwidth ${Math.round(memoryMBps / 1024)} GB/s far below expected ${Math.round(expectedMemBwMBps / 1024)} GB/s for declared spec`,
-            );
-          }
-        }
-        const newMemCalibration =
-          expectedMemBwMBps > 0 && memoryMBps > 0 ? Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * memBwRatio)) : 1.0;
-        setBenchmarkMemCalibration(newMemCalibration);
-
         // GPU ALU-score calibration: only run for desktops with discrete GPUs.
         // Laptops are modelled as a single thermal unit (CPU+iGPU envelope), so GPU
         // benchmarking is meaningless there.  Also skip for any device where GPU
@@ -936,8 +871,6 @@ export default function Miner({
         const isBaselineBenchmark = reason === 'startup' || reason === 'slider-stop';
         if (isBaselineBenchmark) {
           benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
-          benchmarkRefMemBwRef.current = memoryMBps;
-          benchmarkRefMemLatencyRef.current = memLatencyNs > 0 ? memLatencyNs : null;
           benchmarkRefGpuScoreRef.current = gpuScore > 0 ? gpuScore : null;
           benchmarkRefJitterRef.current = jitterRatio > 0 ? jitterRatio : null;
           benchmarkRetryPendingRef.current = false;
@@ -953,14 +886,6 @@ export default function Miner({
             if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`cpu ${(d * 100).toFixed(1)}%`);
           } else {
             benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
-          }
-
-          const refMemLatency = benchmarkRefMemLatencyRef.current;
-          if (refMemLatency !== null && refMemLatency > 0 && memLatencyNs > 0) {
-            const d = Math.abs(memLatencyNs - refMemLatency) / refMemLatency;
-            if (d > BENCHMARK_DRIFT_THRESHOLD) driftChecks.push(`ddr latency ${(d * 100).toFixed(1)}%`);
-          } else if (memLatencyNs > 0) {
-            benchmarkRefMemLatencyRef.current = memLatencyNs;
           }
 
           const refGpu = benchmarkRefGpuScoreRef.current;
@@ -990,8 +915,6 @@ export default function Miner({
           } else {
             // No significant drift: update baselines to track gradual hardware changes.
             if (cpuOpsPerSec > 0) benchmarkRefCpuOpsRef.current = cpuOpsPerSec;
-            if (memoryMBps > 0) benchmarkRefMemBwRef.current = memoryMBps;
-            if (memLatencyNs > 0) benchmarkRefMemLatencyRef.current = memLatencyNs;
             if (gpuScore > 0) benchmarkRefGpuScoreRef.current = gpuScore;
             if (jitterRatio > 0) benchmarkRefJitterRef.current = jitterRatio;
           }
@@ -1186,24 +1109,19 @@ export default function Miner({
         const elapsedMs = performance.now() - startedAt;
         const trustAfter = trustScoreRef.current;
         let bgCpuOpsPerSec = 0;
-        let bgMemMBps = 0;
         let bgCpuDutyPct = 0;
-        let bgMemDutyPct = 0;
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.getHardwareLoadState) {
             const hwState = await window.wattcoinHardware.getHardwareLoadState();
             if (hwState && hwState.ok) {
               bgCpuOpsPerSec = Math.max(0, Number(hwState.cpuLoadOpsPerSec) || 0);
-              bgMemMBps = Math.max(0, Number(hwState.memLoadMBps) || 0);
               bgCpuDutyPct = Math.max(0, Math.min(100, (Number(hwState.avgCpuWorkerDuty) || 0) * 100));
-              bgMemDutyPct = Math.max(0, Math.min(100, (Number(hwState.memDuty) || 0) * 100));
             }
           }
         } catch (_) {
           if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
         }
         const totalCpuWorkOpsPerSec = cpuOpsPerSec + bgCpuOpsPerSec;
-        const totalMemWorkMBps = memoryMBps + bgMemMBps;
         const gpuDutyPct = Math.max(0, Math.min(100, gpuMeasuredDutyRef.current * 100));
         const gpuActualWorkOpsPerMs = gpuScore > 0 ? gpuScore * (gpuDutyPct / 100) : 0;
         const summary =
@@ -1211,9 +1129,6 @@ export default function Miner({
           `, cpu-speed ${fmtNum(cpuSpeedOpsPerSec, 0)} ops/s${expectedSpeedOps > 0 ? ` (${(hardwareOpsRatio * 100).toFixed(0)}% of expected)` : ''}` +
           `, cpu-phase ${fmtNum(cpuOpsPerSec, 0)} ops/s` +
           `, cpu-total ${fmtNum(totalCpuWorkOpsPerSec, 0)} ops/s (bench ${fmtNum(cpuOpsPerSec, 0)} + bg ${fmtNum(bgCpuOpsPerSec, 0)} @${bgCpuDutyPct.toFixed(0)}%)` +
-          `, mem-seq ${fmtNum(memoryMBps, 0)} MB/s${expectedMemBwMBps > 0 ? ` (${(memBwRatio * 100).toFixed(0)}% of expected)` : ''}` +
-          `, mem-total ${fmtNum(totalMemWorkMBps, 0)} MB/s (bench ${fmtNum(memoryMBps, 0)} + bg ${fmtNum(bgMemMBps, 0)} @${bgMemDutyPct.toFixed(0)}%)` +
-          (memLatencyNs > 0 ? `, mem-latency ${memLatencyNs.toFixed(0)} ns` : '') +
           (allowGpuWorkloads
             ? gpuScore > 0
               ? `, gpu-score ${fmtNum(gpuScore, 0)} ops/ms${maxExpectedGpuScore > 0 ? ` (${(gpuScoreRatio * 100).toFixed(0)}% of expected)` : ''}`
@@ -1227,7 +1142,6 @@ export default function Miner({
           `, jitter ${(jitterRatio * 100).toFixed(1)}%, challenge ${challengeSeed}` +
           `, trust ${trustAfter}/100${!isBaselineBenchmark ? ` (${lastTrustDelta > 0 ? '+' : ''}${lastTrustDelta})` : ''}` +
           `, cpu-proof ${backendBench.cpuSpeedProof || 'n/a'} (seed ${backendBench.cpuSpeedInitialSeed || 0})` +
-          `, mem-proof ${backendBench.memProof || 'n/a'}` +
           (gpuPowDevices && gpuPowDevices.length > 0
             ? `, gpu-pow ${gpuPowDevices.length} device${gpuPowDevices.length > 1 ? 's' : ''} (${gpuPowDevices.map((d) => `${d.deviceIndex}:${d.nonce}`).join(' ')})`
             : allowGpuWorkloads
@@ -1237,10 +1151,8 @@ export default function Miner({
 
         // Compute vs-average deviation percentages using personal mean returned by main.
         const personalMeanCpu = Number(backendBench.personalMeanCpu) || 0;
-        const personalMeanMem = Number(backendBench.personalMeanMem) || 0;
         const personalMeanGpuRatio = Number(gpuCalibResult && gpuCalibResult.personalMeanGpuRatio) || 0;
         const lastAvgCpuPct = personalMeanCpu > 0 ? Math.round((cpuSpeedOpsPerSec / personalMeanCpu - 1) * 100) : null;
-        const lastAvgMemPct = personalMeanMem > 0 ? Math.round((memoryMBps / personalMeanMem - 1) * 100) : null;
         const lastAvgGpuPct =
           allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0 && hardware.deviceType !== 'Laptop'
             ? Math.round((gpuScoreRatio / (personalMeanGpuRatio > 0 ? personalMeanGpuRatio : 1.0) - 1) * 100)
@@ -1248,8 +1160,6 @@ export default function Miner({
 
         const cpuPenaltyPct =
           expectedSpeedOps > 0 ? Math.max(0, 100 - Math.round((cpuSpeedOpsPerSec / expectedSpeedOps) * 100)) : -1;
-        const memPenaltyPct =
-          expectedMemBwMBps > 0 ? Math.max(0, 100 - Math.round((memoryMBps / expectedMemBwMBps) * 100)) : -1;
         const gpuPenaltyPct =
           allowGpuWorkloads && maxExpectedGpuScore > 0 && gpuScore > 0
             ? Math.max(0, 100 - Math.round((gpuScore / maxExpectedGpuScore) * 100))
@@ -1264,18 +1174,16 @@ export default function Miner({
           lastJitterPct: Math.round(jitterRatio * 1000) / 10,
           lastTrustDelta,
           lastAvgCpuPct,
-          lastAvgMemPct,
           lastAvgGpuPct,
           lastWasBaseline: isBaselineBenchmark,
           cpuPenaltyPct,
-          memPenaltyPct,
           gpuPenaltyPct,
         });
 
         // If startup benchmark shows significant performance degradation,
         // prompt the user to re-benchmark before continuing to mine.
         if (isBaselineBenchmark) {
-          const anyDegraded = [cpuPenaltyPct, memPenaltyPct, gpuPenaltyPct].some((p) => p > 30);
+          const anyDegraded = [cpuPenaltyPct, gpuPenaltyPct].some((p) => p > 30);
           if (anyDegraded) setShowRebenchPrompt(true);
         }
 
@@ -1285,9 +1193,6 @@ export default function Miner({
         benchmarkProofRef.current = {
           cpuSpeedProof: backendBench.cpuSpeedProof || '',
           cpuSpeedInitialSeed: Number(backendBench.cpuSpeedInitialSeed) || 0,
-          memProof: backendBench.memProof || '',
-          memProofSeed: Number(backendBench.memProofSeed) || 0,
-          memLatencyNs: Math.max(0, Number(backendBench.memLatencyNs) || 0),
           gpuPowDevices: gpuPowDevices || [],
           gpuPowScore: Math.round(gpuScore),
           gpuPowElapsedMs: _gpuScoreElapsedMs,
@@ -1296,15 +1201,11 @@ export default function Miner({
           cpuSpeedOpsPerSec: Math.round(cpuSpeedOpsPerSec),
           cpuTotalWorkOpsPerSec: Math.round(totalCpuWorkOpsPerSec),
           backgroundCpuOpsPerSec: Math.round(bgCpuOpsPerSec),
-          memoryMBps: Math.round(memoryMBps),
-          memoryTotalWorkMBps: Math.round(totalMemWorkMBps),
-          backgroundMemMBps: Math.round(bgMemMBps),
           gpuScoreOpsPerMs: Math.round(gpuScore),
           gpuActualWorkOpsPerMs: Math.round(gpuActualWorkOpsPerMs),
           gpuMeasuredDutyPct: Math.round(gpuDutyPct * 10) / 10,
           jitterRatio: Math.round(jitterRatio * 10000) / 10000,
           cpuSpeedTier, // item 2: measurement-derived tier
-          memLatencyTier, // item 2: measurement-derived tier
           score,
           issues: [...issues],
           benchmarkTs: Date.now(),
@@ -1438,7 +1339,6 @@ export default function Miner({
                   ? Number(benchmarkProofRef.current.cpuSpeedInitialSeed) || 0
                   : 0,
                 cpuSpeedProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.cpuSpeedProof || '') : '',
-                memProof: benchmarkProofRef.current ? String(benchmarkProofRef.current.memProof || '') : '',
                 proofIssues: benchmarkProofRef.current ? benchmarkState.issues || [] : [],
                 proofCommitment: result.proofCommitment || null,
                 peerProbeVerified: !!(proofData && proofData.peerProbeVerified), // item 4
@@ -1735,11 +1635,11 @@ export default function Miner({
   // Source priority:
   //   1. PEER mode  — requestPeerProbe() fetches a challenge issued by the coordinator.
   //      The coordinator measures wall-clock time independently; the worker cannot lie
-  //      about speed.  CPU and memory proofs are also hash-verified.
+  //      about speed.  CPU proofs are also hash-verified.
   //   2. LOCAL mode — falls back to self-issued probes when coordinator is unreachable
   //      or node is standalone.  Proof hashes still verified by Node; timing is loose.
   //
-  // CPU and memory computations run inline here so they block the JS thread for their
+  // CPU computations run inline here so they block the JS thread for their
   // full duration (~500-2000 ms) — this is intentional and ensures the timing
   // measurement reflects true hardware throughput and is not easily faked by sleeping.
   const walletAddressRef = React.useRef(miningAddress);
@@ -1834,30 +1734,6 @@ export default function Miner({
             _chunks: cpuResult.chunks ? cpuResult.chunks.join(',') : '',
             _callCount: callCount,
             probeWallClockMs: mainMs,
-          };
-        } else if (probe.type === 'memory') {
-          const ENTRIES = Math.max(1, Number(probe.params.entries) || 1 << 24);
-          const s = probe.params.arraySeed | 0 || 1;
-          const arr = new Uint32Array(ENTRIES);
-          for (let fillIdx = 0; fillIdx < ENTRIES; fillIdx++) {
-            arr[fillIdx] = ((fillIdx * 1664525 + s) ^ (s >>> 13)) & (ENTRIES - 1);
-          }
-          let idx = arr[0];
-          const durationMs = probe.params.durationMs || 1000;
-          const walkStart = performance.now();
-          const deadline = walkStart + durationMs;
-          let iterations = 0;
-          const MEM_CHUNK = 1000000;
-          while (performance.now() < deadline) {
-            const chunkEnd = iterations + MEM_CHUNK;
-            for (let i = iterations; i < chunkEnd; i++) idx = arr[idx & (ENTRIES - 1)];
-            iterations = chunkEnd;
-          }
-          probeResult = {
-            id: probe.id,
-            type: 'memory',
-            proof: (idx >>> 0).toString(16).padStart(8, '0'),
-            iterations,
           };
         } else if (probe.type === 'gpu-pow') {
           // GPU PoW probe: use native binary to search for a nonce where hash < difficulty.
@@ -1954,7 +1830,6 @@ export default function Miner({
           },
           hardwareSpec: {
             measuredCpuOpsPerSec: Number(benchmarkProofRef.current && benchmarkProofRef.current.cpuSpeedOpsPerSec) || 0,
-            measuredMemLatencyNs: Number(benchmarkProofRef.current && benchmarkProofRef.current.memLatencyNs) || 0,
             allowGpuWorkloads,
             hwPowerW: Math.max(0, Math.round(Number(totalHardwareTDPRef.current) || 0)),
             cpuModel: typeof hardware.cpu === 'string' ? hardware.cpu : '',
@@ -2075,6 +1950,7 @@ export default function Miner({
                           window.wattcoinHardware.appVersion) ||
                         null,
                   loadPercent: typeof verdict.loadPercent === 'number' ? verdict.loadPercent : null,
+                  energyWh: typeof verdict.energyWh === 'number' ? verdict.energyWh : 0,
                   trustDelta:
                     typeof verdict.trustScoreAfter === 'number' && typeof verdict.trustScoreBefore === 'number'
                       ? verdict.trustScoreAfter - verdict.trustScoreBefore
@@ -2212,7 +2088,6 @@ export default function Miner({
     trustScore,
     benchmarkOpsCalibration,
     benchmarkGpuCalibration,
-    benchmarkMemCalibration,
     isHardwareOnHold,
     benchPower,
   });
@@ -2381,9 +2256,8 @@ export default function Miner({
           if (window.wattcoinHardware && window.wattcoinHardware.getHardwareLoadState) {
             const hwState = await window.wattcoinHardware.getHardwareLoadState();
             const cpuDuty = Math.max(0, Math.min(1, Number(hwState && hwState.avgCpuWorkerDuty) || 0));
-            const memDuty = Math.max(0, Math.min(1, Number(hwState && hwState.memDuty) || 0));
             const gpuDuty = Math.max(0, Math.min(1, Number(gpuMeasuredDutyRef.current) || 0));
-            const peakDuty = Math.max(cpuDuty, memDuty, gpuDuty);
+            const peakDuty = Math.max(cpuDuty, gpuDuty);
             const expectedFloor = Math.max(0.08, (effectiveLoad / 100) * 0.35);
             if (peakDuty > 0 && peakDuty < expectedFloor) {
               suspicionScore += 2;
@@ -2471,14 +2345,24 @@ export default function Miner({
       // Fetch current round contribution so the start log shows running total.
       (async () => {
         let roundWhStr = '';
+        let benchStr = '';
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-            const bal = await window.wattcoinHardware
-              .invoke('wattcoin-ledger-get-balances', targetAddress)
-              .catch(() => null);
+            const [bal, auth] = await Promise.all([
+              window.wattcoinHardware.invoke('wattcoin-ledger-get-balances', targetAddress).catch(() => null),
+              window.wattcoinHardware.invoke('wattcoin-get-authority-state').catch(() => null),
+            ]);
             const roundWh =
               bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (round so far: ${fmtEnergy(roundWh)})`;
+            if (auth) {
+              const parts = [];
+              if (typeof auth.sha256OpsPerMs === 'number' && auth.sha256OpsPerMs > 0)
+                parts.push(`CPU ${auth.sha256OpsPerMs} ops/ms`);
+              if (typeof auth.gpuOpsPerMs === 'number' && auth.gpuOpsPerMs > 0)
+                parts.push(`GPU ${auth.gpuOpsPerMs} ops/ms`);
+              if (parts.length > 0) benchStr = ` [${parts.join(', ')}]`;
+            }
           }
         } catch (_) {
           if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
@@ -2486,7 +2370,7 @@ export default function Miner({
         setLog((log) => [
           {
             time: now(),
-            msg: `Mining started (tier ${currentTier}, target ${fmtEnergy(energyPerBlockWh)} per block, address=${targetAddress})${roundWhStr}`,
+            msg: `Mining started (tier ${currentTier}, target ${fmtEnergy(energyPerBlockWh)} per block, address=${targetAddress})${benchStr}${roundWhStr}`,
             type: 'info',
           },
           ...log,
@@ -2496,14 +2380,24 @@ export default function Miner({
       // Fetch current round contribution so the stop log shows how much was contributed.
       (async () => {
         let roundWhStr = '';
+        let benchStr = '';
         try {
           if (window.wattcoinHardware && window.wattcoinHardware.invoke) {
-            const bal = await window.wattcoinHardware
-              .invoke('wattcoin-ledger-get-balances', targetAddress)
-              .catch(() => null);
+            const [bal, auth] = await Promise.all([
+              window.wattcoinHardware.invoke('wattcoin-ledger-get-balances', targetAddress).catch(() => null),
+              window.wattcoinHardware.invoke('wattcoin-get-authority-state').catch(() => null),
+            ]);
             const roundWh =
               bal && typeof bal.currentRoundContributionWh === 'number' ? bal.currentRoundContributionWh : 0;
             if (roundWh > 0) roundWhStr = ` (contributed ${fmtEnergy(roundWh)} this round)`;
+            if (auth) {
+              const parts = [];
+              if (typeof auth.sha256OpsPerMs === 'number' && auth.sha256OpsPerMs > 0)
+                parts.push(`CPU ${auth.sha256OpsPerMs} ops/ms`);
+              if (typeof auth.gpuOpsPerMs === 'number' && auth.gpuOpsPerMs > 0)
+                parts.push(`GPU ${auth.gpuOpsPerMs} ops/ms`);
+              if (parts.length > 0) benchStr = ` [${parts.join(', ')}]`;
+            }
           }
         } catch (_) {
           if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Caught:', String(_.message || _).slice(0, 80));
@@ -2511,7 +2405,7 @@ export default function Miner({
         setLog((log) => [
           {
             time: now(),
-            msg: `Mining stopped${roundWhStr}`,
+            msg: `Mining stopped${benchStr}${roundWhStr}`,
             type: 'info',
           },
           ...log,
@@ -3446,7 +3340,6 @@ export default function Miner({
               benchmarkState.lastScore !== null &&
               (benchmarkState.lastJitterPct !== null ||
                 benchmarkState.lastAvgCpuPct !== null ||
-                benchmarkState.lastAvgMemPct !== null ||
                 benchmarkState.lastAvgGpuPct !== null) && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                   {benchmarkState.lastJitterPct !== null && (
@@ -3472,9 +3365,7 @@ export default function Miner({
                       })()}
                     </div>
                   )}
-                  {(benchmarkState.lastAvgCpuPct !== null ||
-                    benchmarkState.lastAvgMemPct !== null ||
-                    benchmarkState.lastAvgGpuPct !== null) &&
+                  {(benchmarkState.lastAvgCpuPct !== null || benchmarkState.lastAvgGpuPct !== null) &&
                     (benchmarkState.lastWasBaseline ? (
                       <div style={{ fontSize: 11, color: '#6b7280' }}>
                         {(() => {
@@ -3492,22 +3383,6 @@ export default function Miner({
                                     ? '#ef4444'
                                     : '#6b7280';
                           return <span style={{ color: clr, marginLeft: 0 }}>CPU: {label}</span>;
-                        })()}
-                        {(() => {
-                          const p = benchmarkState.memPenaltyPct;
-                          const label =
-                            p < 0 ? 'Baseline' : p <= 10 ? 'Good' : p <= 20 ? 'Normal' : p <= 30 ? 'Poor' : 'Degraded';
-                          const clr =
-                            label === 'Good'
-                              ? '#a7ffb0'
-                              : label === 'Normal'
-                                ? '#facc15'
-                                : label === 'High'
-                                  ? '#f97316'
-                                  : label === 'Degraded'
-                                    ? '#ef4444'
-                                    : '#6b7280';
-                          return <span style={{ color: clr, marginLeft: 8 }}>Mem: {label}</span>;
                         })()}
                         {benchmarkState.lastAvgGpuPct !== null &&
                           (() => {
@@ -3553,23 +3428,6 @@ export default function Miner({
                               return (
                                 <span key="cpu" style={{ color: c, marginLeft: 8 }}>
                                   CPU {v > 0 ? `+${v}` : v}%
-                                </span>
-                              );
-                            })(),
-                          benchmarkState.lastAvgMemPct !== null &&
-                            (() => {
-                              const v = benchmarkState.lastAvgMemPct;
-                              const c =
-                                Math.abs(v) <= 10
-                                  ? '#a7ffb0'
-                                  : Math.abs(v) <= 25
-                                    ? '#facc15'
-                                    : v > 0
-                                      ? '#4ade80'
-                                      : '#f87171';
-                              return (
-                                <span key="mem" style={{ color: c, marginLeft: 8 }}>
-                                  Mem {v > 0 ? `+${v}` : v}%
                                 </span>
                               );
                             })(),
@@ -4253,7 +4111,6 @@ export default function Miner({
                   Startup benchmark shows degraded performance
                   {[
                     benchmarkState.cpuPenaltyPct > 30 && `CPU ${benchmarkState.cpuPenaltyPct}%`,
-                    benchmarkState.memPenaltyPct > 30 && `Mem ${benchmarkState.memPenaltyPct}%`,
                     benchmarkState.gpuPenaltyPct > 30 && `GPU ${benchmarkState.gpuPenaltyPct}%`,
                   ]
                     .filter(Boolean)

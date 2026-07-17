@@ -2,12 +2,9 @@
 const crypto = require('crypto');
 const {
   verifyCpuProbe,
-  verifyMemProbe,
   verifyGpuPowProbe,
   deriveProbeSeed,
   PROBE_CPU_DURATION_MS,
-  PROBE_MEM_ENTRIES,
-  PROBE_MEM_DURATION_MS,
   PROBE_GPU_POW_DIFFICULTY,
 } = require('./benchmark-execution');
 const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
@@ -21,11 +18,11 @@ const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 //
 // The renderer runs a small challenge workload and returns a proof hash +
 // elapsed time.  The node re-runs the same deterministic computation to
-// verify the hash (CPU + memory).  GPU-PoW probes use a native binary to
+// verify the hash (CPU).  GPU-PoW probes use a native binary to
 // search for a nonce — the proof IS the nonce (self-authenticating).
 //
 // Calibration probe schedule: 2-8 min random jitter (PROBE_INTERVAL_MIN/MS)._MAX/MS).
-// Three types cycle randomly: 'cpu', 'memory', 'gpu-pow' (only if allowGpuWorkloads).
+// Types cycle randomly: 'cpu', 'gpu-pow' (only if allowGpuWorkloads).
 // If the renderer does not respond within PROBE_TIMEOUT_MS, it is recorded as a failure.
 //
 // SIZING RATIONALE:
@@ -34,7 +31,6 @@ const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 //   computation should stay comfortably in the multi-hundred-ms to low-second range
 //   even on weaker hardware. Values below intentionally bias toward longer runtimes:
 //     CPU:    1000 ms fixed duration (duration-based probe)
-//     Memory: 1000 ms fixed duration (duration-based probe)
 //     GPU-PoW: native binary nonce search (difficulty 1024)
 // ----------------------------------------------------------------------------------
 
@@ -129,7 +125,7 @@ function getPendingProbe() {
   // Include 'asic' only when the hardware spec has an expected hashrate for it.
   const allowGpu = !!(probeState.hardwareSpec && probeState.hardwareSpec.allowGpuWorkloads);
   const hasAsic = !!(probeState.hardwareSpec && probeState.hardwareSpec.asicHashrateTHs > 0);
-  const types = ['cpu', 'memory', ...(allowGpu ? ['gpu-pow'] : []), ...(hasAsic ? ['asic'] : [])];
+  const types = ['cpu', ...(allowGpu ? ['gpu-pow'] : []), ...(hasAsic ? ['asic'] : [])];
   const type = types[Math.floor(Math.random() * types.length)];
   // Chain derivation: next seed is deterministically derived from the previous proof so
   // the worker cannot pre-compute answers without executing every prior probe in sequence.
@@ -145,11 +141,9 @@ function getPendingProbe() {
     params:
       type === 'cpu'
         ? { seed, durationMs: PROBE_CPU_DURATION_MS }
-        : type === 'memory'
-          ? { arraySeed: seed, durationMs: PROBE_MEM_DURATION_MS, entries: PROBE_MEM_ENTRIES }
-          : type === 'gpu-pow'
-            ? { seed, difficulty: PROBE_GPU_POW_DIFFICULTY }
-            : /* asic */ { minShares: 3 },
+        : type === 'gpu-pow'
+          ? { seed, difficulty: PROBE_GPU_POW_DIFFICULTY }
+          : /* asic */ { minShares: 3 },
   };
 
   // ASIC liveness challenge: generate a random 32-byte prevHash that the worker
@@ -193,17 +187,6 @@ async function submitProbeResult(result, _peerTimed = false) {
       proofValid = await verifyCpuProbe(probe.params.seed, cpuIters, result.proof || '');
       if (!proofValid) {
         issues.push('cpu probe: proof hash mismatch — computation was tampered or skipped');
-      }
-    }
-  } else if (probe.type === 'memory') {
-    const memIters = result.iterations | 0;
-    if (memIters <= 0) {
-      issues.push('memory probe: no iterations reported');
-      proofValid = false;
-    } else {
-      proofValid = await verifyMemProbe(probe.params.arraySeed, memIters, result.proof || '');
-      if (!proofValid) {
-        issues.push('memory probe: proof hash mismatch — computation was tampered or skipped');
       }
     }
   } else if (probe.type === 'gpu-pow') {

@@ -187,9 +187,6 @@ function buildPowerProofCommitment(proofData) {
     gpuProofWorkload: String(proofData.gpuProofWorkload || 'none'),
     issues: Array.isArray(proofData.issues) ? [...proofData.issues].sort() : [],
     jitterRatio: Number(proofData.jitterRatio) || 0,
-    memoryMBps: Number(proofData.memoryMBps) || 0,
-    memLatencyTier: Number(proofData.memLatencyTier) || 0,
-    memProof: String(proofData.memProof || ''),
     miningAddress: String(proofData.miningAddress || ''),
     peerProbeVerified: !!proofData.peerProbeVerified,
     probeReceipt:

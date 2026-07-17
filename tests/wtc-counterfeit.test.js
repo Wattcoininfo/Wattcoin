@@ -61,7 +61,6 @@ function makeNode(id, dir) {
       throw new Error('no peers in counterfeit test');
     },
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
   });
 }
 
@@ -71,8 +70,6 @@ function mineOne(node) {
     proofCommitment: `test-proof-${Date.now()}`,
     cpuSpeedInitialSeed: 1,
     cpuSpeedProof: 'abc123',
-    memProof: 'def456',
-    memProofSeed: 0,
   });
 }
 
@@ -207,8 +204,6 @@ async function run() {
           proofCommitment: 'redirect-test',
           cpuSpeedInitialSeed: 1,
           cpuSpeedProof: 'abc123',
-          memProof: 'def456',
-          memProofSeed: 0,
         },
         { [attacker.address]: 500 },
       );
@@ -234,8 +229,6 @@ async function run() {
               proofCommitment: 'low-energy-attack',
               cpuSpeedInitialSeed: 1,
               cpuSpeedProof: 'abc123',
-              memProof: 'def456',
-              memProofSeed: 0,
             })
             .then((r) => {
               if (r && r.ok === false) throw new Error(r.reason);
@@ -448,7 +441,6 @@ async function run() {
           throw new Error('no peers');
         },
         verifyCpuSpeedProof: () => Promise.resolve(true),
-        verifyMemProof: () => Promise.resolve(true),
         getEnergyContributions: () => contributions,
       });
 
@@ -467,8 +459,6 @@ async function run() {
         rewardAddresses,
         cpuSpeedInitialSeed: 1,
         cpuSpeedProof: 'abc123',
-        memProof: 'def456',
-        memProofSeed: 0,
       });
       assert.strictEqual(result && result.ok, false, 'skewed reward must be rejected');
       assert.match(String(result.reason), /reward for/i, 'rejection reason should mention reward address');

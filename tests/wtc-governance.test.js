@@ -172,8 +172,6 @@ async function run() {
       nftsRoot: stateRoot,
       cpuSpeedInitialSeed: 1,
       cpuSpeedProof: 'abc123',
-      memProof: 'def456',
-      memProofSeed: 0,
       gpuProof: '',
       gpuProofSeed: 0,
       attestationVersion: 1,
@@ -201,7 +199,6 @@ async function run() {
       privateKey: Buffer.from(kp.privateKey, 'hex'),
       allowPartialQuorumCommit: true,
       verifyCpuSpeedProof: () => Promise.resolve(true),
-      verifyMemProof: () => Promise.resolve(true),
     });
 
     const err = await consensus._validateBlock(block);

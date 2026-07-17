@@ -40,8 +40,6 @@ export function proofColor(type) {
   switch (type) {
     case 'gpu':
       return '#a78bfa';
-    case 'memory':
-      return '#60a5fa';
     default:
       return '#4ade80';
   }
@@ -51,8 +49,6 @@ export function proofLabel(type) {
   switch (type) {
     case 'gpu':
       return 'GPU';
-    case 'memory':
-      return 'MEM';
     default:
       return 'CPU';
   }

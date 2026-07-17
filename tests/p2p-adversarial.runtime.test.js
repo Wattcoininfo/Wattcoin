@@ -109,7 +109,6 @@ function createNode(id, dataDir, net, opts = {}) {
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: false,
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => net.getActivePeers(id),
     getTrustedPeerTargets: typeof opts.getTrustedPeerTargets === 'function' ? opts.getTrustedPeerTargets : undefined,
     requestPeerJson: (peerUrl, method, routePath, payload, query) => {
@@ -141,8 +140,6 @@ async function mineN(node, n) {
         proofCommitment: `test-${Date.now()}-${mined}`,
         cpuSpeedInitialSeed: 1,
         cpuSpeedProof: 'abc123',
-        memProof: 'def456',
-        memProofSeed: 0,
       });
       mined += 1;
     } catch (err) {
@@ -174,8 +171,6 @@ async function mineNWithFallback(nodes, n) {
           proofCommitment: `fallback-${Date.now()}-${mined}`,
           cpuSpeedInitialSeed: 1,
           cpuSpeedProof: 'abc123',
-          memProof: 'def456',
-          memProofSeed: 0,
         });
         committed = true;
         mined += 1;

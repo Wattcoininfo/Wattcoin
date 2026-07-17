@@ -101,7 +101,6 @@ function createNode(id, dataDir, net) {
     signingSecret: `shared-round-${id}`,
     allowPartialQuorumCommit: false,
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => net.getActivePeers(id),
     requestPeerJson: (peerUrl, method, routePath, payload, query) =>
       net.request(id, peerUrl, method, routePath, payload, query),
@@ -189,8 +188,6 @@ async function run() {
             proofCommitment: 'shared-round-below-threshold',
             cpuSpeedInitialSeed: 1,
             cpuSpeedProof: 'abc123',
-            memProof: 'def456',
-            memProofSeed: 0,
           },
           buildRewardMap(belowThreshold, 500),
         ),
@@ -221,8 +218,6 @@ async function run() {
         proofCommitment: 'shared-round-threshold-hit',
         cpuSpeedInitialSeed: 1,
         cpuSpeedProof: 'abc123',
-        memProof: 'def456',
-        memProofSeed: 0,
       },
       buildRewardMap(exactThreshold, 500),
     );

@@ -487,6 +487,7 @@ export async function getHardwareInfo() {
         gpuDetailsList,
         memory,
         memTotalGB,
+        memType,
         memSpeedMhz,
         memSticks,
         osName,

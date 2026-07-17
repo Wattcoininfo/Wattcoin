@@ -46,7 +46,7 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
   }
 
   function loadBenchmarkHistory() {
-    const empty = { cpuSamples: [], memSamples: [], gpuSamples: [], jitterSamples: [] };
+    const empty = { cpuSamples: [], gpuSamples: [], jitterSamples: [] };
     try {
       const filePath = getBenchmarkHistoryPath();
       if (_benchHistCache && _benchHistCachePath === filePath) return _benchHistCache;
@@ -64,9 +64,6 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
       const result = {
         cpuSamples: Array.isArray(data.cpuSamples)
           ? data.cpuSamples.map(Number).filter((v) => isFinite(v) && v > 0)
-          : [],
-        memSamples: Array.isArray(data.memSamples)
-          ? data.memSamples.map(Number).filter((v) => isFinite(v) && v > 0)
           : [],
         gpuSamples: Array.isArray(data.gpuSamples)
           ? data.gpuSamples.map(Number).filter((v) => isFinite(v) && v > 0)
@@ -88,7 +85,6 @@ function createHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHw
       const p = getBenchmarkHistoryPath();
       const data = {
         cpuSamples: history.cpuSamples,
-        memSamples: history.memSamples,
         gpuSamples: history.gpuSamples,
         jitterSamples: history.jitterSamples,
       };

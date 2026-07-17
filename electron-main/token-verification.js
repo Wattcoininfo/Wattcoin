@@ -209,11 +209,6 @@ function computeEnergyWh(hardwareType, proof, hardwareSpec) {
       if (!hardwareSpec || !hardwareSpec.tdpW) return 0;
       return (hardwareSpec.tdpW * (burnMs / 1000)) / 3600;
     }
-    case 'memory': {
-      if (!hardwareSpec || !hardwareSpec.opsPerMs || !hardwareSpec.tdpW) return 0;
-      const energyPerOp = hardwareSpec.tdpW / (hardwareSpec.opsPerMs * 1000);
-      return (ops * energyPerOp) / 3600;
-    }
     case 'asic': {
       if (!hardwareSpec || !hardwareSpec.powerW) return 0;
       return (hardwareSpec.powerW * (elapsedMs / 1000)) / 3600;

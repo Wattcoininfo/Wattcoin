@@ -47,7 +47,6 @@ function createStandaloneNode(id, dataDir) {
       throw new Error('unexpected peer RPC in standalone test');
     },
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
   });
 }
 
@@ -96,8 +95,6 @@ async function run() {
       proofCommitment: 'probe-attestation-test',
       cpuSpeedInitialSeed: 1,
       cpuSpeedProof: 'abc123',
-      memProof: 'def456',
-      memProofSeed: 0,
       peerProbeVerified: true,
       probeReceipt,
     });

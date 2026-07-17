@@ -425,7 +425,6 @@ function createAttestation(deps) {
       ),
       minimums: {
         cpuOpsPerSec: profile.minCpuOpsPerSec,
-        memoryMBps: profile.minMemoryMBps,
         jitterRatioMax: 0.45,
       },
       reattestation: {
@@ -485,7 +484,6 @@ function createAttestation(deps) {
       workloadProfile: {
         phaseCount: 4,
         phaseDurationMs: 120,
-        memBytes: 8 * 1024 * 1024,
         allowGpuWorkloads: policy.profileId === 'desktop-high' || policy.profileId === 'desktop-mid',
       },
       minimums: policy.minimums,
@@ -646,7 +644,6 @@ function createAttestation(deps) {
       );
     }
     const cpuOpsPerSec = expected.measuredCpuOpsPerSec;
-    const memoryMBps = expected.measuredMemoryMBps;
     const jitterRatio = Math.max(0, Number(proof.jitterRatio) || 0);
 
     const failures = [];
@@ -660,9 +657,6 @@ function createAttestation(deps) {
 
     if (cpuOpsPerSec < Number((expected.minimums && expected.minimums.cpuOpsPerSec) || 0)) {
       failures.push('cpu throughput below node minimum');
-    }
-    if (memoryMBps < Number((expected.minimums && expected.minimums.memoryMBps) || 0)) {
-      failures.push('memory bandwidth below node minimum');
     }
     if (jitterRatio > Number((expected.minimums && expected.minimums.jitterRatioMax) || 0.45)) {
       const adaptiveMax =
@@ -678,7 +672,6 @@ function createAttestation(deps) {
         challengeId: expected.id,
         challengeSeed,
         cpuOpsPerSec: Math.round(cpuOpsPerSec),
-        memoryMBps: Math.round(memoryMBps),
       }),
     );
     if (consumedBenchmarkProofs.has(replayKey)) {

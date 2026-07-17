@@ -17,13 +17,7 @@ const {
   clearProbeHistory,
   setAsicHardwareSpec,
 } = require('./backend-benchmark');
-const {
-  getExpectedCpuSpeedOps,
-  getExpectedMemBandwidthMBps,
-  getAsicPowerW,
-  getAsicHashrateTHs,
-  getGpuTdpW,
-} = require('./hardware-tables.cjs');
+const { getExpectedCpuSpeedOps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW } = require('./hardware-tables.cjs');
 const { ensureGpu, getGpuInfo } = require('./gpu-load-controller');
 const { getHardwareLoadState, setHardwareLoadPercent } = require('./hardware-load-controller');
 const {
@@ -119,7 +113,7 @@ function registerBenchmarkIpcHandlers(deps) {
     if (_gpuCount > 0) {
       ensureGpu(_gpuCount).catch(() => {});
     }
-    // Stop CPU/memory load workers before the benchmark so the SHA-256
+    // Stop CPU load workers before the benchmark so the SHA-256
     // measurement runs on a clean main thread without competing for cores.
     // The load is restarted at the previous level afterwards.
     if (_prevPct > 0) setHardwareLoadPercent(0);
@@ -128,7 +122,6 @@ function registerBenchmarkIpcHandlers(deps) {
     if (result && result.ok) {
       setProbeHardwareSpec({
         measuredCpuOpsPerSec: result.cpuSpeedOpsPerSec || 0,
-        measuredMemLatencyNs: result.memLatencyNs || 0,
         allowGpuWorkloads: !!(request && request.allowGpuWorkloads),
       });
 
@@ -137,7 +130,6 @@ function registerBenchmarkIpcHandlers(deps) {
         for (const _ch of activeAttestationChallenges.values()) {
           if (_ch.minerId === _minerAddr || _ch.identityAddress === _minerAddr) {
             _ch.measuredCpuOpsPerSec = result.cpuSpeedOpsPerSec || 0;
-            _ch.measuredMemoryMBps = result.memoryMBps || 0;
           }
         }
       }
@@ -185,23 +177,15 @@ function registerBenchmarkIpcHandlers(deps) {
       let benchmarkConsistencySignal = false;
       let mismatchSignalCount = 0;
 
-      const memType = String((request && request.declaredMemType) || '');
-      const memSpeedMhz = Number((request && request.declaredMemSpeedMhz) || 0);
-      const memSticks = Number((request && request.declaredMemSticks) || 1);
       const isBaseline = !!(request && request.isBaselineBenchmark);
       const measuredCpu = result.cpuSpeedOpsPerSec || 0;
-      const measuredMem = result.memoryMBps || 0;
       const expectedCpu = getExpectedCpuSpeedOps(cpuModel);
       const expectedDeclaredCpu = getExpectedCpuSpeedOps(declaredCpuModel);
-      const expectedMem = getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks);
 
       const currentWallet = walletAddressCache.address || '';
       const hwDescriptor = {
         cpuModel,
         gpuModels: normalizeGpuFingerprintValue(hwIdentity.gpuModels),
-        memType,
-        memSpeedMhz,
-        memSticks,
       };
       const storedFp = loadHwFingerprint();
       if (storedFp && currentWallet) {
@@ -239,14 +223,10 @@ function registerBenchmarkIpcHandlers(deps) {
       if (isBaseline) {
         if (measuredCpu > 0)
           benchmarkHistory.cpuSamples = appendBenchmarkSample(benchmarkHistory.cpuSamples, measuredCpu);
-        if (measuredMem > 0)
-          benchmarkHistory.memSamples = appendBenchmarkSample(benchmarkHistory.memSamples, measuredMem);
       }
       if (!isBaseline) {
         if (measuredCpu > 0)
           benchmarkHistory.cpuSamples = appendBenchmarkSample(benchmarkHistory.cpuSamples, measuredCpu);
-        if (measuredMem > 0)
-          benchmarkHistory.memSamples = appendBenchmarkSample(benchmarkHistory.memSamples, measuredMem);
       }
       const measuredJitter = Math.min(1.0, Math.max(0, Number(result.jitterRatio) || 0));
       if (measuredJitter > 0) {
@@ -261,24 +241,14 @@ function registerBenchmarkIpcHandlers(deps) {
         benchmarkHistory.cpuSamples.length >= 4
           ? benchmarkHistory.cpuSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.cpuSamples.length
           : 0;
-      const personalMemMean =
-        benchmarkHistory.memSamples.length >= 4
-          ? benchmarkHistory.memSamples.reduce((a, b) => a + b, 0) / benchmarkHistory.memSamples.length
-          : 0;
       const referenceCpu = Math.max(getPersonalReference(benchmarkHistory.cpuSamples, expectedCpu), personalCpuMean);
-      const referenceMem = Math.max(getPersonalReference(benchmarkHistory.memSamples, expectedMem), personalMemMean);
 
       let cpuDeclaredInconsistent = false;
       if (expectedDeclaredCpu > 0 && measuredCpu > 0) {
         const declaredCpuRatio = measuredCpu / expectedDeclaredCpu;
         cpuDeclaredInconsistent = declaredCpuRatio < 0.6 || declaredCpuRatio > 1.7;
       }
-      let memDeclaredInconsistent = false;
-      if (expectedMem > 0 && measuredMem > 0) {
-        const declaredMemRatio = measuredMem / expectedMem;
-        memDeclaredInconsistent = declaredMemRatio < 0.5 || declaredMemRatio > 1.9;
-      }
-      benchmarkConsistencySignal = cpuDeclaredInconsistent || memDeclaredInconsistent;
+      benchmarkConsistencySignal = cpuDeclaredInconsistent;
 
       const identitySignalCount = [cpuModelMismatch, gpuModelMismatch, deviceTypeMismatch].filter(Boolean).length;
       mismatchSignalCount = identitySignalCount + (benchmarkConsistencySignal ? 1 : 0);
@@ -301,12 +271,6 @@ function registerBenchmarkIpcHandlers(deps) {
         hwAuthority.benchmarkOpsCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
       } else if (referenceCpu === 0) {
         hwAuthority.benchmarkOpsCalibration = Math.min(hwAuthority.benchmarkOpsCalibration, 0.8);
-      }
-      if (referenceMem > 0 && measuredMem > 0) {
-        const ratio = measuredMem / referenceMem;
-        hwAuthority.benchmarkMemCalibration = Math.min(1.2, Math.max(0.2, 0.5 + 0.5 * ratio));
-      } else if (referenceMem === 0) {
-        hwAuthority.benchmarkMemCalibration = Math.min(hwAuthority.benchmarkMemCalibration, 0.8);
       }
       if (result.sha256OpsPerMs > 0) {
         const prev = Number(hwAuthority.sha256OpsPerMs) || 0;
@@ -669,7 +633,7 @@ function registerBenchmarkIpcHandlers(deps) {
         const pcDeclaredPowerW = Math.max(0, declaredUnitPowerW - totalActiveAsicPowerW);
         const calibFactor = Math.min(
           hwAuthority.benchmarkOpsCalibration,
-          hwAuthority.benchmarkMemCalibration,
+          1.0,
           _allowGpuCalib ? hwAuthority.benchmarkGpuCalibration : 1.0,
         );
         const pcCalibratedPowerW = Math.round(pcDeclaredPowerW * calibFactor);
@@ -695,7 +659,7 @@ function registerBenchmarkIpcHandlers(deps) {
       const trustScoreBefore = hwAuthority.trustScore;
       if (!isBaseline) {
         const rendererIssues = Array.isArray(result.issues) ? result.issues : [];
-        const backendFail = result.cpuSpeedProofVerified === false || result.memProofVerified === false;
+        const backendFail = result.cpuSpeedProofVerified === false;
         const allIssues = [
           ...rendererIssues,
           ...(backendFail ? ['backend proof integrity failed'] : []),
@@ -731,13 +695,11 @@ function registerBenchmarkIpcHandlers(deps) {
         saveHwAuthState();
       }
       const _cpuSamples = benchmarkHistory.cpuSamples;
-      const _memSamples = benchmarkHistory.memSamples;
       result = Object.assign({}, result, {
         trustScoreBefore,
         trustScoreAfter: hwAuthority.trustScore,
         historySamples: _cpuSamples.length,
         personalMeanCpu: _cpuSamples.length >= 1 ? _cpuSamples.reduce((a, b) => a + b, 0) / _cpuSamples.length : 0,
-        personalMeanMem: _memSamples.length >= 1 ? _memSamples.reduce((a, b) => a + b, 0) / _memSamples.length : 0,
       });
     }
     return result;

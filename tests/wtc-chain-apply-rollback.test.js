@@ -52,7 +52,6 @@ function standaloneNode(id, dir) {
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: true,
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => [],
     requestPeerJson: () => {
       throw new Error('no peers in test');
@@ -75,8 +74,6 @@ async function run() {
       proofCommitment: 'rollback-risk-test',
       cpuSpeedInitialSeed: 1,
       cpuSpeedProof: 'abc123',
-      memProof: 'def456',
-      memProofSeed: 0,
     });
     assert.strictEqual(nodeB.getHeight(), 1, 'node B should be at height 1 after mining');
 

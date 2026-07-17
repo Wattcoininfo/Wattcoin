@@ -37,7 +37,6 @@ const { computeBlockHash, energyForHeight, cumulativeSupplyAtHeight, HARD_CAP } 
 const { validateBlockProbeAttestation } = require('./probe-attestation');
 const {
   verifyCpuSpeedProof,
-  verifyMemProof,
   computeGpuProbeExpectedHash,
   GPU_PROOF_SIZE,
   GPU_PROOF_ITERS,
@@ -74,7 +73,6 @@ class Consensus {
     governance = null,
     getEnergyContributions,
     verifyCpuSpeedProof: verifyCpuSpeedProofFn,
-    verifyMemProof: verifyMemProofFn,
     verifyGpuProof: verifyGpuProofFn,
   }) {
     this._chain = chain;
@@ -89,7 +87,6 @@ class Consensus {
     this._getEnergyContributions = typeof getEnergyContributions === 'function' ? getEnergyContributions : () => ({});
     this._verifyCpuSpeedProof =
       typeof verifyCpuSpeedProofFn === 'function' ? verifyCpuSpeedProofFn : verifyCpuSpeedProof;
-    this._verifyMemProof = typeof verifyMemProofFn === 'function' ? verifyMemProofFn : verifyMemProof;
     this._verifyGpuProof =
       typeof verifyGpuProofFn === 'function'
         ? verifyGpuProofFn
@@ -133,7 +130,6 @@ class Consensus {
     nftsRoot = '',
     cpuSpeedInitialSeed = 0,
     cpuSpeedProof = '',
-    memProof = '',
     gpuProof = '',
     gpuProofSeed = 0,
   }) {
@@ -151,7 +147,6 @@ class Consensus {
       nftsRoot,
       cpuSpeedInitialSeed,
       cpuSpeedProof,
-      memProof,
       gpuProof,
       gpuProofSeed,
     });
@@ -542,15 +537,6 @@ class Consensus {
     }
     if (!(await this._verifyCpuSpeedProof(cpuSeed, cpuProof))) {
       return `CPU proof re-verification failed for block at height ${block.height}`;
-    }
-
-    const memProof = String(block.memProof || '');
-    const memProofSeed = Number(block.memProofSeed) || 0;
-    if (!memProof) {
-      return `Memory proof missing for block at height ${block.height}`;
-    }
-    if (!(await this._verifyMemProof(memProof, block.proposer, memProofSeed))) {
-      return `Memory proof re-verification failed for block at height ${block.height}`;
     }
 
     const gpuProof = String(block.gpuProof || '');

@@ -3,29 +3,14 @@ const path = require('path');
 const { Worker } = require('worker_threads');
 
 let cpuWorkers = [];
-let ddrWorker = null;
 let _physicalCoreCount = null;
 
-// SharedArrayBuffer for zero-event-loop DDR target communication.
-let ddrSharedBuf = null;
-let ddrSharedInt = null;
 const cpuWorkerTelemetry = new Map();
-let ddrTelemetry = {
-  mbps: 0,
-  duty: 0,
-  burnMs: 0,
-  totalMs: 0,
-  targetPercent: 0,
-  ts: 0,
-};
-let _accumulatedMemBurnMs = 0;
 let currentPercent = 0;
 let targetPercent = 0;
 let rampUpStartTime = 0;
 let rampUpTimer = null;
 const RAMP_UP_DURATION_MS = 3000;
-const MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT = 12;
-const MEMORY_LOAD_MAX_WEIGHT = 0.35;
 
 // ── Coordinator seed state ────────────────────────────────────────────────
 // Tracks the current coordinator-issued seed and cumulative proof data
@@ -33,12 +18,6 @@ const MEMORY_LOAD_MAX_WEIGHT = 0.35;
 let _activeCoordinatorSeed = null;
 let _seedProofs = new Map(); // workerThreadId → { startState, totalOps, burnMs }
 let _onSeedProof = null; // callback: (proof) => void — called when a worker submits a proof
-
-// ── DDR seed state ────────────────────────────────────────────────────────
-// Memory worker seed proof tracking (same pattern as CPU).
-let _activeDdrSeed = null;
-let _ddrSeedProofs = new Map(); // workerThreadId → { startState, totalOps, burnMs }
-let _onDdrSeedProof = null;
 
 function clampPercent(value) {
   const n = Number(value);
@@ -151,30 +130,6 @@ function onSeedProof(callback) {
   _onSeedProof = callback;
 }
 
-// ── DDR seed management ───────────────────────────────────────────────────
-function setDdrCoordinatorSeed(seed) {
-  if (seed === _activeDdrSeed) return;
-  _activeDdrSeed = seed;
-  if (ddrWorker) {
-    try {
-      ddrWorker.postMessage({ type: 'set-seed', seed });
-    } catch (_) {
-      /* worker may have exited */
-    }
-  }
-}
-
-function drainDdrSeedProofs() {
-  const entries = [];
-  for (const [k, v] of _ddrSeedProofs) entries.push([k, v]);
-  _ddrSeedProofs.clear();
-  return new Map(entries);
-}
-
-function onDdrSeedProof(callback) {
-  _onDdrSeedProof = callback;
-}
-
 function stopRampUp() {
   if (rampUpTimer) {
     clearInterval(rampUpTimer);
@@ -197,11 +152,6 @@ function startRampUp(targetLoad) {
     if (nextPercent !== currentPercent) {
       currentPercent = nextPercent;
       setCpuTarget(nextPercent);
-      if (getEffectiveMemoryTargetPercent(nextPercent) > 0) {
-        setMemoryTarget(nextPercent);
-      } else {
-        stopMemoryPressure();
-      }
     }
 
     if (rampFactor >= 1) {
@@ -210,101 +160,12 @@ function startRampUp(targetLoad) {
   }, 50);
 }
 
-function ensureDdrShared() {
-  if (!ddrSharedBuf) {
-    ddrSharedBuf = new SharedArrayBuffer(8);
-    ddrSharedInt = new Int32Array(ddrSharedBuf);
-    Atomics.store(ddrSharedInt, 0, 0);
-    Atomics.store(ddrSharedInt, 1, 0);
-  }
-}
-
-function stopMemoryPressure() {
-  if (ddrSharedInt) {
-    Atomics.store(ddrSharedInt, 1, 0);
-    Atomics.notify(ddrSharedInt, 0);
-  }
-  if (ddrWorker) {
-    try {
-      ddrWorker.postMessage({ type: 'stop' });
-      ddrWorker.terminate();
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[HwLoad] Caught:', String(_.message || _).slice(0, 80));
-    }
-    ddrWorker = null;
-  }
-  _ddrSeedProofs.clear();
-  ddrTelemetry = {
-    mbps: 0,
-    duty: 0,
-    burnMs: 0,
-    totalMs: 0,
-    targetPercent: 0,
-    ts: Date.now(),
-  };
-}
-
-function getEffectiveMemoryTargetPercent(percent) {
-  const clamped = clampPercent(percent);
-  if (clamped <= MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT) return 0;
-  const normalizedRange =
-    (clamped - MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT) / (100 - MEMORY_LOAD_ENABLE_THRESHOLD_PERCENT);
-  return Math.round(clamped * MEMORY_LOAD_MAX_WEIGHT * Math.max(0, Math.min(1, normalizedRange)));
-}
-
-function setMemoryTarget(percent) {
-  const effectiveTarget = getEffectiveMemoryTargetPercent(percent);
-  if (effectiveTarget <= 0) {
-    stopMemoryPressure();
-    return;
-  }
-
-  ensureDdrShared();
-  Atomics.store(ddrSharedInt, 1, effectiveTarget);
-  Atomics.notify(ddrSharedInt, 0);
-
-  if (!ddrWorker) {
-    const ddrWorkerPath = path.join(__dirname, 'ddr-load-worker.js');
-    ddrWorker = new Worker(ddrWorkerPath, { workerData: { sharedBuf: ddrSharedBuf } });
-    ddrWorker.on('message', (msg) => {
-      if (!msg) return;
-      if (msg.type === 'stats') {
-        _accumulatedMemBurnMs += Math.max(0, Number(msg.burnMs) || 0);
-        ddrTelemetry = {
-          mbps: Math.max(0, Number(msg.mbps) || 0),
-          duty: Math.max(0, Math.min(1, Number(msg.duty) || 0)),
-          burnMs: Math.max(0, Number(msg.burnMs) || 0),
-          totalMs: Math.max(0, Number(msg.totalMs) || 0),
-          targetPercent: Math.max(0, Math.min(100, Number(msg.targetPercent) || 0)),
-          ts: Date.now(),
-        };
-      } else if (msg.type === 'seed-proof') {
-        _ddrSeedProofs.set(ddrWorker.threadId, {
-          seed: msg.seed,
-          startState: msg.startState,
-          endState: msg.endState,
-          totalOps: Number(msg.totalOps) || 0,
-          burnMs: Number(msg.burnMs) || 0,
-          intermediateProof: msg.intermediateProof,
-        });
-        if (typeof _onDdrSeedProof === 'function') {
-          _onDdrSeedProof(msg);
-        }
-      }
-    });
-    ddrWorker.on('error', () => {
-      ddrWorker = null;
-    });
-  }
-}
-
 function setHardwareLoadPercent(percent) {
   const next = clampPercent(percent);
 
   if (next <= 0) {
     stopRampUp();
     stopCpuWorkers();
-    stopMemoryPressure();
     currentPercent = 0;
     targetPercent = 0;
     return currentPercent;
@@ -318,9 +179,7 @@ function stopHardwareLoad() {
   stopRampUp();
   currentPercent = 0;
   targetPercent = 0;
-  _accumulatedMemBurnMs = 0;
   stopCpuWorkers();
-  stopMemoryPressure();
 }
 
 function getHardwareLoadState() {
@@ -338,21 +197,15 @@ function getHardwareLoadState() {
   }
 
   const avgCpuWorkerDuty = cpuDutyCount > 0 ? cpuDutySum / cpuDutyCount : 0;
-  const memLoadMBps = nowMs - (ddrTelemetry.ts || 0) <= staleAfterMs ? Math.max(0, Number(ddrTelemetry.mbps) || 0) : 0;
-  const memDuty =
-    nowMs - (ddrTelemetry.ts || 0) <= staleAfterMs ? Math.max(0, Math.min(1, Number(ddrTelemetry.duty) || 0)) : 0;
 
   return {
     targetPercent: targetPercent,
     currentPercent: currentPercent,
     cpuWorkers: cpuWorkers.length,
-    memoryPressureEnabled: !!ddrWorker,
     rampingUp: !!rampUpTimer,
     cpuLoadOpsPerSec,
     avgCpuWorkerDuty,
-    memLoadMBps,
-    memDuty,
-    mode: 'cpu-memory-ramp-best-effort',
+    mode: 'cpu-ramp-best-effort',
     gpuControlled: false,
   };
 }
@@ -405,12 +258,6 @@ function getMeasuredCpuDuty() {
   return totalDuty / count;
 }
 
-function consumeMemBurnMs() {
-  const ms = _accumulatedMemBurnMs;
-  _accumulatedMemBurnMs = 0;
-  return ms;
-}
-
 module.exports = {
   setHardwareLoadPercent,
   stopHardwareLoad,
@@ -423,8 +270,4 @@ module.exports = {
   getCoordinatorSeed,
   drainSeedProofs,
   onSeedProof,
-  consumeMemBurnMs,
-  setDdrCoordinatorSeed,
-  drainDdrSeedProofs,
-  onDdrSeedProof,
 };

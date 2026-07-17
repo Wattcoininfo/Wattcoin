@@ -203,7 +203,6 @@ class WtcNode {
     getConnectedPeerCount,
     getEnergyContributions,
     verifyCpuSpeedProof,
-    verifyMemProof,
   }) {
     const privBuf = Buffer.from(this._wallet.primaryKey.privateKey, 'hex');
 
@@ -219,7 +218,6 @@ class WtcNode {
       allowPartialQuorumCommit,
       getEnergyContributions,
       verifyCpuSpeedProof,
-      verifyMemProof,
     });
     this._isLiveLocalTunnelPeer = typeof isLiveLocalTunnelPeer === 'function' ? isLiveLocalTunnelPeer : null;
     this._isSelfPeerUrl = typeof isSelfPeerUrl === 'function' ? isSelfPeerUrl : null;
@@ -702,8 +700,6 @@ class WtcNode {
     const probesAnswered = Math.max(0, Math.floor(Number(proofData.probesAnswered) || 0));
     const cpuSpeedInitialSeed = Number(proofData.cpuSpeedInitialSeed) || 0;
     const cpuSpeedProof = String(proofData.cpuSpeedProof || '');
-    const memProof = String(proofData.memProof || '');
-    const memProofSeed = Number(proofData.memProofSeed) || 0;
     const gpuProof = String(proofData.gpuProof || '');
     const gpuProofSeed = Number(proofData.gpuProofSeed) || 0;
 
@@ -738,8 +734,6 @@ class WtcNode {
       nftsRoot,
       cpuSpeedInitialSeed,
       cpuSpeedProof,
-      memProof,
-      memProofSeed,
       gpuProof,
       gpuProofSeed,
     });
@@ -2018,7 +2012,6 @@ function createWtcNode({
   getConnectedPeerCount,
   getEnergyContributions,
   verifyCpuSpeedProof,
-  verifyMemProof,
 }) {
   const node = new WtcNode({ dataDir, signingSecret, peerIdentity, walletKey });
   node.init({
@@ -2033,7 +2026,6 @@ function createWtcNode({
     getConnectedPeerCount,
     getEnergyContributions,
     verifyCpuSpeedProof,
-    verifyMemProof,
   });
   return node;
 }

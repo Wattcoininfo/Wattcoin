@@ -6,11 +6,8 @@ const { verifyX11Share, STRATUM_DIFFICULTY } = require('../local-stratum');
 const {
   verifyGpuPowProbe,
   verifyCpuProbe,
-  verifyMemProbe,
   deriveProbeSeed,
   PROBE_CPU_DURATION_MS,
-  PROBE_MEM_ENTRIES,
-  PROBE_MEM_DURATION_MS,
   PROBE_GPU_POW_DIFFICULTY,
   PROBE_PEER_SLACK,
 } = require('./benchmark-execution');
@@ -79,12 +76,10 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
   if (isNewWorker) {
     type = 'cpu';
   } else if (gpuPowCapable) {
-    // CPU + GPU + memory: 45% CPU, 45% GPU, 10% memory
-    const r = Math.random();
-    type = r < 0.45 ? 'cpu' : r < 0.9 ? 'gpu-pow' : 'memory';
+    // CPU + GPU: 50% CPU, 50% GPU
+    type = Math.random() < 0.5 ? 'cpu' : 'gpu-pow';
   } else {
-    // CPU + memory only: 90% CPU, 10% memory
-    type = Math.random() < 0.9 ? 'cpu' : 'memory';
+    type = 'cpu';
   }
 
   const probe = {
@@ -99,26 +94,18 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
             vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
             vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
           }
-        : type === 'memory'
+        : type === 'gpu-pow'
           ? {
-              arraySeed: seed,
-              durationMs: PROBE_MEM_DURATION_MS,
-              entries: PROBE_MEM_ENTRIES,
+              seed,
+              difficulty: PROBE_GPU_POW_DIFFICULTY,
               vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
               vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
             }
-          : type === 'gpu-pow'
-            ? {
-                seed,
-                difficulty: PROBE_GPU_POW_DIFFICULTY,
-                vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
-                vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
-              }
-            : /* asic */ {
-                minShares: 3,
-                vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
-                vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
-              },
+          : /* asic */ {
+              minShares: 3,
+              vdfDifficulty: DEFAULT_VDF_DIFFICULTY,
+              vdfDiscriminantSize: DEFAULT_VDF_DISCRIMINANT_BITS,
+            },
   };
 
   // ASIC liveness challenge: generate a random 32-byte prevHash that the worker
@@ -192,7 +179,7 @@ function issuePeerProbe(workerId, allowGpuWorkloads, hasAsic, gpuPowCapable) {
   });
   console.log(`[PeerProbe] Issued ${type} probe id=${probe.id} to worker=${workerId} chain=${workerChain.chainIndex}`);
   // Return probe WITHOUT params.seed in plaintext for GPU (no computational advantage),
-  // but CPU/memory seeds are needed by the worker to run the algorithm — they're fine
+  // but CPU seeds are needed by the worker to run the algorithm — they're fine
   // to transmit because re-running is equivalent to computing a new result.
   return { ...probe };
 }
@@ -271,17 +258,6 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         issues.push('cpu peer-probe: proof hash mismatch');
       }
     }
-  } else if (probe.type === 'memory') {
-    const memIters = result.iterations | 0;
-    if (memIters <= 0) {
-      issues.push('memory peer-probe: no iterations reported');
-      proofValid = false;
-    } else {
-      proofValid = await verifyMemProbe(probe.params.arraySeed, memIters, result.proof || '');
-      if (!proofValid) {
-        issues.push('memory peer-probe: proof hash mismatch');
-      }
-    }
   } else if (probe.type === 'gpu-pow') {
     // GPU PoW probe: worker found a nonce on each device where the proof hash (lower 16 bits) < difficulty.
     // Each device uses its own seed partition, so all GPUs independently prove work.
@@ -318,7 +294,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
       }
       if (allValid && probeWallClockMs > 0) {
         const gpuCount = Math.max(1, devices.length);
-        const workerHist = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [], gpuPowSamples: [] };
+        const workerHist = workerHwHistory.get(entry.workerId) || { cpuSamples: [], gpuPowSamples: [] };
         const historicalTimePerNonceMean =
           workerHist.gpuPowSamples.length >= WORKER_HW_ENROLL_COUNT
             ? workerHist.gpuPowSamples.reduce((a, b) => a + b, 0) / workerHist.gpuPowSamples.length
@@ -425,13 +401,10 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
 
   // Update per-worker hardware-speed history using VDF-measured timing.
   if (proofValid) {
-    const wh = workerHwHistory.get(entry.workerId) || { cpuSamples: [], memSamples: [], gpuPowSamples: [] };
+    const wh = workerHwHistory.get(entry.workerId) || { cpuSamples: [], gpuPowSamples: [] };
     if (probe.type === 'cpu' && probeWallClockMs > 0 && result.iterations > 0) {
       const actualCpuOpsPerSec = (result.iterations / probeWallClockMs) * 1000;
       wh.cpuSamples = appendWorkerHwSample(wh.cpuSamples, actualCpuOpsPerSec);
-    } else if (probe.type === 'memory' && probeWallClockMs > 0 && result.iterations > 0) {
-      const actualMemLatencyNs = (probeWallClockMs * 1e6) / result.iterations;
-      wh.memSamples = appendWorkerHwSample(wh.memSamples, actualMemLatencyNs);
     } else if (probe.type === 'gpu-pow' && probeWallClockMs > 0) {
       const gpuCount = Math.max(1, Array.isArray(result.devices) ? result.devices.length : 1);
       const timePerNonceMs = probeWallClockMs / gpuCount;
@@ -471,7 +444,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
   let verifiedHwPowerW = 0;
   if (hardwareSpec && hardwareSpec.hwPowerW > 0) {
     let hardwareKnown = false;
-    if (probe.type === 'cpu' || probe.type === 'memory') {
+    if (probe.type === 'cpu') {
       hardwareKnown = hardwareSpec.cpuModel && getExpectedCpuSpeedOps(hardwareSpec.cpuModel) > 0;
     } else if (probe.type === 'gpu-pow') {
       const gpuModels = Array.isArray(hardwareSpec.gpuModels) ? hardwareSpec.gpuModels : [];
@@ -485,7 +458,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         if (hardwareSpec.hwPowerW <= maxPlausibleW) {
           verifiedHwPowerW = Math.round(hardwareSpec.hwPowerW);
         }
-      } else if (probe.type === 'memory' || probe.type === 'gpu-pow' || probe.type === 'asic') {
+      } else if (probe.type === 'gpu-pow' || probe.type === 'asic') {
         verifiedHwPowerW = Math.round(hardwareSpec.hwPowerW);
       }
     }
@@ -519,7 +492,7 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     if (gpuModels.length > 0) {
       receiptHwModels.gpuModels = gpuModels.map((m) => String(m || '').trim()).filter(Boolean);
     }
-  } else if (probe.type === 'cpu' || probe.type === 'memory') {
+  } else if (probe.type === 'cpu') {
     if (hardwareSpec && hardwareSpec.cpuModel) {
       receiptHwModels.cpuModel = String(hardwareSpec.cpuModel).trim();
     }

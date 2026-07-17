@@ -21,8 +21,6 @@ function createSeedAssignmentManager({
   setCpuCoordinatorSeed,
   _getGpuCoordinatorSeed,
   setGpuCoordinatorSeed,
-  getMemSeedProofs,
-  setMemCoordinatorSeed,
   getCpuSeedProofs,
   getGpuSeedProofs,
   hwAuthority,
@@ -41,7 +39,6 @@ function createSeedAssignmentManager({
     _lastSeedAssignedAt = now;
     if (typeof setCpuCoordinatorSeed === 'function') setCpuCoordinatorSeed(seed);
     if (typeof setGpuCoordinatorSeed === 'function') setGpuCoordinatorSeed(seed);
-    if (typeof setMemCoordinatorSeed === 'function') setMemCoordinatorSeed(seed);
     return seed;
   }
 
@@ -86,19 +83,6 @@ function createSeedAssignmentManager({
     const collected = [];
     for (const [, proof] of proofs) {
       collected.push({ ...proof, type: 'gpu' });
-    }
-    return collected;
-  }
-
-  function setMemSeed(hexSeed) {
-    if (typeof setMemCoordinatorSeed === 'function') setMemCoordinatorSeed(hexSeed);
-  }
-
-  function collectMemProofs() {
-    const proofs = typeof getMemSeedProofs === 'function' ? getMemSeedProofs() : new Map();
-    const collected = [];
-    for (const [, proof] of proofs) {
-      collected.push({ ...proof, type: 'memory' });
     }
     return collected;
   }
@@ -242,92 +226,18 @@ function createSeedAssignmentManager({
     };
   }
 
-  async function verifyMemProofs(proofs, elapsedMs, cpuModel, claimedLoad) {
-    if (!Array.isArray(proofs) || proofs.length === 0) {
-      console.log(
-        `[SeedManager] MEM proofs: none collected (cpuModel=${cpuModel || 'null'} opsPerMs=${(hwAuthority && hwAuthority.sha256OpsPerMs) || 0})`,
-      );
-      return { ok: true, totalEnergyWh: 0, proofs: 0, reason: 'no_proofs' };
-    }
-    const tdpW = cpuModel ? getCpuTdpW(cpuModel) : 0;
-    const tableOpsPerMs = cpuModel ? getMinOpsPerMs(cpuModel) : 0;
-    const opsPerMs = hwAuthority && hwAuthority.sha256OpsPerMs > 0 ? hwAuthority.sha256OpsPerMs : tableOpsPerMs;
-    console.log(
-      `[SeedManager] MEM proofs: count=${proofs.length} opsPerMs=${opsPerMs} tdpW=${tdpW} load=${claimedLoad}`,
-    );
-    let totalEnergyWh = 0;
-    let verifiedCount = 0;
-    let rejectReasons = {};
-    for (let i = 0; i < proofs.length; i++) {
-      const proof = proofs[i];
-      if (i > 0) await new Promise((r) => setImmediate(r));
-      const seedHex = String(proof.seed || '');
-      if (!isValidHex32(seedHex)) {
-        rejectReasons['invalid_seed'] = (rejectReasons['invalid_seed'] || 0) + 1;
-        continue;
-      }
-      const result = await verifySeedProof(proof, seedHex, undefined, undefined, opsPerMs);
-      if (!result.ok) {
-        rejectReasons[result.reason] = (rejectReasons[result.reason] || 0) + 1;
-        continue;
-      }
-      const effectiveElapsedMs = Math.max(MIN_BURN_MS, result.burnMs || 0);
-      const plausibility = checkProofPlausibility(
-        result.totalOps,
-        effectiveElapsedMs,
-        {
-          opsPerMs,
-          tdpW,
-        },
-        claimedLoad,
-      );
-      if (!plausibility.ok) {
-        console.log(
-          `[SeedManager] MEM proof implausible: ${plausibility.reason} (actualOps=${plausibility.actualOps} expectedOps=${plausibility.expectedOps} burnMs=${effectiveElapsedMs} opsPerMs=${opsPerMs} load=${claimedLoad})`,
-        );
-        rejectReasons[plausibility.reason] = (rejectReasons[plausibility.reason] || 0) + 1;
-        continue;
-      }
-      const energyWh = computeEnergyWh(
-        'memory',
-        {
-          totalOps: plausibility.creditedOps,
-          burnMs: result.burnMs,
-          elapsedMs,
-        },
-        { opsPerMs, tdpW },
-      );
-      totalEnergyWh += energyWh;
-      verifiedCount++;
-    }
-    if (verifiedCount === 0 && proofs.length > 0) {
-      console.log(
-        `[SeedManager] MEM ALL REJECTED: ${JSON.stringify(rejectReasons)} (opsPerMs=${opsPerMs} tdpW=${tdpW})`,
-      );
-    }
-    return {
-      ok: true,
-      totalEnergyWh,
-      proofs: verifiedCount,
-      total: proofs.length,
-    };
-  }
-
   async function collectAndVerifyAll({ elapsedMs, cpuModel, gpuModel, claimedLoad } = {}) {
     const effectiveElapsed = Math.max(1, Number(elapsedMs) || 60000);
     const cpuProofs = collectCpuProofs();
     const gpuProofs = collectGpuProofs();
-    const memProofs = collectMemProofs();
     const cpuResult = await verifyCpuProofs(cpuProofs, effectiveElapsed, cpuModel, claimedLoad);
     const gpuResult = await verifyGpuProofs(gpuProofs, effectiveElapsed, gpuModel, claimedLoad);
-    const memResult = await verifyMemProofs(memProofs, effectiveElapsed, cpuModel, claimedLoad);
-    const totalEnergyWh = Math.max(0, cpuResult.totalEnergyWh + gpuResult.totalEnergyWh + memResult.totalEnergyWh);
+    const totalEnergyWh = Math.max(0, cpuResult.totalEnergyWh + gpuResult.totalEnergyWh);
     const summary = {
       ok: true,
       totalEnergyWh,
       cpu: { verified: cpuResult.proofs, total: cpuResult.total, energyWh: cpuResult.totalEnergyWh },
       gpu: { verified: gpuResult.proofs, total: gpuResult.total, energyWh: gpuResult.totalEnergyWh },
-      mem: { verified: memResult.proofs, total: memResult.total, energyWh: memResult.totalEnergyWh },
       elapsedMs: effectiveElapsed,
     };
     _historicalProofs.push({ ts: Date.now(), summary });
@@ -351,15 +261,12 @@ function createSeedAssignmentManager({
     assignNewSeed,
     setCpuSeed,
     setGpuSeed,
-    setMemSeed,
     assignNewCpuSeed,
     assignNewGpuSeed,
     collectCpuProofs,
     collectGpuProofs,
-    collectMemProofs,
     verifyCpuProofs,
     verifyGpuProofs,
-    verifyMemProofs,
     collectAndVerifyAll,
     getLastSeedInfo,
     getHistory,

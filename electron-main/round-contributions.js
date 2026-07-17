@@ -50,7 +50,6 @@ async function verifyContributorSeedProofs(
     const result = await verifySeedProof(proof, seedHex);
     if (!result.ok) continue;
     const isGpu = proof.type === 'gpu';
-    const isMem = proof.type === 'memory';
     const hwOpsPerMs = isGpu ? (gpuModel ? getGpuMinOpsPerMs(gpuModel) : 500) : getMinOpsPerMs(cpuModel);
     const hwTdpW = isGpu ? (gpuModel ? getGpuTdpW(gpuModel) : 80) : cpuModel ? getCpuTdpW(cpuModel) : 65;
     const plausibility = checkProofPlausibility(
@@ -61,7 +60,7 @@ async function verifyContributorSeedProofs(
     );
     if (!plausibility.ok) continue;
     const energyWh = computeEnergyWh(
-      isGpu ? 'gpu' : isMem ? 'memory' : 'cpu',
+      isGpu ? 'gpu' : 'cpu',
       {
         totalOps: plausibility.creditedOps,
         burnMs: result.burnMs,
@@ -226,7 +225,7 @@ function createRoundContributions(deps) {
               /* ignore lookup failure */
             }
           }
-        } else if ((receipt.type === 'cpu' || receipt.type === 'memory') && receipt.cpuModel) {
+        } else if (receipt.type === 'cpu' && receipt.cpuModel) {
           try {
             const expectedOps = getExpectedCpuSpeedOps(receipt.cpuModel);
             if (expectedOps > 0) {

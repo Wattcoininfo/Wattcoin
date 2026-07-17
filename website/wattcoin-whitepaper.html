@@ -6,17 +6,17 @@
     <title>Wattcoin Whitepaper · Proof-of-Energy Cryptocurrency</title>
     <meta
       name="description"
-      content="Wattcoin is the first Proof-of-Energy cryptocurrency — every coin minted has a verifiable, non-negotiable energy cost. Mine fairly with any hardware: CPU, GPU, RAM, or server. No ASIC advantage, no mining pools, no luck variance. 21M hard cap across 21 mining tiers, backed by a real 60 kW Vortex hydro turbine in Estonia."
+      content="Wattcoin is the first Proof-of-Energy cryptocurrency — every coin minted has a verifiable, non-negotiable energy cost. Mine fairly with any hardware: CPU, GPU, or server. No ASIC advantage, no mining pools, no luck variance. 21M hard cap across 21 mining tiers, backed by a real 60 kW Vortex hydro turbine in Estonia."
     />
     <meta
       name="keywords"
-      content="Wattcoin, WTC, Proof of Energy, energy-backed cryptocurrency, green crypto, crypto mining, CPU mining, GPU mining, RAM mining, Vortex NFT, hydro turbine, Proof of Work alternative, BFT consensus, mine cryptocurrency, energy cost floor, fair mining, no mining pools, Estonia crypto, 21M supply, staking crypto"
+      content="Wattcoin, WTC, Proof of Energy, energy-backed cryptocurrency, green crypto, crypto mining, CPU mining, GPU mining, Vortex NFT, hydro turbine, Proof of Work alternative, BFT consensus, mine cryptocurrency, energy cost floor, fair mining, no mining pools, Estonia crypto, 21M supply, staking crypto"
     />
     <link rel="canonical" href="https://wattcoin.ee/wattcoin-whitepaper.html" />
     <meta property="og:title" content="Wattcoin · Proof-of-Energy Cryptocurrency | Fair Mining, 21M Supply" />
     <meta
       property="og:description"
-      content="Wattcoin is the first Proof-of-Energy cryptocurrency. Every coin has a verifiable energy cost. Mine with any hardware — CPU, GPU, RAM, or server. No ASIC advantage, no pools. 21M hard cap, backed by a real hydro turbine."
+      content="Wattcoin is the first Proof-of-Energy cryptocurrency. Every coin has a verifiable energy cost. Mine with any hardware — CPU, GPU, or server. No ASIC advantage, no pools. 21M hard cap, backed by a real hydro turbine."
     />
     <meta property="og:url" content="https://wattcoin.ee/wattcoin-whitepaper.html" />
     <meta property="og:type" content="website" />
@@ -32,7 +32,7 @@
     <meta name="twitter:title" content="Wattcoin · Energy-Backed Cryptocurrency | Mine WTC" />
     <meta
       name="twitter:description"
-      content="Wattcoin is the first Proof-of-Energy cryptocurrency — every coin minted has a verifiable energy cost. Mine with any hardware: CPU, GPU, RAM, or server. 21M hard cap, backed by a real hydro turbine."
+      content="Wattcoin is the first Proof-of-Energy cryptocurrency — every coin minted has a verifiable energy cost. Mine with any hardware: CPU, GPU, or server. 21M hard cap, backed by a real hydro turbine."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <script type="application/ld+json">
@@ -137,7 +137,7 @@
       <div class="hero-grid"></div>
       <div class="container hero-content">
         <div class="hero-pill-row">
-          <div class="hero-pill">VERSION 1.0.466 — JULY 2026</div>
+          <div class="hero-pill">VERSION 1.0.471 — JULY 2026</div>
           <div
             class="elec-dial"
             id="hero-elec-dial"
@@ -506,9 +506,9 @@
             <p>
               Energy consumption is derived from hardware specifications scaled by the miner's configured duty-cycle
               load: <strong>Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</strong>. Benchmark
-              proofs &mdash; CPU hash, memory walk, GPU compute hash &mdash; measure actual computation throughput to
-              validate the hardware claim. Any ledger peer independently re-derives each expected proof using the same
-              deterministic algorithm. No specialised hardware is required on the verifier side.
+              proofs &mdash; CPU hash, GPU compute hash &mdash; measure actual computation throughput to validate the
+              hardware claim. Any ledger peer independently re-derives each expected proof using the same deterministic
+              algorithm. No specialised hardware is required on the verifier side.
             </p>
             <p>
               The design uses a two-tier structure: <strong class="gold">Tier 0</strong> &mdash; 1,000,000 WTC allocated
@@ -1763,7 +1763,7 @@
             color: #1e3a1e;
           "
         >
-          WATTCOIN FOUNDATION &mdash; VERSION 1.0.466 &mdash; JULY 2026
+          WATTCOIN FOUNDATION &mdash; VERSION 1.0.471 &mdash; JULY 2026
         </div>
       </div>
     </section>
@@ -2142,9 +2142,9 @@
         <div class="download-cards-row">
           <div class="download-card">
             <div class="download-platform">WINDOWS</div>
-            <div class="download-name">Wattcoin Miner v1.0.466</div>
+            <div class="download-name">Wattcoin Miner v1.0.471</div>
             <div class="download-sub">Installer (.exe) &nbsp;—&nbsp; Windows 10 / 11 &nbsp;—&nbsp; x64</div>
-            <a href="/releases/Wattcoin Miner Setup 1.0.466.exe" download class="download-btn" id="download-btn"
+            <a href="/releases/Wattcoin Miner Setup 1.0.471.exe" download class="download-btn" id="download-btn"
               >&#8595;&nbsp; Download for Windows</a
             >
             <div
@@ -2229,7 +2229,7 @@
     </section>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.466 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.471 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer"
         ><svg
@@ -2413,11 +2413,7 @@
       (function buildSteps() {
         const steps = [
           ['01', 'SUBMIT', 'Hardware specs and claimed efficiency ?'],
-          [
-            '02',
-            'BENCHMARK',
-            'A ledger peer issues random computation challenges (CPU hash, GPU compute hash, memory probe)',
-          ],
+          ['02', 'BENCHMARK', 'A ledger peer issues random computation challenges (CPU hash, GPU compute hash)'],
           [
             '03',
             'PROVE',

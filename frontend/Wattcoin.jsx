@@ -663,9 +663,9 @@ export default function Wattcoin() {
                   <strong style={{ color: '#e8f5e8' }}>
                     Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)
                   </strong>
-                  . Benchmark proofs — CPU hash, memory walk, GPU compute hash — measure actual computation throughput
-                  to validate the hardware claim. Any ledger peer independently re-derives each expected proof using the
-                  same deterministic algorithm. No specialised hardware is required on the verifier side.
+                  . Benchmark proofs — CPU hash, GPU compute hash — measure actual computation throughput to validate
+                  the hardware claim. Any ledger peer independently re-derives each expected proof using the same
+                  deterministic algorithm. No specialised hardware is required on the verifier side.
                 </p>
                 <p style={{ fontSize: 16, lineHeight: 1.85, color: '#7aaa7a' }}>
                   The design uses a two-tier structure: <strong style={{ color: '#fbbf24' }}>Tier 0</strong> — 1,000,000
@@ -852,11 +852,7 @@ export default function Wattcoin() {
             <div style={{ marginTop: 40, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
               {[
                 ['01', 'SUBMIT', 'Hardware specs and claimed efficiency η'],
-                [
-                  '02',
-                  'BENCHMARK',
-                  'A ledger peer issues random computation challenges (CPU hash, GPU compute hash, memory probe)',
-                ],
+                ['02', 'BENCHMARK', 'A ledger peer issues random computation challenges (CPU hash, GPU compute hash)'],
                 [
                   '03',
                   'PROVE',

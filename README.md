@@ -186,10 +186,9 @@ npm run test:counterfeit            # Counterfeit/spoofing security tests
 │   ├── local-subnet-discovery.js # LAN peer discovery
 │   ├── round-ledger.js           # Round event ledger
 │   ├── runtime-config.js         # Configuration loader
-│   ├── hardware-load-controller.js # CPU + DDR load controller
+│   ├── hardware-load-controller.js # CPU load controller
 │   ├── gpu-load-controller.js    # Native GPU load controller (gpu-miner.exe)
 │   ├── cpu-load-worker.js        # CPU load simulation worker
-│   ├── ddr-load-worker.js        # RAM load simulation worker
 │   ├── hardware-tables.cjs       # Hardware energy tables
 │   ├── ops-health.js             # Operational health checks
 │   ├── backend-benchmark.js      # Backend benchmarking

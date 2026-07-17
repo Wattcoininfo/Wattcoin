@@ -1,5 +1,5 @@
 // hardware-tables.cjs
-// Authoritative hardware expected-ops and expected-memory-bandwidth lookup tables.
+// Authoritative hardware expected-ops lookup tables.
 // Required by electron-main.js (main process) so calibration calculations cannot be
 // spoofed by patching the renderer bundle.  Keep in sync with Miner.jsx.
 
@@ -230,23 +230,6 @@ function getExpectedCpuSpeedOps(cpuModel) {
   if (/\bM1\b/i.test(m))                        return 420_000_000;
 
   return 0; // unknown — skip validation
-}
-
-function getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks) {
-  if (!memSpeedMhz || memSpeedMhz <= 0) return 0;
-  // Infer channel count: ≥2 sticks usually implies dual-channel for DDR4/DDR5.
-  // LPDDR is always one "virtual channel" per package (spec-defined 128-bit bus treats as 2 ch).
-  const isLPDDR = /LPDDR/i.test(memType || '');
-  let channels = isLPDDR ? 2 : ((memSticks >= 2) ? 2 : 1);
-  // DDR4/5: bus width = 64 bits = 8 bytes per transfer; speed in MT/s
-  const theoreticalMBps = channels * memSpeedMhz * 8; // MT/s × 8 B = MB/s
-  const efficiency = 0.25; // fraction of theoretical peak reported by this bench.
-                           // Stride-64 writes cause a read-for-ownership per cache line,
-                           // so actual DRAM traffic is 2× the buffer size, but we only
-                           // count bytes written.  V8 vs native adds further overhead.
-                           // Derivation: 65% peak × 50% RFO factor × 80% V8 ≈ 26%,
-                           // round down to 0.25 — applies universally across all DDR types.
-  return Math.round(theoreticalMBps * efficiency);
 }
 
 // ── ASIC Power Lookup ─────────────────────────────────────────────────────────
@@ -983,4 +966,4 @@ function getGpuMinOpsPerMs(gpuModel) {
   return 0;
 }
 
-module.exports = { getExpectedCpuSpeedOps, getMinOpsPerMs, getGpuMinOpsPerMs, getExpectedMemBandwidthMBps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW, getCpuTdpW };
+module.exports = { getExpectedCpuSpeedOps, getMinOpsPerMs, getGpuMinOpsPerMs, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW, getCpuTdpW };

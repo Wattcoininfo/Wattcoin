@@ -24,7 +24,7 @@ const {
   updateWorkerRtt,
   getPeerProbeHistory: _getPeerProbeHistory,
   verifyCpuSpeedProof: _verifyCpuSpeedProof,
-  verifyMemProof: _verifyMemProof,
+
   setCoordinatorIdentityKey,
   PROBE_INTERVAL_MS,
   getLocalProbeChain,
@@ -50,9 +50,6 @@ const {
   setCoordinatorSeed,
   getCoordinatorSeed,
   drainSeedProofs,
-  consumeMemBurnMs,
-  setDdrCoordinatorSeed,
-  drainDdrSeedProofs,
 } = require('./electron-main/hardware-load-controller');
 const {
   ensureGpu,
@@ -237,10 +234,11 @@ let hwAuthority = {
   trustScore: 50,
   hwHoldUntilMs: 0,
   benchmarkOpsCalibration: 1.0,
-  benchmarkMemCalibration: 1.0,
+
   benchmarkGpuCalibration: 1.0,
   sha256OpsPerMs: 0,
   gpuOpsPerMs: 0,
+
   consecutiveCleanBenchmarks: 0,
   peerProbeVerifiedForRound: false,
   peerProbeChainIndex: 0,
@@ -667,8 +665,7 @@ const seedManager = createSeedAssignmentManager({
   setCpuCoordinatorSeed: (seed) => setCoordinatorSeed(seed),
   getGpuCoordinatorSeed: () => getGpuCoordinatorSeed(),
   setGpuCoordinatorSeed: (seed) => setGpuCoordinatorSeed(seed),
-  getMemSeedProofs: () => drainDdrSeedProofs(),
-  setMemCoordinatorSeed: (seed) => setDdrCoordinatorSeed(seed),
+
   getCpuSeedProofs: () => drainSeedProofs(),
   getGpuSeedProofs: () => drainGpuSeedProofs(),
   hwAuthority,
@@ -723,7 +720,6 @@ const peerProbeIpc = createPeerProbeIpc({
   startGpuLoad,
   getHardwareLoadState,
   getGpuLoadState,
-  consumeMemBurnMs,
 });
 const { registerIpcHandlers, _connectBgProbeWs, _closeBgProbeWs, _scheduleBgProbeWsReconnect } = peerProbeIpc;
 

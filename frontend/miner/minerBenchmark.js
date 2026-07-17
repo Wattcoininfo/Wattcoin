@@ -1,26 +1,3 @@
-// ─── Memory bandwidth expected values ─────────────────────────────────────────
-// Returns expected sequential bandwidth in MB/s for the declared memory spec.
-// Formula: channels × speedMhz × 8 bytes (64-bit bus) × efficiency_factor.
-// Node.js sequential bench achieves ~55% of theoretical peak, so efficiency=0.55.
-// Called with hardware.memType (DDR4/DDR5/LPDDR5…), memSpeedMhz, and memSticks.
-export function getExpectedMemBandwidthMBps(memType, memSpeedMhz, memSticks) {
-  if (!memSpeedMhz || memSpeedMhz <= 0) return 0;
-  // Infer channel count: ≥2 sticks usually implies dual-channel for DDR4/DDR5.
-  // LPDDR is always one "virtual channel" per package (spec-defined 128-bit bus treats as 2 ch).
-  const isLPDDR = /LPDDR/i.test(memType || '');
-  const _isDDR5 = /DDR5/i.test(memType || '');
-  let channels = isLPDDR ? 2 : memSticks >= 2 ? 2 : 1;
-  // DDR4/5: bus width = 64 bits = 8 bytes per transfer; speed in MT/s
-  const theoreticalMBps = channels * memSpeedMhz * 8; // MT/s × 8 B = MB/s
-  const efficiency = 0.25; // fraction of theoretical peak reported by this bench.
-  // Stride-64 writes cause a read-for-ownership per cache line,
-  // so actual DRAM traffic is 2× the buffer size, but we only
-  // count bytes written.  V8 vs native adds further overhead.
-  // Derivation: 65% peak × 50% RFO factor × 80% V8 ≈ 26%,
-  // round down to 0.25 — applies universally across all DDR types.
-  return Math.round(theoreticalMBps * efficiency);
-}
-
 // ─── GPU-PoW native benchmark ─────────────────────────────────────────────────
 // Calls the native GPU binary via IPC to run proof-of-work on all detected GPUs.
 // Returns { score, elapsedMs, devices, gpuCount } or { error }.

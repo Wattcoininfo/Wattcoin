@@ -82,7 +82,6 @@ function createNode(id, dataDir, net) {
     signingSecret: `secret-${id}`,
     allowPartialQuorumCommit: false,
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => net.getActivePeers(id),
     requestPeerJson: (peerUrl, method, routePath, payload, query) =>
       net.request(id, peerUrl, method, routePath, payload, query),
@@ -98,8 +97,6 @@ async function mineOneBlock(node) {
     proofCommitment: 'legacy-state-root-test',
     cpuSpeedInitialSeed: 1,
     cpuSpeedProof: 'abc123',
-    memProof: 'def456',
-    memProofSeed: 0,
   });
 }
 

@@ -845,11 +845,6 @@ describe('formatHardwareChangeList', () => {
     assert.ok(changes.some((c) => c.startsWith('Memory type:')));
   });
 
-  it('detects memory speed change', () => {
-    const changes = formatHardwareChangeList({ memSpeedMhz: 3200 }, { memSpeedMhz: 3600 });
-    assert.ok(changes.some((c) => c.startsWith('Memory speed:')));
-  });
-
   it('detects memory module count change', () => {
     const changes = formatHardwareChangeList({ memSticks: 2 }, { memSticks: 4 });
     assert.ok(changes.some((c) => c.startsWith('Memory modules:')));

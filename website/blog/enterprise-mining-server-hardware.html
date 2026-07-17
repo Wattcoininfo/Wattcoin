@@ -6,13 +6,13 @@
     <title>Enterprise Mining — Server Hardware on Wattcoin | Wattcoin Blog</title>
     <meta
       name="description"
-      content="Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
+      content="Deploying server CPUs and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
     />
     <link rel="canonical" href="https://wattcoin.ee/blog/enterprise-mining-server-hardware.html" />
     <meta property="og:title" content="Enterprise Mining — Server Hardware on Wattcoin" />
     <meta
       property="og:description"
-      content="Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
+      content="Deploying server CPUs and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
     />
     <meta property="og:url" content="https://wattcoin.ee/blog/enterprise-mining-server-hardware.html" />
     <meta property="og:type" content="article" />
@@ -27,7 +27,7 @@
     <meta name="twitter:title" content="Enterprise Mining — Server Hardware on Wattcoin | Wattcoin Blog" />
     <meta
       name="twitter:description"
-      content="Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
+      content="Deploying server CPUs and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network."
     />
     <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
     <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
@@ -53,7 +53,7 @@
             "publisher": {
               "@id": "https://wattcoin.ee/#organization"
             },
-            "description": "Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.",
+            "description": "Deploying server CPUs and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.",
             "mainEntityOfPage": {
               "@type": "WebPage",
               "@id": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html"
@@ -87,7 +87,7 @@
             "@type": "HowTo",
             "@id": "https://wattcoin.ee/blog/enterprise-mining-server-hardware.html#howto",
             "name": "Enterprise Mining — Server Hardware on Wattcoin",
-            "description": "Deploying server CPUs, RAM, and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.",
+            "description": "Deploying server CPUs and rack infrastructure for maximum energy contribution on the Wattcoin Proof-of-Energy network.",
             "step": [
               {
                 "@type": "HowToStep",
@@ -98,8 +98,8 @@
               {
                 "@type": "HowToStep",
                 "position": 2,
-                "name": "Configure CPU and Memory Workloads",
-                "text": "Configure CPU and Memory Workloads"
+                "name": "Configure CPU Workloads",
+                "text": "Configure CPU Workloads"
               },
               {
                 "@type": "HowToStep",
@@ -548,23 +548,22 @@
           <p>
             Server hardware has always been the backbone of cryptocurrency mining — but only as a management layer for
             ASIC racks. Wattcoin is the first cryptocurrency where
-            <strong>server CPUs and enterprise memory are first-class mining hardware</strong>, capable of competing
-            with consumer GPUs on energy contribution.
+            <strong>server CPUs are first-class mining hardware</strong>, capable of competing with consumer GPUs on
+            energy contribution.
           </p>
 
           <h3>Why Servers Excel on Proof-of-Energy</h3>
 
           <p>
             Proof-of-Energy rewards raw energy consumption, and servers consume a lot of it. A dual-socket EPYC or Xeon
-            workstation can draw 300–600W under full load before adding memory modules. Every watt contributes equally
-            to your block reward share:
+            workstation can draw 300–600W under full load. Every watt contributes equally to your block reward share:
           </p>
 
           <div class="viz-box">
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>Server Contribution = CPU (W) + Memory (W) + Platform (W)</div>
+              <div>Server Contribution = CPU (W) + Platform (W)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Every subsystem contributes — summed for total verified energy
+                // CPU and platform energy — summed for total verified energy
               </div>
             </div>
           </div>
@@ -577,8 +576,8 @@
               9654 runs at 100% duty cycle indefinitely with proper cooling.
             </li>
             <li>
-              <strong>Massive memory capacity</strong> — With 12 DDR5 channels and 2 TB+ of RAM, servers dominate the
-              memory stride walk workload, adding hundreds of watts of verified energy from RAM alone.
+              <strong>High core count</strong> — With up to 128+ CPU cores per socket, servers can run massive parallel
+              integer hashing workloads, maximizing verified energy from compute alone.
             </li>
             <li>
               <strong>Density</strong> — A single 4U server can hold 4+ dual-socket nodes, 8 TB of RAM, and multiple
@@ -596,9 +595,9 @@
               startup script).
             </li>
             <li>
-              <strong>Configure CPU and Memory Workloads</strong><br />
-              Enable both CPU integer hashing and memory stride walks. On server hardware, memory often contributes up
-              to 35% of total verified energy due to the large number of DIMMs and high memory bandwidth.
+              <strong>Configure CPU Workloads</strong><br />
+              Enable CPU integer hashing. On server hardware, high core counts and sustained TDP allow CPUs to
+              contribute the bulk of verified energy.
             </li>
             <li>
               <strong>Set Duty Cycle</strong><br />
@@ -644,7 +643,7 @@
 
           <div class="info-callout">
             <strong>Key takeaway:</strong> Server hardware isn't just compatible with Wattcoin — it's optimal. High TDP
-            CPUs, massive memory bandwidth, and 24/7 operation make data centers some of the most effective mining
+            CPUs, massive core density, and 24/7 operation make data centers some of the most effective mining
             environments in the network.
           </div>
 
@@ -658,7 +657,7 @@
       </div>
     </div>
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.466 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.471 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

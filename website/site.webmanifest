@@ -1,7 +1,7 @@
 {
   "name": "Wattcoin — Energy-Backed Cryptocurrency",
   "short_name": "Wattcoin",
-  "description": "Mine WTC with CPU, GPU, or RAM. Every coin has a verifiable energy cost. 21M hard cap.",
+  "description": "Mine WTC with CPU and GPU. Every coin has a verifiable energy cost. 21M hard cap.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#060e06",

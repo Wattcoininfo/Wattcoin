@@ -38,7 +38,6 @@ function createStandaloneNode(id, dataDir) {
     signingSecret: `tier1-threshold-${id}`,
     allowPartialQuorumCommit: false,
     verifyCpuSpeedProof: () => Promise.resolve(true),
-    verifyMemProof: () => Promise.resolve(true),
     getActivePeers: () => [],
     requestPeerJson: () => {
       throw new Error('unexpected peer RPC in standalone test');
@@ -73,8 +72,6 @@ async function run() {
       proofCommitment: 'tier1-exact-threshold',
       cpuSpeedInitialSeed: 1,
       cpuSpeedProof: 'abc123',
-      memProof: 'def456',
-      memProofSeed: 0,
     });
     assert.strictEqual(exactBlock.height, 1, 'exact-threshold block should mine at height 1');
     assert.strictEqual(exactNode.getHeight(), 1, 'exact-threshold node should advance to height 1');
@@ -88,8 +85,6 @@ async function run() {
           proofCommitment: 'tier1-below-threshold',
           cpuSpeedInitialSeed: 1,
           cpuSpeedProof: 'abc123',
-          memProof: 'def456',
-          memProofSeed: 0,
         }),
       /insufficient energyWh: required 10000000, got 9999999/,
       'sub-threshold Tier1 block should be rejected',
@@ -103,8 +98,6 @@ async function run() {
       proofCommitment: 'tier1-above-threshold',
       cpuSpeedInitialSeed: 1,
       cpuSpeedProof: 'abc123',
-      memProof: 'def456',
-      memProofSeed: 0,
     });
     assert.strictEqual(aboveBlock.height, 1, 'above-threshold block should mine at height 1');
     assert.strictEqual(aboveNode.getHeight(), 1, 'above-threshold node should advance to height 1');

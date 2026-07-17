@@ -131,12 +131,6 @@ function computeBlockHash(block) {
   if (block.cpuSpeedProof) {
     canon.cpuSpeedProof = block.cpuSpeedProof;
   }
-  if (block.memProof) {
-    canon.memProof = block.memProof;
-  }
-  if (block.memProofSeed) {
-    canon.memProofSeed = block.memProofSeed;
-  }
   if (block.gpuProof) {
     canon.gpuProof = block.gpuProof;
   }
@@ -381,7 +375,7 @@ class Chain {
    * Build an unsigned block proposal at the next height.
    * The returned block needs to go through BFT voting before being appended.
    *
-   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot?, cpuSpeedInitialSeed?, cpuSpeedProof?, memProof?, memProofSeed?, gpuProof?, gpuProofSeed? }} opts
+   * @param {{ proposer, energyWh, proofCommitment, peerProbeVerified?, probeReceipt?, probesAnswered?, transactions?, rewardAddresses, stateRoot?, cpuSpeedInitialSeed?, cpuSpeedProof?, gpuProof?, gpuProofSeed? }} opts
    */
   buildBlock({
     proposer,
@@ -397,8 +391,6 @@ class Chain {
     nftsRoot = '',
     cpuSpeedInitialSeed = 0,
     cpuSpeedProof = '',
-    memProof = '',
-    memProofSeed = 0,
     gpuProof = '',
     gpuProofSeed = 0,
   }) {
@@ -425,8 +417,6 @@ class Chain {
       probesAnswered: Math.max(0, Math.floor(Number(probesAnswered) || 0)),
       cpuSpeedInitialSeed: Number(cpuSpeedInitialSeed) || 0,
       cpuSpeedProof: String(cpuSpeedProof || ''),
-      memProof: String(memProof || ''),
-      memProofSeed: Number(memProofSeed) || 0,
       gpuProof: String(gpuProof || ''),
       gpuProofSeed: Number(gpuProofSeed) || 0,
       txsHash,

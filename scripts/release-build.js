@@ -13,7 +13,6 @@ const APP_INTEGRITY_FILES = [
   'electron-main/gpu-load-controller.js',
   'electron-main/local-stratum.js',
   'electron-main/cpu-load-worker.js',
-  'electron-main/ddr-load-worker.js',
   'electron-main/probe-attestation.js',
   'electron-main/wtc-node.js',
   'electron-main/wtc-consensus.js',
@@ -347,6 +346,32 @@ function removeExistingVersionArtifacts(root, version) {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     } catch (e) {
       throw new Error(`Failed to remove stale release artifact ${filePath}: ${e && e.message ? e.message : e}`);
+    }
+  }
+}
+
+function addDefenderExclusions(root) {
+  if (process.platform !== 'win32') return;
+  const folders = [root, path.join(root, 'Releases')];
+  for (const folder of folders) {
+    if (!fs.existsSync(folder)) continue;
+    try {
+      const res = spawnSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          `Add-MpPreference -ExclusionPath '${folder.replace(/'/g, "''")}'`,
+        ],
+        { stdio: 'pipe', windowsHide: true },
+      );
+      if (res.status === 0) {
+        console.log(`[release-build] Added Windows Defender exclusion: ${folder}`);
+      }
+    } catch (_) {
+      // Non-fatal: if user lacks admin rights the exclusion won't be added
+      // but the build can still succeed if Defender doesn't scan the files.
     }
   }
 }
@@ -885,6 +910,7 @@ async function main() {
       buildNativeGpuBinary(root);
     }
     removeStaleElectronBuilderOutput(root);
+    addDefenderExclusions(root);
     logPackagingChecklistReminder();
     runNpmExec(['exec', '--', 'electron-builder', '--config', 'electron-builder.config.js']);
     verifyAndArchiveInstaller(root, nextVersion);

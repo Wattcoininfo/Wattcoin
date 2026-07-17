@@ -187,24 +187,6 @@ function formatHardwareChangeList(previousDescriptor, nextDescriptor) {
     changes.push(`GPU: ${previousGpu.join(', ') || 'unknown'} -> ${nextGpu.join(', ') || 'unknown'}`);
   }
 
-  const previousMemType = String((previousDescriptor && previousDescriptor.memType) || '').trim();
-  const nextMemType = String((nextDescriptor && nextDescriptor.memType) || '').trim();
-  if (previousMemType !== nextMemType) {
-    changes.push(`Memory type: ${previousMemType || 'unknown'} -> ${nextMemType || 'unknown'}`);
-  }
-
-  const previousMemSpeed = Number((previousDescriptor && previousDescriptor.memSpeedMhz) || 0);
-  const nextMemSpeed = Number((nextDescriptor && nextDescriptor.memSpeedMhz) || 0);
-  if (previousMemSpeed !== nextMemSpeed) {
-    changes.push(`Memory speed: ${previousMemSpeed || 0} MHz -> ${nextMemSpeed || 0} MHz`);
-  }
-
-  const previousMemSticks = Number((previousDescriptor && previousDescriptor.memSticks) || 0);
-  const nextMemSticks = Number((nextDescriptor && nextDescriptor.memSticks) || 0);
-  if (previousMemSticks !== nextMemSticks) {
-    changes.push(`Memory modules: ${previousMemSticks || 0} -> ${nextMemSticks || 0}`);
-  }
-
   return changes;
 }
 

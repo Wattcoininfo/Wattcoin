@@ -422,11 +422,6 @@
             conclusive evidence of tampering.
           </li>
           <li>
-            <strong>Memory probe</strong> — a fixed-duration pointer-chase across a large array (1000 ms). The worker
-            walks pointers for the full duration and counts iterations. Memory latency is derived from the iteration
-            count and verified against the declared hardware spec.
-          </li>
-          <li>
             <strong>GPU PoW probe</strong> — a native binary computes a nonce search where the XOR-shift hash must meet
             a difficulty target. Each GPU in a multi-card rig searches a unique nonce space partitioned by device index.
             The proof is self-authenticating — the nonce itself proves work was done — and the coordinator verifies
@@ -492,8 +487,8 @@
         </p>
         <p>
           The worker starts the VDF computation <em>before</em> the benchmark workload so both run in parallel. The VDF
-          runs in the main process while CPU, memory, GPU, or ASIC work runs in the renderer or hardware driver. Total
-          probe time = <code>max(benchmark, VDF)</code>.
+          runs in the main process while CPU, GPU, or ASIC work runs in the renderer or hardware driver. Total probe
+          time = <code>max(benchmark, VDF)</code>.
         </p>
         <p
           style="
@@ -516,9 +511,9 @@
           energy accumulation and throughput calculations.
         </p>
         <p>
-          For CPU and memory probes, the coordinator computes throughput as <code>iterations / vdfTimingMs</code>.
-          Because the VDF proves that at least the stated time elapsed, a worker cannot inflate its ops/sec by
-          fabricating iteration counts — the math does not work if the denominator is cryptographically enforced.
+          For CPU probes, the coordinator computes throughput as <code>iterations / vdfTimingMs</code>. Because the VDF
+          proves that at least the stated time elapsed, a worker cannot inflate its ops/sec by fabricating iteration
+          counts — the math does not work if the denominator is cryptographically enforced.
         </p>
 
         <h2>Trust Score — How Probes Drive Mining Power</h2>
@@ -580,8 +575,8 @@
         <h2>How Protections Work Together</h2>
         <h4>Computational proof verification</h4>
         <p>
-          The coordinator independently re-computes CPU and memory proofs and cryptographically verifies GPU-PoW nonces
-          and ASIC X11 shares, so any fabricated result is detected immediately.
+          The coordinator independently re-computes CPU proofs and cryptographically verifies GPU-PoW nonces and ASIC
+          X11 shares, so any fabricated result is detected immediately.
         </p>
         <h4>Multi-channel hardware attestation</h4>
         <p>
@@ -620,7 +615,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.466 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.471 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;

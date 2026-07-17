@@ -238,24 +238,41 @@ function MiningLog({
           >
             {isAttested ? 'Attested' : 'My HW'}
           </span>
-          {/* Timing: total, network, HW compute */}
-          {typeof entry.wallClockMs === 'number' && (
-            <span style={{ color: '#64748b', fontSize: 11 }}>{Math.round(entry.wallClockMs)} ms</span>
+          {/* Energy flushed badge */}
+          {typeof entry.energyWh === 'number' && entry.energyWh > 0 && (
+            <span
+              style={{
+                background: '#0f2a12',
+                color: '#4ade80',
+                border: '1px solid #166534',
+                borderRadius: 4,
+                padding: '1px 7px',
+                fontSize: 10,
+              }}
+            >
+              {`${entry.energyWh.toFixed(4)} Wh`}
+            </span>
           )}
-          {typeof entry.rttMs === 'number' && (
-            <span style={{ color: '#475569', fontSize: 10 }}>net {Math.round(entry.rttMs)}ms</span>
-          )}
+          {/* Timing + chain (right-aligned) */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {typeof entry.wallClockMs === 'number' && (
+              <span style={{ color: '#64748b', fontSize: 11 }}>{Math.round(entry.wallClockMs)} ms</span>
+            )}
+            {typeof entry.rttMs === 'number' && (
+              <span style={{ color: '#475569', fontSize: 10 }}>net {Math.round(entry.rttMs)}ms</span>
+            )}
 
-          {/* Chain index */}
-          {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (
-            <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
-          )}
+            {/* Chain index */}
+            {typeof entry.chainIndex === 'number' && entry.chainIndex > 0 && (
+              <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
+            )}
+          </div>
           {probeId && <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>}
           {entry.type === 'gpu-pow' && typeof entry.proof === 'string' && entry.proof && (
             <span style={{ color: '#64748b', fontSize: 11 }}>proof {entry.proof}</span>
           )}
           {/* Source label */}
-          <span style={{ color: '#4b5563', fontSize: 10, marginLeft: 'auto' }}>{peerLabel}</span>
+          <span style={{ color: '#4b5563', fontSize: 10 }}>{peerLabel}</span>
         </div>
         {/* Issues */}
         {entry.issues && entry.issues.length > 0 && (

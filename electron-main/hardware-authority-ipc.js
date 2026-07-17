@@ -29,7 +29,6 @@ function registerHardwareAuthorityIpcHandlers(ipcMain, deps) {
       hwHoldUntilMs: hwAuthority.hwHoldUntilMs,
       isOnHold: hwAuthority.hwHoldUntilMs > now,
       benchmarkOpsCalibration: hwAuthority.benchmarkOpsCalibration,
-      benchmarkMemCalibration: hwAuthority.benchmarkMemCalibration,
       benchmarkGpuCalibration: hwAuthority.benchmarkGpuCalibration,
       peerProbeVerifiedForRound: hwAuthority.peerProbeVerifiedForRound,
       calibratedUnitPowerW: hwAuthority.calibratedUnitPowerW,
@@ -41,6 +40,8 @@ function registerHardwareAuthorityIpcHandlers(ipcMain, deps) {
       searchCacheCooldownRemainingMs,
       searchCacheOnCooldown: searchCacheCooldownRemainingMs > 0,
       isFirstRun: hwAuthStateIsNew.current,
+      sha256OpsPerMs: hwAuthority.sha256OpsPerMs || 0,
+      gpuOpsPerMs: hwAuthority.gpuOpsPerMs || 0,
     };
   });
 

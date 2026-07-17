@@ -404,7 +404,6 @@
             <div>├─ Mining Engine</div>
             <div>│&nbsp;&nbsp; ├─ CPU miner — Integer hashing tasks</div>
             <div>│&nbsp;&nbsp; ├─ GPU miner — DirectX compute shaders</div>
-            <div>│&nbsp;&nbsp; ├─ Memory miner — RAM bandwidth tasks</div>
             <div>│&nbsp;&nbsp; └─ ASIC integration — Stratum protocol</div>
             <div>│</div>
             <div>├─ Blockchain Node</div>
@@ -518,16 +517,12 @@
           Throughout the round, peer coordinators issue computational probes to verify that each miner is running real
           hardware at the declared load. Every probe is paired with a <strong>VDF (Verifiable Delay Function)</strong>
           proof-of-time that proves a minimum amount of sequential computation has elapsed — replacing the coordinator's
-          wall clock as the authoritative timing source. Four probe types are used:
+          wall clock as the authoritative timing source. Three probe types are used:
         </p>
         <ul>
           <li>
             <strong>CPU probe</strong> — Fixed-duration (1000 ms) integer hash-chain; throughput computed as iterations
             / VDF time.
-          </li>
-          <li>
-            <strong>Memory probe</strong> — Fixed-duration (1000 ms) pointer-chase; memory latency derived from
-            iteration count.
           </li>
           <li>
             <strong>GPU PoW probe</strong> — A self-authenticating proof-of-work challenge where each GPU searches for a
@@ -709,7 +704,7 @@
     </div>
 
     <footer>
-      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.466 &nbsp;&mdash;&nbsp;
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.471 &nbsp;&mdash;&nbsp;
       <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
       <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
       &nbsp;&mdash;&nbsp;
