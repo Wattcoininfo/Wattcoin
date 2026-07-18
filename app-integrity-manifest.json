@@ -1,6 +1,6 @@
 {
-  "electron-main.js": "11a4994fb592a37a6fd2fe6e64253360c0cda12c9a43db8455996ba0dccbbbfa",
-  "preload.js": "a867adb772fcda9c5bff1fdffcf844b92ff061b060c53cc3e341f1eabccb10b2",
+  "electron-main.js": "e6d889b4a2e5672d0a863b457a72e6d37da067f2e4d70ed98f2ebcc9fefd8aa5",
+  "preload.js": "4d573eaf12ceec1faeb9fe615629d1654ef080d3bfd92f70d251d6bd4cec73ff",
   "backend-benchmark.js": "2530265e44c9f96abc9114570e5d0a2772cb5afabd0128bcf7c1029060579cb2",
   "hardware-load-controller.js": "c3ec7175d292a52a85e2cab7743c4a5acc0e89a713e1b0be6c983e36ff38eaf3",
   "gpu-load-controller.js": "8f832025f898abbdae9fa180f7c323986e28d610206446aa2df39ea0ea57f3d0",
@@ -15,6 +15,7 @@
   "wtc-sale-queue.js": "24edf8d169befaed2a7c5eb3013c0028c7bbcd31613a0e6183fdb1cc56864779",
   "wtc-staking-queue.js": "9af1e230f56dedf9deb3685b7fde9adbae1b0720ca53b103e281e2d2ebb50e89",
   "runtime-config.js": "1d15ad5e61d3c08b6867a0e0be89813c4308705c711565b09bb3adfff09a8050",
+  "live-power-ipc.js": "465dced5877f70ff14bfd98c3335e402a87a64d4d0a3599d5926742c3a90bff4",
   "asic-drivers/index.js": "9a9312085cc1dc965e135d48628ad95cdfd2b2b8e3c3459885e9d7de6e073892",
   "asic-drivers/cgminer.js": "65138992fe3bce24acb546af2647824d6d5291f278e231441d0c256de2330438",
   "asic-drivers/nmminer.js": "6d557469603d8b6f98b50b989e4b6a5c4c5f4cae3633dec4efffdb6bff75ebd6",

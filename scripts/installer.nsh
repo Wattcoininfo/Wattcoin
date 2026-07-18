@@ -45,6 +45,15 @@
 !define WATTCOIN_FW_RULE_NAME "Wattcoin Miner Ledger Network (TCP 39310)"
 
 !macro customInstall
+  ; ── Install RAPL power sensor driver ──────────────────────────────────────
+  ; The Hubblo ScaphandreDrv kernel driver enables real-time CPU power reading
+  ; on Win10 via RAPL MSRs.  The installer runs elevated so sc.exe works.
+  ; If the driver is already installed (upgrade), sc create will overwrite it.
+  IfFileExists "$INSTDIR\resources\native-power\driver\ScaphandreDrv.sys" 0 skip_driver
+  nsExec::ExecToLog 'sc create ScaphandreDrv type= kernel start= demand binPath= "$INSTDIR\resources\native-power\driver\ScaphandreDrv.sys"'
+  nsExec::ExecToLog 'sc start ScaphandreDrv'
+  skip_driver:
+
   ; ── Ask user before adding the firewall rule ──────────────────────────────
   ; Skip the dialog during silent installs (autoInstallOnAppQuit / /S flag).
   IfSilent skip_fw_rule
@@ -78,6 +87,9 @@ will not work and your trust score may be affected." \
 !macroend
 
 !macro customUnInstall
+  ; Stop and remove the RAPL power sensor driver
+  nsExec::ExecToLog 'sc stop ScaphandreDrv'
+  nsExec::ExecToLog 'sc delete ScaphandreDrv'
   nsExec::ExecToLog 'netsh advfirewall firewall delete rule name="${WATTCOIN_FW_RULE_NAME}" dir=in'
   Delete "$PROFILE\WattcoinMinerUserData\firewall-consented.sentinel"
 !macroend

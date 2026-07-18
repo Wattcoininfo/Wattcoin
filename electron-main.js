@@ -131,6 +131,10 @@ const { ensureCanonicalGenesis } = require('./electron-main/main-utils');
 const { initQueues } = require('./electron-main/queue-init');
 const { registerPeerNetworkIpcHandlers } = require('./electron-main/peer-network-ipc');
 const { registerHardwareLoadIpcHandlers } = require('./electron-main/hardware-load-ipc');
+const {
+  registerLivePowerIpcHandlers,
+  readEnergySnapshot: _readEnergySnapshot,
+} = require('./electron-main/live-power-ipc');
 const { registerWalletIpcHandlers } = require('./electron-main/wallet-ipc');
 const { createPeerConnectivityInspector } = require('./electron-main/peer-connectivity');
 const { createOpsMetricsManager } = require('./electron-main/ops-metrics');
@@ -720,6 +724,7 @@ const peerProbeIpc = createPeerProbeIpc({
   startGpuLoad,
   getHardwareLoadState,
   getGpuLoadState,
+  readEnergySnapshot: _readEnergySnapshot,
 });
 const { registerIpcHandlers, _connectBgProbeWs, _closeBgProbeWs, _scheduleBgProbeWsReconnect } = peerProbeIpc;
 
@@ -1228,6 +1233,8 @@ registerMinerAccessIpcHandlers(ipcMain, {
 });
 
 registerFirewallIpcHandlers(ipcMain, { app });
+
+registerLivePowerIpcHandlers(ipcMain);
 
 registerExternalUrlIpcHandlers(ipcMain, { shell });
 

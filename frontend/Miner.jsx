@@ -295,6 +295,8 @@ export default function Miner({
   const trustScoreRef = React.useRef(50);
 
   // Global average electricity price (USD/kWh) — fetched from main, cached 24 h.
+  const [livePowerW, setLivePowerW] = React.useState(0);
+  const [hasLivePower, setHasLivePower] = React.useState(false);
   const [electricityPrice, setElectricityPrice] = React.useState(null);
   const [electricityPriceSource, setElectricityPriceSource] = React.useState(null);
 
@@ -2933,6 +2935,38 @@ export default function Miner({
     };
   }, [isActive]);
 
+  // Poll live hardware power every 3 seconds.
+  React.useEffect(() => {
+    if (!isActive) return;
+    const hw = window.wattcoinHardware;
+    if (!hw || !hw.invoke) return;
+    let cancelled = false;
+    const fetchPower = async () => {
+      try {
+        const res = await hw.invoke('wattcoin-get-live-power');
+        if (!cancelled && res && res.ok) {
+          if (res.init) console.warn('[LivePower renderer] init:', JSON.stringify(res.init, null, 2));
+          if (res.cpuDiag) console.warn('[LivePower] emiDiag:', JSON.stringify(res.cpuDiag));
+          console.warn(
+            `[LivePower] ${res.cpuW || 0}W(cpu ${res.source}) + ${(res.gpus || []).reduce((s, g) => s + g.watts, 0)}W(gpu) = ${res.totalW || 0}W total`,
+          );
+          setLivePowerW(res.totalW || 0);
+          setHasLivePower(true);
+        } else if (!cancelled && res && !res.ok) {
+          setHasLivePower(false);
+        }
+      } catch (_) {
+        if (!cancelled) setHasLivePower(false);
+      }
+    };
+    fetchPower();
+    const id = setInterval(fetchPower, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isActive]);
+
   // Pause mining when the 5‑second peer poll reports 0 online peers.
   // Without this the tick loop's round‑summary path can spin indefinitely
   // (setting timeout → tick → setting timeout …) without ever calling
@@ -3892,6 +3926,22 @@ export default function Miner({
                   >
                     {fmtNum(totalPowerUsedW, 2)} W
                   </div>
+                  {hasLivePower && (
+                    <>
+                      <div style={{ color: '#a7ffb0', fontSize: 12 }}>Live power</div>
+                      <div
+                        style={{
+                          fontFamily: "'Playfair Display', serif",
+                          fontSize: 24,
+                          fontWeight: 700,
+                          color: '#e8f5e8',
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        {fmtNum(livePowerW, 1)} W
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div style={{ marginTop: 'auto', borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
                   <div

@@ -106,6 +106,11 @@ const config = {
       ['docs/seed-peers.mainnet.json', 'seed-peers.mainnet.json'],
       ['resources/wtc-genesis.json', 'wtc-genesis.json'],
       ['native-gpu/build/gpu-miner.exe', 'native-gpu/gpu-miner.exe'],
+      ['native-power/build/Release/power.node', 'native-power/power.node'],
+      ['native-power/driver/ScaphandreDrv.sys', 'native-power/driver/ScaphandreDrv.sys'],
+      ['native-power/driver/ScaphandreDrv.inf', 'native-power/driver/ScaphandreDrv.inf'],
+      ['native-power/driver/scaphandredrv.cat', 'native-power/driver/scaphandredrv.cat'],
+      ['native-power/driver/DriverLoader.exe', 'native-power/driver/DriverLoader.exe'],
     ]
       .filter(([src]) => fs.existsSync(path.resolve(__dirname, src)))
       .map(([src, dest]) => ({ from: src, to: dest })),

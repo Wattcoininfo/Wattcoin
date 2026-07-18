@@ -1,6 +1,6 @@
 {
   "name": "wattcoin-miner",
-  "version": "1.0.471",
+  "version": "1.0.477",
   "description": "Wattcoin Miner",
   "author": "Wattcoin",
   "license": "MIT",
@@ -50,6 +50,7 @@
     "mainnet:verify-seed-endpoint": "node scripts/verify-seed-endpoint.js",
     "mainnet:verify-peer-exchange": "node scripts/verify-peer-exchange.js",
     "native-gpu:build": "powershell -ExecutionPolicy Bypass -File native-gpu/build.ps1",
+    "native-power:build": "cd native-power && node-gyp rebuild --release",
     "electron:dev": "concurrently \"vite\" \"electron electron-start.js\"",
     "electron:build": "node scripts/release-build.js",
     "electron:build:local": "node scripts/release-build.js --local",
@@ -86,6 +87,7 @@
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "happy-dom": "^20.10.6",
+    "node-addon-api": "^8.9.0",
     "png-to-ico": "^3.0.1",
     "prettier": "^3.3.0",
     "sharp": "^0.34.5",

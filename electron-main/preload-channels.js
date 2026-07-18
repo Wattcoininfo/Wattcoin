@@ -123,6 +123,7 @@ const ALLOWED_CHANNELS = new Set([
   'wattcoin-set-gpu-load',
   'wattcoin-asic-liveness-status',
   'wattcoin-sale-get-purchase-total',
+  'wattcoin-get-live-power',
 ]);
 
 module.exports = { ALLOWED_CHANNELS };

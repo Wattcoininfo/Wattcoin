@@ -464,6 +464,51 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
     }
   }
 
+  // ── Sensor energy cross-validation (proof-chain power verification) ───────
+  // The worker includes a raw RAPL/EMI energy delta (in µJ) measured during
+  // the proof computation window.  The coordinator computes sensor watts from
+  // this delta and cross-validates against the proof timing (VDF-verified,
+  // cannot be faked by the worker) and the hardware's known efficiency.
+  //
+  // If sensor data is present and consistent → use it as the authoritative
+  // power reading (replaces the TDP-table estimate).
+  // If sensor data is missing or inconsistent → fall back to TDP estimate.
+  let sensorW = 0;
+  let sensorValid = false;
+  const sensorEnergyUj = typeof result.sensorEnergyUj === 'number' ? result.sensorEnergyUj : 0;
+  const sensorEnergyTimeMs = typeof result.sensorEnergyTimeMs === 'number' ? result.sensorEnergyTimeMs : 0;
+  const sensorSource = typeof result.sensorSource === 'string' ? result.sensorSource : '';
+
+  if (sensorEnergyUj > 0 && sensorEnergyTimeMs > 100 && probeWallClockMs > 0) {
+    // Compute sensor watts: energy (µJ) / time (ms) = milliwatts; / 1000 = watts
+    sensorW = sensorEnergyUj / sensorEnergyTimeMs / 1000;
+
+    // Cross-validate: sensor watts must be physically plausible for this hardware.
+    // Use TDP table as the reference — sensor reading must be within [0.2×TDP, 2.0×TDP].
+    // This catches both inflated readings (fake high power) and deflated readings (fake low).
+    if (verifiedHwPowerW > 0) {
+      const tdpW = verifiedHwPowerW;
+      const SENSOR_MIN_RATIO = 0.2;
+      const SENSOR_MAX_RATIO = 2.0;
+      if (sensorW >= tdpW * SENSOR_MIN_RATIO && sensorW <= tdpW * SENSOR_MAX_RATIO) {
+        sensorValid = true;
+        // Use sensor reading as the authoritative power (replaces TDP estimate).
+        // The sensor is hardware-calibrated and more accurate than any table lookup.
+        verifiedHwPowerW = Math.round(sensorW);
+      } else {
+        issues.push(
+          `sensor_power_out_of_range: sensor=${sensorW.toFixed(1)}W ` +
+            `tdp=${tdpW}W ratio=${(sensorW / tdpW).toFixed(2)} (expected [${SENSOR_MIN_RATIO}, ${SENSOR_MAX_RATIO}])`,
+        );
+      }
+    } else if (sensorW > 0 && sensorW < 500) {
+      // Hardware not in tables but sensor reading is plausible — use it.
+      // This handles new/unrecognized hardware where TDP tables have no entry.
+      sensorValid = true;
+      verifiedHwPowerW = Math.round(sensorW);
+    }
+  }
+
   // Timing-consistent power cap: subtract verifier-measured network RTT from the
   // total wall-clock round trip to isolate pure GPU compute time, then verify
   // that hwPowerW × computeTimeMs is physically plausible.  The product is
@@ -533,6 +578,8 @@ async function submitPeerProbeResult(result, hardwareSpec, currentRoundId) {
         chainIndex: workerChainEntry.chainIndex,
         chainHead: workerChainEntry.chainHead,
         hwPowerW: verifiedHwPowerW,
+        sensorW: sensorValid ? Math.round(sensorW) : undefined,
+        sensorSource: sensorValid ? sensorSource : undefined,
         ...receiptHwModels,
         ...receiptVdfFields,
       },

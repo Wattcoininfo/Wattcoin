@@ -1,0 +1,61 @@
+;
+; ScaphandreDrv.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider=%ManufacturerName%
+CatalogFile=ScaphandreDrv.cat
+CatalogFile.NTAMD64=ScaphandreDrv.cat
+DriverVer = 11/09/2023,15.7.37.46
+PnpLockdown=1
+
+[DestinationDirs]
+DefaultDestDir = 12
+ScaphandreDrv_Device_CoInstaller_CopyFiles = 11
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+ScaphandreDrv.sys = 1,,
+;
+
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NTAMD64
+
+[Standard.NTAMD64]
+%ScaphandreDrv.DeviceDesc%=ScaphandreDrv_Device, Root\ScaphandreDrv ; TODO: edit hw-id
+
+[ScaphandreDrv_Device.NTAMD64]
+CopyFiles=Drivers_Dir
+
+[Drivers_Dir]
+ScaphandreDrv.sys
+
+;-------------- Service installation
+[ScaphandreDrv_Device.NTAMD64.Services]
+AddService = ScaphandreDrv,%SPSVCINST_ASSOCSERVICE%, ScaphandreDrv_Service_Inst
+
+; -------------- ScaphandreDrv driver install sections
+[ScaphandreDrv_Service_Inst]
+DisplayName    = %ScaphandreDrv.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\ScaphandreDrv.sys
+
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="Hubblo"
+DiskName = "ScaphandreDrv Installation Disk"
+ScaphandreDrv.DeviceDesc = "ScaphandreDrv Device"
+ScaphandreDrv.SVCDESC = "ScaphandreDrv Service"

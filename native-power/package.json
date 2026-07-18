@@ -1,0 +1,8 @@
+{
+  "name": "wattcoin-native-power",
+  "version": "0.1.0",
+  "main": "build/Release/power.node",
+  "dependencies": {
+    "node-addon-api": "^7.0.0"
+  }
+}

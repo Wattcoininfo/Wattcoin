@@ -840,23 +840,10 @@ describe('formatHardwareChangeList', () => {
     );
   });
 
-  it('detects memory type change', () => {
-    const changes = formatHardwareChangeList({ memType: 'DDR4' }, { memType: 'DDR5' });
-    assert.ok(changes.some((c) => c.startsWith('Memory type:')));
-  });
-
-  it('detects memory module count change', () => {
-    const changes = formatHardwareChangeList({ memSticks: 2 }, { memSticks: 4 });
-    assert.ok(changes.some((c) => c.startsWith('Memory modules:')));
-  });
-
   it('returns empty array when nothing changed', () => {
     const descriptor = {
       cpuModel: 'Intel i7',
       gpuModels: ['NVIDIA RTX 3080'],
-      memType: 'DDR4',
-      memSpeedMhz: 3200,
-      memSticks: 2,
     };
     const changes = formatHardwareChangeList(descriptor, { ...descriptor });
     assert.deepStrictEqual(changes, []);

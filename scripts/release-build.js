@@ -22,6 +22,7 @@ const APP_INTEGRITY_FILES = [
   'electron-main/wtc-sale-queue.js',
   'electron-main/wtc-staking-queue.js',
   'electron-main/runtime-config.js',
+  'electron-main/live-power-ipc.js',
   'asic-drivers/index.js',
   'asic-drivers/cgminer.js',
   'asic-drivers/nmminer.js',
@@ -401,6 +402,16 @@ function buildNativeGpuBinary(root) {
   if (!fs.existsSync(gpuBinaryPath)) {
     throw new Error(`Native GPU build did not produce expected binary: ${gpuBinaryPath}`);
   }
+}
+
+function buildNativePowerAddon(root) {
+  const addonPath = path.join(root, 'native-power', 'build', 'Release', 'power.node');
+  console.log('[release-build] Building native-power addon for Electron ABI...');
+  runNpmExec(['exec', '--', '@electron/rebuild', '-m', path.join(root, 'native-power')]);
+  if (!fs.existsSync(addonPath)) {
+    throw new Error(`Native power addon build did not produce expected binary: ${addonPath}`);
+  }
+  console.log('[release-build] Native power addon built successfully.');
 }
 
 function findWorkspaceElectronProcesses(root) {
@@ -908,6 +919,7 @@ async function main() {
     assertMainProcessRuntimeFilesPackaged(root);
     if (process.platform === 'win32') {
       buildNativeGpuBinary(root);
+      buildNativePowerAddon(root);
     }
     removeStaleElectronBuilderOutput(root);
     addDefenderExclusions(root);

@@ -42,6 +42,7 @@ function createHandlers(deps) {
     startGpuLoad,
     getHardwareLoadState,
     _getGpuLoadState,
+    readEnergySnapshot,
   } = deps;
 
   // -- State ------------------------------------------------------------------
@@ -57,6 +58,10 @@ function createHandlers(deps) {
   let _probeInProgressEpoch = -1;
   let _probeTimeoutTimer = null;
   let _probeEpoch = 0;
+  // Energy snapshots for proof-chain cross-validation.
+  // _probeEnergyStart is captured when the probe is dispatched to the worker;
+  // _probeEnergyEnd is captured just before the result is submitted to the coordinator.
+  let _probeEnergyStart = null;
   let _probeConns = [];
   let _pendingConns = new Map();
   let _probeConnIdSeq = 0;
@@ -522,6 +527,10 @@ function createHandlers(deps) {
             saveHwAuthState();
           }
         }, _PROBE_TIMEOUT_MS);
+        // Snapshot energy counter BEFORE the worker starts computation.
+        // The coordinator's wall-clock starts when the probe is issued;
+        // this snapshot is the start marker for energy cross-validation.
+        _probeEnergyStart = typeof readEnergySnapshot === 'function' ? readEnergySnapshot() : null;
         return { ok: true, source: cached.source, probe: cached.probe };
       }
 
@@ -561,8 +570,21 @@ function createHandlers(deps) {
           try {
             const _submittedAt = Date.now();
             result._submittedAt = _submittedAt;
+            // Snapshot energy counter AFTER computation, BEFORE submission.
+            // The delta (_probeEnergyEnd - _probeEnergyStart) is the energy
+            // consumed during the proof, used for coordinator cross-validation.
+            const _probeEnergyEnd = typeof readEnergySnapshot === 'function' ? readEnergySnapshot() : null;
+            let sensorEnergyUj = null;
+            let sensorEnergyTimeMs = null;
+            let sensorSource = null;
+            if (_probeEnergyStart && _probeEnergyEnd && _probeEnergyStart.source === _probeEnergyEnd.source) {
+              sensorEnergyUj = Math.max(0, _probeEnergyEnd.energyUj - _probeEnergyStart.energyUj);
+              sensorEnergyTimeMs = _probeEnergyEnd.timeMs - _probeEnergyStart.timeMs;
+              sensorSource = _probeEnergyEnd.source;
+            }
+            _probeEnergyStart = null;
             console.warn(
-              `[PeerProbe] submit body probeWallClockMs=${typeof result.probeWallClockMs === 'number' ? Math.round(result.probeWallClockMs) : '?'} id=${result.id} N=${result.iterations || '?'} intDateMs=${typeof result._intDateMs === 'number' ? Math.round(result._intDateMs) : '?'} warmupTotal=${typeof result._warmupTotalMs === 'number' ? Math.round(result._warmupTotalMs) : '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''}`,
+              `[PeerProbe] submit body probeWallClockMs=${typeof result.probeWallClockMs === 'number' ? Math.round(result.probeWallClockMs) : '?'} id=${result.id} N=${result.iterations || '?'} intDateMs=${typeof result._intDateMs === 'number' ? Math.round(result._intDateMs) : '?'} warmupTotal=${typeof result._warmupTotalMs === 'number' ? Math.round(result._warmupTotalMs) : '?'} retried=${result._retried || 0} callCount=${result._callCount || '?'} chunks=${result._chunks || ''} sensorE_uJ=${sensorEnergyUj !== null ? Math.round(sensorEnergyUj) : 'N/A'}`,
             );
             const body = {
               probeId: result.id || '',
@@ -583,6 +605,10 @@ function createHandlers(deps) {
               iterations: typeof result.iterations === 'number' ? result.iterations : undefined,
               shares: Array.isArray(result.shares) ? result.shares : undefined,
               shareCount: typeof result.shareCount === 'number' ? result.shareCount : undefined,
+              // Sensor energy proof — raw RAPL/EMI delta during proof computation
+              sensorEnergyUj: sensorEnergyUj !== null ? Math.round(sensorEnergyUj) : undefined,
+              sensorEnergyTimeMs: sensorEnergyTimeMs !== null ? Math.round(sensorEnergyTimeMs) : undefined,
+              sensorSource: sensorSource || undefined,
             };
             let verdict;
             const wsConn = _probeConns.find((c) => c.peerUrl === peerUrl);

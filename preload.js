@@ -195,6 +195,7 @@ try {
           'wattcoin-set-gpu-load',
           'wattcoin-asic-liveness-status',
           'wattcoin-sale-get-purchase-total',
+          'wattcoin-get-live-power',
         ]);
         if (!ALLOWED_CHANNELS.has(channel)) {
           return Promise.reject(new Error(`IPC channel '${channel}' is not allowed from the renderer`));

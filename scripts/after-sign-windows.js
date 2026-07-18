@@ -79,7 +79,11 @@ function buildSignArgs(filePath) {
 
 function collectSignTargets(resourcesDir) {
   const targets = [];
-  const candidateDirs = [path.join(resourcesDir, 'bin'), path.join(resourcesDir, 'native-gpu')];
+  const candidateDirs = [
+    path.join(resourcesDir, 'bin'),
+    path.join(resourcesDir, 'native-gpu'),
+    path.join(resourcesDir, 'native-power', 'driver'),
+  ];
 
   for (const dir of candidateDirs) {
     if (!fs.existsSync(dir)) continue;
