@@ -568,6 +568,9 @@ function createLedgerRequestHandler(ctx) {
               totalWh,
               elapsedMs,
               witnessedProbeReceipts,
+              undefined,
+              typeof ctx.loadPowerCurve === 'function' ? ctx.loadPowerCurve() : null,
+              ctx.interpolatePower,
             );
             if (!proofResult.ok) {
               console.warn(

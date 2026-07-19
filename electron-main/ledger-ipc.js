@@ -77,6 +77,8 @@ function registerLedgerIpcHandlers(deps) {
     _gpuDutySamples,
     _prevRawGpuDuty,
     _physicalCoreCount: _physicalCoreCountRef,
+    loadPowerCurve,
+    interpolatePower,
   } = deps;
 
   // Sync module-level _physicalCoreCount with the caller's ref so the
@@ -274,7 +276,27 @@ function registerLedgerIpcHandlers(deps) {
     }
 
     const _gpuPower = hwAuthority.nativeGpuTdpW || 0;
-    const pcCalibratedPowerW = Math.max(0, hwAuthority.calibratedUnitPowerW - (hwAuthority.asicPowerW || 0));
+
+    // Power curve path: use measured power at current load level instead of linear scaling.
+    // The curve gives us actual power consumption (non-linear) at each load %,
+    // which is more accurate than TDP × duty cycle.
+    let pcCalibratedPowerW;
+    const _powerCurve = typeof loadPowerCurve === 'function' ? loadPowerCurve() : null;
+    if (
+      _powerCurve &&
+      Array.isArray(_powerCurve.steps) &&
+      _powerCurve.steps.length >= 2 &&
+      _powerCurve.measuredWithSensors
+    ) {
+      const currentLoad = Math.max(0, Math.min(100, hwAuthority.currentLoadPercent || 100));
+      const curvePowerW = typeof interpolatePower === 'function' ? interpolatePower(_powerCurve, currentLoad) : 0;
+      // Subtract ASIC power if present (curve includes total system power)
+      pcCalibratedPowerW = Math.max(0, curvePowerW - (hwAuthority.asicPowerW || 0));
+    } else {
+      // Fallback: linear scaling from calibrated max power (existing behavior)
+      pcCalibratedPowerW = Math.max(0, hwAuthority.calibratedUnitPowerW - (hwAuthority.asicPowerW || 0));
+    }
+
     const _gpuFraction = pcCalibratedPowerW > 0 ? _gpuPower / pcCalibratedPowerW : 0;
     const _cpuFraction = 1 - _gpuFraction;
     const loadFactor = Math.max(0.1, effectiveCpuDuty * _cpuFraction + effectiveGpuDuty * _gpuFraction);

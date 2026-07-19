@@ -124,6 +124,8 @@ const ALLOWED_CHANNELS = new Set([
   'wattcoin-asic-liveness-status',
   'wattcoin-sale-get-purchase-total',
   'wattcoin-get-live-power',
+  'wattcoin-run-power-curve-benchmark',
+  'wattcoin-get-power-curve',
 ]);
 
 module.exports = { ALLOWED_CHANNELS };

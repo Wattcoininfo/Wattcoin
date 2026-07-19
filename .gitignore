@@ -115,5 +115,11 @@ status_final.out
 status_utf8.out
 
 
+# Native power addon build artifacts
+native-power/build/
+native-power/bin/
+native-power/package-lock.json
+native-power/driver/result.txt
+
 # Project-specific agent instructions
 AGENTS.md

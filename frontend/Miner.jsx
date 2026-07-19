@@ -263,6 +263,36 @@ export default function Miner({
 
   const [benchPower, setBenchPower] = React.useState(null);
 
+  // Power curve: measured power and ops/ms at each load level (10%→100%).
+  // When available, replaces TDP-based power estimation with actual sensor measurements.
+  const [powerCurve, setPowerCurve] = React.useState(null);
+  const [powerCurveBenchmarkPending, setPowerCurveBenchmarkPending] = React.useState(false);
+  const powerCurveRef = React.useRef(null);
+
+  const rebenchPowerCurve = React.useCallback(async () => {
+    if (powerCurveBenchmarkPending) return;
+    setPowerCurveBenchmarkPending(true);
+    try {
+      const hw = window.wattcoinHardware;
+      if (hw && hw.invoke) {
+        const res = await hw.invoke('wattcoin-run-power-curve-benchmark', {
+          declaredCpuModel: hardware.cpu ? hardware.cpu.split(' (')[0] : '',
+          declaredGpuModel: hardware.gpu || '',
+          declaredDeviceType: hardware.deviceType || '',
+          declaredGpuCount: Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0,
+        });
+        if (res && res.ok && res.curve) {
+          setPowerCurve(res.curve);
+          powerCurveRef.current = res.curve;
+        }
+      }
+    } catch (_) {
+      if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Power curve re-benchmark error:', String(_));
+    } finally {
+      setPowerCurveBenchmarkPending(false);
+    }
+  }, [hardware, powerCurveBenchmarkPending]);
+
   // Persisted hardware card width — saved after hardware is recognized so the card
   // doesn't jump from "Unknown" placeholder size to full content size on next launch.
   // Minimum threshold prevents caching a loading-state narrow width.
@@ -1611,6 +1641,65 @@ export default function Miner({
     hardwareLookupResetNonce,
   ]);
 
+  // Load power curve from backend on mount and when hardware changes.
+  React.useEffect(() => {
+    if (!(hardware && hardware.source)) return;
+    let cancelled = false;
+    const loadCurve = async () => {
+      try {
+        const hw = window.wattcoinHardware;
+        if (hw && hw.invoke) {
+          const res = await hw.invoke('wattcoin-get-power-curve');
+          if (!cancelled && res && res.ok && res.curve) {
+            setPowerCurve(res.curve);
+            powerCurveRef.current = res.curve;
+          }
+        }
+      } catch (_) {
+        /* curve not available */
+      }
+    };
+    loadCurve();
+    return () => {
+      cancelled = true;
+    };
+  }, [hardware, hardwareLookupResetNonce]);
+
+  // Trigger power curve benchmark 5 seconds after startup benchmark finishes.
+  const powerCurveAutoTriggeredRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!benchmarkState.startupDone) return;
+    if (isHardwareOnHold) return;
+    if (powerCurve) return;
+    if (powerCurveAutoTriggeredRef.current) return;
+    if (!(hardware && hardware.source)) return;
+    powerCurveAutoTriggeredRef.current = true;
+    const timeoutId = setTimeout(async () => {
+      setPowerCurveBenchmarkPending(true);
+      try {
+        const hw = window.wattcoinHardware;
+        if (hw && hw.invoke) {
+          const res = await hw.invoke('wattcoin-run-power-curve-benchmark', {
+            declaredCpuModel: hardware.cpu ? hardware.cpu.split(' (')[0] : '',
+            declaredGpuModel: hardware.gpu || '',
+            declaredDeviceType: hardware.deviceType || '',
+            declaredGpuCount: Array.isArray(hardware && hardware.gpus) ? hardware.gpus.length : 0,
+          });
+          if (res && res.ok && res.curve) {
+            setPowerCurve(res.curve);
+            powerCurveRef.current = res.curve;
+          }
+        }
+      } catch (_) {
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Power curve benchmark error:', String(_));
+      } finally {
+        setPowerCurveBenchmarkPending(false);
+      }
+    }, 5000);
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [benchmarkState.startupDone, isHardwareOnHold, powerCurve, hardware, hardwareLookupResetNonce]);
+
   // Run a benchmark after user stops adjusting hardware load slider.
   // Not dashboard-gated: slider-triggered baseline checks must run on any tab.
   React.useEffect(() => {
@@ -2092,6 +2181,7 @@ export default function Miner({
     benchmarkGpuCalibration,
     isHardwareOnHold,
     benchPower,
+    powerCurve,
   });
   let powerW = _powerEstimation.powerW;
   const unitFullPowerW = _powerEstimation.unitFullPowerW;
@@ -2156,6 +2246,7 @@ export default function Miner({
       hardware.cpu === 'Unknown' ||
       (Array.isArray(hardware.gpus) && hardware.gpus.some((g) => g === 'Unknown' || !g)));
   const startupBenchmarkPending = hardwareRecognitionFinished && !benchmarkState.startupDone && clampedLoadPercent > 0;
+  const needsPowerCurve = hardwareRecognitionFinished && !powerCurve && !powerCurveBenchmarkPending;
   // Persist the card's rendered width once hardware is fully loaded so the next
   // launch pre-sizes the card and avoids a layout jump.
   React.useEffect(() => {
@@ -2306,6 +2397,118 @@ export default function Miner({
     setLog,
     now,
   ]);
+
+  // Power curve drift detection: every 60s during mining, compare live ops/ms
+  // and live sensor wattage against the stored curve. >30% deviation on either
+  // metric triggers automatic re-benchmark.
+  React.useEffect(() => {
+    if (!mining) return;
+    if (!powerCurve || !powerCurve.steps || powerCurve.steps.length < 2) return;
+    let cancelled = false;
+    let lastCheckMs = 0;
+    const CURVE_DRIFT_CHECK_INTERVAL_MS = 60_000;
+    const CURVE_DRIFT_THRESHOLD = 0.3;
+
+    const checkCurveDrift = async () => {
+      if (cancelled) return;
+      if (benchmarkInFlightRef.current) return;
+      if (powerCurveBenchmarkPending) return;
+      const nowMs = Date.now();
+      if (nowMs - lastCheckMs < CURVE_DRIFT_CHECK_INTERVAL_MS) return;
+      lastCheckMs = nowMs;
+
+      try {
+        const hw = window.wattcoinHardware;
+        if (!hw || !hw.getHardwareLoadState) return;
+
+        const currentLoad = effectiveLoadPercent;
+
+        // Interpolate expected ops/ms from curve at current load
+        const expectedOpsPerMs = (() => {
+          const steps = powerCurve.steps;
+          const pct = Math.max(0, Math.min(100, currentLoad));
+          if (pct <= steps[0].loadPercent) return steps[0].avgOpsPerMs;
+          if (pct >= steps[steps.length - 1].loadPercent) return steps[steps.length - 1].avgOpsPerMs;
+          for (let i = 0; i < steps.length - 1; i++) {
+            const a = steps[i];
+            const b = steps[i + 1];
+            if (pct >= a.loadPercent && pct <= b.loadPercent) {
+              const t = (pct - a.loadPercent) / (b.loadPercent - a.loadPercent);
+              return a.avgOpsPerMs + t * (b.avgOpsPerMs - a.avgOpsPerMs);
+            }
+          }
+          return steps[steps.length - 1].avgOpsPerMs;
+        })();
+
+        // Interpolate expected power from curve at current load
+        const expectedPowerW = (() => {
+          const steps = powerCurve.steps;
+          const pct = Math.max(0, Math.min(100, currentLoad));
+          if (pct <= steps[0].loadPercent) return steps[0].avgPowerW;
+          if (pct >= steps[steps.length - 1].loadPercent) return steps[steps.length - 1].avgPowerW;
+          for (let i = 0; i < steps.length - 1; i++) {
+            const a = steps[i];
+            const b = steps[i + 1];
+            if (pct >= a.loadPercent && pct <= b.loadPercent) {
+              const t = (pct - a.loadPercent) / (b.loadPercent - a.loadPercent);
+              return a.avgPowerW + t * (b.avgPowerW - a.avgPowerW);
+            }
+          }
+          return steps[steps.length - 1].avgPowerW;
+        })();
+
+        // ── Ops/ms drift check ──
+        const hwState = await hw.getHardwareLoadState();
+        if (hwState && hwState.ok) {
+          const currentOpsPerSec = Number(hwState.cpuLoadOpsPerSec) || 0;
+          if (currentOpsPerSec > 0 && expectedOpsPerMs > 0) {
+            const actualOpsPerMs = currentOpsPerSec / 1000;
+            const drift = Math.abs(actualOpsPerMs - expectedOpsPerMs) / expectedOpsPerMs;
+            if (drift > CURVE_DRIFT_THRESHOLD) {
+              setLog((log) => [
+                {
+                  time: now(),
+                  msg: `Power curve drift detected: ${(drift * 100).toFixed(1)}% ops/ms deviation at ${currentLoad}% load (expected ${expectedOpsPerMs.toFixed(1)}, got ${actualOpsPerMs.toFixed(1)}). Re-benchmarking...`,
+                  type: 'warn',
+                },
+                ...log,
+              ]);
+              setPowerCurve(null);
+              powerCurveRef.current = null;
+              return;
+            }
+          }
+        }
+
+        // ── Live power drift check ──
+        if (hasLivePower && livePowerW > 0 && expectedPowerW > 0) {
+          const powerDrift = Math.abs(livePowerW - expectedPowerW) / expectedPowerW;
+          if (powerDrift > CURVE_DRIFT_THRESHOLD) {
+            setLog((log) => [
+              {
+                time: now(),
+                msg: `Power curve wattage drift: ${(powerDrift * 100).toFixed(1)}% deviation at ${currentLoad}% load (curve ${expectedPowerW.toFixed(1)}W, live ${livePowerW.toFixed(1)}W). Re-benchmarking...`,
+                type: 'warn',
+              },
+              ...log,
+            ]);
+            setPowerCurve(null);
+            powerCurveRef.current = null;
+          }
+        }
+      } catch (_) {
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Curve drift check error:', String(_));
+      }
+    };
+
+    const timer = setInterval(() => {
+      checkCurveDrift().catch(() => {});
+    }, CURVE_DRIFT_CHECK_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [mining, powerCurve, effectiveLoadPercent, powerCurveBenchmarkPending, livePowerW, hasLivePower, setLog, now]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const coinsPerHour = tierEnergyPerCoinWh > 0 ? powerW / tierEnergyPerCoinWh : 0;
   const displayUnmatured = Math.max(0, nodeUnmatured);
@@ -3226,23 +3429,7 @@ export default function Miner({
           >
             <b>Operating System:</b> {hardware.osName || 'Unknown'}
           </div>
-          <div style={{ color: '#4ade80', fontSize: 13, marginTop: 8, wordBreak: 'break-all' }}>
-            <b>Hardware info:</b> {hardware.source || 'Unknown'}
-          </div>
-          <div
-            style={{
-              color: '#6aaa6a',
-              fontSize: 13,
-              marginTop: 2,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              width: '100%',
-            }}
-            title={hardwareCardPowerCalcBreakdown}
-          >
-            <b>Power calculation:</b> {hardwareCardPowerCalcBreakdown}
-          </div>
+
           <div style={{ marginTop: 8, borderTop: '1px solid #1e3a1e', paddingTop: 8 }}>
             <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 15, color: '#4ade80', marginBottom: 12 }}>
               ASIC Recognition
@@ -3356,7 +3543,53 @@ export default function Miner({
               </div>
             )}
           </div>
-          <div style={{ marginTop: 'auto', width: '100%', borderTop: '1px solid #1e3a1e', paddingTop: 10 }}>
+          <div
+            style={{
+              marginTop: 'auto',
+              width: '100%',
+              borderTop: '1px solid #1e3a1e',
+              paddingTop: 10,
+              position: 'relative',
+            }}
+          >
+            {!powerCurveBenchmarkPending && (
+              <button
+                onClick={rebenchPowerCurve}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  fontSize: 9,
+                  padding: '1px 5px',
+                  border: '1px solid #4ade80',
+                  borderRadius: 4,
+                  background: 'transparent',
+                  color: '#4ade80',
+                  cursor: 'pointer',
+                }}
+                title="Re-run power curve benchmark"
+              >
+                re-bench
+              </button>
+            )}
+            <div
+              style={{
+                color: '#6aaa6a',
+                fontSize: 13,
+                marginTop: 0,
+                marginBottom: 4,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                width: '100%',
+              }}
+              title={powerCurveBenchmarkPending ? 'Power curve benchmark in progress' : hardwareCardPowerCalcBreakdown}
+            >
+              <b>Power calculation:</b>{' '}
+              <span style={{ color: powerCurveBenchmarkPending ? '#facc15' : undefined }}>
+                {powerCurveBenchmarkPending ? 'Calibrating...' : hardwareCardPowerCalcBreakdown}
+              </span>
+            </div>
             <div
               style={{ color: benchmarkState.running || startupBenchmarkPending ? '#facc15' : '#4ade80', fontSize: 12 }}
             >
@@ -4189,6 +4422,8 @@ export default function Miner({
                   !hardwareRecognitionFinished ||
                   benchmarkState.running ||
                   startupBenchmarkPending ||
+                  powerCurveBenchmarkPending ||
+                  needsPowerCurve ||
                   isHardwareOnHold ||
                   firewallBlocked ||
                   peerCount === null ||
@@ -4203,6 +4438,8 @@ export default function Miner({
                     !hardwareRecognitionFinished ||
                     benchmarkState.running ||
                     startupBenchmarkPending ||
+                    powerCurveBenchmarkPending ||
+                    needsPowerCurve ||
                     isHardwareOnHold ||
                     firewallBlocked ||
                     peerCount === null ||
@@ -4224,6 +4461,8 @@ export default function Miner({
                     !hardwareRecognitionFinished ||
                     benchmarkState.running ||
                     startupBenchmarkPending ||
+                    powerCurveBenchmarkPending ||
+                    needsPowerCurve ||
                     isHardwareOnHold ||
                     firewallBlocked ||
                     peerCount === null ||
@@ -4237,21 +4476,25 @@ export default function Miner({
                   ? 'Hardware unknown'
                   : isHardwareOnHold
                     ? `On hold (${Math.floor(holdSecondsLeft / 60)}:${String(holdSecondsLeft % 60).padStart(2, '0')})`
-                    : mining
-                      ? 'Mining active'
-                      : benchmarkState.running || startupBenchmarkPending
-                        ? 'Benchmarking...'
-                        : firewallBlocked
-                          ? 'Firewall blocked'
-                          : peerCount === null || peerCount === 0
-                            ? 'No peers'
-                            : showRebenchPrompt
-                              ? 'Re-Benchmark'
-                              : clampedLoadPercent === 0
-                                ? 'Set hardware load'
-                                : hardwareRecognitionFinished
-                                  ? 'Start mining'
-                                  : 'Detecting hardware...'}
+                    : powerCurveBenchmarkPending
+                      ? 'Calibrating curve'
+                      : needsPowerCurve
+                        ? 'Calibrating curve...'
+                        : mining
+                          ? 'Mining active'
+                          : benchmarkState.running || startupBenchmarkPending
+                            ? 'Benchmarking...'
+                            : firewallBlocked
+                              ? 'Firewall blocked'
+                              : peerCount === null || peerCount === 0
+                                ? 'No peers'
+                                : showRebenchPrompt
+                                  ? 'Re-Benchmark'
+                                  : clampedLoadPercent === 0
+                                    ? 'Set hardware load'
+                                    : hardwareRecognitionFinished
+                                      ? 'Start mining'
+                                      : 'Detecting hardware...'}
               </button>
             </div>
             <div style={{ flex: 1 }}>

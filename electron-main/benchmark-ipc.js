@@ -19,7 +19,13 @@ const {
 } = require('./backend-benchmark');
 const { getExpectedCpuSpeedOps, getAsicPowerW, getAsicHashrateTHs, getGpuTdpW } = require('./hardware-tables.cjs');
 const { ensureGpu, getGpuInfo } = require('./gpu-load-controller');
-const { getHardwareLoadState, setHardwareLoadPercent } = require('./hardware-load-controller');
+const {
+  getHardwareLoadState,
+  setHardwareLoadPercent,
+  setCoordinatorSeed,
+  getCoordinatorSeed,
+  setCpuTarget,
+} = require('./hardware-load-controller');
 const {
   normalizeGpuFingerprintValue,
   formatHardwareChangeList,
@@ -75,6 +81,11 @@ function registerBenchmarkIpcHandlers(deps) {
     _connectBgProbeWs,
     computeHwAuthSig,
     stopStratumServer,
+    _loadPowerCurve,
+    savePowerCurve,
+    _clearPowerCurve,
+    _isCurveValidForHardware,
+    CURVE_STEPS,
   } = deps;
 
   ipcMain.handle('wattcoin-get-benchmark-capabilities', () => {
@@ -1065,6 +1076,249 @@ function registerBenchmarkIpcHandlers(deps) {
       return { ok: true };
     } catch (e) {
       return { ok: false, message: e && e.message ? e.message : 'write failed' };
+    }
+  });
+
+  // ── Multi-point power curve benchmark ───────────────────────────────────────
+  // Steps through 10%→100% load, measuring actual power (via live sensors) and
+  // throughput (ops/ms) at each level. The 100% measurement becomes the
+  // authoritative unitFullPowerW — TDP tables are NOT used as the power source.
+  ipcMain.handle('wattcoin-run-power-curve-benchmark', async (_event, request) => {
+    if (!walletAddressCache.address) {
+      try {
+        if (deps.wtcNode()) {
+          const address = deps.wtcNode().getPrimaryAddress();
+          if (address) {
+            walletAddressCache.address = address;
+            walletAddressCache.at = Date.now();
+          }
+        }
+      } catch (_) {
+        if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
+      }
+    }
+
+    const _readLivePower = () => {
+      try {
+        const { readLivePowerW } = require('./live-power-ipc');
+        if (typeof readLivePowerW === 'function') return readLivePowerW();
+      } catch (_) {
+        /* addon not available */
+      }
+      return null;
+    };
+
+    try {
+      const _hwBefore = getHardwareLoadState();
+      const _prevPct = _hwBefore.currentPercent || 0;
+      const _gpuCount = Math.max(0, Number(request && request.declaredGpuCount) || 0);
+      if (_gpuCount > 0) {
+        ensureGpu(_gpuCount).catch(() => {});
+      }
+
+      // Check live sensors are available via the lazy loader
+      const _sensorProbe = _readLivePower();
+      if (!_sensorProbe) {
+        return {
+          ok: false,
+          message: 'Live power sensors not available (EMI/RAPL/NVML/PDH). Mining requires hardware power sensors.',
+          sensorAvailable: false,
+        };
+      }
+
+      const steps = CURVE_STEPS || [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+      const STEP_DURATION_MS = 7000;
+      const MAX_STEP_DURATION_MS = 30000;
+      const SAMPLE_INTERVAL_MS = 500;
+      const SETTLE_TIMEOUT_MS = 20000;
+      const curveSteps = [];
+
+      // Send a dummy seed so workers use the same burnCpuOps (JS crypto) path
+      // as mining instead of native BCrypt.  This ensures the power curve
+      // benchmark measures the same workload that mining actually runs.
+      const _prevSeed = getCoordinatorSeed();
+      setCoordinatorSeed('dead000000000000000000000000000000000000000000000000000000000000');
+
+      for (const targetPct of steps) {
+        // Set target directly on workers — no ramp-up.
+        // setHardwareLoadPercent triggers a 3s ramp that prevents the duty
+        // from ever reaching the actual target during settle/sampling.
+        setCpuTarget(targetPct);
+
+        // Wait for actual measured duty cycle to stabilize at the target.
+        // Require 5 consecutive readings within tolerance to confirm stability.
+        const settleStart = Date.now();
+        let stableCount = 0;
+        const STABLE_READINGS_NEEDED = 5;
+        while (Date.now() - settleStart < SETTLE_TIMEOUT_MS) {
+          await new Promise((r) => setTimeout(r, 500));
+          const hwState = getHardwareLoadState();
+          const actualDuty = hwState.avgCpuWorkerDuty; // 0..1
+          const targetDuty = targetPct / 100;
+          const dutyClose = Math.abs(actualDuty - targetDuty) < 0.08;
+          if (dutyClose) {
+            stableCount++;
+            if (stableCount >= STABLE_READINGS_NEEDED) break;
+          } else {
+            stableCount = 0;
+            // Re-send target if duty drifted — nudges workers back
+            if (targetPct > 0) {
+              setCpuTarget(targetPct);
+            }
+          }
+        }
+        // Extra settle buffer to let thermal/power stabilize
+        await new Promise((r) => setTimeout(r, 1500));
+
+        // At 100% load, sample for 30 seconds for an accurate max power reading.
+        // Other steps use the standard duration.
+        const stepDuration = targetPct === 100 ? MAX_STEP_DURATION_MS : STEP_DURATION_MS;
+
+        // Sample live power + measure ops/ms during workload
+        const powerSamples = [];
+        let opsTotal = 0;
+        let opsCount = 0;
+        const stepStart = Date.now();
+
+        while (Date.now() - stepStart < stepDuration) {
+          // Re-enforce target load every 3 seconds to prevent drift
+          const elapsed = Date.now() - stepStart;
+          if (elapsed > 0 && elapsed % 3000 < SAMPLE_INTERVAL_MS) {
+            try {
+              setCpuTarget(targetPct);
+            } catch (_) {
+              /* ignore */
+            }
+          }
+
+          // Read live power via the lazy loader
+          try {
+            const reading = _readLivePower();
+            if (reading && reading.totalW > 0) {
+              powerSamples.push(reading.totalW);
+            }
+          } catch (_) {
+            /* best-effort */
+          }
+
+          // Sample ops/ms from hardware load state
+          try {
+            const hwState = getHardwareLoadState();
+            if (typeof hwState.cpuLoadOpsPerSec === 'number' && hwState.cpuLoadOpsPerSec > 0) {
+              opsTotal += hwState.cpuLoadOpsPerSec / 1000;
+              opsCount++;
+            }
+          } catch (_) {
+            /* best-effort */
+          }
+
+          await new Promise((r) => setTimeout(r, SAMPLE_INTERVAL_MS));
+        }
+
+        const avgPowerW = powerSamples.length > 0 ? powerSamples.reduce((a, b) => a + b, 0) / powerSamples.length : 0;
+        const avgOpsPerMs = opsCount > 0 ? opsTotal / opsCount : 0;
+
+        // Validate reading
+        if (avgPowerW < 0.5 || avgPowerW > 2000) {
+          setCoordinatorSeed(_prevSeed || null);
+          setHardwareLoadPercent(_prevPct);
+          return {
+            ok: false,
+            message: `Invalid power reading at ${targetPct}% load: ${avgPowerW.toFixed(1)}W (expected 0.5-2000W)`,
+            sensorAvailable: true,
+          };
+        }
+
+        curveSteps.push({
+          loadPercent: targetPct,
+          avgPowerW: Math.round(avgPowerW * 100) / 100,
+          avgOpsPerMs: Math.round(avgOpsPerMs * 100) / 100,
+        });
+
+        console.log(`[PowerCurve] ${targetPct}% → ${avgPowerW.toFixed(1)}W, ${avgOpsPerMs.toFixed(1)} ops/ms`);
+      }
+
+      // Restore previous load and seed
+      setCoordinatorSeed(_prevSeed || null);
+      setHardwareLoadPercent(_prevPct);
+
+      const maxPowerW = curveSteps.length > 0 ? curveSteps[curveSteps.length - 1].avgPowerW : 0;
+      if (maxPowerW <= 0) {
+        return { ok: false, message: 'Power curve benchmark produced no valid data.' };
+      }
+
+      // Get hardware fingerprint hash
+      let hardwareHash = '';
+      try {
+        const fp = loadHwFingerprint();
+        if (fp && fp.hash) hardwareHash = fp.hash;
+      } catch (_) {
+        /* best-effort */
+      }
+
+      // Get sensor info from the lazy loader
+      let sensorSources = [];
+      try {
+        const { getSensorInitInfo } = require('./live-power-ipc');
+        const info = getSensorInitInfo();
+        if (info) {
+          if (info.emi) sensorSources.push('emi');
+          if (info.rapl) sensorSources.push('rapl');
+          if (info.nvml) sensorSources.push('nvml');
+          if (info.pdh) sensorSources.push('pdh');
+        }
+      } catch (_) {
+        /* best-effort */
+      }
+
+      const curve = {
+        version: 1,
+        hardwareHash,
+        measuredWithSensors: true,
+        sensorSources,
+        steps: curveSteps,
+        maxPowerW,
+        createdAtMs: Date.now(),
+        updatedAtMs: Date.now(),
+      };
+
+      savePowerCurve(curve);
+
+      // Update hwAuthority with measured max power
+      hwAuthority.calibratedUnitPowerW = Math.round(maxPowerW);
+      hwAuthority.currentLoadPercent = _prevPct;
+
+      // Append 100% ops/sec to benchmark history for cross-session drift detection
+      try {
+        const history = loadBenchmarkHistory();
+        const maxOpsPerSec = curveSteps.length > 0 ? curveSteps[curveSteps.length - 1].avgOpsPerMs * 1000 : 0;
+        if (maxOpsPerSec > 0) {
+          history.cpuSamples = appendBenchmarkSample(history.cpuSamples, maxOpsPerSec);
+          saveBenchmarkHistory(history);
+        }
+      } catch (_) {
+        /* best-effort */
+      }
+
+      saveHwAuthState();
+
+      return {
+        ok: true,
+        curve,
+        maxPowerW,
+        calibratedUnitPowerW: hwAuthority.calibratedUnitPowerW,
+      };
+    } catch (e) {
+      try {
+        setCoordinatorSeed(null);
+      } catch (_) {
+        /* best-effort */
+      }
+      setHardwareLoadPercent(0);
+      return {
+        ok: false,
+        message: e && e.message ? e.message : String(e),
+      };
     }
   });
 }

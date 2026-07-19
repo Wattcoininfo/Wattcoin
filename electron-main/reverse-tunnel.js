@@ -378,7 +378,6 @@ function createReverseTunnel(ctx) {
           probePushWssRef.current.handleUpgrade(req, socket, head, (ws) => {
             const existing = probePushConns.get(workerId);
             if (existing) {
-              cancelPendingPeerProbesForWorker(workerId);
               try {
                 existing.ws.close();
               } catch (_) {
@@ -408,7 +407,6 @@ function createReverseTunnel(ctx) {
                 probePushConns.delete(id);
               }
               workerIsMining.delete(id);
-              cancelPendingPeerProbesForWorker(id);
             };
             ws.on('close', () => dropWorker(workerId));
             ws.on('error', () => dropWorker(workerId));
@@ -613,11 +611,6 @@ function createReverseTunnel(ctx) {
     }
     for (const [wid, conn] of probePushConns) {
       if (conn && conn.ws && conn.ws._isRelayWs) {
-        cancelPendingPeerProbesForWorker(wid);
-      }
-    }
-    for (const [wid, conn] of probePushConns) {
-      if (conn && conn.ws && conn.ws._isRelayWs) {
         probePushConns.delete(wid);
       }
     }
@@ -810,7 +803,6 @@ function createReverseTunnel(ctx) {
       const hasAsic = message.hasAsic === true;
       const existing = probePushConns.get(workerId);
       if (existing) {
-        cancelPendingPeerProbesForWorker(workerId);
         try {
           existing.ws.close();
         } catch (_) {
@@ -875,7 +867,6 @@ function createReverseTunnel(ctx) {
         }
         probePushConns.delete(workerId);
         workerIsMining.delete(workerId);
-        cancelPendingPeerProbesForWorker(workerId);
         conn.ws._emitClose();
       }
       return;

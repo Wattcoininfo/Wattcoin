@@ -516,51 +516,38 @@ async function run() {
   // ═══════════════════════════════════════════════════════════════════════════
   console.log('\n  computeEnergyWh');
 
-  await test('CPU: returns 0 when no hardware spec', () => {
-    const proof = { totalOps: 10000, burnMs: 10, elapsedMs: 10 };
-    assert.strictEqual(computeEnergyWh('cpu', proof, null), 0);
+  await test('returns 0 when powerW is 0', () => {
+    assert.strictEqual(computeEnergyWh('cpu', 10000, 0), 0);
   });
 
-  await test('CPU: computes energy from ops and tdpW/opsPerMs', () => {
-    const proof = { totalOps: 10000, burnMs: 10, elapsedMs: 10 };
-    const spec = { opsPerMs: 1000, tdpW: 100 };
-    // energyPerOp = 100 / (1000 * 1000) = 0.0001 Wh/op
-    // total = 10000 * 0.0001 / 3600 = 1/3600
-    const expected = (10000 * (100 / (1000 * 1000))) / 3600;
-    assert.strictEqual(computeEnergyWh('cpu', proof, spec), expected);
+  await test('returns 0 when elapsedMs is 0', () => {
+    assert.strictEqual(computeEnergyWh('cpu', 0, 10), 0);
   });
 
-  await test('GPU: returns 0 when no tdpW', () => {
-    const proof = { totalOps: 1000, burnMs: 10, elapsedMs: 1000 };
-    assert.strictEqual(computeEnergyWh('gpu', proof, null), 0);
-    assert.strictEqual(computeEnergyWh('gpu', proof, {}), 0);
+  await test('CPU: energy = powerW * elapsedMs / 3600000', () => {
+    // 10W × 30s = 0.0833 Wh
+    const expected = (10 * 30000) / 3600000;
+    assert.strictEqual(computeEnergyWh('cpu', 30000, 10), expected);
   });
 
-  await test('GPU: computes energy from tdpW * burnMs', () => {
-    const proof = { totalOps: 1000, burnMs: 5000, elapsedMs: 60000 };
-    const spec = { tdpW: 200 };
-    // (200 * 5) / 3600 = 1000/3600
-    const expected = (200 * 5) / 3600;
-    assert.strictEqual(computeEnergyWh('gpu', proof, spec), expected);
+  await test('GPU: energy = powerW * elapsedMs / 3600000', () => {
+    // 200W × 60s = 3.333 Wh
+    const expected = (200 * 60000) / 3600000;
+    assert.strictEqual(computeEnergyWh('gpu', 60000, 200), expected);
   });
 
-  await test('ASIC: returns 0 when no powerW', () => {
-    const proof = { totalOps: 1000, burnMs: 10, elapsedMs: 1000 };
-    assert.strictEqual(computeEnergyWh('asic', proof, null), 0);
-    assert.strictEqual(computeEnergyWh('asic', proof, {}), 0);
+  await test('ASIC: energy = powerW * elapsedMs / 3600000', () => {
+    // 150W × 3600s = 150 Wh
+    const expected = (150 * 3600000) / 3600000;
+    assert.strictEqual(computeEnergyWh('asic', 3600000, 150), expected);
   });
 
-  await test('ASIC: computes energy from powerW * elapsedMs', () => {
-    const proof = { totalOps: 1000, burnMs: 10, elapsedMs: 3600000 };
-    const spec = { powerW: 150 };
-    // (150 * 3600) / 3600 = 150
-    const expected = (150 * 3600) / 3600;
-    assert.strictEqual(computeEnergyWh('asic', proof, spec), expected);
+  await test('returns 0 when powerW is negative', () => {
+    assert.strictEqual(computeEnergyWh('cpu', 10000, -5), 0);
   });
 
-  await test('unknown type returns 0', () => {
-    const proof = { totalOps: 1000, burnMs: 10, elapsedMs: 1000 };
-    assert.strictEqual(computeEnergyWh('fpga', proof, { tdpW: 100 }), 0);
+  await test('returns 0 when elapsedMs is negative', () => {
+    assert.strictEqual(computeEnergyWh('cpu', -1000, 10), 0);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

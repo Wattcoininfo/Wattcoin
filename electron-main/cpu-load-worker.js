@@ -58,9 +58,9 @@ function burnCpuOps(ops, seed) {
   }
 
   const n = ops | 0;
+  const input = Buffer.alloc(68);
   for (let i = 0; i < n; i++) {
     const absStep = seedAbsoluteStep + i;
-    const input = Buffer.alloc(68);
     state.copy(input, 0);
     input.writeUInt32LE(absStep >>> 0, 32);
     seedBuf.copy(input, 36);
@@ -82,11 +82,14 @@ function burnCpuOps(ops, seed) {
   return { burnResult: state, proof };
 }
 
-// EMA of ops per ms at current CPU frequency.
+// EMA of ops per ms at current CPU frequency.  Calibrated at startup so the
+// first real burn doesn't wildly over-/under-shoot the target duration.
 let opsPerMs = 1_000;
 
 // Target busy-phase duration at 100% load.  Scales proportionally at lower %.
-const TARGET_BURST_MS = 120;
+// Large enough that setImmediate overhead is a tiny fraction of each cycle, but
+// small enough that opsPerMs recalibration converges quickly.
+const TARGET_BURST_MS = 200;
 const MIN_BURN_MS = 8;
 
 // ── Seed proof submission ─────────────────────────────────────────────────
@@ -189,6 +192,9 @@ function loop() {
     const ops = Math.max(1000, Math.round(desiredBurnMs * opsPerMs));
 
     // Burn phase — wall-clock timed
+    // Always uses JS crypto.createHash (burnCpuOps) which is the same path
+    // that mining uses.  The power-curve benchmark sets a dummy seed to
+    // ensure this path is taken.
     const t0 = performance.now();
     burnCpuOps(ops, activeSeed);
     const wallBurnMs = Math.max(0.1, performance.now() - t0);
@@ -202,10 +208,10 @@ function loop() {
     // Nominal idle for this cycle
     const nominalIdle = ((1 - f) / f) * wallBurnMs;
 
-    // Proportional correction
+    // Proportional correction — conservative gain to avoid oscillation
     let idleMs = nominalIdle;
     const n = wFull ? WINDOW : wIdx;
-    if (n >= 4) {
+    if (n >= 6) {
       let sumBurn = 0,
         sumTotal = 0;
       for (let i = 0; i < n; i++) {
@@ -215,7 +221,7 @@ function loop() {
       const measuredDuty = sumBurn / sumTotal;
       const error = f - measuredDuty;
       const avgCycle = sumTotal / n;
-      idleMs = Math.max(0, nominalIdle - error * avgCycle * 1.2);
+      idleMs = Math.max(0, nominalIdle - error * avgCycle * 0.6);
     }
 
     // Sleep and measure actual sleep
@@ -258,5 +264,31 @@ parentPort.on('message', (message) => {
     process.exit(0);
   }
 });
+
+// ── Startup calibration ───────────────────────────────────────────────────
+// Calibrate using the same loop structure as burnCpuOps (state chaining,
+// buffer copies) so opsPerMs matches actual burn throughput.  Using a simpler
+// loop overestimates opsPerMs and causes wrong duty cycle calculations.
+{
+  const CAL_OPS = 5_000;
+  const calSeedBuf = Buffer.alloc(32);
+  const calStartInput = Buffer.alloc(64);
+  let calState = crypto.createHash('sha256').update(calStartInput).digest();
+  const calT0 = performance.now();
+  const calInput = Buffer.alloc(68);
+  for (let i = 0; i < CAL_OPS; i++) {
+    calState.copy(calInput, 0);
+    calInput.writeUInt32LE(i >>> 0, 32);
+    calSeedBuf.copy(calInput, 36);
+    calState = crypto.createHash('sha256').update(calInput).digest();
+  }
+  const calMs = performance.now() - calT0;
+  opsPerMs = Math.max(10, CAL_OPS / Math.max(0.001, calMs));
+  try {
+    parentPort.postMessage({ type: 'calibration', opsPerMs, calMs, nativeBurn: false });
+  } catch (_) {
+    /* ignore */
+  }
+}
 
 loop();

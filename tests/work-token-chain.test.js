@@ -371,6 +371,8 @@ async function run() {
       bootstrapPeerAddresses: new Set(),
       MIN_PROBE_VERIFIERS: 1,
       ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS: 10,
+      loadPowerCurve: () => null,
+      interpolatePower: () => 0,
     });
     const msg = rc.buildRoundContributionMessage({
       address: 'addr1',
@@ -415,6 +417,8 @@ async function run() {
       bootstrapPeerAddresses: new Set(),
       MIN_PROBE_VERIFIERS: 1,
       ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS: 10,
+      loadPowerCurve: () => null,
+      interpolatePower: () => 0,
     });
     const msg = rc.buildRoundContributionMessage({
       address: 'addr1',

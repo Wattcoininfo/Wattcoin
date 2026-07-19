@@ -193,29 +193,12 @@ function checkProofPlausibility(totalOps, elapsedMs, hardwareSpec, claimedLoad) 
 }
 
 // ── Energy calculation ────────────────────────────────────────────────────
-// Computes energy credit (Wh) from verified proof and hardware specs.
-function computeEnergyWh(hardwareType, proof, hardwareSpec) {
-  const ops = Number(proof.totalOps) || 0;
-  const burnMs = Number(proof.burnMs) || 0;
-  const elapsedMs = Number(proof.elapsedMs) || burnMs || 0;
-
-  switch (hardwareType) {
-    case 'cpu': {
-      if (!hardwareSpec || !hardwareSpec.opsPerMs || !hardwareSpec.tdpW) return 0;
-      const energyPerOp = hardwareSpec.tdpW / (hardwareSpec.opsPerMs * 1000);
-      return (ops * energyPerOp) / 3600;
-    }
-    case 'gpu': {
-      if (!hardwareSpec || !hardwareSpec.tdpW) return 0;
-      return (hardwareSpec.tdpW * (burnMs / 1000)) / 3600;
-    }
-    case 'asic': {
-      if (!hardwareSpec || !hardwareSpec.powerW) return 0;
-      return (hardwareSpec.powerW * (elapsedMs / 1000)) / 3600;
-    }
-    default:
-      return 0;
-  }
+// Pure physics: energy (Wh) = power (W) × time (s) / 3600.
+// Called once per probe interval — NOT per proof.  At least one proof must
+// pass validation before this is credited.
+function computeEnergyWh(hardwareType, elapsedMs, powerW) {
+  if (powerW <= 0 || elapsedMs <= 0) return 0;
+  return (powerW * (elapsedMs / 1000)) / 3600;
 }
 
 module.exports = {

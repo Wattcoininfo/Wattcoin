@@ -53,9 +53,11 @@ function registerLivePowerIpcHandlers(ipcMain) {
         source: g.source || '',
       }));
       const gpuTotal = gpus.reduce((s, g) => s + (g.watts || 0), 0);
-      console.warn(
-        `[LivePower] cpu=${cpuW.toFixed(1)}W(${cpuSource}) gpu=${gpuTotal.toFixed(1)}W(${gpus.length} devices) total=${(result.totalW || 0).toFixed(1)}W src=${result.source || '?'}`,
-      );
+      if (process.env.WATTCOIN_DEBUG) {
+        console.warn(
+          `[LivePower] cpu=${cpuW.toFixed(1)}W(${cpuSource}) gpu=${gpuTotal.toFixed(1)}W(${gpus.length} devices) total=${(result.totalW || 0).toFixed(1)}W src=${result.source || '?'}`,
+        );
+      }
       const response = {
         ok: true,
         totalW: result.totalW || 0,
@@ -71,6 +73,7 @@ function registerLivePowerIpcHandlers(ipcMain) {
           rawTimeDelta: result.cpu.rawTimeDelta,
           bytesReturned: result.cpu.bytesReturned,
           channelCount: result.cpu.channelCount,
+          allChannels: result.cpu.allChannels || [],
         };
       }
       // Include init diagnostics on the first response so the renderer can log them.
@@ -85,7 +88,41 @@ function registerLivePowerIpcHandlers(ipcMain) {
   });
 }
 
-module.exports = { registerLivePowerIpcHandlers, readEnergySnapshot };
+module.exports = { registerLivePowerIpcHandlers, readEnergySnapshot, readLivePowerW, getSensorInitInfo };
+
+/**
+ * Read live power in watts from the lazy-loaded addon.
+ * Returns { totalW, cpuW, gpus, source } or null if no sensor is available.
+ */
+function readLivePowerW() {
+  _loadAddon();
+  if (!_powerAddon) return null;
+  try {
+    const result = _powerAddon.readAll();
+    if (!result) return null;
+    return {
+      totalW: result.totalW || 0,
+      cpuW: result.cpu ? result.cpu.watts : 0,
+      gpus: (result.gpus || []).map((g) => ({
+        watts: g.watts,
+        name: g.name || '',
+        source: g.source || '',
+      })),
+      source: result.source || 'unknown',
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Return the init result from the lazy-loaded addon (sensor availability flags).
+ * Returns { emi, rapl, nvml, pdh } or null.
+ */
+function getSensorInitInfo() {
+  _loadAddon();
+  return _initResult || null;
+}
 
 /**
  * Read a raw energy snapshot from the hardware sensor (µJ).

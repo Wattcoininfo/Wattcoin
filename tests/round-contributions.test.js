@@ -72,6 +72,8 @@ function createMockDeps(overrides = {}) {
     MIN_PROBE_VERIFIERS: 1,
     REVERSE_TUNNEL_LIVE_THRESHOLD_MS: 30000,
     ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS: 100,
+    loadPowerCurve: () => null,
+    interpolatePower: () => 0,
     pullContributionsFromPeers: () => null,
     getLocalLedgerBalances: () => ({ ok: true, addressRoundWh: 0 }),
     settleLocalLedgerRound: () => ({ ok: true }),

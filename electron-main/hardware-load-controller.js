@@ -6,6 +6,7 @@ let cpuWorkers = [];
 let _physicalCoreCount = null;
 
 const cpuWorkerTelemetry = new Map();
+const _staleWorkerIds = new Set(); // threadIds of workers that received 'stop'
 let currentPercent = 0;
 let targetPercent = 0;
 let rampUpStartTime = 0;
@@ -26,17 +27,52 @@ function clampPercent(value) {
 }
 
 function stopCpuWorkers() {
-  for (const worker of cpuWorkers) {
-    try {
-      worker.postMessage({ type: 'stop' });
-      worker.terminate();
-    } catch (_) {
-      if (process.env.WATTCOIN_DEBUG) console.warn('[HwLoad] Caught:', String(_.message || _).slice(0, 80));
-    }
-  }
+  const workersToStop = cpuWorkers;
   cpuWorkers = [];
   cpuWorkerTelemetry.clear();
   _seedProofs.clear();
+
+  for (const worker of workersToStop) {
+    _staleWorkerIds.add(worker.threadId);
+    try {
+      worker.postMessage({ type: 'stop' });
+    } catch (_) {
+      try {
+        worker.terminate();
+      } catch (_) {
+        /* already dead */
+      }
+    }
+  }
+  // Give workers time to finish their current native burn and call process.exit(0).
+  // Terminating mid-N-API call crashes the main process.
+  const deadline = Date.now() + 3000;
+  const forceKill = () => {
+    for (const worker of workersToStop) {
+      try {
+        worker.terminate();
+      } catch (_) {
+        /* already dead */
+      }
+    }
+  };
+  const poll = () => {
+    // Check if all workers have exited (exit event fires and threadId becomes stale)
+    const anyAlive = workersToStop.some((w) => {
+      try {
+        w.postMessage({ type: 'stats' });
+        return true;
+      } catch (_) {
+        return false;
+      }
+    });
+    if (!anyAlive || Date.now() >= deadline) {
+      forceKill();
+      return;
+    }
+    setTimeout(poll, 50);
+  };
+  poll();
 }
 
 function ensureCpuWorkers() {
@@ -49,13 +85,14 @@ function ensureCpuWorkers() {
   // provisioning causes workers to share physical cores and halves throughput,
   // triggering ops_too_low rejections.
   const physicalCores = _physicalCoreCount || Math.max(1, Math.floor(logicalCores / 2));
-  const workerCount = Math.min(physicalCores, 16);
+  const workerCount = physicalCores;
   const workerPath = path.join(__dirname, 'cpu-load-worker.js');
 
   for (let i = 0; i < workerCount; i++) {
     const worker = new Worker(workerPath);
     worker.on('message', (msg) => {
       if (!msg) return;
+      if (_staleWorkerIds.has(worker.threadId)) return;
       if (msg.type === 'stats') {
         cpuWorkerTelemetry.set(worker.threadId, {
           opsPerSec: Math.max(0, Number(msg.opsPerSec) || 0),
@@ -81,9 +118,20 @@ function ensureCpuWorkers() {
         }
       }
     });
-    worker.on('exit', () => {
+    worker.on('exit', (code) => {
       cpuWorkerTelemetry.delete(worker.threadId);
       _seedProofs.delete(worker.threadId);
+      _staleWorkerIds.delete(worker.threadId);
+      if (code !== 0 && code !== null) {
+        if (process.env.WATTCOIN_DEBUG) console.warn(`[HwLoad] Worker ${worker.threadId} exited with code ${code}`);
+      }
+    });
+    worker.on('error', (err) => {
+      if (process.env.WATTCOIN_DEBUG)
+        console.warn(`[HwLoad] Worker ${worker.threadId} error:`, String((err && err.message) || err).slice(0, 120));
+      cpuWorkerTelemetry.delete(worker.threadId);
+      _seedProofs.delete(worker.threadId);
+      _staleWorkerIds.delete(worker.threadId);
     });
     cpuWorkers.push(worker);
   }
@@ -270,4 +318,5 @@ module.exports = {
   getCoordinatorSeed,
   drainSeedProofs,
   onSeedProof,
+  setCpuTarget,
 };

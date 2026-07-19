@@ -43,6 +43,7 @@ function createHandlers(deps) {
     getHardwareLoadState,
     _getGpuLoadState,
     readEnergySnapshot,
+    readLivePowerW,
   } = deps;
 
   // -- State ------------------------------------------------------------------
@@ -71,6 +72,43 @@ function createHandlers(deps) {
   let _gpuPowCapable = false;
   const _BG_WS_RECONNECT_MAX_MS = 60_000;
   let _lastCpuSeedAssignedAt = 0;
+  let _lastProbeResultSubmittedAt = Date.now();
+
+  // -- Live power sampling (periodic readLivePowerW() between probes) ----------
+  const _POWER_SAMPLE_INTERVAL_MS = 2000;
+  let _powerSamples = [];
+  let _powerSamplingTimer = null;
+
+  function _startPowerSampling() {
+    if (_powerSamplingTimer !== null) return;
+    _powerSamples = [];
+    _powerSamplingTimer = setInterval(() => {
+      if (!_localMiningStatus) return;
+      try {
+        const snapshot = typeof readLivePowerW === 'function' ? readLivePowerW() : null;
+        if (snapshot && typeof snapshot.totalW === 'number' && snapshot.totalW > 0) {
+          _powerSamples.push(snapshot.totalW);
+        }
+      } catch (_) {
+        /* best-effort */
+      }
+    }, _POWER_SAMPLE_INTERVAL_MS);
+  }
+
+  function _stopPowerSampling() {
+    if (_powerSamplingTimer !== null) {
+      clearInterval(_powerSamplingTimer);
+      _powerSamplingTimer = null;
+    }
+    _powerSamples = [];
+  }
+
+  function _averageSampledPowerW() {
+    if (_powerSamples.length === 0) return 0;
+    let sum = 0;
+    for (let i = 0; i < _powerSamples.length; i++) sum += _powerSamples[i];
+    return sum / _powerSamples.length;
+  }
 
   // -- Internal helpers -------------------------------------------------------
 
@@ -417,7 +455,10 @@ function createHandlers(deps) {
   function registerIpcHandlers(ipcMain) {
     ipcMain.handle('wattcoin-mining-status', (_event, { mining }) => {
       _localMiningStatus = !!mining;
-      if (!_localMiningStatus) {
+      if (_localMiningStatus) {
+        _startPowerSampling();
+      } else {
+        _stopPowerSampling();
         _pendingContributionWhRef.current = 0;
         _pendingProbes = [];
         _clearProbeTimeoutTimer();
@@ -484,8 +525,8 @@ function createHandlers(deps) {
         if (probeType === 'cpu') {
           const hwState = typeof getHardwareLoadState === 'function' ? getHardwareLoadState() : null;
           if (!hwState || !hwState.cpuWorkers || hwState.cpuWorkers === 0) {
-            const loadPercent = hwAuthority.currentLoadPercent || 100;
-            if (typeof setHardwareLoadPercent === 'function') {
+            const loadPercent = hwAuthority.currentLoadPercent;
+            if (loadPercent > 0 && typeof setHardwareLoadPercent === 'function') {
               setHardwareLoadPercent(loadPercent);
               console.log(`[PeerProbe] CPU probe arrived - loading CPU workers at ${loadPercent}%`);
             }
@@ -502,8 +543,8 @@ function createHandlers(deps) {
           }
         } else if (probeType === 'gpu-pow') {
           {
-            const loadPercent = hwAuthority.currentLoadPercent || 100;
-            if (typeof startGpuLoad === 'function') {
+            const loadPercent = hwAuthority.currentLoadPercent;
+            if (loadPercent > 0 && typeof startGpuLoad === 'function') {
               startGpuLoad(loadPercent);
               console.log(`[PeerProbe] GPU probe arrived - loading GPU at ${loadPercent}%`);
             }
@@ -672,6 +713,8 @@ function createHandlers(deps) {
                 trustScoreAfter: hwAuthority.trustScore,
               });
               let collectedProofs = [];
+              let sampledPowerW = 0;
+              let elapsedMs = Math.max(1000, Date.now() - _lastProbeResultSubmittedAt);
               if (typeof seedManager !== 'undefined' && seedManager) {
                 try {
                   const cpuModel = typeof getLocalCpuModel === 'function' ? getLocalCpuModel() : null;
@@ -679,22 +722,26 @@ function createHandlers(deps) {
                   const cpuProofs = seedManager.collectCpuProofs();
                   const gpuProofs = seedManager.collectGpuProofs();
                   collectedProofs = [...cpuProofs, ...gpuProofs];
-                  const seedInfo =
-                    typeof seedManager.getLastSeedInfo === 'function' ? seedManager.getLastSeedInfo() : null;
-                  const proofDurationMs = Math.max(1000, (seedInfo && seedInfo.durationMs) || 60000);
+                  const now = Date.now();
+                  elapsedMs = Math.max(1000, now - _lastProbeResultSubmittedAt);
+                  _lastProbeResultSubmittedAt = now;
                   const claimedLoad = Math.min(1, Math.max(0.1, (hwAuthority.currentLoadPercent || 100) / 100));
+                  sampledPowerW = _averageSampledPowerW();
+                  _powerSamples = [];
                   const _proofStart = Date.now();
                   const proofResult = await seedManager.verifyCpuProofs(
                     cpuProofs,
-                    proofDurationMs,
+                    elapsedMs,
                     cpuModel,
                     claimedLoad,
+                    sampledPowerW,
                   );
                   const gpuProofResult = await seedManager.verifyGpuProofs(
                     gpuProofs,
-                    proofDurationMs,
+                    elapsedMs,
                     gpuModel,
                     claimedLoad,
+                    sampledPowerW,
                   );
                   const _proofElapsed = Date.now() - _proofStart;
                   const totalEnergyWh = proofResult.totalEnergyWh + gpuProofResult.totalEnergyWh;
@@ -750,8 +797,8 @@ function createHandlers(deps) {
                       `energyWh=${totalEnergyWh.toFixed(6)} ` +
                       `totalOps=${cpuTotalOps} burnMs=${Math.round(cpuTotalBurnMs)} ` +
                       `measuredOpsPerMs=${Math.round(measuredOpsPerMs)} benchOpsPerMs=${Math.round(hwAuthority.sha256OpsPerMs) || 'unset'} ` +
-                      `load=${(claimedLoad * 100).toFixed(0)}% ` +
-                      `proofDur=${proofDurationMs}ms ` +
+                      `sampledPowerW=${sampledPowerW.toFixed(2)} ` +
+                      `elapsedMs=${elapsedMs} ` +
                       `verifyMs=${_proofElapsed} submitToVerdictMs=${_submitToVerdictMs}`,
                   );
                   if (totalEnergyWh > 0) {
@@ -773,7 +820,13 @@ function createHandlers(deps) {
               const _cpuModel = typeof getLocalCpuModel === 'function' ? getLocalCpuModel() : null;
               const _gpuModel = typeof getLocalGpuModel === 'function' ? getLocalGpuModel() : null;
               const _hwModels = { cpuModel: _cpuModel, gpuModels: _gpuModel ? [_gpuModel] : [] };
-              _flushPendingContribution(hwAuthority.peerProbeChainIndex, collectedProofs, _hwModels);
+              _flushPendingContribution(
+                hwAuthority.peerProbeChainIndex,
+                collectedProofs,
+                _hwModels,
+                sampledPowerW,
+                elapsedMs,
+              );
               console.log(
                 `[PeerProbe] Probe OK total=${Date.now() - _submittedAt}ms ` +
                   `(submit=${_verdictAt - _submittedAt}ms proofs=${_flushAt - _verdictAt}ms flush=${Date.now() - _flushAt}ms) ` +
@@ -900,7 +953,6 @@ function createHandlers(deps) {
       for (const wid of deadWorkers) {
         _probePushConns.delete(wid);
         _workerIsMining.delete(wid);
-        cancelPendingPeerProbesForWorker(wid);
       }
       for (const wid of liveWorkers) {
         const conn = _probePushConns.get(wid);
@@ -925,7 +977,7 @@ function createHandlers(deps) {
             conn.ws.send(JSON.stringify({ type: 'probe', data: { ok: true, probe, source: 'peer' } }));
           }
         } catch (_) {
-          cancelPendingPeerProbesForWorker(wid);
+          /* probe send failed — entry will expire via timeout */
         }
       }
     } catch (_) {

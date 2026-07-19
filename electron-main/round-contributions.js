@@ -1,17 +1,20 @@
 'use strict';
 
-const {
-  getGpuTdpW,
-  getExpectedCpuSpeedOps,
-  getMinOpsPerMs,
-  getGpuMinOpsPerMs,
-  getCpuTdpW,
-} = require('./hardware-tables.cjs');
+const { getGpuTdpW, getExpectedCpuSpeedOps, getMinOpsPerMs, getGpuMinOpsPerMs } = require('./hardware-tables.cjs');
 const { PROBE_INTERVAL_MS } = require('./backend-benchmark');
 const { estimateVdfTimingMs } = require('./vdf');
 const { verifySeedProof, checkProofPlausibility, computeEnergyWh, isValidHex32 } = require('./token-verification');
 
 const ROUND_CONTRIBUTION_MESSAGE_PREFIX = 'wtc-round-contribution-v1';
+
+// Resolve measured power (W) at a claimed load from a power curve.
+// Returns 0 if no curve is available — callers must not fall back to TDP.
+function _powerAtLoad(powerCurve, interpolatePowerFn, claimedLoad) {
+  if (!powerCurve || !Array.isArray(powerCurve.steps) || powerCurve.steps.length < 2 || !powerCurve.measuredWithSensors)
+    return 0;
+  const loadPct = Math.max(0, Math.min(100, (Number(claimedLoad) || 0) * 100));
+  return typeof interpolatePowerFn === 'function' ? interpolatePowerFn(powerCurve, loadPct) : 0;
+}
 
 // ── Seed proof verification (standalone, usable by both round-contributions and ledger-routes) ──
 async function verifyContributorSeedProofs(
@@ -21,6 +24,8 @@ async function verifyContributorSeedProofs(
   elapsedMs,
   witnessedProbeReceipts,
   claimedLoad,
+  powerCurve,
+  interpolatePowerFn,
 ) {
   let parsed;
   try {
@@ -41,8 +46,16 @@ async function verifyContributorSeedProofs(
   const gpuModel =
     _getHardwareModel(witnessedProbeReceipts, address, 'gpu') ||
     (Array.isArray(parsed.gpuModels) && parsed.gpuModels.length > 0 ? parsed.gpuModels[0] : null);
-  const effectiveElapsed = Math.max(1, Number(elapsedMs) || 60000);
-  let totalVerifiedWh = 0;
+  const effectiveElapsed = Math.max(1, parsed.elapsedMs > 0 ? Number(parsed.elapsedMs) : Number(elapsedMs) || 60000);
+  let powerW =
+    typeof parsed.sampledPowerW === 'number' && parsed.sampledPowerW > 0
+      ? parsed.sampledPowerW
+      : _powerAtLoad(powerCurve, interpolatePowerFn, claimedLoad);
+  // Cap power at the hardware's measured maximum to prevent inflated energy claims.
+  const maxPowerW = powerCurve && powerCurve.maxPowerW > 0 ? powerCurve.maxPowerW : 0;
+  if (maxPowerW > 0 && powerW > maxPowerW) {
+    powerW = maxPowerW;
+  }
   let verifiedCount = 0;
   for (const proof of parsed.seedProofs) {
     const seedHex = String(proof.seed || '');
@@ -51,25 +64,16 @@ async function verifyContributorSeedProofs(
     if (!result.ok) continue;
     const isGpu = proof.type === 'gpu';
     const hwOpsPerMs = isGpu ? (gpuModel ? getGpuMinOpsPerMs(gpuModel) : 500) : getMinOpsPerMs(cpuModel);
-    const hwTdpW = isGpu ? (gpuModel ? getGpuTdpW(gpuModel) : 80) : cpuModel ? getCpuTdpW(cpuModel) : 65;
     const plausibility = checkProofPlausibility(
       result.totalOps,
       effectiveElapsed,
-      { opsPerMs: hwOpsPerMs, tdpW: hwTdpW },
+      { opsPerMs: hwOpsPerMs },
       claimedLoad,
     );
     if (!plausibility.ok) continue;
-    const energyWh = computeEnergyWh(
-      isGpu ? 'gpu' : 'cpu',
-      {
-        totalOps: plausibility.creditedOps,
-        burnMs: result.burnMs,
-      },
-      { opsPerMs: hwOpsPerMs, tdpW: hwTdpW },
-    );
-    totalVerifiedWh += energyWh;
     verifiedCount++;
   }
+  const totalVerifiedWh = verifiedCount > 0 ? computeEnergyWh('cpu', effectiveElapsed, powerW) : 0;
   if (verifiedCount === 0 && claimedTotalWh > 0.0001) {
     return { ok: false, reason: 'no_valid_proofs', verifiedWh: 0 };
   }
@@ -142,6 +146,8 @@ function createRoundContributions(deps) {
     bootstrapPeerAddresses,
     MIN_PROBE_VERIFIERS,
     ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS,
+    loadPowerCurve,
+    interpolatePower,
   } = deps;
 
   // Track address+roundId combinations that failed pull verification so they
@@ -415,6 +421,9 @@ function createRoundContributions(deps) {
                 totalWh,
                 elapsedMs,
                 witnessedProbeReceipts,
+                undefined,
+                typeof loadPowerCurve === 'function' ? loadPowerCurve() : null,
+                interpolatePower,
               );
               if (proofResult.ok && proofResult.verifiedWh > 0) {
                 acceptedWh = Math.min(totalWh, proofResult.verifiedWh);
@@ -462,6 +471,8 @@ function createRoundContributions(deps) {
     seedProofs,
     cpuModel,
     gpuModels,
+    sampledPowerW,
+    elapsedMs,
   }) {
     const msg = {
       prefix: ROUND_CONTRIBUTION_MESSAGE_PREFIX,
@@ -474,6 +485,8 @@ function createRoundContributions(deps) {
     };
     if (cpuModel) msg.cpuModel = String(cpuModel);
     if (Array.isArray(gpuModels) && gpuModels.length > 0) msg.gpuModels = gpuModels.map(String);
+    if (typeof sampledPowerW === 'number' && sampledPowerW > 0) msg.sampledPowerW = Number(sampledPowerW.toFixed(4));
+    if (typeof elapsedMs === 'number' && elapsedMs > 0) msg.elapsedMs = Math.round(elapsedMs);
     if (Array.isArray(seedProofs) && seedProofs.length > 0) {
       msg.seedProofs = seedProofs.map((p) => ({
         type: String(p.type || 'cpu'),
@@ -564,7 +577,7 @@ function createRoundContributions(deps) {
     }
   }
 
-  function _flushPendingContribution(chainIndex, seedProofs, hwModels) {
+  function _flushPendingContribution(chainIndex, seedProofs, hwModels, sampledPowerW, elapsedMs) {
     const wtcNode = getWtcNode();
     const wh = _pendingContributionWh.current;
     const hasProofs = Array.isArray(seedProofs) && seedProofs.length > 0;
@@ -613,6 +626,8 @@ function createRoundContributions(deps) {
             seedProofs,
             cpuModel: hwModels && hwModels.cpuModel,
             gpuModels: hwModels && hwModels.gpuModels,
+            sampledPowerW,
+            elapsedMs,
           });
           if (wtcNode && typeof wtcNode.signMessage === 'function') {
             const signed = wtcNode.signMessage(addr, message);

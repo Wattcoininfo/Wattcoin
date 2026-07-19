@@ -146,6 +146,11 @@ function getProbeLogFilePath() {
   return path.join(app.getPath('userData'), 'probe-log.json');
 }
 
+function getPowerCurvePath() {
+  const { app } = require('electron');
+  return path.join(app.getPath('userData'), 'power-curve.json');
+}
+
 function persistDevPeerPrivacyRecoveryKey(getDeviceIdentitySecret, loadOrCreateDeviceIdentity) {
   const { app } = require('electron');
   if (app.isPackaged) return '';
@@ -174,5 +179,6 @@ module.exports = {
   getRemoteSeedPeerCachePath,
   getConsumedProofsFilePath,
   getProbeLogFilePath,
+  getPowerCurvePath,
   persistDevPeerPrivacyRecoveryKey,
 };

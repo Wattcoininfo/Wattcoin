@@ -175,6 +175,7 @@ const {
   getDiscoveredSeedPeerCachePath,
   getRemoteSeedPeerCachePath,
   getConsumedProofsFilePath,
+  getPowerCurvePath,
   persistDevPeerPrivacyRecoveryKey,
 } = require('./electron-main/electron-utils');
 const { registerWalletBackupIpcHandlers } = require('./electron-main/wallet-backup-ipc');
@@ -302,6 +303,29 @@ const {
   saveBenchmarkHistory,
   clearBenchmarkHistory,
 } = createFingerprintHandlers(getHwFingerprintPath, getBenchmarkHistoryPath, computeHwAuthSig);
+
+const { createHandlers: createPowerCurveHandlers } = require('./electron-main/power-curve-state');
+const {
+  loadPowerCurve,
+  savePowerCurve,
+  clearPowerCurve,
+  isCurveValidForHardware,
+  interpolatePower,
+  _interpolateOpsPerMs,
+  CURVE_STEPS,
+} = createPowerCurveHandlers({ getPowerCurvePath, computeHwAuthSig, getHwFingerprintPath });
+
+// On startup, load the power curve and set calibratedUnitPowerW from it.
+// The curve is the authoritative source for max power (measured via live sensors).
+try {
+  const _startupCurve = loadPowerCurve();
+  if (_startupCurve && _startupCurve.maxPowerW > 0 && _startupCurve.measuredWithSensors) {
+    hwAuthority.calibratedUnitPowerW = Math.round(_startupCurve.maxPowerW);
+    console.log(`[PowerCurve] Loaded curve: maxPowerW=${_startupCurve.maxPowerW}W`);
+  }
+} catch (_) {
+  if (process.env.WATTCOIN_DEBUG) console.warn('[Main] Caught:', String(_.message || _).slice(0, 80));
+}
 
 function getWalletDataDir() {
   return getDataDir();
@@ -607,6 +631,8 @@ const roundContributions = createRoundContributions({
   REVERSE_TUNNEL_LIVE_THRESHOLD_MS,
   ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS,
   getMeasuredOpsPerMs,
+  loadPowerCurve,
+  interpolatePower,
 });
 
 const wtcChainSync = createWtcChainSync({
@@ -673,6 +699,8 @@ const seedManager = createSeedAssignmentManager({
   getCpuSeedProofs: () => drainSeedProofs(),
   getGpuSeedProofs: () => drainGpuSeedProofs(),
   hwAuthority,
+  loadPowerCurve,
+  interpolatePower,
   console,
 });
 
@@ -1074,6 +1102,11 @@ registerBenchmarkIpcHandlers({
   _connectBgProbeWs,
   computeHwAuthSig,
   stopStratumServer,
+  loadPowerCurve,
+  savePowerCurve,
+  clearPowerCurve,
+  isCurveValidForHardware,
+  CURVE_STEPS,
 });
 const { createHandlers: createDeviceIdentityHandlers } = require('./electron-main/device-identity');
 const {
@@ -1235,6 +1268,12 @@ registerMinerAccessIpcHandlers(ipcMain, {
 registerFirewallIpcHandlers(ipcMain, { app });
 
 registerLivePowerIpcHandlers(ipcMain);
+
+ipcMain.handle('wattcoin-get-power-curve', () => {
+  const curve = loadPowerCurve();
+  if (!curve) return { ok: false, curve: null };
+  return { ok: true, curve };
+});
 
 registerExternalUrlIpcHandlers(ipcMain, { shell });
 
@@ -1447,6 +1486,8 @@ const ledgerRequestHandler = createLedgerRequestHandler({
   usedPunchPorts,
   stunNatInfoRef,
   CHAIN_STALL_ALERT_MS,
+  loadPowerCurve,
+  interpolatePower,
 });
 const { startLedgerNetworkServer, stopLedgerNetworkServer } = createLedgerServer({
   http,
@@ -1516,6 +1557,8 @@ registerLedgerIpcHandlers({
   _gpuDutySamples: _gpuDutySamplesRef,
   _prevRawGpuDuty: _prevRawGpuDutyRef,
   _physicalCoreCount: _physicalCoreCountRef,
+  loadPowerCurve,
+  interpolatePower,
 });
 
 // Get WTC balances reconstructed from mined block history for a specific mining address.

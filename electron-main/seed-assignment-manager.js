@@ -8,7 +8,7 @@ const {
   isValidHex32,
   MIN_BURN_MS,
 } = require('./token-verification');
-const { getMinOpsPerMs, getGpuMinOpsPerMs, getCpuTdpW, getGpuTdpW } = require('./hardware-tables.cjs');
+const { getMinOpsPerMs, getGpuMinOpsPerMs } = require('./hardware-tables.cjs');
 
 const _SEED_HEX_LENGTH = 64;
 
@@ -24,6 +24,8 @@ function createSeedAssignmentManager({
   getCpuSeedProofs,
   getGpuSeedProofs,
   hwAuthority,
+  loadPowerCurve,
+  interpolatePower,
   console,
 }) {
   let _lastSeedAssignedAt = 0;
@@ -87,20 +89,35 @@ function createSeedAssignmentManager({
     return collected;
   }
 
-  async function verifyCpuProofs(proofs, elapsedMs, cpuModel, claimedLoad) {
+  // Resolve the measured power (W) at a given claimed load from the power curve.
+  // Returns 0 if no curve is available — callers must not fall back to TDP.
+  function _powerAtLoad(claimedLoad) {
+    try {
+      const curve = typeof loadPowerCurve === 'function' ? loadPowerCurve() : null;
+      if (curve && Array.isArray(curve.steps) && curve.steps.length >= 2 && curve.measuredWithSensors) {
+        const loadPct = Math.max(0, Math.min(100, (Number(claimedLoad) || 0) * 100));
+        return typeof interpolatePower === 'function' ? interpolatePower(curve, loadPct) : 0;
+      }
+    } catch (_) {
+      /* best-effort */
+    }
+    return 0;
+  }
+
+  async function verifyCpuProofs(proofs, elapsedMs, cpuModel, claimedLoad, overridePowerW) {
     if (!Array.isArray(proofs) || proofs.length === 0) {
       console.log(
         `[SeedManager] CPU proofs: none collected (cpuModel=${cpuModel || 'null'} opsPerMs=${(hwAuthority && hwAuthority.sha256OpsPerMs) || 0})`,
       );
       return { ok: true, totalEnergyWh: 0, proofs: 0, reason: 'no_proofs' };
     }
-    const tdpW = cpuModel ? getCpuTdpW(cpuModel) : 0;
     const tableOpsPerMs = cpuModel ? getMinOpsPerMs(cpuModel) : 0;
     const opsPerMs = hwAuthority && hwAuthority.sha256OpsPerMs > 0 ? hwAuthority.sha256OpsPerMs : tableOpsPerMs;
+    const powerW =
+      typeof overridePowerW === 'number' && overridePowerW > 0 ? overridePowerW : _powerAtLoad(claimedLoad);
     console.log(
-      `[SeedManager] CPU proofs: count=${proofs.length} opsPerMs=${opsPerMs} tdpW=${tdpW} load=${claimedLoad}`,
+      `[SeedManager] CPU proofs: count=${proofs.length} opsPerMs=${opsPerMs} powerW=${powerW.toFixed(2)} load=${claimedLoad} elapsedMs=${elapsedMs}`,
     );
-    let totalEnergyWh = 0;
     let verifiedCount = 0;
     let rejectReasons = {};
     for (let i = 0; i < proofs.length; i++) {
@@ -122,7 +139,6 @@ function createSeedAssignmentManager({
         effectiveElapsedMs,
         {
           opsPerMs,
-          tdpW,
         },
         claimedLoad,
       );
@@ -133,23 +149,14 @@ function createSeedAssignmentManager({
         rejectReasons[plausibility.reason] = (rejectReasons[plausibility.reason] || 0) + 1;
         continue;
       }
-      const energyWh = computeEnergyWh(
-        'cpu',
-        {
-          totalOps: plausibility.creditedOps,
-          burnMs: result.burnMs,
-          elapsedMs,
-        },
-        { opsPerMs, tdpW },
-      );
-      totalEnergyWh += energyWh;
       verifiedCount++;
     }
     if (verifiedCount === 0 && proofs.length > 0) {
       console.log(
-        `[SeedManager] CPU ALL REJECTED: ${JSON.stringify(rejectReasons)} (opsPerMs=${opsPerMs} tdpW=${tdpW})`,
+        `[SeedManager] CPU ALL REJECTED: ${JSON.stringify(rejectReasons)} (opsPerMs=${opsPerMs} powerW=${powerW.toFixed(2)})`,
       );
     }
+    const totalEnergyWh = verifiedCount > 0 ? computeEnergyWh('cpu', elapsedMs, powerW) : 0;
     return {
       ok: true,
       totalEnergyWh,
@@ -158,18 +165,18 @@ function createSeedAssignmentManager({
     };
   }
 
-  async function verifyGpuProofs(proofs, elapsedMs, gpuModel, claimedLoad) {
+  async function verifyGpuProofs(proofs, elapsedMs, gpuModel, claimedLoad, overridePowerW) {
     if (!Array.isArray(proofs) || proofs.length === 0) {
       console.log(`[SeedManager] GPU proofs: none collected (gpuModel=${gpuModel || 'null'})`);
       return { ok: true, totalEnergyWh: 0, proofs: 0, reason: 'no_proofs' };
     }
-    const tdpW = gpuModel ? getGpuTdpW(gpuModel) : 0;
     const tableOpsPerMs = gpuModel ? getGpuMinOpsPerMs(gpuModel) : 0;
     const opsPerMs = hwAuthority && hwAuthority.gpuOpsPerMs > 0 ? hwAuthority.gpuOpsPerMs : tableOpsPerMs;
+    const powerW =
+      typeof overridePowerW === 'number' && overridePowerW > 0 ? overridePowerW : _powerAtLoad(claimedLoad);
     console.log(
-      `[SeedManager] GPU proofs: count=${proofs.length} opsPerMs=${opsPerMs} tdpW=${tdpW} load=${claimedLoad}`,
+      `[SeedManager] GPU proofs: count=${proofs.length} opsPerMs=${opsPerMs} powerW=${powerW.toFixed(2)} load=${claimedLoad} elapsedMs=${elapsedMs}`,
     );
-    let totalEnergyWh = 0;
     let verifiedCount = 0;
     let rejectReasons = {};
     for (let i = 0; i < proofs.length; i++) {
@@ -191,7 +198,6 @@ function createSeedAssignmentManager({
         effectiveElapsedMs,
         {
           opsPerMs,
-          tdpW,
         },
         claimedLoad,
       );
@@ -202,22 +208,14 @@ function createSeedAssignmentManager({
         rejectReasons[plausibility.reason] = (rejectReasons[plausibility.reason] || 0) + 1;
         continue;
       }
-      const energyWh = computeEnergyWh(
-        'gpu',
-        {
-          totalOps: plausibility.creditedOps,
-          burnMs: result.burnMs,
-        },
-        { tdpW },
-      );
-      totalEnergyWh += energyWh;
       verifiedCount++;
     }
     if (verifiedCount === 0 && proofs.length > 0) {
       console.log(
-        `[SeedManager] GPU ALL REJECTED: ${JSON.stringify(rejectReasons)} (opsPerMs=${opsPerMs} tdpW=${tdpW})`,
+        `[SeedManager] GPU ALL REJECTED: ${JSON.stringify(rejectReasons)} (opsPerMs=${opsPerMs} powerW=${powerW.toFixed(2)})`,
       );
     }
+    const totalEnergyWh = verifiedCount > 0 ? computeEnergyWh('gpu', elapsedMs, powerW) : 0;
     return {
       ok: true,
       totalEnergyWh,
@@ -226,12 +224,12 @@ function createSeedAssignmentManager({
     };
   }
 
-  async function collectAndVerifyAll({ elapsedMs, cpuModel, gpuModel, claimedLoad } = {}) {
+  async function collectAndVerifyAll({ elapsedMs, cpuModel, gpuModel, claimedLoad, overridePowerW } = {}) {
     const effectiveElapsed = Math.max(1, Number(elapsedMs) || 60000);
     const cpuProofs = collectCpuProofs();
     const gpuProofs = collectGpuProofs();
-    const cpuResult = await verifyCpuProofs(cpuProofs, effectiveElapsed, cpuModel, claimedLoad);
-    const gpuResult = await verifyGpuProofs(gpuProofs, effectiveElapsed, gpuModel, claimedLoad);
+    const cpuResult = await verifyCpuProofs(cpuProofs, effectiveElapsed, cpuModel, claimedLoad, overridePowerW);
+    const gpuResult = await verifyGpuProofs(gpuProofs, effectiveElapsed, gpuModel, claimedLoad, overridePowerW);
     const totalEnergyWh = Math.max(0, cpuResult.totalEnergyWh + gpuResult.totalEnergyWh);
     const summary = {
       ok: true,

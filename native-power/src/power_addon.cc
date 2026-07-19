@@ -2,14 +2,17 @@
 #include <windows.h>
 #include <setupapi.h>
 #include <pdh.h>
+#include <bcrypt.h>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "pdh.lib")
+#pragma comment(lib, "bcrypt.lib")
 
 // ─── EMI (Energy Metering Interface) ─────────────────────────────────────────
 // Works on Windows 11+ for Intel/AMD CPU RAPL power readings
@@ -83,27 +86,14 @@ struct EmiState {
 static EmiState g_emi;
 
 // EMI MeasurementUnit → energy-to-joules conversion factor.
-// AbsoluteEnergy is in the unit described by MeasurementUnit;
 // AbsoluteTime is always in 100ns intervals.
 //
-// Standard Intel units 0-5 are well-defined. AMD vendor-defined units
-// (>= 100) encode the energy-per-tick directly in nanojoules, e.g.
-// measurementUnit=100 means 100 nJ per counter tick.
-static double emiEnergyToJoules(int measurementUnit, uint64_t rawEnergy) {
-    switch (measurementUnit) {
-        case 0:  return (double)rawEnergy * 3.6e-9;   // picowatt-hours
-        case 1:  return (double)rawEnergy * 1e-9;      // nanojoules
-        case 2:  return (double)rawEnergy * 3.6e-3;    // microwatt-hours
-        case 3:  return (double)rawEnergy * 1e-3;      // millijoules
-        case 4:  return (double)rawEnergy * 3600.0;    // watt-hours
-        case 5:  return (double)rawEnergy;             // joules
-        default:
-            if (measurementUnit >= 100) {
-                // AMD vendor-defined: value IS the nanojoules-per-tick
-                return (double)rawEnergy * (double)measurementUnit * 1e-9;
-            }
-            return (double)rawEnergy * 3.6e-9;         // fallback: assume pWh
-    }
+// Per the Microsoft EMI spec and Chromium's reference implementation
+// (energy_metrics_provider_win.cc), AbsoluteEnergy from EMI is ALWAYS
+// in picowatt-hours regardless of what MeasurementUnit says.
+// MeasurementUnit describes counter resolution, not a different energy unit.
+static double emiEnergyToJoules(int /*measurementUnit*/, uint64_t rawEnergy) {
+    return (double)rawEnergy * 3.6e-9;   // picowatt-hours → joules
 }
 
 static bool emiInit() {
@@ -660,34 +650,80 @@ static Napi::Value NapiReadCpuPower(const Napi::CallbackInfo& info) {
     // Try EMI first (real sensor, Win11)
     if (g_emi.initialized && g_emi.pkgChannelIndex >= 0) {
         int idx = g_emi.pkgChannelIndex;
-        EmiChannel& ch = g_emi.channels[idx];
 
-        // Read measurement
+        // Read measurement for ALL channels at once
         std::vector<EMI_CHANNEL_MEASUREMENT_S> data(g_emi.channels.size());
         DWORD bytesReturned = 0;
         if (DeviceIoControl(g_emi.hDevice, IOCTL_EMI_GET_MEASUREMENT,
                 nullptr, 0, data.data(), (DWORD)(data.size() * sizeof(EMI_CHANNEL_MEASUREMENT_S)),
                 &bytesReturned, nullptr)) {
-            uint64_t energyDelta = data[idx].AbsoluteEnergy - ch.prevEnergy;
-            uint64_t timeDelta = data[idx].AbsoluteTime - ch.prevTime;
-            ch.prevEnergy = data[idx].AbsoluteEnergy;
-            ch.prevTime = data[idx].AbsoluteTime;
-
+            // Compute deltas and watts for ALL channels first (using old baselines)
+            struct ChannelInfo { double watts; uint64_t eDelta; uint64_t tDelta; int unit; std::string name; };
+            std::vector<ChannelInfo> infos(g_emi.channels.size());
+            double bestUnit0Watts = 0.0;
+            int bestUnit0Idx = idx;
+            for (size_t ci = 0; ci < g_emi.channels.size(); ++ci) {
+                EmiChannel& ech = g_emi.channels[ci];
+                uint64_t eDelta = data[ci].AbsoluteEnergy - ech.prevEnergy;
+                uint64_t tDelta = data[ci].AbsoluteTime - ech.prevTime;
+                double chWatts = 0.0;
+                if (tDelta > 0) {
+                    chWatts = emiEnergyToJoules(ech.measurementUnit, eDelta) / ((double)tDelta * 1e-7);
+                }
+                int csz = WideCharToMultiByte(CP_UTF8, 0, ech.name.c_str(),
+                    (int)ech.name.size(), nullptr, 0, nullptr, nullptr);
+                std::string cuk8(csz, 0);
+                WideCharToMultiByte(CP_UTF8, 0, ech.name.c_str(),
+                    (int)ech.name.size(), &cuk8[0], csz, nullptr, nullptr);
+                infos[ci] = { chWatts, eDelta, tDelta, ech.measurementUnit, cuk8 };
+                // Track best channel with standard unit (measurementUnit == 0, picowatt-hours)
+                if (ech.measurementUnit == 0 && chWatts > bestUnit0Watts) {
+                    bestUnit0Watts = chWatts;
+                    bestUnit0Idx = (int)ci;
+                }
+            }
+            // Now update all baselines
+            for (size_t ci = 0; ci < g_emi.channels.size(); ++ci) {
+                g_emi.channels[ci].prevEnergy = data[ci].AbsoluteEnergy;
+                g_emi.channels[ci].prevTime = data[ci].AbsoluteTime;
+            }
+            // Channel selection: prefer standard unit=0 channels over vendor-defined units
+            // On Intel APL, the named "APL_Package0_PKG" channel uses unit=100 and gives
+            // wrong readings — the real package power is on an unnamed unit=0 channel.
+            double pkgWatts = infos[idx].watts;
             double watts = 0.0;
-            if (timeDelta > 0) {
-                double energyJoules = emiEnergyToJoules(ch.measurementUnit, energyDelta);
-                double timeSeconds = (double)timeDelta * 1e-7;
-                watts = energyJoules / timeSeconds;
+            bool pkgIsVendorUnit = g_emi.channels[idx].measurementUnit != 0;
+            if (pkgIsVendorUnit || pkgWatts < 0.001) {
+                idx = bestUnit0Idx;
+                watts = bestUnit0Watts;
+            } else {
+                watts = pkgWatts;
             }
 
             Napi::Object result = Napi::Object::New(env);
             result.Set("watts", Napi::Number::New(env, watts));
             result.Set("source", Napi::String::New(env, "emi"));
-            result.Set("measurementUnit", Napi::Number::New(env, ch.measurementUnit));
-            result.Set("rawEnergyDelta", Napi::Number::New(env, (double)energyDelta));
-            result.Set("rawTimeDelta", Napi::Number::New(env, (double)timeDelta));
+            result.Set("measurementUnit", Napi::Number::New(env, g_emi.channels[idx].measurementUnit));
+            result.Set("rawEnergyDelta", Napi::Number::New(env, (double)infos[idx].eDelta));
+            result.Set("rawTimeDelta", Napi::Number::New(env, (double)infos[idx].tDelta));
             result.Set("bytesReturned", Napi::Number::New(env, (double)bytesReturned));
             result.Set("channelCount", Napi::Number::New(env, (double)g_emi.channels.size()));
+            result.Set("channelName", Napi::String::New(env, infos[idx].name));
+            result.Set("channelIndex", Napi::Number::New(env, (double)idx));
+            // Per-channel power readings for ALL channels
+            Napi::Array allChannels = Napi::Array::New(env);
+            uint32_t chIdx = 0;
+            for (size_t ci = 0; ci < infos.size(); ++ci) {
+                Napi::Object chObj = Napi::Object::New(env);
+                chObj.Set("index", Napi::Number::New(env, (double)ci));
+                chObj.Set("name", Napi::String::New(env, infos[ci].name));
+                chObj.Set("measurementUnit", Napi::Number::New(env, (double)infos[ci].unit));
+                chObj.Set("watts", Napi::Number::New(env, infos[ci].watts));
+                chObj.Set("rawEnergyDelta", Napi::Number::New(env, (double)infos[ci].eDelta));
+                chObj.Set("rawTimeDelta", Napi::Number::New(env, (double)infos[ci].tDelta));
+                allChannels.Set(chIdx++, chObj);
+            }
+            result.Set("allChannels", allChannels);
             return result;
         }
     }
@@ -890,6 +926,62 @@ static Napi::Value NapiShutdown(const Napi::CallbackInfo& info) {
     return info.Env().Undefined();
 }
 
+// burnCpu(ops) → { ops, elapsedMs }
+// Tight C++ SHA-256 loop with zero JS object allocation per iteration.
+// Pegs CPU at ~100% because there's no V8 GC, no Hash object creation,
+// no Buffer allocation — just pure OpenSSL in a tight C loop.
+static Napi::Value NapiBurnCpu(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    int ops = info[0].As<Napi::Number>().Int32Value();
+
+    // Pre-allocate buffers once
+    unsigned char state[32];
+    unsigned char input[68];
+    memset(state, 0, sizeof(state));
+    memset(input, 0, sizeof(input));
+
+    LARGE_INTEGER freq, start;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+
+    BCRYPT_ALG_HANDLE hAlg = NULL;
+    NTSTATUS status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_SHA256_ALGORITHM, NULL, 0);
+    if (!BCRYPT_SUCCESS(status) || !hAlg) {
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("ops", Napi::Number::New(env, 0));
+        result.Set("elapsedMs", Napi::Number::New(env, 0.0));
+        result.Set("error", Napi::String::New(env, "BCryptOpenAlgorithmProvider failed"));
+        return result;
+    }
+
+    for (int i = 0; i < ops; i++) {
+        // SHA-256: input = state ‖ i(LE32) ‖ seed(32 bytes of zeros)
+        memcpy(input, state, 32);
+        input[32] = i & 0xFF;
+        input[33] = (i >> 8) & 0xFF;
+        input[34] = (i >> 16) & 0xFF;
+        input[35] = (i >> 24) & 0xFF;
+
+        // BCrypt SHA-256 — open provider once, create/destroy hash handle per iter
+        BCRYPT_HASH_HANDLE hHash = NULL;
+        BCryptCreateHash(hAlg, &hHash, NULL, 0, NULL, 0, 0);
+        BCryptHashData(hHash, input, 68, 0);
+        BCryptFinishHash(hHash, state, 32, 0);
+        BCryptDestroyHash(hHash);
+    }
+
+    BCryptCloseAlgorithmProvider(hAlg, 0);
+
+    LARGE_INTEGER end;
+    QueryPerformanceCounter(&end);
+    double elapsedMs = (double)(end.QuadPart - start.QuadPart) / (double)freq.QuadPart * 1000.0;
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("ops", Napi::Number::New(env, ops));
+    result.Set("elapsedMs", Napi::Number::New(env, elapsedMs));
+    return result;
+}
+
 // ─── Module Init ─────────────────────────────────────────────────────────────
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -898,6 +990,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("readGpuPowerW", Napi::Function::New(env, NapiReadGpuPower));
     exports.Set("readEnergyUj", Napi::Function::New(env, NapiReadEnergyUj));
     exports.Set("readAll", Napi::Function::New(env, NapiReadAll));
+    exports.Set("burnCpu", Napi::Function::New(env, NapiBurnCpu));
     exports.Set("shutdown", Napi::Function::New(env, NapiShutdown));
     return exports;
 }
