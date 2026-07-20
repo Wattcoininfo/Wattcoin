@@ -393,9 +393,9 @@
           Proof-of-Energy mining requires an honest answer to a hard question:
           <em>is this miner actually burning the energy they claim?</em> Traditional Proof-of-Work avoids the question
           entirely — energy expenditure is implicit in the hash rate, and the protocol never asks <em>how</em> the work
-          was done. Wattcoin faces a different problem: contributions are proportional to declared hardware TDP, so the
-          network must independently verify that each miner is running the hardware they say they are, that it is
-          actually computing, and that it is computing at the expected speed.
+          was done. Wattcoin faces a different problem: contributions are proportional to each machine's calibrated
+          power curve, so the network must independently verify that each miner is running the hardware they say they
+          are, that it is actually computing, and that it is computing at the expected speed.
         </p>
         <p>
           The <strong>peer probe system</strong> is the mechanism that answers these questions. Every miner on the
@@ -438,24 +438,24 @@
         <h2>Hardware Attestation — You Cannot Lie About What You Have</h2>
         <p>
           Before any probe is issued, every miner must pass a <strong>hardware verification</strong> step during
-          benchmark. The renderer sends its hardware strings (CPU model, GPU model, device type, declared TDP) to the
-          main process, which independently verifies them:
+          benchmark. The renderer sends its hardware strings (CPU model, GPU model, device type) to the main process,
+          which independently verifies them:
         </p>
         <ul>
           <li>
             The <strong>CPU model</strong> is read from <code>os.cpus()[0].model</code> — the operating system kernel,
-            not the renderer, decides what CPU is installed. Any mismatch triggers a −20 trust penalty and caps declared
-            power to the real CPU's TDP.
+            not the renderer, decides what CPU is installed. Any mismatch triggers a −20 trust penalty and forces a
+            power curve re-benchmark.
           </li>
           <li>
             The <strong>GPU model</strong> is verified through two independent channels: the OS-level
             <code>resolveOsHardwareIdentity()</code> function and, on Windows, the native
-            <code>gpu-miner.exe</code> binary that reports the DXGI adapter name. TDP is looked up from a local hardware
-            table.
+            <code>gpu-miner.exe</code> binary that reports the DXGI adapter name. A power curve benchmark is required to
+            establish the machine's actual power fingerprint.
           </li>
           <li>
             <strong>Device type</strong> (desktop vs. laptop) is cross-checked. A renderer claiming "desktop" while the
-            OS reports "laptop" triggers a clamp to the laptop CPU's TDP (or 35 W fallback).
+            OS reports "laptop" triggers a clamp to the laptop's power ceiling.
           </li>
           <li>
             <strong>Virtual machines</strong> are blocked entirely — VM-based mining cannot attest hardware identity to
@@ -463,10 +463,11 @@
           </li>
         </ul>
         <p>
-          After identity verification, a <strong>calibration factor</strong> (range 0.2× to 1.2×) is computed by
-          comparing the miner's actual benchmark speed against a reference table for the declared hardware. The final
-          contribution ceiling is <code>declaredUnitPowerW × calibrationFactor</code>, and the trust factor (0.2 to 1.0)
-          is applied at contribution time.
+          After identity verification, a <strong>power curve benchmark</strong> measures the machine's actual power draw
+          at 10 load levels (10%–100%) using hardware power sensors (RAPL, EMI, NVML). This creates a per-machine power
+          fingerprint that replaces generic TDP lookups. The power curve is HMAC-signed to prevent tampering. At each
+          probe, the miner's configured load indexes into the curve to determine the active power draw, and the trust
+          factor (0.2 to 1.0) is applied at contribution time.
         </p>
 
         <h2>Proof Hash Chain — Sequential Computation Required</h2>
@@ -529,7 +530,7 @@
           "
         >
           trustFactor = 0.2 + (trustScore / 100) × 0.8<br />
-          maxDeltaWh = (calibratedUnitPowerW × trustFactor × loadFactor × 0.5) / 3600
+          maxDeltaWh = (powerCurveMaxW × trustFactor × loadFactor × 0.5) / 3600
         </p>
         <p>
           The <strong>loadFactor</strong> is derived from the miner's hardware load slider setting (<code
@@ -568,8 +569,8 @@
           Even if a miner passes individual probes, an anomalously high power-to-CPU ratio compared to the rest of the
           network is flagged. Each miner's stats are recorded in a network-wide histogram. If a miner's ratio deviates
           more than <strong>3 standard deviations</strong> from the mean of all other miners, a flag is raised at
-          benchmark time. This catches cases where a miner declares a reasonable CPU model but inflates the TDP beyond
-          what the benchmark-implied power would suggest.
+          benchmark time. This catches cases where a miner declares a reasonable CPU model but inflates the power curve
+          beyond what the benchmark-implied power would suggest.
         </p>
 
         <h2>How Protections Work Together</h2>
@@ -590,8 +591,8 @@
         </p>
         <h4>Physical-machine-bound contributions</h4>
         <p>
-          Contribution is bound to the physical machine's verified TDP rather than the number of worker identities,
-          preventing identity multiplication from increasing mining power.
+          Contribution is bound to the physical machine's calibrated power curve rather than the number of worker
+          identities, preventing identity multiplication from increasing mining power.
         </p>
 
         <h2>Summary</h2>

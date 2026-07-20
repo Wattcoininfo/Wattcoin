@@ -564,8 +564,8 @@
 
           <p>
             Proof-of-Energy doesn't care what hardware you use. It only counts the kilowatt-hours you prove. A CPU miner
-            pays the same estimated 20 kWh per WTC in Tier 1 as a GPU miner or an ASIC miner. Your CPU's power draw (W)
-            times your duty cycle (%) determines your energy contribution — nothing else matters.
+            pays the same estimated 20 kWh per WTC in Tier 1 as a GPU miner or an ASIC miner. Your machine's calibrated
+            power curve determines your energy contribution — nothing else matters.
           </p>
 
           <div class="info-callout">
@@ -594,7 +594,8 @@
             <li>
               <strong>Click Start Mining</strong><br />
               The miner detects your CPU, benchmarks its efficiency, and begins running integer hashing tasks. The
-              protocol estimates your energy consumption from your CPU's power draw (TDP) and duty cycle.
+              protocol estimates your energy consumption from your machine's calibrated power curve — actual power draw
+              measured at 10 load levels during the initial benchmark.
             </li>
             <li>
               <strong>Earn Every Block</strong><br />

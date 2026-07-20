@@ -825,10 +825,10 @@
             Proof-of-Energy replaces hash-based mining with verifiable energy expenditure. Instead of solving useless
             hash puzzles, your hardware runs benchmark-verified computation tasks: CPU integer hashing, GPU DirectX
             compute shaders via a native Windows binary, while the protocol estimates the electrical energy consumed
-            using your hardware's known power draw and duty cycle. The GPU's identity (model name) is read
-            authoritatively from the hardware via DXGI, so the miner cannot lie about which GPU is installed. The GPU's
-            thermal design power (TDP) ceiling is then looked up from a hardware specification table to estimate its
-            power draw.
+            using your machine's calibrated power curve. During the initial benchmark, hardware power sensors (RAPL,
+            EMI, NVML) measure your system's actual power draw at 10 load levels, creating a per-machine power
+            fingerprint. The GPU's identity (model name) is read authoritatively from the hardware via DXGI, so the
+            miner cannot lie about which GPU is installed.
           </p>
           <p style="margin-bottom: 16px">
             Every miner, regardless of hardware type, pays the same estimated energy cost per coin. A CPU miner and a

@@ -100,7 +100,7 @@
                 "name": "How does Proof-of-Energy work on Wattcoin?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "The Wattcoin Miner runs benchmark-verified tasks on your CPU and GPU while the protocol estimates energy consumption from known power draw and duty cycle. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets paid every block, no lottery, no pools."
+                  "text": "The Wattcoin Miner runs benchmark-verified tasks on your CPU and GPU while the protocol estimates energy consumption from a calibrated power curve — actual power draw measured at 10 load levels during the initial benchmark. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets paid every block, no lottery, no pools."
                 }
               },
               {
@@ -578,14 +578,15 @@
             Instead of racing to solve a hash puzzle, every miner runs benchmark-verified computational tasks that
             exercise specific hardware components — <strong>CPU integer hashing</strong> and
             <strong>GPU compute shaders</strong>. The protocol estimates the electrical energy consumed using each
-            hardware component's known power draw and the miner's configured duty-cycle load:
+            machine's calibrated power curve — a fingerprint of actual power draw measured at 10 load levels during the
+            initial benchmark:
           </p>
 
           <div class="viz-box">
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>Energy (Wh) = Hardware Power (W) &times; Load (%) &times; Time (h)</div>
+              <div>Energy (Wh) = PowerCurve (W) &times; Time (h)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Every miner, every hardware type — same formula
+                // PowerCurve indexes at the miner's configured load level
               </div>
             </div>
           </div>
@@ -680,9 +681,9 @@
             <h3>How does Proof-of-Energy work on Wattcoin?</h3>
             <p>
               The Wattcoin Miner runs benchmark-verified tasks on your CPU, GPU, and memory while the protocol estimates
-              energy consumption from known power draw and duty cycle. Each miner's contribution is measured in
-              watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets
-              paid every block, no lottery, no pools.
+              energy consumption from a calibrated power curve — actual power draw measured at 10 load levels during the
+              initial benchmark. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are
+              split proportionally by verified energy — every miner gets paid every block, no lottery, no pools.
             </p>
           </div>
 

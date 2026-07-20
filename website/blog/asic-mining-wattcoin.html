@@ -520,8 +520,8 @@
           <p>
             The Wattcoin miner classifies ASICs as <strong>whole-device mining units</strong> — unlike desktop PCs where
             power is decomposed into CPU + GPU + memory components, each ASIC is treated as one unit. You declare the
-            ASIC model during benchmark (e.g. Antminer S21) and its rated power is looked up from the hardware table —
-            up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
+            ASIC model during benchmark (e.g. Antminer S21) and its power curve is measured using hardware power sensors
+            — up to <strong>3800 W</strong> for high-end units, with a protocol ceiling of 5000 W.
             <strong>Only verified ASIC models</strong> listed in the supported hardware database can be used. The
             protocol estimates energy contribution as follows:
           </p>
@@ -530,7 +530,7 @@
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
               <div>Energy (Wh) = Active ASICs &times; ASIC Power (W) &times; Time (h)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Each active ASIC contributes at its full rated power — no partial load
+                // Each active ASIC contributes at its calibrated power — no partial load
               </div>
             </div>
           </div>
@@ -566,9 +566,9 @@
           <p>
             The ASIC arms race in PoW was brutal: each new fabrication node made previous-generation hardware obsolete
             within 18–24 months, creating massive e-waste. On Wattcoin, an ASIC's mining capability does not depend on
-            its hash rate. Every ASIC model is looked up by its model name with its specific power rating. An older S9
-            (1350 W) contributes less than a modern S21 (3500 W) simply because it draws less power. However, the S9 is
-            still fully productive — there is no hash-rate obsolescence penalty.
+            its hash rate. Every ASIC model is measured by its calibrated power curve. An older S9 (1350 W) contributes
+            less than a modern S21 (3500 W) simply because it draws less power. However, the S9 is still fully
+            productive — there is no hash-rate obsolescence penalty.
           </p>
 
           <table class="comparison-table">
@@ -620,7 +620,7 @@
             <li>
               <strong>Configure in the miner app</strong><br />
               The miner lists detected ASICs as whole-device mining units. Declare your ASIC model during benchmark to
-              set the power estimate — all ASICs on this host use that model's power rating.
+              establish the power curve — all ASICs on this host use that model's calibrated power fingerprint.
             </li>
             <li>
               <strong>Start mining</strong><br />

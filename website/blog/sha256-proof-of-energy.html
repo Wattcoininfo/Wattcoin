@@ -540,8 +540,9 @@
             </li>
             <li>
               <strong>Contribution flush</strong> &mdash; The verified seed proofs are converted to watt-hours using the
-              hardware's known power draw from specification tables, then broadcast to the P2P network as a signed
-              contribution to the current mining round.
+              machine's calibrated power curve — a fingerprint of actual power draw measured at 10 load levels during
+              the initial benchmark — then broadcast to the P2P network as a signed contribution to the current mining
+              round.
             </li>
           </ol>
 
@@ -566,9 +567,10 @@
           </p>
 
           <p>
-            The hardware power draw comes from known specification tables — each CPU model and GPU model has a
-            documented TDP (thermal design power). The duty cycle is the miner's configured load percentage. The burn
-            duration is measured by the worker's clock and bounded by the probe interval.
+            The hardware power draw comes from the machine's calibrated power curve — during the initial benchmark,
+            hardware power sensors (RAPL, EMI, NVML) measure actual power draw at 10 load levels, creating a per-machine
+            fingerprint. The miner's configured load indexes into this curve to determine the active power draw. The
+            burn duration is measured by the worker's clock and bounded by the probe interval.
           </p>
 
           <h3>Seed Proofs: The Evidence</h3>
@@ -633,8 +635,8 @@
           </ul>
 
           <p>
-            Each hardware type has its own power profile in the specification tables. The protocol does not care which
-            hardware you use — it measures energy, not speed.
+            Each machine has its own calibrated power curve — a fingerprint of its actual power consumption at different
+            load levels. The protocol does not care which hardware you use — it measures energy, not speed.
           </p>
 
           <h3>Peer Verification</h3>
@@ -655,7 +657,7 @@
           <div class="info-callout">
             <strong>Key takeaway:</strong> SHA-256 in Wattcoin is not a puzzle to solve — it is a measuring instrument.
             Every hash burned is a verifiable unit of energy expenditure, confirmed by peer re-execution and converted
-            to watt-hours using known hardware specifications.
+            to watt-hours using the machine's calibrated power curve.
           </div>
 
           <p>
@@ -669,9 +671,10 @@
             <h3>How does SHA-256 prove energy consumption?</h3>
             <p>
               SHA-256 computation requires transistors to switch, which consumes electricity. By running a known
-              computation for a measured duration on known hardware, the energy consumed can be estimated from the
-              hardware's power draw specification. The SHA-256 output serves as proof that the computation actually
-              happened — peers can re-run the same chain and verify the result matches.
+              computation for a measured duration on a calibrated machine, the energy consumed is derived from the
+              machine's calibrated power curve — actual power draw measured at 10 load levels during the initial
+              benchmark. The SHA-256 output serves as proof that the computation actually happened — peers can re-run
+              the same chain and verify the result matches.
             </p>
           </div>
 
@@ -690,19 +693,20 @@
             <p>
               Bitcoin rewards the fastest hasher. Wattcoin rewards the most energy spent. Hash rate is a proxy for
               energy, but an imperfect one — different hardware architectures achieve vastly different hash rates at the
-              same power draw. By measuring energy directly through verified computation time on known hardware,
-              Wattcoin eliminates the ASIC arms race and makes every watt of electricity count equally.
+              same power draw. By measuring energy directly through verified computation time on a calibrated power
+              curve, Wattcoin eliminates the ASIC arms race and makes every watt of electricity count equally.
             </p>
           </div>
 
           <div class="faq-item">
             <h3>What prevents someone from claiming more energy than they actually used?</h3>
             <p>
-              Three layers of protection. First, the hardware specification tables cap the claimed power draw to known
-              TDP values — you cannot claim 500W from a CPU rated at 65W. Second, the duty-cycle configuration limits
-              the percentage of time the hardware is assumed to be active. Third, peer probes verify that the worker is
-              actually performing the claimed computation in real time — a VDF proof-of-time proves sequential time
-              elapsed, and the benchmark proof proves the hardware executed the work.
+              Three layers of protection. First, the calibrated power curve caps claimed power draw to values measured
+              by hardware power sensors during the initial benchmark — you cannot claim 500W from a machine that
+              measured 65W at full load. Second, the duty-cycle configuration limits the percentage of time the hardware
+              is assumed to be active. Third, peer probes verify that the worker is actually performing the claimed
+              computation in real time — a VDF proof-of-time proves sequential time elapsed, and the benchmark proof
+              proves the hardware executed the work.
             </p>
           </div>
 

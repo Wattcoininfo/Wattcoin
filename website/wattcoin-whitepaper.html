@@ -634,10 +634,11 @@
         </div>
         <p>
           Benchmark proofs determine each hardware type's efficiency &eta; (Joules per operation). Power of usage is
-          calculated via algorithm that specifically calculates your hardware's power consumption and is scaled by the
-          miner's configured duty-cycle load. Benchmark proofs calibrate the estimate against measured throughput — if
-          the hardware underperforms, its credited power is reduced proportionally. Energy in Wh is computed as power —
-          load% — elapsed time, and verified by ledger peers through computation probes.
+          derived from a calibrated power curve — a machine-specific fingerprint measured during the initial benchmark
+          using hardware power sensors at 10 load levels. The miner's configured duty-cycle load indexes into this curve
+          to determine the active power draw. Benchmark proofs calibrate the estimate against measured throughput — if
+          the hardware underperforms, its credited power is reduced proportionally. Energy in Wh is computed as power
+          &times; load% &times; elapsed time, and verified by ledger peers through computation probes.
         </p>
         <div class="tbl-wrap" id="hardware-table"></div>
         <div class="step-cards" id="registry-steps"></div>
@@ -814,10 +815,11 @@
           run throughout mining with chain-derived seeds so past answers cannot be recycled:
         </p>
         <p style="font-size: 12px; color: #5a8a5a; line-height: 1.7; margin-bottom: 28px; font-style: italic">
-          Energy consumption is measured via software-based power estimation using declared hardware TDP and duty-cycle
-          sampling. Estimates carry a typical accuracy of &plusmn;20%, comparable to standard software monitoring tools.
-          The protocol accounts for this variance through statistical re-benchmarking thresholds and peer-verified probe
-          attestations.
+          Energy consumption is measured using a calibrated power curve — a per-machine fingerprint of actual power draw
+          at 10 load levels (10%–100%), measured during the initial benchmark via hardware power sensors (RAPL, EMI,
+          NVML). The curve is HMAC-signed to prevent tampering. At each probe, energy is computed as
+          power&nbsp;curve(claimed&nbsp;load) &times; elapsed&nbsp;time&nbsp;/&nbsp;3600. The protocol accounts for
+          variance through power-curve drift detection and peer-verified probe attestations.
         </p>
         <div class="two-col">
           <div>
@@ -2419,7 +2421,7 @@
             'PROVE',
             'Miner returns deterministic proof hash; issuing peer re-derives expected answer independently',
           ],
-          ['04', 'ATTEST', 'Benchmark speed cross-checked against declared hardware TDP; level caps updated'],
+          ['04', 'ATTEST', 'Benchmark speed cross-checked against calibrated power curve; level caps updated'],
           ['05', 'RECORD', 'Attestation level and power cap stored; influences WTC reward cap'],
         ];
         const el = document.getElementById('registry-steps');
@@ -2595,7 +2597,7 @@
       (function buildProofs() {
         const proofs = [
           ['SUBMITTED', 'Miner address'],
-          ['SUBMITTED', 'Declared energy (Wh) — computed as hardware power — duty-cycle load — elapsed time'],
+          ['SUBMITTED', 'Declared energy (Wh) — computed from calibrated power curve — elapsed time'],
           ['SUBMITTED', 'Proof commitment — SHA-256(blockHash + Wh + blocks), binds energy claim to block'],
           ['BENCHMARK', 'CPU speed proof — deterministic IMUL/XOR hash, independently re-run by peers'],
           ['BENCHMARK', 'Memory proof — seeded array-walk hash, independently re-run by peers'],
@@ -2625,7 +2627,7 @@
           [
             'Power Misreporting',
             'Faking W(t) readings',
-            'Ledger peers cross-check probe computation speed against declared hardware TDP — excess claimed wattage without matching proof speed caps attestation level',
+            'Ledger peers cross-check probe computation speed against calibrated power curve — excess claimed wattage without matching proof speed caps attestation level',
           ],
           [
             'Sampling Manipulation',

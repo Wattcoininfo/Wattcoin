@@ -558,14 +558,15 @@
             miner dispatches DirectX compute shaders (D3D11/D3D12) that run a verifiable floating-point vector math loop
             across the GPU's compute units at a configurable load level. GPU proof hashes are generated via a
             deterministic integer XOR-shift compute shader. The protocol estimates your energy contribution from your
-            GPU's thermal design power (TDP) and the configured duty cycle:
+            machine's calibrated power curve — actual power draw measured at 10 load levels during the initial
+            benchmark:
           </p>
 
           <div class="viz-box">
             <div style="font-family: 'DM Mono', monospace; font-size: 14px; color: #4ade80; line-height: 2">
-              <div>Energy (Wh) = GPU TDP (W) &times; Load (%) &times; Time (h)</div>
+              <div>Energy (Wh) = PowerCurve (W) &times; Time (h)</div>
               <div style="color: #5a8a5a; font-size: 11px; margin-top: 4px">
-                // Same formula as CPU — hardware only affects speed, not cost
+                // PowerCurve indexes at the miner's configured load level
               </div>
             </div>
           </div>
