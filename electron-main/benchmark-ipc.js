@@ -1133,11 +1133,10 @@ function registerBenchmarkIpcHandlers(deps) {
       const SETTLE_TIMEOUT_MS = 20000;
       const curveSteps = [];
 
-      // Send a dummy seed so workers use the same burnCpuOps (JS crypto) path
-      // as mining instead of native BCrypt.  This ensures the power curve
-      // benchmark measures the same workload that mining actually runs.
+      // Preserve the current seed so it can be restored after calibration.
+      // Workers use the same burnCpuOps (JS crypto) path regardless of seed
+      // value, so no dummy seed injection is needed.
       const _prevSeed = getCoordinatorSeed();
-      setCoordinatorSeed('dead000000000000000000000000000000000000000000000000000000000000');
 
       for (const targetPct of steps) {
         // Set target directly on workers — no ramp-up.

@@ -1667,6 +1667,9 @@ export default function Miner({
 
   // Trigger power curve benchmark 5 seconds after startup benchmark finishes.
   const powerCurveAutoTriggeredRef = React.useRef(false);
+  // When drift is detected during mining, pause mining and auto-rebench.
+  // After the new curve is calibrated, mining resumes automatically.
+  const autoRebenchPendingRef = React.useRef(false);
   React.useEffect(() => {
     if (!benchmarkState.startupDone) return;
     if (isHardwareOnHold) return;
@@ -1674,6 +1677,9 @@ export default function Miner({
     if (powerCurveAutoTriggeredRef.current) return;
     if (!(hardware && hardware.source)) return;
     powerCurveAutoTriggeredRef.current = true;
+    const isDriftRebench = autoRebenchPendingRef.current;
+    // When resuming after drift, wait longer for CPU workers to fully wind down.
+    const delayMs = isDriftRebench ? 10_000 : 5_000;
     const timeoutId = setTimeout(async () => {
       setPowerCurveBenchmarkPending(true);
       try {
@@ -1688,14 +1694,22 @@ export default function Miner({
           if (res && res.ok && res.curve) {
             setPowerCurve(res.curve);
             powerCurveRef.current = res.curve;
+            // Auto-resume mining after drift-triggered re-benchmark.
+            if (autoRebenchPendingRef.current) {
+              autoRebenchPendingRef.current = false;
+              setMining(true);
+            }
+          } else {
+            autoRebenchPendingRef.current = false;
           }
         }
       } catch (_) {
+        autoRebenchPendingRef.current = false;
         if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Power curve benchmark error:', String(_));
       } finally {
         setPowerCurveBenchmarkPending(false);
       }
-    }, 5000);
+    }, delayMs);
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [benchmarkState.startupDone, isHardwareOnHold, powerCurve, hardware, hardwareLookupResetNonce]);
@@ -2042,6 +2056,7 @@ export default function Miner({
                         null,
                   loadPercent: typeof verdict.loadPercent === 'number' ? verdict.loadPercent : null,
                   energyWh: typeof verdict.energyWh === 'number' ? verdict.energyWh : 0,
+                  opsPerMs: typeof verdict.opsPerMs === 'number' ? verdict.opsPerMs : 0,
                   trustDelta:
                     typeof verdict.trustScoreAfter === 'number' && typeof verdict.trustScoreBefore === 'number'
                       ? verdict.trustScoreAfter - verdict.trustScoreBefore
@@ -2400,14 +2415,16 @@ export default function Miner({
 
   // Power curve drift detection: every 60s during mining, compare live ops/ms
   // and live sensor wattage against the stored curve. >30% deviation on either
-  // metric triggers automatic re-benchmark.
+  // metric for 5 consecutive checks triggers automatic re-benchmark.
   React.useEffect(() => {
     if (!mining) return;
     if (!powerCurve || !powerCurve.steps || powerCurve.steps.length < 2) return;
     let cancelled = false;
     let lastCheckMs = 0;
+    let consecutiveDriftCount = 0;
     const CURVE_DRIFT_CHECK_INTERVAL_MS = 60_000;
     const CURVE_DRIFT_THRESHOLD = 0.3;
+    const DRIFT_CONSECUTIVE_REQUIRED = 5;
 
     const checkCurveDrift = async () => {
       if (cancelled) return;
@@ -2458,6 +2475,7 @@ export default function Miner({
         })();
 
         // ── Ops/ms drift check ──
+        let opsDrifted = false;
         const hwState = await hw.getHardwareLoadState();
         if (hwState && hwState.ok) {
           const currentOpsPerSec = Number(hwState.cpuLoadOpsPerSec) || 0;
@@ -2465,36 +2483,62 @@ export default function Miner({
             const actualOpsPerMs = currentOpsPerSec / 1000;
             const drift = Math.abs(actualOpsPerMs - expectedOpsPerMs) / expectedOpsPerMs;
             if (drift > CURVE_DRIFT_THRESHOLD) {
-              setLog((log) => [
-                {
-                  time: now(),
-                  msg: `Power curve drift detected: ${(drift * 100).toFixed(1)}% ops/ms deviation at ${currentLoad}% load (expected ${expectedOpsPerMs.toFixed(1)}, got ${actualOpsPerMs.toFixed(1)}). Re-benchmarking...`,
-                  type: 'warn',
-                },
-                ...log,
-              ]);
-              setPowerCurve(null);
-              powerCurveRef.current = null;
-              return;
+              opsDrifted = true;
+              if (consecutiveDriftCount < DRIFT_CONSECUTIVE_REQUIRED) {
+                setLog((log) => [
+                  {
+                    time: now(),
+                    msg: `Power curve ops/ms drift: ${(drift * 100).toFixed(1)}% at ${currentLoad}% load (expected ${expectedOpsPerMs.toFixed(1)}, got ${actualOpsPerMs.toFixed(1)}). Monitoring... (${consecutiveDriftCount + 1}/${DRIFT_CONSECUTIVE_REQUIRED})`,
+                    type: 'warn',
+                  },
+                  ...log,
+                ]);
+              }
             }
           }
         }
 
         // ── Live power drift check ──
-        if (hasLivePower && livePowerW > 0 && expectedPowerW > 0) {
-          const powerDrift = Math.abs(livePowerW - expectedPowerW) / expectedPowerW;
+        // Only flag when live wattage is BELOW the curve, which may
+        // indicate thermal throttling or hardware degradation.
+        let powerDrifted = false;
+        if (hasLivePower && livePowerW > 0 && expectedPowerW > 0 && livePowerW < expectedPowerW) {
+          const powerDrift = (expectedPowerW - livePowerW) / expectedPowerW;
           if (powerDrift > CURVE_DRIFT_THRESHOLD) {
+            powerDrifted = true;
+            if (consecutiveDriftCount < DRIFT_CONSECUTIVE_REQUIRED) {
+              setLog((log) => [
+                {
+                  time: now(),
+                  msg: `Power curve wattage drift: ${(powerDrift * 100).toFixed(1)}% at ${currentLoad}% load (curve ${expectedPowerW.toFixed(1)}W, live ${livePowerW.toFixed(1)}W). Monitoring... (${consecutiveDriftCount + 1}/${DRIFT_CONSECUTIVE_REQUIRED})`,
+                  type: 'warn',
+                },
+                ...log,
+              ]);
+            }
+          }
+        }
+
+        // ── Consistency guard ──
+        if (opsDrifted || powerDrifted) {
+          consecutiveDriftCount += 1;
+          if (consecutiveDriftCount >= DRIFT_CONSECUTIVE_REQUIRED) {
             setLog((log) => [
               {
                 time: now(),
-                msg: `Power curve wattage drift: ${(powerDrift * 100).toFixed(1)}% deviation at ${currentLoad}% load (curve ${expectedPowerW.toFixed(1)}W, live ${livePowerW.toFixed(1)}W). Re-benchmarking...`,
+                msg: `Power curve drift confirmed (${DRIFT_CONSECUTIVE_REQUIRED} consecutive checks). Pausing mining to recalibrate...`,
                 type: 'warn',
               },
               ...log,
             ]);
+            autoRebenchPendingRef.current = true;
+            powerCurveAutoTriggeredRef.current = false;
+            setMining(false);
             setPowerCurve(null);
             powerCurveRef.current = null;
           }
+        } else {
+          consecutiveDriftCount = 0;
         }
       } catch (_) {
         if (process.env.WATTCOIN_DEBUG) console.warn('[Miner] Curve drift check error:', String(_));
@@ -3557,8 +3601,8 @@ export default function Miner({
                 onClick={rebenchPowerCurve}
                 style={{
                   position: 'absolute',
-                  top: 0,
-                  right: 0,
+                  top: 2,
+                  right: -8,
                   fontSize: 9,
                   padding: '1px 5px',
                   border: '1px solid #4ade80',
@@ -4500,6 +4544,7 @@ export default function Miner({
             <div style={{ flex: 1 }}>
               <button
                 onClick={async () => {
+                  autoRebenchPendingRef.current = false;
                   setMining(false);
                   try {
                     if (window.wattcoinHardware && window.wattcoinHardware.stopHardwareLoad) {

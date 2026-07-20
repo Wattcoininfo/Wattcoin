@@ -104,7 +104,7 @@ function createSeedAssignmentManager({
     return 0;
   }
 
-  async function verifyCpuProofs(proofs, elapsedMs, cpuModel, claimedLoad, overridePowerW) {
+  async function verifyCpuProofs(proofs, elapsedMs, cpuModel, claimedLoad) {
     if (!Array.isArray(proofs) || proofs.length === 0) {
       console.log(
         `[SeedManager] CPU proofs: none collected (cpuModel=${cpuModel || 'null'} opsPerMs=${(hwAuthority && hwAuthority.sha256OpsPerMs) || 0})`,
@@ -113,8 +113,7 @@ function createSeedAssignmentManager({
     }
     const tableOpsPerMs = cpuModel ? getMinOpsPerMs(cpuModel) : 0;
     const opsPerMs = hwAuthority && hwAuthority.sha256OpsPerMs > 0 ? hwAuthority.sha256OpsPerMs : tableOpsPerMs;
-    const powerW =
-      typeof overridePowerW === 'number' && overridePowerW > 0 ? overridePowerW : _powerAtLoad(claimedLoad);
+    const powerW = _powerAtLoad(claimedLoad);
     console.log(
       `[SeedManager] CPU proofs: count=${proofs.length} opsPerMs=${opsPerMs} powerW=${powerW.toFixed(2)} load=${claimedLoad} elapsedMs=${elapsedMs}`,
     );
@@ -165,15 +164,14 @@ function createSeedAssignmentManager({
     };
   }
 
-  async function verifyGpuProofs(proofs, elapsedMs, gpuModel, claimedLoad, overridePowerW) {
+  async function verifyGpuProofs(proofs, elapsedMs, gpuModel, claimedLoad) {
     if (!Array.isArray(proofs) || proofs.length === 0) {
       console.log(`[SeedManager] GPU proofs: none collected (gpuModel=${gpuModel || 'null'})`);
       return { ok: true, totalEnergyWh: 0, proofs: 0, reason: 'no_proofs' };
     }
     const tableOpsPerMs = gpuModel ? getGpuMinOpsPerMs(gpuModel) : 0;
     const opsPerMs = hwAuthority && hwAuthority.gpuOpsPerMs > 0 ? hwAuthority.gpuOpsPerMs : tableOpsPerMs;
-    const powerW =
-      typeof overridePowerW === 'number' && overridePowerW > 0 ? overridePowerW : _powerAtLoad(claimedLoad);
+    const powerW = _powerAtLoad(claimedLoad);
     console.log(
       `[SeedManager] GPU proofs: count=${proofs.length} opsPerMs=${opsPerMs} powerW=${powerW.toFixed(2)} load=${claimedLoad} elapsedMs=${elapsedMs}`,
     );
@@ -268,6 +266,7 @@ function createSeedAssignmentManager({
     collectAndVerifyAll,
     getLastSeedInfo,
     getHistory,
+    powerAtLoad: _powerAtLoad,
   };
 }
 

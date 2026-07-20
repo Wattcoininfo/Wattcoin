@@ -253,6 +253,21 @@ function MiningLog({
               {`${entry.energyWh.toFixed(4)} Wh`}
             </span>
           )}
+          {/* Ops/ms badge */}
+          {typeof entry.opsPerMs === 'number' && entry.opsPerMs > 0 && (
+            <span
+              style={{
+                background: '#1a1a2e',
+                color: '#60a5fa',
+                border: '1px solid #1e3a8a',
+                borderRadius: 4,
+                padding: '1px 7px',
+                fontSize: 10,
+              }}
+            >
+              {`${Math.round(entry.opsPerMs)} ops/ms`}
+            </span>
+          )}
           {/* Timing + chain (right-aligned) */}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {typeof entry.wallClockMs === 'number' && (
@@ -271,8 +286,8 @@ function MiningLog({
           {entry.type === 'gpu-pow' && typeof entry.proof === 'string' && entry.proof && (
             <span style={{ color: '#64748b', fontSize: 11 }}>proof {entry.proof}</span>
           )}
-          {/* Source label */}
-          <span style={{ color: '#4b5563', fontSize: 10 }}>{peerLabel}</span>
+          {/* Source label (right-aligned) */}
+          <span style={{ color: '#4b5563', fontSize: 10, marginLeft: 'auto' }}>{peerLabel}</span>
         </div>
         {/* Issues */}
         {entry.issues && entry.issues.length > 0 && (

@@ -66,17 +66,6 @@ function createWindow() {
       preload: path.join(appDir, 'preload.js'),
     },
   });
-  // Pass --debug on the command line to open DevTools automatically.
-  if (process.argv.includes('--debug')) {
-    win.webContents.openDevTools();
-  }
-  // Allow toggling DevTools with F12 (application menu is null, so default
-  // Electron shortcuts like Ctrl+Shift+I are lost on Windows).
-  win.webContents.on('before-input-event', (_event, input) => {
-    if (input.key === 'F12' && input.type === 'keyDown') {
-      win.webContents.toggleDevTools();
-    }
-  });
   // Keep the versioned title even after the page's <title> tag loads.
   win.on('page-title-updated', (event) => {
     event.preventDefault();

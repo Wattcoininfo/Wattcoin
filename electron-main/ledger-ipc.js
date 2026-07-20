@@ -78,7 +78,6 @@ function registerLedgerIpcHandlers(deps) {
     _prevRawGpuDuty,
     _physicalCoreCount: _physicalCoreCountRef,
     loadPowerCurve,
-    interpolatePower,
   } = deps;
 
   // Sync module-level _physicalCoreCount with the caller's ref so the
@@ -288,10 +287,11 @@ function registerLedgerIpcHandlers(deps) {
       _powerCurve.steps.length >= 2 &&
       _powerCurve.measuredWithSensors
     ) {
-      const currentLoad = Math.max(0, Math.min(100, hwAuthority.currentLoadPercent || 100));
-      const curvePowerW = typeof interpolatePower === 'function' ? interpolatePower(_powerCurve, currentLoad) : 0;
+      // Use max power from curve (not interpolated at current load) to avoid
+      // double-counting — loadFactor below already accounts for actual duty.
+      const curveMaxPowerW = _powerCurve && _powerCurve.maxPowerW > 0 ? _powerCurve.maxPowerW : 0;
       // Subtract ASIC power if present (curve includes total system power)
-      pcCalibratedPowerW = Math.max(0, curvePowerW - (hwAuthority.asicPowerW || 0));
+      pcCalibratedPowerW = Math.max(0, curveMaxPowerW - (hwAuthority.asicPowerW || 0));
     } else {
       // Fallback: linear scaling from calibrated max power (existing behavior)
       pcCalibratedPowerW = Math.max(0, hwAuthority.calibratedUnitPowerW - (hwAuthority.asicPowerW || 0));

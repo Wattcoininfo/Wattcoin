@@ -43,7 +43,6 @@ function createHandlers(deps) {
     getHardwareLoadState,
     _getGpuLoadState,
     readEnergySnapshot,
-    readLivePowerW,
   } = deps;
 
   // -- State ------------------------------------------------------------------
@@ -73,42 +72,6 @@ function createHandlers(deps) {
   const _BG_WS_RECONNECT_MAX_MS = 60_000;
   let _lastCpuSeedAssignedAt = 0;
   let _lastProbeResultSubmittedAt = Date.now();
-
-  // -- Live power sampling (periodic readLivePowerW() between probes) ----------
-  const _POWER_SAMPLE_INTERVAL_MS = 2000;
-  let _powerSamples = [];
-  let _powerSamplingTimer = null;
-
-  function _startPowerSampling() {
-    if (_powerSamplingTimer !== null) return;
-    _powerSamples = [];
-    _powerSamplingTimer = setInterval(() => {
-      if (!_localMiningStatus) return;
-      try {
-        const snapshot = typeof readLivePowerW === 'function' ? readLivePowerW() : null;
-        if (snapshot && typeof snapshot.totalW === 'number' && snapshot.totalW > 0) {
-          _powerSamples.push(snapshot.totalW);
-        }
-      } catch (_) {
-        /* best-effort */
-      }
-    }, _POWER_SAMPLE_INTERVAL_MS);
-  }
-
-  function _stopPowerSampling() {
-    if (_powerSamplingTimer !== null) {
-      clearInterval(_powerSamplingTimer);
-      _powerSamplingTimer = null;
-    }
-    _powerSamples = [];
-  }
-
-  function _averageSampledPowerW() {
-    if (_powerSamples.length === 0) return 0;
-    let sum = 0;
-    for (let i = 0; i < _powerSamples.length; i++) sum += _powerSamples[i];
-    return sum / _powerSamples.length;
-  }
 
   // -- Internal helpers -------------------------------------------------------
 
@@ -455,10 +418,7 @@ function createHandlers(deps) {
   function registerIpcHandlers(ipcMain) {
     ipcMain.handle('wattcoin-mining-status', (_event, { mining }) => {
       _localMiningStatus = !!mining;
-      if (_localMiningStatus) {
-        _startPowerSampling();
-      } else {
-        _stopPowerSampling();
+      if (!_localMiningStatus) {
         _pendingContributionWhRef.current = 0;
         _pendingProbes = [];
         _clearProbeTimeoutTimer();
@@ -726,27 +686,16 @@ function createHandlers(deps) {
                   elapsedMs = Math.max(1000, now - _lastProbeResultSubmittedAt);
                   _lastProbeResultSubmittedAt = now;
                   const claimedLoad = Math.min(1, Math.max(0.1, (hwAuthority.currentLoadPercent || 100) / 100));
-                  sampledPowerW = _averageSampledPowerW();
-                  _powerSamples = [];
+                  sampledPowerW =
+                    typeof seedManager.powerAtLoad === 'function' ? seedManager.powerAtLoad(claimedLoad) : 0;
                   const _proofStart = Date.now();
-                  const proofResult = await seedManager.verifyCpuProofs(
-                    cpuProofs,
-                    elapsedMs,
-                    cpuModel,
-                    claimedLoad,
-                    sampledPowerW,
-                  );
-                  const gpuProofResult = await seedManager.verifyGpuProofs(
-                    gpuProofs,
-                    elapsedMs,
-                    gpuModel,
-                    claimedLoad,
-                    sampledPowerW,
-                  );
+                  const proofResult = await seedManager.verifyCpuProofs(cpuProofs, elapsedMs, cpuModel, claimedLoad);
+                  const gpuProofResult = await seedManager.verifyGpuProofs(gpuProofs, elapsedMs, gpuModel, claimedLoad);
                   const _proofElapsed = Date.now() - _proofStart;
                   const totalEnergyWh = proofResult.totalEnergyWh + gpuProofResult.totalEnergyWh;
                   _pendingContributionWhRef.current = totalEnergyWh;
                   verdict.energyWh = totalEnergyWh;
+                  verdict.opsPerMs = measuredOpsPerMs;
                   const _submitToVerdictMs = _verdictAt - (result._submittedAt || _verdictAt);
                   const cpuTotalOps = cpuProofs.reduce((sum, p) => sum + (Number(p.totalOps) || 0), 0);
                   const cpuTotalBurnMs = cpuProofs.reduce((sum, p) => sum + (Number(p.burnMs) || 0), 0);
