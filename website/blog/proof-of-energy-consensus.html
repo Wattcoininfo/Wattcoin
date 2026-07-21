@@ -92,7 +92,7 @@
                 "name": "What is Proof-of-Energy?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "Proof-of-Energy (PoE) is a consensus mechanism that replaces hash-based mining with verifiable energy expenditure. Miners earn rewards proportional to their estimated electricity consumption, not their hash rate. Every watt of power contributes equally — a CPU and an ASIC mining on PoE both earn the same estimated reward per kilowatt-hour, making hardware efficiency irrelevant for competition."
+                  "text": "Proof-of-Energy (PoE) is a consensus mechanism that replaces hash-based mining with verifiable energy expenditure. Miners earn rewards proportional to their measured electricity consumption, not their hash rate. Every watt of power contributes equally — a CPU and an ASIC mining on PoE both earn the same measured reward per kilowatt-hour, making hardware efficiency irrelevant for competition."
                 }
               },
               {
@@ -100,7 +100,7 @@
                 "name": "How does Proof-of-Energy work on Wattcoin?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "The Wattcoin Miner runs benchmark-verified tasks on your CPU and GPU while the protocol estimates energy consumption from a calibrated power curve — actual power draw measured at 10 load levels during the initial benchmark. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets paid every block, no lottery, no pools."
+                  "text": "The Wattcoin Miner runs benchmark-verified tasks on your CPU and GPU while the protocol calculates energy consumption from a calibrated power curve — actual power draw measured at 10 load levels during the initial benchmark. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are split proportionally by verified energy — every miner gets paid every block, no lottery, no pools."
                 }
               },
               {
@@ -108,7 +108,7 @@
                 "name": "Is Proof-of-Energy better than Proof-of-Work?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "Proof-of-Energy eliminates the ASIC arms race. In PoW, the fastest hardware dominates and older gear becomes e-waste. In PoE, hardware speed determines how fast you mine but energy cost determines what you pay — all hardware earns the same estimated rate per kilowatt-hour. Old, power-hungry hardware that is obsolete on Bitcoin becomes valuable on Wattcoin."
+                  "text": "Proof-of-Energy eliminates the ASIC arms race. In PoW, the fastest hardware dominates and older gear becomes e-waste. In PoE, hardware speed determines how fast you mine but energy cost determines what you pay — all hardware earns the same measured rate per kilowatt-hour. Old, power-hungry hardware that is obsolete on Bitcoin becomes valuable on Wattcoin."
                 }
               },
               {
@@ -577,7 +577,7 @@
           <p>
             Instead of racing to solve a hash puzzle, every miner runs benchmark-verified computational tasks that
             exercise specific hardware components — <strong>CPU integer hashing</strong> and
-            <strong>GPU compute shaders</strong>. The protocol estimates the electrical energy consumed using each
+            <strong>GPU compute shaders</strong>. The protocol calculates the electrical energy consumed using each
             machine's calibrated power curve — a fingerprint of actual power draw measured at 10 load levels during the
             initial benchmark:
           </p>
@@ -671,17 +671,17 @@
             <h3>What is Proof-of-Energy?</h3>
             <p>
               Proof-of-Energy (PoE) is a consensus mechanism that replaces hash-based mining with verifiable energy
-              expenditure. Miners earn rewards proportional to their estimated electricity consumption, not their hash
+              expenditure. Miners earn rewards proportional to their measured electricity consumption, not their hash
               rate. Every watt of power contributes equally — a CPU and an ASIC mining on PoE both earn the same
-              estimated reward per kilowatt-hour.
+              measured reward per kilowatt-hour.
             </p>
           </div>
 
           <div class="faq-item">
             <h3>How does Proof-of-Energy work on Wattcoin?</h3>
             <p>
-              The Wattcoin Miner runs benchmark-verified tasks on your CPU, GPU, and memory while the protocol estimates
-              energy consumption from a calibrated power curve — actual power draw measured at 10 load levels during the
+              The Wattcoin Miner runs benchmark-verified tasks on your CPU and GPU while the protocol calculates energy
+              consumption from a calibrated power curve — actual power draw measured at 10 load levels during the
               initial benchmark. Each miner's contribution is measured in watt-hours, not hash count. Block rewards are
               split proportionally by verified energy — every miner gets paid every block, no lottery, no pools.
             </p>
@@ -692,7 +692,7 @@
             <p>
               Proof-of-Energy eliminates the ASIC arms race. In PoW, the fastest hardware dominates and older gear
               becomes e-waste. In PoE, hardware speed determines how fast you mine but energy cost determines what you
-              pay — all hardware earns the same estimated rate per kilowatt-hour. Old, power-hungry hardware that is
+              pay — all hardware earns the same measured rate per kilowatt-hour. Old, power-hungry hardware that is
               obsolete on Bitcoin becomes valuable on Wattcoin.
             </p>
           </div>
