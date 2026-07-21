@@ -695,11 +695,11 @@ function createHandlers(deps) {
                   const totalEnergyWh = proofResult.totalEnergyWh + gpuProofResult.totalEnergyWh;
                   _pendingContributionWhRef.current = totalEnergyWh;
                   verdict.energyWh = totalEnergyWh;
-                  verdict.opsPerMs = measuredOpsPerMs;
                   const _submitToVerdictMs = _verdictAt - (result._submittedAt || _verdictAt);
                   const cpuTotalOps = cpuProofs.reduce((sum, p) => sum + (Number(p.totalOps) || 0), 0);
                   const cpuTotalBurnMs = cpuProofs.reduce((sum, p) => sum + (Number(p.burnMs) || 0), 0);
                   const measuredOpsPerMs = cpuTotalBurnMs > 0 ? cpuTotalOps / cpuTotalBurnMs : 0;
+                  verdict.opsPerMs = measuredOpsPerMs;
                   const benchOpsPerMs = Number(hwAuthority.sha256OpsPerMs) || 0;
                   if (measuredOpsPerMs > 0 && benchOpsPerMs > 0 && cpuProofs.length > 0) {
                     const CALIBRATION_ALPHA = 0.15;

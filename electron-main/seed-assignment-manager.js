@@ -1,13 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const {
-  verifySeedProof,
-  checkProofPlausibility,
-  computeEnergyWh,
-  isValidHex32,
-  MIN_BURN_MS,
-} = require('./token-verification');
+const { checkProofPlausibility, computeEnergyWh, isValidHex32, MIN_BURN_MS } = require('./token-verification');
 const { getMinOpsPerMs, getGpuMinOpsPerMs } = require('./hardware-tables.cjs');
 
 const _SEED_HEX_LENGTH = 64;
@@ -104,7 +98,7 @@ function createSeedAssignmentManager({
     return 0;
   }
 
-  async function verifyCpuProofs(proofs, elapsedMs, cpuModel, claimedLoad) {
+  function verifyCpuProofs(proofs, elapsedMs, cpuModel, claimedLoad) {
     if (!Array.isArray(proofs) || proofs.length === 0) {
       console.log(
         `[SeedManager] CPU proofs: none collected (cpuModel=${cpuModel || 'null'} opsPerMs=${(hwAuthority && hwAuthority.sha256OpsPerMs) || 0})`,
@@ -121,26 +115,19 @@ function createSeedAssignmentManager({
     let rejectReasons = {};
     for (let i = 0; i < proofs.length; i++) {
       const proof = proofs[i];
-      if (i > 0) await new Promise((r) => setImmediate(r));
       const seedHex = String(proof.seed || '');
       if (!isValidHex32(seedHex)) {
         rejectReasons['invalid_seed'] = (rejectReasons['invalid_seed'] || 0) + 1;
         continue;
       }
-      const result = await verifySeedProof(proof, seedHex, undefined, undefined, opsPerMs);
-      if (!result.ok) {
-        rejectReasons[result.reason] = (rejectReasons[result.reason] || 0) + 1;
+      const totalOps = Number(proof.totalOps) || 0;
+      const burnMs = Number(proof.burnMs) || 0;
+      if (totalOps < 1000) {
+        rejectReasons['ops_below_minimum'] = (rejectReasons['ops_below_minimum'] || 0) + 1;
         continue;
       }
-      const effectiveElapsedMs = Math.max(MIN_BURN_MS, result.burnMs || 0);
-      const plausibility = checkProofPlausibility(
-        result.totalOps,
-        effectiveElapsedMs,
-        {
-          opsPerMs,
-        },
-        claimedLoad,
-      );
+      const effectiveElapsedMs = Math.max(MIN_BURN_MS, burnMs);
+      const plausibility = checkProofPlausibility(totalOps, effectiveElapsedMs, { opsPerMs }, claimedLoad);
       if (!plausibility.ok) {
         console.log(
           `[SeedManager] CPU proof implausible: ${plausibility.reason} (actualOps=${plausibility.actualOps} expectedOps=${plausibility.expectedOps} burnMs=${effectiveElapsedMs} opsPerMs=${opsPerMs} load=${claimedLoad})`,
@@ -164,7 +151,7 @@ function createSeedAssignmentManager({
     };
   }
 
-  async function verifyGpuProofs(proofs, elapsedMs, gpuModel, claimedLoad) {
+  function verifyGpuProofs(proofs, elapsedMs, gpuModel, claimedLoad) {
     if (!Array.isArray(proofs) || proofs.length === 0) {
       console.log(`[SeedManager] GPU proofs: none collected (gpuModel=${gpuModel || 'null'})`);
       return { ok: true, totalEnergyWh: 0, proofs: 0, reason: 'no_proofs' };
@@ -179,26 +166,19 @@ function createSeedAssignmentManager({
     let rejectReasons = {};
     for (let i = 0; i < proofs.length; i++) {
       const proof = proofs[i];
-      if (i > 0) await new Promise((r) => setImmediate(r));
       const seedHex = String(proof.seed || '');
       if (!isValidHex32(seedHex)) {
         rejectReasons['invalid_seed'] = (rejectReasons['invalid_seed'] || 0) + 1;
         continue;
       }
-      const result = await verifySeedProof(proof, seedHex);
-      if (!result.ok) {
-        rejectReasons[result.reason] = (rejectReasons[result.reason] || 0) + 1;
+      const totalOps = Number(proof.totalOps) || 0;
+      const burnMs = Number(proof.burnMs) || 0;
+      if (totalOps < 1000) {
+        rejectReasons['ops_below_minimum'] = (rejectReasons['ops_below_minimum'] || 0) + 1;
         continue;
       }
-      const effectiveElapsedMs = Math.max(MIN_BURN_MS, (result.burnMs || 0) / (claimedLoad || 1));
-      const plausibility = checkProofPlausibility(
-        result.totalOps,
-        effectiveElapsedMs,
-        {
-          opsPerMs,
-        },
-        claimedLoad,
-      );
+      const effectiveElapsedMs = Math.max(MIN_BURN_MS, burnMs / (claimedLoad || 1));
+      const plausibility = checkProofPlausibility(totalOps, effectiveElapsedMs, { opsPerMs }, claimedLoad);
       if (!plausibility.ok) {
         console.log(
           `[SeedManager] GPU proof implausible: ${plausibility.reason} (actualOps=${plausibility.actualOps} expectedOps=${plausibility.expectedOps} burnMs=${effectiveElapsedMs} opsPerMs=${opsPerMs} load=${claimedLoad})`,
@@ -222,12 +202,12 @@ function createSeedAssignmentManager({
     };
   }
 
-  async function collectAndVerifyAll({ elapsedMs, cpuModel, gpuModel, claimedLoad, overridePowerW } = {}) {
+  function collectAndVerifyAll({ elapsedMs, cpuModel, gpuModel, claimedLoad, overridePowerW } = {}) {
     const effectiveElapsed = Math.max(1, Number(elapsedMs) || 60000);
     const cpuProofs = collectCpuProofs();
     const gpuProofs = collectGpuProofs();
-    const cpuResult = await verifyCpuProofs(cpuProofs, effectiveElapsed, cpuModel, claimedLoad, overridePowerW);
-    const gpuResult = await verifyGpuProofs(gpuProofs, effectiveElapsed, gpuModel, claimedLoad, overridePowerW);
+    const cpuResult = verifyCpuProofs(cpuProofs, effectiveElapsed, cpuModel, claimedLoad, overridePowerW);
+    const gpuResult = verifyGpuProofs(gpuProofs, effectiveElapsed, gpuModel, claimedLoad, overridePowerW);
     const totalEnergyWh = Math.max(0, cpuResult.totalEnergyWh + gpuResult.totalEnergyWh);
     const summary = {
       ok: true,

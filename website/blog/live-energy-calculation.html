@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>How Wattcoin Calculates Live Energy | Wattcoin Blog</title>
+    <meta
+      name="description"
+      content="How Wattcoin measures real energy consumption from your hardware and turns it into mining credits — explained in plain English."
+    />
+    <link rel="canonical" href="https://wattcoin.ee/blog/live-energy-calculation.html" />
+    <meta property="og:title" content="How Wattcoin Calculates Live Energy | Wattcoin Blog" />
+    <meta
+      property="og:description"
+      content="How Wattcoin measures real energy consumption from your hardware and turns it into mining credits — explained in plain English."
+    />
+    <meta property="og:url" content="https://wattcoin.ee/blog/live-energy-calculation.html" />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:site_name" content="Wattcoin" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="Wattcoin Foundation" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="How Wattcoin Calculates Live Energy | Wattcoin Blog" />
+    <meta
+      name="twitter:description"
+      content="How Wattcoin measures real energy consumption from your hardware and turns it into mining credits — explained in plain English."
+    />
+    <meta name="twitter:image" content="https://wattcoin.ee/assets/new_icon.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/icons/icon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/assets/icons/icon-256.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/icon-256.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/assets/fonts/fonts.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Article",
+            "@id": "https://wattcoin.ee/blog/live-energy-calculation.html#article",
+            "headline": "How Wattcoin Calculates Live Energy",
+            "url": "https://wattcoin.ee/blog/live-energy-calculation.html",
+            "datePublished": "2026-07-21",
+            "author": {
+              "@type": "Organization",
+              "name": "Wattcoin Foundation"
+            },
+            "publisher": {
+              "@id": "https://wattcoin.ee/#organization"
+            },
+            "description": "How Wattcoin measures real energy consumption from your hardware and turns it into mining credits — explained in plain English.",
+            "mainEntityOfPage": {
+              "@type": "WebPage",
+              "@id": "https://wattcoin.ee/blog/live-energy-calculation.html"
+            }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://wattcoin.ee/blog/live-energy-calculation.html#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": "https://wattcoin.ee/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": "https://wattcoin.ee/blog.html"
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "How Wattcoin Calculates Live Energy",
+                "item": "https://wattcoin.ee/blog/live-energy-calculation.html"
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        background: #060e06;
+        background-image:
+          linear-gradient(rgba(26, 58, 26, 0.12) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(26, 58, 26, 0.12) 1px, transparent 1px);
+        background-size: 60px 60px;
+        color: #e8f5e8;
+        font-family: Georgia, serif;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: #4ade80;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      nav {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 100;
+        background: rgba(6, 14, 6, 0.92);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #1a2a1a;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        padding: 0 24px;
+      }
+      .nav-logo {
+        font-family: 'Playfair Display', serif;
+        font-size: 22px;
+        font-weight: 900;
+        color: #e8f5e8;
+        text-decoration: none;
+      }
+      .nav-logo:hover {
+        text-decoration: none;
+      }
+      .nav-logo span {
+        color: #4ade80;
+      }
+      .nav-links {
+        display: flex;
+        gap: 20px;
+        list-style: none;
+      }
+      .nav-links a {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        color: #6b9a6b;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .nav-links a:hover {
+        color: #4ade80;
+      }
+      .nav-links a.nav-blog {
+        color: #4ade80;
+        font-weight: 500;
+      }
+      .nav-links a.nav-wallet {
+        color: #fbbf24;
+      }
+      .nav-links a.nav-wallet:hover {
+        color: #fde68a;
+      }
+
+      .blog-post {
+        padding: 40px 0 60px;
+        line-height: 1.8;
+        font-size: 16px;
+      }
+      .blog-post h1 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(28px, 4vw, 38px);
+        font-weight: 900;
+        color: #e8f5e8;
+        margin-bottom: 16px;
+        letter-spacing: -0.02em;
+      }
+      .blog-post h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: clamp(24px, 3.5vw, 32px);
+        font-weight: 900;
+        color: #e8f5e8;
+        margin-bottom: 20px;
+        letter-spacing: -0.02em;
+      }
+      .blog-post h3 {
+        font-family: 'Playfair Display', serif;
+        font-size: 20px;
+        font-weight: 700;
+        color: #d7ffd9;
+        margin: 28px 0 12px;
+      }
+      .blog-post p {
+        font-size: 16px;
+        color: #9ac79f;
+        line-height: 1.85;
+        margin-bottom: 16px;
+      }
+      .blog-post p strong {
+        color: #e8f5e8;
+      }
+      .blog-post ul,
+      .blog-post ol {
+        font-size: 15px;
+        color: #9ac79f;
+        line-height: 1.8;
+        margin: 0 0 16px 24px;
+      }
+      .blog-post li {
+        margin-bottom: 6px;
+      }
+      .blog-post li strong {
+        color: #e8f5e8;
+      }
+      .blog-post .meta {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link {
+        display: inline-block;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        margin-bottom: 24px;
+        letter-spacing: 0.05em;
+      }
+      .blog-post .back-link:hover {
+        color: #4ade80;
+      }
+
+      .info-callout {
+        background: #0a1a0a;
+        border-left: 3px solid #4ade80;
+        border-radius: 0 8px 8px 0;
+        padding: 16px 20px;
+        margin: 20px 0;
+        font-size: 14px;
+        color: #b7f5bc;
+        line-height: 1.7;
+      }
+      .info-callout strong {
+        color: #4ade80;
+      }
+      .tag-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .tag {
+        font-family: 'DM Mono', monospace;
+        font-size: 10px;
+        padding: 3px 10px;
+        border-radius: 99px;
+        border: 1px solid #4ade8050;
+        color: #4ade80;
+        letter-spacing: 0.06em;
+      }
+
+      footer {
+        padding: 40px;
+        text-align: center;
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: #5a8a5a;
+        border-top: 1px solid #1e3a1e;
+      }
+      footer a {
+        color: #7aaa7a;
+      }
+      footer a:hover {
+        color: #4ade80;
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          padding: 0 16px;
+        }
+        .blog-post {
+          padding: 30px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <a href="/" class="nav-logo">Watt<span>coin</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/wattcoin-whitepaper.html" class="nav-whitepaper">Whitepaper</a></li>
+        <li><a href="/blog.html" class="nav-blog">Blog</a></li>
+        <li><a href="/wallet.html" class="nav-wallet">Wallet</a></li>
+      </ul>
+    </nav>
+    <div style="padding-top: 100px">
+      <div class="container">
+        <article class="blog-post">
+          <a href="/blog.html" class="back-link">&larr; Back to all posts</a>
+          <div class="tag-row">
+            <span class="tag">How It Works</span>
+            <span class="tag">Energy</span>
+            <span class="tag">Mining</span>
+          </div>
+          <h1>How Wattcoin Measures Your Energy</h1>
+          <div class="meta">July 21, 2026 &nbsp;&mdash;&nbsp; 5 min read</div>
+
+          <h3>The Big Idea</h3>
+          <p>
+            Wattcoin reads your computer's real power meter and reports how many watts it's using. The app converts that
+            into energy credits — the more real energy you spend, the more you earn. Just physics, measured and
+            verified.
+          </p>
+
+          <h3>Step 1 — Reading the Power Meter</h3>
+          <p>
+            Your computer already knows how much power it's using. The CPU and GPU have built-in energy meters that
+            report real-time wattage — the same sensors that manufacturers use for thermal management.
+          </p>
+          <p>
+            Wattcoin's miner taps into these meters directly. On Intel CPUs it reads the RAPL counter, on newer Windows
+            systems it uses the Energy Metering Interface, and for GPUs it reads live power through NVIDIA's Management
+            Library or AMD's Display Library — whichever matches your hardware.
+          </p>
+          <p>
+            The result is a single number: <strong>how many watts your machine is drawing right now</strong>. This isn't
+            an estimate or a guess — it's what the hardware itself is reporting.
+          </p>
+
+          <h3>Step 2 — Building a Power Profile</h3>
+          <p>
+            A single wattage reading tells you what your machine is doing <em>right now</em>, but not what it
+            <em>should</em> be doing at a given load level. That's where the power profile comes in.
+          </p>
+          <p>
+            When you first start mining (or after a recalibration), the app runs a quick benchmark. It puts your CPU to
+            work at 10 different intensity levels — from barely working at 10% all the way up to full blast at 100%. At
+            each level, it reads the power meter for several seconds and averages out the results.
+          </p>
+          <p>
+            The result is a <strong>power profile</strong> — a fingerprint of your specific machine that shows exactly
+            how many watts it draws at every load level. Two identical processors might have slightly different profiles
+            because of motherboard differences, cooling, or age.
+          </p>
+
+          <div class="info-callout">
+            <strong>Why averaging matters:</strong> Your CPU's power draw jumps around constantly — it spikes during
+            computation and drops during tiny gaps between work. A single snapshot might catch a low point and
+            undercount your energy. That's why the app takes many readings over several seconds and averages them.
+          </div>
+
+          <h3>Step 3 — Determining Power During Mining</h3>
+          <p>
+            Once the power profile is built, the app knows exactly how many watts your machine draws at every load level
+            — all from real measurements. When you're mining at a given intensity, it looks up the corresponding values
+            from the profile and smoothly blends between the two closest data points to get a precise reading.
+          </p>
+          <p>This is fast, reliable, and doesn't add any overhead to your mining.</p>
+
+          <h3>Step 4 — The Verification Check</h3>
+          <p>
+            Energy credits aren't awarded continuously. Instead, a coordinator on the network periodically sends your
+            miner a challenge — a <strong>probe</strong>. Here's what happens during a probe:
+          </p>
+          <ol>
+            <li>
+              <strong>The coordinator sends a secret code.</strong> This code is unique and unpredictable — your miner
+              can't prepare an answer in advance.
+            </li>
+            <li>
+              <strong>Your miner runs a computation.</strong> It burns through a fixed amount of work that proves it's
+              really running at the expected power level. It also runs a cryptographic time-lock that can't be faked or
+              sped up.
+            </li>
+            <li>
+              <strong>Your miner submits the proof.</strong> It sends back the result along with a reading from the
+              hardware power meter — a second data point that the coordinator can cross-check.
+            </li>
+            <li>
+              <strong>The coordinator verifies everything.</strong> It checks the time-lock proof, confirms the
+              computation makes sense for your hardware, and compares the reported power against what your machine is
+              rated for.
+            </li>
+            <li>
+              <strong>You get credited.</strong> If everything checks out, the energy you spent during that probe is
+              recorded in your local energy ledger.
+            </li>
+          </ol>
+
+          <h3>Step 5 — Getting Paid</h3>
+          <p>
+            Your energy credits accumulate in a local file called the round ledger. Every miner on the network has one.
+            When a new block is found, the block reward is split among all miners
+            <strong>in proportion to how much energy they contributed</strong>.
+          </p>
+          <p>
+            If you contributed 15% of all the energy spent during a round, you get 15% of the reward. Simple as that.
+          </p>
+          <p>
+            The exact energy numbers stay on your machine — they're not uploaded to the blockchain. Instead, a
+            fingerprint of the reward split is written to the chain. This means anyone can verify that the rewards were
+            distributed fairly, without bloating the blockchain with detailed energy data.
+          </p>
+
+          <h3>Cheating Is Hard</h3>
+          <p>The whole system is designed to make cheating more effort than it's worth:</p>
+          <ul>
+            <li>
+              <strong>Unpredictable challenges.</strong> Each probe's secret code depends on the previous proof, so you
+              can't pre-compute answers.
+            </li>
+            <li>
+              <strong>Time-lock proofs.</strong> The cryptographic challenge takes a fixed amount of real time and can't
+              be parallelized or skipped.
+            </li>
+            <li>
+              <strong>Hardware cross-checks.</strong> The coordinator compares your reported power against your
+              machine's known specifications. Claiming 500 watts from a 65-watt laptop won't fly.
+            </li>
+            <li>
+              <strong>Plausibility checks.</strong> The amount of computation you claim must make sense for your
+              hardware's benchmarked speed. Too high or too low, and the proof is rejected.
+            </li>
+            <li>
+              <strong>Hardware binding.</strong> The power profile is locked to your specific machine. Swap hardware and
+              you need to recalibrate.
+            </li>
+            <li>
+              <strong>No virtual machines.</strong> VMs can't prove they're running on real hardware, so they're blocked
+              entirely.
+            </li>
+          </ul>
+
+          <h3>Keeping the Profile Accurate</h3>
+          <p>
+            Your machine's power characteristics can shift over time — thermal paste ages, dust builds up, ambient
+            temperature changes. The app watches for this.
+          </p>
+          <p>
+            Every minute during mining, it takes a fresh set of power readings and compares them against the stored
+            profile. If the live readings consistently fall more than 30% below what the profile predicts, the app
+            assumes the profile is stale. After five minutes of sustained drift, it automatically pauses mining and runs
+            a fresh calibration.
+          </p>
+
+          <h3>Trust Builds Over Time</h3>
+          <p>
+            Every miner has a trust score from 0 to 100. It starts at 50 and goes up when your proofs are consistently
+            clean, or down when proofs fail or look suspicious. At zero trust, mining is paused for 24 hours.
+          </p>
+          <p>
+            The trust score also affects how much of your energy credit you actually receive — from 20% at zero trust
+            all the way to 100% at maximum trust. This rewards consistency and makes it costly to try funny business.
+          </p>
+
+          <h2>In Short</h2>
+          <p>
+            Wattcoin reads your hardware's real power meter, builds a profile of how much energy your machine uses at
+            different load levels, verifies that you're really doing the work through periodic challenges, and splits
+            block rewards based on actual energy contributed. Measured energy, verified by the network, and rewarded
+            fairly.
+          </p>
+          <a href="/blog.html" class="back-link" style="display: inline-block; margin-top: 32px"
+            >&larr; Back to all posts</a
+          >
+        </article>
+      </div>
+    </div>
+    <footer>
+      WATTCOIN FOUNDATION &nbsp;&mdash;&nbsp; v1.0.496 &nbsp;&mdash;&nbsp;
+      <a href="mailto:info@wattcoin.ee">info@wattcoin.ee</a> &nbsp;&mdash;&nbsp;
+      <a href="https://x.com/WattcoinInfo" target="_blank" rel="noopener noreferrer">Twitter: @WattcoinInfo</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://t.me/+VfDsBLxrAGswNGM0" target="_blank" rel="noopener noreferrer">Telegram</a>
+      &nbsp;&mdash;&nbsp;
+      <a href="https://github.com/Wattcoininfo/Wattcoin" target="_blank" rel="noopener noreferrer">Github</a>
+      &nbsp;&mdash;&nbsp; JULY 2026 <br /><span id="page-visit-count" style="font-size: 10px; color: #3a5a3a"></span>
+    </footer>
+    <script>
+      (function () {
+        'use strict';
+        var BASE = '/counter-api/?page=';
+        function fmt(n) {
+          if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+          return n;
+        }
+        var counted = sessionStorage.getItem('wtc_pg_live-energy-calculation');
+        var method = counted ? 'GET' : 'POST';
+        if (!counted) sessionStorage.setItem('wtc_pg_live-energy-calculation', '1');
+        fetch(BASE + 'blog-live-energy-calculation', { method: method })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var el = document.getElementById('page-visit-count');
+            if (el && d.ok) el.textContent = fmt(d.count);
+          })
+          .catch(function () {});
+      })();
+    </script>
+  </body>
+</html>

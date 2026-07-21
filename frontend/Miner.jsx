@@ -2067,14 +2067,18 @@ export default function Miner({
             );
           }
           if (!verdict.ok) {
-            setLog((prev) => [
-              {
-                time: now(),
-                msg: `Hardware probe FAILED (${probe.type}, ${source}): ${(verdict.issues || []).join('; ')}`,
-                type: 'warn',
-              },
-              ...prev,
-            ]);
+            const issueStr = (verdict.issues || []).join('; ');
+            const isTransient = /mining stopped while probe|stale probe|coordinator disconnected/i.test(issueStr);
+            if (!isTransient) {
+              setLog((prev) => [
+                {
+                  time: now(),
+                  msg: `Hardware probe FAILED (${probe.type}, ${source}): ${issueStr}`,
+                  type: 'warn',
+                },
+                ...prev,
+              ]);
+            }
           }
         }
       } catch (_) {
@@ -2501,16 +2505,31 @@ export default function Miner({
         // ── Live power drift check ──
         // Only flag when live wattage is BELOW the curve, which may
         // indicate thermal throttling or hardware degradation.
+        // Take multiple samples and average them to match the curve's
+        // calibration methodology (7-second averaged sensor readings).
         let powerDrifted = false;
         if (hasLivePower && livePowerW > 0 && expectedPowerW > 0 && livePowerW < expectedPowerW) {
-          const powerDrift = (expectedPowerW - livePowerW) / expectedPowerW;
+          const POWER_SAMPLES = 6;
+          const POWER_SAMPLE_GAP_MS = 500;
+          const samples = [livePowerW];
+          for (let s = 1; s < POWER_SAMPLES; s++) {
+            await new Promise((r) => setTimeout(r, POWER_SAMPLE_GAP_MS));
+            try {
+              const res = await hw.invoke('wattcoin-get-live-power');
+              if (res && res.ok && res.totalW > 0) samples.push(res.totalW);
+            } catch (_) {
+              /* ignore */
+            }
+          }
+          const avgLivePowerW = samples.reduce((a, b) => a + b, 0) / samples.length;
+          const powerDrift = (expectedPowerW - avgLivePowerW) / expectedPowerW;
           if (powerDrift > CURVE_DRIFT_THRESHOLD) {
             powerDrifted = true;
             if (consecutiveDriftCount < DRIFT_CONSECUTIVE_REQUIRED) {
               setLog((log) => [
                 {
                   time: now(),
-                  msg: `Power curve wattage drift: ${(powerDrift * 100).toFixed(1)}% at ${currentLoad}% load (curve ${expectedPowerW.toFixed(1)}W, live ${livePowerW.toFixed(1)}W). Monitoring... (${consecutiveDriftCount + 1}/${DRIFT_CONSECUTIVE_REQUIRED})`,
+                  msg: `Power curve wattage drift: ${(powerDrift * 100).toFixed(1)}% at ${currentLoad}% load (curve ${expectedPowerW.toFixed(1)}W, live ${avgLivePowerW.toFixed(1)}W avg of ${samples.length} samples). Monitoring... (${consecutiveDriftCount + 1}/${DRIFT_CONSECUTIVE_REQUIRED})`,
                   type: 'warn',
                 },
                 ...log,

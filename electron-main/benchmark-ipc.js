@@ -1121,7 +1121,7 @@ function registerBenchmarkIpcHandlers(deps) {
       if (!_sensorProbe) {
         return {
           ok: false,
-          message: 'Live power sensors not available (EMI/RAPL/NVML/PDH). Mining requires hardware power sensors.',
+          message: 'Live power sensors not available (EMI/RAPL/NVML/ADL/PDH). Mining requires hardware power sensors.',
           sensorAvailable: false,
         };
       }
@@ -1264,6 +1264,7 @@ function registerBenchmarkIpcHandlers(deps) {
           if (info.emi) sensorSources.push('emi');
           if (info.rapl) sensorSources.push('rapl');
           if (info.nvml) sensorSources.push('nvml');
+          if (info.adl) sensorSources.push('adl');
           if (info.pdh) sensorSources.push('pdh');
         }
       } catch (_) {

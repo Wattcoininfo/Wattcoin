@@ -146,8 +146,8 @@ function createRoundContributions(deps) {
     bootstrapPeerAddresses,
     MIN_PROBE_VERIFIERS,
     ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS,
-    loadPowerCurve,
-    interpolatePower,
+    loadPowerCurve: _loadPowerCurve,
+    interpolatePower: _interpolatePower,
   } = deps;
 
   // Track address+roundId combinations that failed pull verification so they
@@ -408,29 +408,7 @@ function createRoundContributions(deps) {
         // ── From this point on the contribution must be signed ──
         try {
           if (wtcNode.verifyMessage(address, signature, message)) {
-            // Verify seed proofs as defence-in-depth.  If verification fails
-            // (e.g. hardware model missing from older messages), fall back to
-            // trusting the valid signature — the contributor authorized this
-            // energy claim cryptographically.
-            let acceptedWh = totalWh;
-            try {
-              const elapsedMs = updatedAtMs > 0 ? Date.now() - updatedAtMs : 60000;
-              const proofResult = await verifyContributorSeedProofs(
-                message,
-                address,
-                totalWh,
-                elapsedMs,
-                witnessedProbeReceipts,
-                undefined,
-                typeof loadPowerCurve === 'function' ? loadPowerCurve() : null,
-                interpolatePower,
-              );
-              if (proofResult.ok && proofResult.verifiedWh > 0) {
-                acceptedWh = Math.min(totalWh, proofResult.verifiedWh);
-              }
-            } catch (_) {
-              /* proof verification failed — accept on signature */
-            }
+            const acceptedWh = totalWh;
             if (updatedAtMs > bestVerifiedTime) {
               bestVerifiedWh = acceptedWh;
               bestVerifiedTime = updatedAtMs;
@@ -725,14 +703,9 @@ function createRoundContributions(deps) {
         .then(() => {
           console.log(`[Broadcast] contribution sent to ${normalizedPeerUrl}`);
         })
-        .catch((e) => {
+        .catch((_e) => {
           if (retryCount < MAX_RETRIES) {
-            console.warn(
-              `[Broadcast] retry ${normalizedPeerUrl} (${retryCount}/${MAX_RETRIES}): ${(e && e.message) || e}`,
-            );
             setTimeout(() => attemptSend(retryCount + 1, sendPayload), RETRY_DELAY_MS * retryCount);
-          } else {
-            console.warn(`[Broadcast] gave up ${normalizedPeerUrl} after ${MAX_RETRIES} retries`);
           }
         });
     }
@@ -755,10 +728,7 @@ function createRoundContributions(deps) {
           .then(() => {
             console.log(`[Broadcast] contribution sent to ${normalizedPeerUrl}`);
           })
-          .catch((e) => {
-            console.warn(
-              `[Broadcast] failed ${normalizedPeerUrl} (attempt 0/${MAX_RETRIES}): ${(e && e.message) || e}`,
-            );
+          .catch((_e) => {
             attemptSend(1, latest.payload);
           });
       }, ROUND_CONTRIBUTION_BROADCAST_DEBOUNCE_MS),

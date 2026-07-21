@@ -19,6 +19,8 @@ const allowed = [
   '@vitest/coverage-v8',
   'esbuild', // transitive through vite/vitest, no breaking-change fix path
   'undici', // transitive through Node.js internals, elevated by GHSA and pending patched release
+  'brace-expansion', // transitive through minimatch/glob — no safe upgrade path without breaking changes
+  'fast-uri', // transitive through undici — no fix available upstream
 ];
 
 const failures = advisories

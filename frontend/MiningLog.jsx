@@ -282,11 +282,20 @@ function MiningLog({
               <span style={{ color: '#475569', fontSize: 11 }}>chain #{entry.chainIndex}</span>
             )}
           </div>
+        </div>
+        {/* Row 3: id, proof — left; peer label — right */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 4,
+          }}
+        >
           {probeId && <span style={{ color: '#64748b', fontSize: 11 }}>id {probeId}</span>}
           {entry.type === 'gpu-pow' && typeof entry.proof === 'string' && entry.proof && (
             <span style={{ color: '#64748b', fontSize: 11 }}>proof {entry.proof}</span>
           )}
-          {/* Source label (right-aligned) */}
           <span style={{ color: '#4b5563', fontSize: 10, marginLeft: 'auto' }}>{peerLabel}</span>
         </div>
         {/* Issues */}

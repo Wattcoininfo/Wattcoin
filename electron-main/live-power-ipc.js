@@ -3,7 +3,7 @@
  * live-power-ipc.js — IPC handler for live hardware power reading
  *
  * Uses the native-power N-API addon to read real wattage from
- * EMI / RAPL driver / NVML / PDH sensors. Lazy-loads the addon
+ * EMI / RAPL driver / NVML / ADL / PDH sensors. Lazy-loads the addon
  * on first call so the app starts even if the .node file is missing.
  */
 const path = require('path');
@@ -117,7 +117,7 @@ function readLivePowerW() {
 
 /**
  * Return the init result from the lazy-loaded addon (sensor availability flags).
- * Returns { emi, rapl, nvml, pdh } or null.
+ * Returns { emi, rapl, nvml, adl, pdh } or null.
  */
 function getSensorInitInfo() {
   _loadAddon();

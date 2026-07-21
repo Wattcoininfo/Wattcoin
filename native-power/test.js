@@ -17,6 +17,7 @@ console.log('Initializing sensors...');
 const info = power.init();
 console.log('  EMI (Intel RAPL):', info.emi ? 'AVAILABLE' : 'not available');
 console.log('  NVML (NVIDIA):    ', info.nvml ? 'AVAILABLE' : 'not available');
+console.log('  ADL (AMD):        ', info.adl ? 'AVAILABLE' : 'not available');
 console.log('  PDH (Counters):   ', info.pdh ? 'AVAILABLE' : 'not available');
 
 if (info.emiChannels) {
@@ -33,6 +34,13 @@ if (info.nvmlDevices) {
   console.log('\n  NVIDIA GPUs:');
   for (const dev of info.nvmlDevices) {
     console.log(`    [${dev.index}] ${dev.name}`);
+  }
+}
+
+if (info.adlDevices) {
+  console.log('\n  AMD GPUs:');
+  for (const dev of info.adlDevices) {
+    console.log(`    [${dev.index}] ${dev.name} (adapter ${dev.adapterIndex})`);
   }
 }
 

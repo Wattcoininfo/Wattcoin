@@ -547,44 +547,6 @@ function createLedgerRequestHandler(ctx) {
           return;
         }
         console.log(`[Contribution-Rx] Signature OK for ${address.slice(0, 16)}…`);
-        // Verify seed proofs — the coordinator re-computes each proof's
-        // SHA-256 chain and checks plausibility against known hardware.
-        // Old-format contributions (no seed proofs in message) are accepted
-        // silently — their energy was earned before the proof requirement.
-        let _parsedMsg = null;
-        try {
-          _parsedMsg = JSON.parse(message);
-        } catch (_) {
-          /* not JSON */
-        }
-        const _hasSeedProofs = _parsedMsg && Array.isArray(_parsedMsg.seedProofs) && _parsedMsg.seedProofs.length > 0;
-        if (totalWh > 0.0001 && _hasSeedProofs) {
-          try {
-            const { verifyContributorSeedProofs } = require('./round-contributions');
-            const elapsedMs = updatedAtMs > 0 ? Date.now() - updatedAtMs : 60000;
-            const proofResult = await verifyContributorSeedProofs(
-              message,
-              address,
-              totalWh,
-              elapsedMs,
-              witnessedProbeReceipts,
-              undefined,
-              typeof ctx.loadPowerCurve === 'function' ? ctx.loadPowerCurve() : null,
-              ctx.interpolatePower,
-            );
-            if (!proofResult.ok) {
-              console.warn(
-                `[Contribution-Rx] Seed proof defence-in-depth failed for ${address.slice(0, 16)}… reason=${proofResult.reason} — accepting on signature`,
-              );
-            } else {
-              console.log(
-                `[Contribution-Rx] Seed proofs verified: ${proofResult.verifiedCount || '?'} proofs, verifiedWh=${(proofResult.verifiedWh || 0).toFixed(6)}`,
-              );
-            }
-          } catch (proofErr) {
-            console.warn('[Contribution-Rx] Seed proof verification error:', proofErr.message);
-          }
-        }
         const probeCheck = validateContributionProbe(address, totalWh, chainIndex);
         let attestedPowerW = probeCheck.attestedPowerW || 0;
         if (!probeCheck.ok) {

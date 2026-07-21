@@ -483,6 +483,152 @@ static void nvmlShutdown() {
     g_nvml.deviceCount = 0;
 }
 
+// ─── ADL (AMD Display Library) ──────────────────────────────────────────────
+// Reads live GPU power from AMD Radeon GPUs via atiadlxx.dll
+
+#define ADL_PMLOG_POWER 1
+
+#pragma pack(push, 1)
+struct AdlAdapterInfo {
+    int iSize;
+    int iAdapterIndex;
+    int iBusNumber;
+    int iDeviceNumber;
+    int iFunctionNumber;
+    int iVendorID;
+    char strAdapterName[256];
+    char strDriverPath[256];
+    char strDriverPathExt[256];
+    char strPNPString[256];
+    int iPresent;
+};
+
+union AdlPMLogDataValue {
+    int i;
+    float f;
+};
+
+struct AdlPMLogDataOutput {
+    int iSize;
+    AdlPMLogDataValue sensors[256];
+};
+#pragma pack(pop)
+
+typedef int (*PFN_ADL2_Main_Memory_Alloc)(int size, void** lpBuffer);
+typedef int (*PFN_ADL2_Create_Context)(PFN_ADL2_Main_Memory_Alloc callback, void** context);
+typedef int (*PFN_ADL2_Destroy_Context)(void* context);
+typedef int (*PFN_ADL2_Adapter_NumberOfAdapters_Get)(void* context, int* numAdapters);
+typedef int (*PFN_ADL2_Adapter_AdapterInfo_Get)(void* context, AdlAdapterInfo* info, int size);
+typedef int (*PFN_ADL2_Adapter_PMLog_Get)(void* context, int adapterIndex,
+    int* dataTypes, int numDataTypes, AdlPMLogDataOutput* dataOutput);
+
+struct AdlState {
+    HMODULE hDll = nullptr;
+    PFN_ADL2_Create_Context pCreateContext = nullptr;
+    PFN_ADL2_Destroy_Context pDestroyContext = nullptr;
+    PFN_ADL2_Adapter_NumberOfAdapters_Get pNumAdapters = nullptr;
+    PFN_ADL2_Adapter_AdapterInfo_Get pAdapterInfo = nullptr;
+    PFN_ADL2_Adapter_PMLog_Get pPMLogGet = nullptr;
+    void* context = nullptr;
+    // Indices into the global adapter info list that belong to AMD GPUs
+    std::vector<int> amdAdapterIndices;
+    std::vector<std::string> amdAdapterNames;
+    bool initialized = false;
+};
+
+static AdlState g_adl;
+
+static int adlMemoryAlloc(int size, void** lpBuffer) {
+    *lpBuffer = malloc(size);
+    return (*lpBuffer) ? 0 : -1;
+}
+
+static bool adlInit() {
+    if (g_adl.initialized) return true;
+
+    g_adl.hDll = LoadLibraryA("atiadlxx.dll");
+    if (!g_adl.hDll) g_adl.hDll = LoadLibraryA("atiadlx.dll");
+    if (!g_adl.hDll) return false;
+
+    g_adl.pCreateContext = (PFN_ADL2_Create_Context)GetProcAddress(g_adl.hDll, "ADL2_Create_Context");
+    g_adl.pDestroyContext = (PFN_ADL2_Destroy_Context)GetProcAddress(g_adl.hDll, "ADL2_Destroy_Context");
+    g_adl.pNumAdapters = (PFN_ADL2_Adapter_NumberOfAdapters_Get)GetProcAddress(g_adl.hDll, "ADL2_Adapter_NumberOfAdapters_Get");
+    g_adl.pAdapterInfo = (PFN_ADL2_Adapter_AdapterInfo_Get)GetProcAddress(g_adl.hDll, "ADL2_Adapter_AdapterInfo_Get");
+    g_adl.pPMLogGet = (PFN_ADL2_Adapter_PMLog_Get)GetProcAddress(g_adl.hDll, "ADL2_Adapter_PMLog_Get");
+
+    if (!g_adl.pCreateContext || !g_adl.pDestroyContext || !g_adl.pNumAdapters ||
+        !g_adl.pAdapterInfo || !g_adl.pPMLogGet) {
+        FreeLibrary(g_adl.hDll);
+        g_adl.hDll = nullptr;
+        return false;
+    }
+
+    if (g_adl.pCreateContext(adlMemoryAlloc, &g_adl.context) != 0 || !g_adl.context) {
+        FreeLibrary(g_adl.hDll);
+        g_adl.hDll = nullptr;
+        return false;
+    }
+
+    int numAdapters = 0;
+    g_adl.pNumAdapters(g_adl.context, &numAdapters);
+    if (numAdapters <= 0) {
+        g_adl.pDestroyContext(g_adl.context);
+        g_adl.context = nullptr;
+        FreeLibrary(g_adl.hDll);
+        g_adl.hDll = nullptr;
+        return false;
+    }
+
+    // AMD vendor ID = 0x1002
+    std::vector<AdlAdapterInfo> infos(numAdapters);
+    for (auto& info : infos) info.iSize = sizeof(AdlAdapterInfo);
+    g_adl.pAdapterInfo(g_adl.context, infos.data(), numAdapters);
+
+    for (int i = 0; i < numAdapters; ++i) {
+        if (infos[i].iVendorID == 0x1002 && infos[i].iPresent) {
+            g_adl.amdAdapterIndices.push_back(infos[i].iAdapterIndex);
+            g_adl.amdAdapterNames.push_back(infos[i].strAdapterName);
+        }
+    }
+
+    if (g_adl.amdAdapterIndices.empty()) {
+        g_adl.pDestroyContext(g_adl.context);
+        g_adl.context = nullptr;
+        FreeLibrary(g_adl.hDll);
+        g_adl.hDll = nullptr;
+        return false;
+    }
+
+    g_adl.initialized = true;
+    return true;
+}
+
+static double adlReadPowerW(int adapterIndex) {
+    if (!g_adl.initialized || !g_adl.pPMLogGet) return -1.0;
+
+    int sensorId = ADL_PMLOG_POWER;
+    AdlPMLogDataOutput output = {};
+    int ret = g_adl.pPMLogGet(g_adl.context, adapterIndex, &sensorId, 1, &output);
+    if (ret != 0) return -1.0;
+
+    double watts = (double)output.sensors[ADL_PMLOG_POWER].i;
+    return (watts > 0.0 && watts < 5000.0) ? watts : -1.0;
+}
+
+static void adlShutdown() {
+    if (g_adl.context && g_adl.pDestroyContext) {
+        g_adl.pDestroyContext(g_adl.context);
+        g_adl.context = nullptr;
+    }
+    if (g_adl.hDll) {
+        FreeLibrary(g_adl.hDll);
+        g_adl.hDll = nullptr;
+    }
+    g_adl.amdAdapterIndices.clear();
+    g_adl.amdAdapterNames.clear();
+    g_adl.initialized = false;
+}
+
 // ─── PDH (Performance Data Helper) ───────────────────────────────────────────
 // Fallback for Win10 where EMI device is not available
 
@@ -595,11 +741,13 @@ static Napi::Value NapiInit(const Napi::CallbackInfo& info) {
     bool emiOk = emiInit();
     bool raplOk = raplInit();
     bool nvmlOk = nvmlInit();
+    bool adlOk = adlInit();
     bool pdhOk = pdhInit();
 
     result.Set("emi", Napi::Boolean::New(env, emiOk));
     result.Set("rapl", Napi::Boolean::New(env, raplOk));
     result.Set("nvml", Napi::Boolean::New(env, nvmlOk));
+    result.Set("adl", Napi::Boolean::New(env, adlOk));
     result.Set("pdh", Napi::Boolean::New(env, pdhOk));
     if (raplOk) {
         result.Set("raplAmd", Napi::Boolean::New(env, g_rapl.isAmd));
@@ -638,6 +786,20 @@ static Napi::Value NapiInit(const Napi::CallbackInfo& info) {
         }
         result.Set("nvmlDevices", devices);
         result.Set("nvmlDeviceCount", Napi::Number::New(env, g_nvml.deviceCount));
+    }
+
+    // ADL (AMD) devices
+    if (adlOk) {
+        Napi::Array devices = Napi::Array::New(env);
+        for (size_t i = 0; i < g_adl.amdAdapterIndices.size(); ++i) {
+            Napi::Object dev = Napi::Object::New(env);
+            dev.Set("index", Napi::Number::New(env, (double)i));
+            dev.Set("adapterIndex", Napi::Number::New(env, g_adl.amdAdapterIndices[i]));
+            dev.Set("name", Napi::String::New(env, g_adl.amdAdapterNames[i]));
+            devices.Set((uint32_t)i, dev);
+        }
+        result.Set("adlDevices", devices);
+        result.Set("adlDeviceCount", Napi::Number::New(env, (double)g_adl.amdAdapterIndices.size()));
     }
 
     return result;
@@ -839,38 +1001,53 @@ static Napi::Value NapiReadEnergyUj(const Napi::CallbackInfo& info) {
 static Napi::Value NapiReadGpuPower(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
 
-    if (!g_nvml.initialized) return env.Null();
-
-    unsigned int deviceIndex = 0;
-    if (info.Length() > 0 && info[0].IsNumber()) {
-        deviceIndex = info[0].As<Napi::Number>().Uint32Value();
-    }
-
     Napi::Array results = Napi::Array::New(env);
     uint32_t count = 0;
 
-    if (deviceIndex == 0 && info.Length() == 0) {
-        // Read all devices
-        for (unsigned int i = 0; i < g_nvml.deviceCount; ++i) {
-            double watts = nvmlReadPowerW(i);
+    // ── NVML (NVIDIA) ──────────────────────────────────────────────────────
+    if (g_nvml.initialized) {
+        unsigned int deviceIndex = 0;
+        if (info.Length() > 0 && info[0].IsNumber()) {
+            deviceIndex = info[0].As<Napi::Number>().Uint32Value();
+        }
+
+        if (deviceIndex == 0 && info.Length() == 0) {
+            for (unsigned int i = 0; i < g_nvml.deviceCount; ++i) {
+                double watts = nvmlReadPowerW(i);
+                if (watts >= 0.0) {
+                    Napi::Object dev = Napi::Object::New(env);
+                    dev.Set("watts", Napi::Number::New(env, watts));
+                    dev.Set("index", Napi::Number::New(env, count));
+                    dev.Set("name", Napi::String::New(env, nvmlGetDeviceName(i)));
+                    dev.Set("source", Napi::String::New(env, "nvml"));
+                    results.Set(count++, dev);
+                }
+            }
+        } else {
+            double watts = nvmlReadPowerW(deviceIndex);
             if (watts >= 0.0) {
                 Napi::Object dev = Napi::Object::New(env);
                 dev.Set("watts", Napi::Number::New(env, watts));
-                dev.Set("index", Napi::Number::New(env, i));
-                dev.Set("name", Napi::String::New(env, nvmlGetDeviceName(i)));
+                dev.Set("index", Napi::Number::New(env, count));
+                dev.Set("name", Napi::String::New(env, nvmlGetDeviceName(deviceIndex)));
                 dev.Set("source", Napi::String::New(env, "nvml"));
                 results.Set(count++, dev);
             }
         }
-    } else {
-        double watts = nvmlReadPowerW(deviceIndex);
-        if (watts >= 0.0) {
-            Napi::Object dev = Napi::Object::New(env);
-            dev.Set("watts", Napi::Number::New(env, watts));
-            dev.Set("index", Napi::Number::New(env, deviceIndex));
-            dev.Set("name", Napi::String::New(env, nvmlGetDeviceName(deviceIndex)));
-            dev.Set("source", Napi::String::New(env, "nvml"));
-            results.Set(count++, dev);
+    }
+
+    // ── ADL (AMD) ──────────────────────────────────────────────────────────
+    if (g_adl.initialized) {
+        for (size_t i = 0; i < g_adl.amdAdapterIndices.size(); ++i) {
+            double watts = adlReadPowerW(g_adl.amdAdapterIndices[i]);
+            if (watts >= 0.0) {
+                Napi::Object dev = Napi::Object::New(env);
+                dev.Set("watts", Napi::Number::New(env, watts));
+                dev.Set("index", Napi::Number::New(env, count));
+                dev.Set("name", Napi::String::New(env, g_adl.amdAdapterNames[i]));
+                dev.Set("source", Napi::String::New(env, "adl"));
+                results.Set(count++, dev);
+            }
         }
     }
 
@@ -922,6 +1099,7 @@ static Napi::Value NapiShutdown(const Napi::CallbackInfo& info) {
     emiShutdown();
     raplShutdown();
     nvmlShutdown();
+    adlShutdown();
     pdhShutdown();
     return info.Env().Undefined();
 }
