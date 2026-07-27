@@ -68,7 +68,7 @@
     "elliptic": "^6.6.1",
     "mqtt": "^5.15.1",
     "react": "^18.0.0",
-    "react-dom": "^18.0.0",
+    "react-dom": "^19.2.8",
     "ssh2": "^1.17.0",
     "systeminformation": "^5.31.5",
     "wasm-x11-hash": "^0.0.2",
