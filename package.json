@@ -63,7 +63,7 @@
   },
   "dependencies": {
     "@silentbot1/nat-api": "^0.4.9",
-    "crypto-vdf": "^1.1.0",
+    "crypto-vdf": "^1.2.0",
     "electron-updater": "^6.8.3",
     "elliptic": "^6.6.1",
     "mqtt": "^5.15.1",
